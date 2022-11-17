@@ -7,4 +7,4 @@ imageQC is a software-tool for the Medical Physicist performing quality control 
 
 Here is a sneak peek:
 
-
+![image](https://user-images.githubusercontent.com/16964680/202554613-13be30f4-e159-4f3e-8667-f4bd7bed082b.png)

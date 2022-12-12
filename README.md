@@ -8,12 +8,12 @@ Get notified when a new version is available. Send me an e-mail ellen.wasbo(-the
 
 ### Install the python package
 
-Clone the repository from GitHub. Then create a virtual environment. If using Anaconda start the cmd.exe Prompt:
+Clone the repository from GitHub or download the zip. Then create a virtual environment. If using Anaconda start the cmd.exe Prompt:
 
 ```bash
 conda create --name viQC python=3.9.7
 conda activate viQC
-cd <C:\yourpath>\ImageQCpy\
+cd <to the folder above folder src>
 pip install -e .
 ```
 

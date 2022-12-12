@@ -1,0 +1,25 @@
+CT:
+- label: default
+  list_tags: [KVP, Exposure, CTDIvol, SoftwareVersions]
+  list_format: ['|:.0f|', '|:.1f|', '|:.2f|', '']
+Xray:
+- label: default
+  list_tags: [KVP, Exposure, ExposureIndex, DAP, SID,
+    DetectorID]
+  list_format: ['|:.1f|', '|:.2f|', '|:.1f|', '|:.3f|', '|:.1f|', '']
+NM:
+- label: default
+  list_tags: [CountsAccumulated, ActualFrameDuration]
+  list_format: ['|:.0f|', '|:.0f|']
+SPECT:
+- label: ''
+  list_tags: []
+  list_format: []
+PET:
+- label: ''
+  list_tags: []
+  list_format: []
+MR:
+- label: default
+  list_tags: [ImagingFrequency, ReceiveCoilName, TransmitCoilName]
+  list_format: ['', '', '']

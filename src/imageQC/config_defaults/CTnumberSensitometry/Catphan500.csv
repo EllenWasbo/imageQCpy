@@ -1,0 +1,5 @@
+materials,pos_x,pos_y,Rel. mass density
+Teflon,58,0,2.16
+Acrylic,0,-58,1.18
+LDPE,-58,0,0.92
+Air,0,58,0

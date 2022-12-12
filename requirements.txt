@@ -1,0 +1,9 @@
+matplotlib==3.5.2
+numpy==1.21.5
+pandas==1.4.3
+pdfplumber==0.7.1
+pydicom==2.2.2
+PyQt5==5.15.7
+PyYAML==6.0
+scikit_image==0.19.2
+scipy==1.9.1

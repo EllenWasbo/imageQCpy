@@ -1,0 +1,20 @@
+Catphan500:
+  materials: [Teflon, Acrylic, LDPE, Air]
+  relative_mass_density: [2.16, 1.18, 0.92, 0.0]
+  pos_x: [58.0, 0, -58, 0]
+  pos_y: [0, -58, 0, 58]
+Catphan503_504:
+  materials: [Teflon, Delrin, Acrylic, Polystyrene, Water, LDPE, PMP, Air]
+  relative_mass_density: [2.16, 1.41, 1.18, 1.05, 1, 0.92, 0.83, 0.0]
+  pos_x: [28.0, 58.0, 28.0, -28.0, 0, -58, -28.0, 0.0]
+  pos_y: [50.0, 0.0, -50.0, -50.0, -58, 0, 50.0, 58.0]
+Catphan600:
+  materials: [Teflon, Delrin, Acrylic, Polystyrene, Water, LDPE, PMP, Air]
+  relative_mass_density: [2.16, 1.41, 1.18, 1.05, 1, 0.92, 0.83, 0.0]
+  pos_x: [-28.0, -58.0, -28.0, 28.0, 0, 58.0, 28.0, 0.0]
+  pos_y: [-50.0, 0.0, 50.0, 50.0, 58, 0.0, -50.0, -58.0]
+Catphan700:
+  materials: [Teflon, Delrin, Acrylic, Water, Polystyrene, LDPE, PMP, Air]
+  relative_mass_density: [1.868, 1.363, 1.147, 1, 0.998, 0.945, 0.853, 0.001]
+  pos_x: [0, -55, 28, -20, -28, 55, -28, 0]
+  pos_y: [-58, -17, 50, 20, -50, -17, 50, 58]

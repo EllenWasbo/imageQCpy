@@ -1,0 +1,53 @@
+{auto_continue: false, auto_ignore_since: 0, auto_import_path: \\SUSRT-FS17.sir.local\W700data\Diagnostikk\Konstanskontroller\NyttFraConquest,
+  auto_last_import_date: '', default_params: CONFIGDEFAULT}
+---
+CT:
+  hom_roi_distance: 55.0
+  hom_roi_rotation: 0.0
+  hom_roi_size: 10.0
+  hun_roi_size: 3.0
+  hun_search_size: 11.0
+  hun_table:
+    materials: [Teflon, Delrin, Acrylic, Water, Polystyrene, LDPE, PMP, Air]
+    pos_x: [-28.0, -58.0, -28.0, 0.0, 28.0, 58.0, 28.0, 0.0]
+    pos_y: [-50.0, 0.0, 50.0, 58.0, 50.0, 0.0, -50.0, -58.0]
+    relative_mass_density: [2.1600000858306885, 1.409999966621399, 1.1799999475479126,
+      1.0, 1.0499999523162842, 0.9200000166893005, 0.8299999833106995, 0.0]
+  huw_roi_size: 55.0
+  mtf_cut_lsf: true
+  mtf_cut_lsf_w: [3.0, 1.0]
+  mtf_cy_pr_mm: true
+  mtf_gaussian: true
+  mtf_offset_mm: false
+  mtf_offset_xy: [0.0, 0.0]
+  mtf_plot: 3
+  mtf_roi_size: 11.0
+  mtf_search_max: false
+  mtf_type: 2
+  noi_roi_size: 55.0
+  nps_n_sub: 20
+  nps_plot_average: true
+  nps_roi_dist: 50.0
+  nps_roi_size: 50
+  rin_median_filter_w: 0
+  rin_range: [5.0, 65.0]
+  rin_smooth_filter_w: 1.0
+  rin_subtract_trend: true
+  roi_offset_mm: false
+  roi_offset_xy: [0.0, 0.0]
+  roi_radius: 5.0
+  roi_type: 0
+  roi_xya: [10.0, 10.0, 0.0]
+  sli_average_width: 1
+  sli_background_width: 5.0
+  sli_ramp_distance: 38.0
+  sli_ramp_length: 60.0
+  sli_search_width: 5
+  sli_signal_low_density: false
+  sli_type: 0
+output:
+  decimal_mark: ','
+  include_filename: true
+  include_header: false
+  qt_out_temps: [DEFAULT, RTG_SUS, DEFAULT, DEFAULT, DEFAULT, DEFAULT]
+  transpose_table: false

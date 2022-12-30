@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InputMain used when no GUI to replace MainWindow.
+InputMain used when no GUI or pytest to replace MainWindow.
 
 @author: Ellen Wasbø
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
 
+# imageQC block start
 import imageQC.config.config_classes as cfc
+# imageQC block end
 
 
 @dataclass

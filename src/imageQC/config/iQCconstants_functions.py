@@ -11,7 +11,9 @@ from PyQt5.QtCore import QFile, QIODevice, QTextStream
 from io import BytesIO
 import yaml
 
+# imageQC block start
 import imageQC.config.config_classes as cfc
+# imageQC block end
 
 
 def empty_template_dict(quicktest_options, dummy=None):

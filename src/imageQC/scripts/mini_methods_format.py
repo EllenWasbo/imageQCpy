@@ -223,3 +223,7 @@ def val_2_str(val_list, decimal_mark='.'):
                 string_list.append(str(val))
 
     return string_list
+
+def valid_template_name(text):
+    """No slash or space in template names (confuse automation)."""
+    return re.sub('[\s/]+', '_', text)

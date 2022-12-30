@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QLabel
     )
 
+# imageQC block start
 from imageQC.config.iQCconstants import (
     ENV_ICON_PATH, QUICKTEST_OPTIONS, ENV_CONFIG_FOLDER
     )
@@ -23,6 +24,7 @@ from imageQC.config.config_func import (
     load_settings, save_settings
     )
 import imageQC.ui.settings
+# imageQC block end
 
 
 class WizardPage(QWizardPage):

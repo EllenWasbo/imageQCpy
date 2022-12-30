@@ -14,22 +14,26 @@ import logging
 from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import Qt
 
+# imageQC block start
 import imageQC.resources
-import imageQC.ui.ui_main
+import imageQC.ui.ui_main as ui_main
+from imageQC.ui.ui_dialogs import StartUpDialog
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants import (
     ENV_ICON_PATH, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER, LOG_FILENAME
     )
 import imageQC.scripts.automation as automation
+# imageQC block end
+
 
 def prepare_debug():
-    '''Set a tracepoint in PDB that works with Qt'''
+    """Set a tracepoint in PDB that works with Qt."""
     from PyQt5.QtCore import pyqtRemoveInputHook
     pyqtRemoveInputHook()
 
 
 if __name__ == '__main__':
-    prepare_debug()#comment out this when not debugging
+    prepare_debug()  # not needen when not debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     os.environ[ENV_USER_PREFS_PATH] = user_prefs_path
     os.environ[ENV_ICON_PATH] = cff.get_icon_path(user_prefs.dark_mode)
@@ -60,6 +64,13 @@ if __name__ == '__main__':
 
         sys.exit('Program exits')
     else:
+        # to set taskbar icon correctly for windows
+        try:
+            from ctypes import windll  # Only exists on Windows.
+            myappid = 'sus.imageQC.app.3'
+            windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except ImportError:
+            pass
 
         app = QtWidgets.QApplication(sys.argv)
         screen = app.primaryScreen()
@@ -144,7 +155,12 @@ if __name__ == '__main__':
             palette.setColor(QtGui.QPalette.HighlightedText, Qt.black)
             app.setPalette(palette)
 
-        w = imageQC.ui.ui_main.MainWindow(scX=sz.width(), scY=sz.height())
+        if os.environ[ENV_USER_PREFS_PATH] == '':
+            dlg = StartUpDialog()
+            dlg.show()
+            splash.finish(dlg)
+            dlg.exec()
+        w = ui_main.MainWindow(scX=sz.width(), scY=sz.height())
         w.show()
         splash.finish(w)
         app.exec()

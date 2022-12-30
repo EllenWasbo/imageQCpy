@@ -28,14 +28,16 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg, NavigationToolbar2QT)
 import pandas as pd
 
+# imageQC block start
 from imageQC.scripts.mini_methods_format import val_2_str, get_format_strings
 from imageQC.scripts.mini_methods import get_included_tags
 from imageQC.config.iQCconstants import (
     ENV_ICON_PATH, QUICKTEST_OPTIONS,
-    ALTERNATIVES, CALCULATION_OPTIONS, HEADERS
+    ALTERNATIVES, CALCULATION_OPTIONS, HEADERS, HEADERS_SUP
     )
 import imageQC.config.config_func as cff
 import imageQC.config.config_classes as cfc
+# imageQC block end
 
 
 def proceed_question(widget, question,
@@ -1373,6 +1375,11 @@ class QuickTestOutputTreeView(QTreeView):
                     text_alt = ALTERNATIVES[
                         self.parent.current_modality][
                             testcode][sub.alternative]
+                except IndexError:
+                    # supplement table starting from 10
+                    text_alt = ALTERNATIVES[
+                        self.parent.current_modality][
+                            testcode][sub.alternative - 10]
                 except KeyError:
                     text_alt = '-'
                 self.model.setData(self.model.index(r, 1), text_alt)
@@ -1435,10 +1442,15 @@ class QuickTestOutputTreeView(QTreeView):
             res = dlg_sub.exec()
             if res:
                 new_sub = copy.deepcopy(dlg_sub.get_data())
-                self.parent.current_template.output.tests[
-                    code][subno] = new_sub
-                self.update_data()
-                self.parent.flag_edit(True)
+                if new_sub is None:
+                    QMessageBox.warning(
+                        self.parent, 'Ignored',
+                        'No table columns selected. Edit ignored.')
+                else:
+                    self.parent.current_template.output.tests[
+                        code][subno] = new_sub
+                    self.update_data()
+                    self.parent.flag_edit(True)
 
     def insert_row(self):
         """Insert row after selected if same test_code, else end of same testcode."""
@@ -1455,18 +1467,23 @@ class QuickTestOutputTreeView(QTreeView):
         if res:
             testcode = dlg_sub.get_testcode()
             new_sub = copy.deepcopy(dlg_sub.get_data())
-            if testcode == code:
-                self.parent.current_template.output.tests[
-                    testcode].insert(subno + 1, new_sub)
+            if new_sub is None:
+                QMessageBox.warning(
+                    self.parent, 'Ignored',
+                    'No table columns selected. Ignored input.')
             else:
-                try:
+                if testcode == code:
                     self.parent.current_template.output.tests[
-                        testcode].append(new_sub)
-                except KeyError:
-                    self.parent.current_template.output.tests[
-                        testcode] = [new_sub]
-            self.update_data()
-            self.parent.flag_edit(True)
+                        testcode].insert(subno + 1, new_sub)
+                else:
+                    try:
+                        self.parent.current_template.output.tests[
+                            testcode].append(new_sub)
+                    except KeyError:
+                        self.parent.current_template.output.tests[
+                            testcode] = [new_sub]
+                self.update_data()
+                self.parent.flag_edit(True)
 
     def delete_row(self):
         """Delete selected row."""
@@ -1513,6 +1530,8 @@ class QuickTestOutputSubDialog(QDialog):
 
         self.cbox_testcode = QComboBox()
         self.cbox_alternatives = QComboBox()
+        self.cbox_table = QComboBox()
+        self.cbox_table.addItems(['Result table', 'Supplement_table'])
         self.list_columns = QListWidget()
         self.cbox_calculation = QComboBox()
         self.chk_per_group = BoolSelect(
@@ -1531,6 +1550,9 @@ class QuickTestOutputSubDialog(QDialog):
         self.cbox_alternatives.currentIndexChanged.connect(
             lambda: self.update_data(
                 update_alternatives=False, update_calculations=False))
+        self.cbox_table.currentIndexChanged.connect(
+            lambda: self.update_data(
+                update_alternatives=False, update_calculations=False))
 
         vLO = QVBoxLayout()
         self.setLayout(vLO)
@@ -1540,12 +1562,15 @@ class QuickTestOutputSubDialog(QDialog):
         fLO = QFormLayout()
         fLO.addRow(QLabel('Test:'), self.cbox_testcode)
         fLO.addRow(QLabel('Alternative:'), self.cbox_alternatives)
+        fLO.addRow(QLabel('Table:'), self.cbox_table)
         fLO.addRow(QLabel('Columns:'), self.list_columns)
         fLO.addRow(QLabel('Calculation:'), self.cbox_calculation)
         fLO.addRow(LabelItalic(
             '    ignored if any of the values are strings'))
         fLO.addRow(QLabel(''), self.chk_per_group)
         fLO.addRow(QLabel('Header:'), self.txt_header)
+        fLO.addRow(LabelItalic(
+            '    Default is column_nameheader_imagelabel or header_grouplabel, ignored if = and > 1 column'))
         fLO.addRow(LabelItalic(
             '    header_imagelabel or header_grouplabel, ignored if = and > 1 column'))
 
@@ -1581,50 +1606,66 @@ class QuickTestOutputSubDialog(QDialog):
                 alts = ALTERNATIVES[self.modality][testcode]
             except KeyError:
                 alts = ['-']
+            '''
             try:
-                altsup = HEADERS[self.modality][testcode]['altSup']
+                altsup = HEADERS_SUP[self.modality][testcode]#['altSup']
                 if len(altsup) > 0:
+                    breakpoint() # add alternative sup not just sup if not supAll
                     if alts[0] == '-':
                         alts = ['Results table', self.suplement_txt]
                     else:
                         alts.append(self.suplement_txt)
             except KeyError:
                 pass
+            '''
             self.cbox_alternatives.blockSignals(True)
             self.cbox_alternatives.clear()
             self.cbox_alternatives.addItems(alts)
-            self.cbox_alternatives.setCurrentIndex(
-                self.qt_output_sub.alternative)
+            if self.qt_output_sub.alternative < 9:
+                self.cbox_alternatives.setCurrentIndex(
+                    self.qt_output_sub.alternative)
+            else:  # supplement table
+                self.cbox_alternatives.setCurrentIndex(
+                    self.qt_output_sub.alternative - 10)
             self.cbox_alternatives.blockSignals(False)
         if update_columns:  # fill text in columns
             cols = []
+            '''
             if self.cbox_alternatives.currentText() == self.suplement_txt:
                 cols = HEADERS[self.modality][testcode]['altSup']
+            '''
+            idx_alt = self.cbox_alternatives.currentIndex()
+            if self.cbox_table.currentIndex() == 1:
+                if testcode in HEADERS_SUP[self.modality]:
+                    if 'altAll' in HEADERS_SUP[self.modality][testcode]:
+                        cols = HEADERS_SUP[self.modality][testcode]['altAll']
+                    elif 'alt0' in HEADERS_SUP[self.modality][testcode]:
+                        cols = HEADERS_SUP[self.modality][testcode]['alt'+str(idx_alt)]
             else:
-                idx = self.cbox_alternatives.currentIndex()
                 try:
-                    cols = HEADERS[self.modality][testcode]['alt'+str(idx)]
+                    cols = HEADERS[self.modality][testcode]['alt'+str(idx_alt)]
                 except KeyError:
                     if testcode == 'DCM':
                         cols = self.paramset.dcm_tagpattern.list_tags
                     elif testcode == 'CTn':
                         cols = self.paramset.ctn_table.materials
             self.list_columns.clear()
-            self.list_columns.addItems(cols)
-            # set checkable
-            subcols = self.qt_output_sub.columns
-            if len(subcols) == 0:
-                subcols = [i for i in range(self.list_columns.count())]
-            for i in range(self.list_columns.count()):
-                item = self.list_columns.item(i)
-                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                if first:
-                    if i in subcols:
-                        item.setCheckState(Qt.Checked)
+            if len(cols) > 0:
+                self.list_columns.addItems(cols)
+                # set checkable
+                subcols = self.qt_output_sub.columns
+                if len(subcols) == 0:
+                    subcols = [i for i in range(self.list_columns.count())]
+                for i in range(self.list_columns.count()):
+                    item = self.list_columns.item(i)
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    if first:
+                        if i in subcols:
+                            item.setCheckState(Qt.Checked)
+                        else:
+                            item.setCheckState(Qt.Unchecked)
                     else:
-                        item.setCheckState(Qt.Unchecked)
-                else:
-                    item.setCheckState(Qt.Checked)
+                        item.setCheckState(Qt.Checked)
         if update_calculations:  # fill and set default calculation option
             self.cbox_calculation.addItems(CALCULATION_OPTIONS)
             self.cbox_calculation.setCurrentText(
@@ -1649,10 +1690,12 @@ class QuickTestOutputSubDialog(QDialog):
         -------
         qtsub : QuickTestOutputSub
         """
+        
         qtsub = cfc.QuickTestOutputSub()
         qtsub.label = self.txt_header.text()
-        if self.cbox_alternatives.currentText() == self.suplement_txt:
-            qtsub.alternative = -1
+
+        if self.cbox_table.currentIndex() == 1:
+            qtsub.alternative = self.cbox_alternatives.currentIndex() + 10
         else:
             qtsub.alternative = self.cbox_alternatives.currentIndex()
         cols = []
@@ -1662,6 +1705,9 @@ class QuickTestOutputSubDialog(QDialog):
         qtsub.columns = cols
         qtsub.calculation = self.cbox_calculation.currentText()
         qtsub.per_group = self.chk_per_group.isChecked()
+
+        if len(cols) == 0:
+            qtsub = None
 
         return qtsub
 
@@ -2046,6 +2092,7 @@ class PlotWidget(QWidget):
 
         vlo_tb.addWidget(tbPlot_copy)
         vlo_tb.addWidget(tbPlot)
+        vlo_tb.addStretch()
         self.hlo.addWidget(self.plotcanvas)
         self.setLayout(self.hlo)
 

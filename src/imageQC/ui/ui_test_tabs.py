@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
     QMessageBox, QFileDialog, QInputDialog,
     )
 
+# imageQC block start
 from imageQC.config.iQCconstants import (
     ENV_ICON_PATH, VENDOR_FILE_OPTIONS, ALTERNATIVES
     )
@@ -29,6 +30,7 @@ import imageQC.config.config_classes as cfc
 import imageQC.ui.reusables as uir
 import imageQC.scripts.read_vendor_QC_reports as rvr
 from imageQC.scripts.calculate_qc import calculate_qc
+# imageQC block end
 
 
 class TagPatternTreeTestDCM(uir.TagPatternTree):
@@ -249,7 +251,39 @@ class TestTabCommon(QTabWidget):
                         self.main.refresh_results_display()
                 if ((update_plot or update_results_table)
                         and clear_results is False):
+                    if attribute == 'mtf_gaussian':
+                        self.update_values_MTF()
                     self.main.refresh_results_display()
+
+    def update_values_MTF(self):
+        """Update MTF table values when changing gaussian vs discrete options."""
+        if 'MTF' in self.main.results:
+            if self.main.results['MTF']['pr_image']:
+                details_dicts = self.main.results['MTF']['details_dict']
+            else:
+                details_dicts = [self.main.results['MTF']['details_dict']]
+            try:
+                mtf_gaussian = self.main.current_paramset.mtf_gaussian
+                proceed = True
+            except AttributeError:
+                proceed = False
+            if proceed:
+                prefix = 'g' if mtf_gaussian else 'd'
+                new_values = []
+                for ddno, dd in enumerate(details_dicts):
+                    if isinstance(dd, dict):
+                        dd = [dd]
+                    new_values_this = dd[0][prefix + 'MTF_details']['values']
+                    try:
+                        new_values_this.extend(
+                                dd[1][prefix + 'MTF_details']['values'])
+                    except IndexError:
+                        pass  # only if x and y dir
+                    new_values.append(new_values_this)
+
+                self.main.results['MTF']['values'] = new_values
+                self.main.refresh_results_display()
+                self.main.statusBar.showMessage('MTF tabular values updated', 1000)
 
     def set_offset(self, attribute, reset=False):
         """Get last mouse click position and set as offset position for test.
@@ -367,6 +401,17 @@ class TestTabCommon(QTabWidget):
     def run_current(self):
         """Run selected test."""
         tests = []
+        marked_this = self.main.treeFileList.get_marked_imgs_current_test()
+        if len(marked_this) == 0:
+            tests = [[self.main.current_test]] * len(self.main.imgs)
+        else:
+            for im in range(len(self.main.imgs)):
+                if im in marked_this:
+                    tests.append([self.main.current_test])
+                else:
+                    tests.append([])
+        self.main.current_quicktest.tests = tests
+        '''
         n_marked = 0
         qt = True if self.main.wQuickTest.gbQT.isChecked() else False
         if qt:
@@ -388,7 +433,11 @@ class TestTabCommon(QTabWidget):
         else:
             self.main.current_quicktest.tests = [
                 [self.main.current_test]] * len(self.main.imgs)
+        '''
         calculate_qc(self.main)
+
+        if self.main.vGUI.active_img_no not in marked_this:
+            self.main.set_active_img(marked_this[0])
 
 
 class TestTabDummyForCopy(TestTabCommon):
@@ -758,7 +807,9 @@ class TestTabCT(TestTabCommon):
             decimals=3, minimum=0.001, singleStep=0.001)
         self.mtf_sampling_frequency.valueChanged.connect(
                     lambda: self.param_changed_from_gui(
-                        attribute='mtf_sampling_frequency'))
+                        attribute='mtf_sampling_frequency', update_roi=False,
+                        clear_results=False, update_plot=False,
+                        update_results_table=False))
 
         self.mtf_cut_lsf = QCheckBox('')
         self.mtf_cut_lsf.toggled.connect(
@@ -767,7 +818,7 @@ class TestTabCT(TestTabCommon):
         self.mtf_cut_lsf_w.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_cut_lsf_w'))
         self.mtf_cut_lsf_w_fade = QDoubleSpinBox(
-            decimals=1, minimum=0.1, singleStep=0.1)
+            decimals=1, minimum=0, singleStep=0.1)
         self.mtf_cut_lsf_w_fade.valueChanged.connect(
             lambda: self.param_changed_from_gui(
                 attribute='mtf_cut_lsf_w_fade'))
@@ -819,7 +870,7 @@ class TestTabCT(TestTabCommon):
         f1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
         f1.addRow(
             QLabel('Width of background (bead method)'), self.mtf_background_width)
-        f1.addRow(QLabel('Auto center ROI'), self.mtf_auto_center)
+        f1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
         f1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
                   self.mtf_sampling_frequency)
         vLO1.addLayout(f1)
@@ -988,7 +1039,7 @@ class TestTabXray(TestTabCommon):
         self.tabMTF = QWidget()
 
         self.mtf_type = QComboBox()
-        self.mtf_type.addItems(['Exponential', 'Gaussian', 'None'])
+        self.mtf_type.addItems(['Exponential fit', 'Gaussian fit', 'No LSF fit'])
         self.mtf_type.currentIndexChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_type'))
 
@@ -999,9 +1050,17 @@ class TestTabXray(TestTabCommon):
         self.mtf_roi_size_y.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_roi_size_y'))
 
-        self.mtf_auto_center = QCheckBox('')
+        self.mtf_auto_center = QGroupBox('Auto detect edge(s)')
+        self.mtf_auto_center.setCheckable(True)
+        self.mtf_auto_center.setFont(uir.FontItalic())
         self.mtf_auto_center.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_auto_ceter'))
+            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
+
+        self.mtf_auto_center_type = QComboBox()
+        self.mtf_auto_center_type.addItems(
+            ['all detected edges', 'edge closest to image center'])
+        self.mtf_auto_center_type.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_auto_center_type'))
 
         self.mtf_sampling_frequency = QDoubleSpinBox(
             decimals=3, minimum=0.001, singleStep=0.001)
@@ -1051,19 +1110,17 @@ class TestTabXray(TestTabCommon):
         tb_mtf_offset.addWidget(self.mtf_offset_mm)
 
         vLO = QVBoxLayout()
+        hLO = QHBoxLayout()
         hLO_size = QHBoxLayout()
         hLO_size.addWidget(QLabel('ROI width/height (mm)'))
         hLO_size.addWidget(self.mtf_roi_size_x)
         hLO_size.addWidget(QLabel('/'))
         hLO_size.addWidget(self.mtf_roi_size_y)
-        hLO_size.addStretch()
-        vLO.addLayout(hLO_size)
 
-        hLO = QHBoxLayout()
         vLO1 = QVBoxLayout()
+        vLO1.addLayout(hLO_size)
         f1 = QFormLayout()
         f1.addRow(QLabel('MTF method'), self.mtf_type)
-        f1.addRow(QLabel('Auto center ROI'), self.mtf_auto_center)
         f1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
                   self.mtf_sampling_frequency)
         vLO1.addLayout(f1)
@@ -1072,8 +1129,14 @@ class TestTabXray(TestTabCommon):
         hLO_offset.addWidget(tb_mtf_offset)
         vLO1.addLayout(hLO_offset)
         hLO.addLayout(vLO1)
+
         hLO.addWidget(uir.VLine())
         vLO2 = QVBoxLayout()
+        vLO2.addWidget(self.mtf_auto_center)
+        hLO_gb_auto = QHBoxLayout()
+        hLO_gb_auto.addWidget(QLabel('Use'))
+        hLO_gb_auto.addWidget(self.mtf_auto_center_type)
+        self.mtf_auto_center.setLayout(hLO_gb_auto)
         f2 = QFormLayout()
         f2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
         f2.addRow(QLabel('    Cut at halfmax + (#FWHM)'), self.mtf_cut_lsf_w)
@@ -1929,6 +1992,7 @@ class TestTabMR(TestTabCommon):
 
         self.tabSli.setLayout(vLO)
 
+
 class TestTabVendor(QWidget):
     """Test tabs for vendor file analysis."""
 
@@ -2086,6 +2150,7 @@ class SpinDegrees(QDoubleSpinBox):
         self.setDecimals(1)
         self.valueChanged.connect(self.parent.clear_results)
 '''
+
 
 class BoolSelectTests(uir.BoolSelect):
     """Radiobutton group of two returning true/false as selected value."""

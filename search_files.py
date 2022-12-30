@@ -5,12 +5,13 @@ Created on Thu Jun 30 19:43:14 2022
 @author: ellen
 """
 
-import glob, os
+import glob
+import os
+from pathlib import Path
 
-directory = r'C:\Users\ellen\CloudStation\ImageQCpy\imageQC\src'
-#directory = r'C:\Users\ellen\Documents\GitHub\extensions-repo\tests'
+directory = Path(__file__).parent / 'src'
 
-search_string = "gauss_fit"
+search_string = "breakpoint"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

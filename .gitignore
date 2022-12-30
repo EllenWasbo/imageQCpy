@@ -1,9 +1,11 @@
 # Windows
 Thumbs.db
 
+vendor_QC_reports/
 *.pyc
 __pycache__/
 .pytest_cache/
+*automation.log
 
 # Distribution / packaging
 .Python

@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QLabel, QRadioButton, QCheckBox, QFileDialog
     )
 
+# imageQC block start
 from imageQC.config.iQCconstants import (
     APPDATA, TEMPDIR, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER, ENV_ICON_PATH
     )
@@ -23,6 +24,7 @@ from imageQC.config.config_func import init_user_prefs
 from imageQC.config.read_config_idl import ConfigIdl2Py
 from imageQC.ui.reusables import QuestionBox
 import imageQC.resources
+# imageQC block end
 
 
 class StartUpDialog(QDialog):

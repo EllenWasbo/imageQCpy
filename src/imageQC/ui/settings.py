@@ -24,6 +24,7 @@ from PyQt5.QtWidgets import (
     )
 import pydicom
 
+# imageQC block start
 from imageQC.config.iQCconstants import (
     QUICKTEST_OPTIONS, CONFIG_FNAMES, ENV_ICON_PATH,
     ENV_USER_PREFS_PATH, LOG_FILENAME,
@@ -33,9 +34,10 @@ import imageQC.config.config_func as cff
 import imageQC.config.config_classes as cfc
 from imageQC.config.read_config_idl import ConfigIdl2Py
 import imageQC.ui.reusables as uir
-from imageQC.scripts.mini_methods_format import time_diff_string
+from imageQC.scripts.mini_methods_format import time_diff_string, valid_template_name
 import imageQC.scripts.read_vendor_QC_reports as read_vendor_QC_reports
 import imageQC.scripts.dcm as dcm
+# imageQC block end
 
 
 class SettingsDialog(QDialog):
@@ -133,7 +135,7 @@ class SettingsDialog(QDialog):
         self.list_txt_item_widget.append(
             (txt, self.item_tag_patterns_sort, self.widget_tag_patterns_sort))
 
-        txt = 'Parameter sets'
+        txt = 'Parameter sets / output'
         self.item_paramsets = QTreeWidgetItem([txt])
         self.item_shared_settings.addChild(self.item_paramsets)
         self.widget_paramsets = ParamSetsWidget(
@@ -658,6 +660,7 @@ class StackWidget(QWidget):
             row = self.wModTemp.list_temps.currentRow()
             self.refresh_templist(selected_id=row)
 
+
 class DummyStackWidgetForCopy(StackWidget):
     """...Copy this code as a template when starting on new stackwidget..."""
 
@@ -808,6 +811,7 @@ class ModTempSelector(QWidget):
         text, ok = QInputDialog.getText(
             self, 'New label',
             'Name the new ' + self.parent.typestr)
+        text = valid_template_name(text)
         if ok and text != '':
             if text in self.parent.current_labels:
                 QMessageBox.warning(
@@ -849,6 +853,7 @@ class ModTempSelector(QWidget):
                     self, 'New label',
                     'Rename ' + self.parent.typestr,
                     text=currentText)
+                text = valid_template_name(text)
                 if ok and text != '' and currentText != text:
                     if text in self.parent.current_labels:
                         QMessageBox.warning(
@@ -885,6 +890,7 @@ class ModTempSelector(QWidget):
                     self,
                     'New label',
                     'Name the new ' + self.parent.typestr)
+                text = valid_template_name(text)
                 if ok and text != '':
                     if text in self.parent.current_labels:
                         QMessageBox.warning(
@@ -2643,6 +2649,7 @@ class AutoCommonWidget(StackWidget):
         """Display log file contents."""
         if os.path.exists(os.path.join(ENV_USER_PREFS_PATH, LOG_FILENAME)):
             os.startfile(ENV_USER_PREFS_PATH)
+
 
 class AutoTemplateWidget(StackWidget):
     """Widget holding automation settings."""

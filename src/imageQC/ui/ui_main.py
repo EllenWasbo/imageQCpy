@@ -9,7 +9,7 @@ import os
 import copy
 import numpy as np
 from skimage import draw
-from time import time
+from time import time, ctime
 from dataclasses import dataclass
 import pandas as pd
 
@@ -30,13 +30,14 @@ import matplotlib.figure
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg, NavigationToolbar2QT)
 
-from imageQC.ui.ui_dialogs import StartUpDialog, EditAnnotationsDialog
-import imageQC.ui.ui_test_tabs
-import imageQC.ui.rename_dicom
-import imageQC.ui.automation_wizard
-import imageQC.ui.settings
-import imageQC.ui.open_multi
-import imageQC.ui.open_automation
+# imageQC block start
+from imageQC.ui.ui_dialogs import EditAnnotationsDialog
+import imageQC.ui.ui_test_tabs as ui_test_tabs
+import imageQC.ui.rename_dicom as rename_dicom
+import imageQC.ui.automation_wizard as automation_wizard
+import imageQC.ui.settings as settings
+import imageQC.ui.open_multi as open_multi
+import imageQC.ui.open_automation as open_automation
 import imageQC.ui.reusables as uir
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants import (
@@ -49,6 +50,7 @@ from imageQC.scripts.calculate_roi import get_rois
 from imageQC.scripts.mini_methods_format import val_2_str
 from imageQC.scripts.mini_methods import get_min_max_pos_2d
 from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
+# imageQC block end
 
 
 def get_rotated_crosshair(szx, szy, delta_xya):
@@ -113,9 +115,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.save_blocked = False
-        if os.environ[ENV_USER_PREFS_PATH] == '':
-            dlg = StartUpDialog()
-            dlg.exec()
+
         if os.environ[ENV_USER_PREFS_PATH] == '':
             if os.environ[ENV_CONFIG_FOLDER] == '':
                 self.save_blocked = True
@@ -142,7 +142,7 @@ class MainWindow(QMainWindow):
         self.vGUI.panel_height = round(0.86*scY)
         self.vGUI.annotations_line_thick = self.user_prefs.annotations_line_thick
         self.vGUI.annotations_font_size = self.user_prefs.annotations_font_size
-        self.statusBar = StatusBar()
+        self.statusBar = StatusBar(self)
         self.setStatusBar(self.statusBar)
         self.statusBar.showMessage('Starting up', 1000)
         self.active_img = None  # np.array pixeldata for active image
@@ -316,7 +316,7 @@ class MainWindow(QMainWindow):
 
     def open_multi(self):
         """Start open advanced dialog."""
-        dlg = imageQC.ui.open_multi.OpenMultiDialog(self)
+        dlg = open_multi.OpenMultiDialog(self)
         res = dlg.exec()
         if res:
             if len(dlg.open_imgs) > 0:
@@ -341,7 +341,7 @@ class MainWindow(QMainWindow):
 
     def open_auto(self):
         """Start open automation dialog."""
-        dlg = imageQC.ui.open_automation.OpenAutomationDialog(self)
+        dlg = open_automation.OpenAutomationDialog(self)
         dlg.exec()
 
     def flag_edit(self, flag=True):
@@ -386,10 +386,13 @@ class MainWindow(QMainWindow):
                 self.imgs[self.vGUI.active_img_no].info_list_modality)
 
             self.refresh_img_display()
+            self.refresh_results_display(update_table=False)
+            '''
             if self.current_test in ['Sli', 'Uni']:
                 self.wResPlot.plotcanvas.plot()
             if self.current_test in ['Uni']:
                 self.wResImage.canvas.result_image_draw()
+            '''
 
     def update_summed_img(self, recalculate_sum=True):
         """Overwrite pixmap in memory with new summed image, refresh GUI."""
@@ -400,8 +403,7 @@ class MainWindow(QMainWindow):
                 testcode = ''
                 if self.wQuickTest.gbQT.isChecked():
                     testcode = self.current_test
-                print(f'testcode {testcode}')
-                breakpoint()
+
                 self.summed_img, errmsg = dcm.sum_marked_images(
                     self.imgs, testcode=testcode)
                 self.stop_wait_cursor()
@@ -492,13 +494,15 @@ class MainWindow(QMainWindow):
 
     def update_roi(self):
         """Recalculate ROI."""
+        errmsg = None
         if self.active_img is not None:
-            self.current_roi = get_rois(
+            self.current_roi, errmsg = get_rois(
                 self.active_img,
                 self.vGUI.active_img_no, self)
         else:
             self.current_roi = None
         self.wImageDisplay.canvas.roi_draw()
+        self.display_errmsg(errmsg)
 
     def update_results(self, n_added_imgs=0, deleted_idxs=[], sort_idxs=[]):
         """Update self.results if added / deleted images.
@@ -560,34 +564,49 @@ class MainWindow(QMainWindow):
 
         self.refresh_results_display()
 
-    def refresh_results_display(self):
+    def refresh_results_display(self, update_table=True):
         """Update GUI for test results when results or selections change."""
         if self.vGUI.hidden_rgt_top is False:
             if self.current_test in self.results:
                 self.hide_rgt_top()  # maximize results displays first time
-        try:
-            self.wResTable.result_table.fill_table(
-                col_labels=self.results[self.current_test]['headers'],
-                values_rows=self.results[self.current_test]['values'],
-                linked_image_list=self.results[self.current_test]['pr_image'])
-        except (KeyError, TypeError):
-            self.wResTable.result_table.clear()
 
-        try:
-            self.wResTableSup.result_table.fill_table(
-                col_labels=self.results[self.current_test]['headers_sup'],
-                values_rows=self.results[self.current_test]['values_sup'],
-                linked_image_list=self.results[self.current_test]['pr_image'])
-        except (KeyError, TypeError):
-            self.wResTableSup.result_table.clear()
+        wid = self.tabResults.currentWidget()
 
-        self.wResPlot.plotcanvas.plot()
-        self.wResImage.canvas.result_image_draw()
+        if isinstance(wid, ResultTableWidget) and update_table:
+            if self.tabResults.currentIndex() == 0:
+                if self.current_test in self.results:
+                    try:
+                        self.wResTable.result_table.fill_table(
+                            col_labels=self.results[self.current_test]['headers'],
+                            values_rows=self.results[self.current_test]['values'],
+                            linked_image_list=self.results[
+                                self.current_test]['pr_image'])
+                    except (KeyError, TypeError):
+                        self.wResTable.result_table.clear()
+                else:
+                    self.wResTable.result_table.clear()
+            else:
+                if self.current_test in self.results:
+                    try:
+                        self.wResTableSup.result_table.fill_table(
+                            col_labels=self.results[self.current_test]['headers_sup'],
+                            values_rows=self.results[self.current_test]['values_sup'],
+                            linked_image_list=self.results[
+                                self.current_test]['pr_image'])
+                    except (KeyError, TypeError):
+                        self.wResTableSup.result_table.clear()
+                else:
+                    self.wResTableSup.result_table.clear()
+
+        elif isinstance(wid, ResultPlotWidget):
+            self.wResPlot.plotcanvas.plot()
+        elif isinstance(wid, ResultImageWidget):
+            self.wResImage.canvas.result_image_draw()
 
     def refresh_img_display(self):
         """Refresh image related gui."""
         if self.active_img is not None:
-            self.current_roi = get_rois(
+            self.current_roi, errmsg = get_rois(
                 self.active_img,
                 self.vGUI.active_img_no, self)
             self.wImageDisplay.canvas.img_draw()
@@ -714,17 +733,17 @@ class MainWindow(QMainWindow):
                 configuration folder for these settings.\n
                 Start the wizard again when the configuration folder is set.
                 ''')
-            dlg = imageQC.ui.settings.SettingsDialog(
+            dlg = settings.SettingsDialog(
                 self, initial_view='Config folder')
             dlg.exec()
         else:
-            self.wizard = imageQC.ui.automation_wizard.AutomationWizard(self)
+            self.wizard = automation_wizard.AutomationWizard(self)
             self.wizard.open()
 
     def run_rename_dicom(self):
         """Start Rename Dicom dialog."""
         open_file_names = [imgDict.filepath for imgDict in self.imgs]
-        dlg = imageQC.ui.rename_dicom.RenameDicomDialog(
+        dlg = rename_dicom.RenameDicomDialog(
             open_file_names, initial_modality=self.current_modality)
         res = dlg.exec()
         """
@@ -736,9 +755,9 @@ class MainWindow(QMainWindow):
     def run_settings(self, initial_view=''):
         """Display settings dialog."""
         if initial_view == '':
-            dlg = imageQC.ui.settings.SettingsDialog(self)
+            dlg = settings.SettingsDialog(self)
         else:
-            dlg = imageQC.ui.settings.SettingsDialog(
+            dlg = settings.SettingsDialog(
                 self, initial_view=initial_view)
         dlg.exec()
         self.update_settings()
@@ -759,6 +778,36 @@ class MainWindow(QMainWindow):
         #   version (available modalities and testcodes)
         #   slettede filer med f.eks. paramset som linket til i andre
         #   display paramset med endret tag_info attr.names
+
+    def display_errmsg(self, errmsg):
+        """Display error messages in statusbar or as popup if long."""
+        if errmsg is not None:
+            if isinstance(errmsg, str):
+                self.statusBar.showMessage(errmsg, 2000, warning=True)
+            elif isinstance(errmsg, list):
+                # show in popup
+                pass#TODO
+
+    def display_previous_warnings(self):
+        """Display saved statusbar warnings."""
+        if len(self.statusBar.saved_warnings) > 0:
+            dlg = uir.TextDisplay(
+                self, '\n'.join(self.statusBar.saved_warnings),
+                title='Previous warnings',
+                min_width=1000, min_height=300)
+            dlg.exec()
+
+            reply = QMessageBox.question(
+                self, 'Reset warnings?',
+                'Reset saved warnings?',
+                QMessageBox.Yes, QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                self.statusBar.saved_warnings = []
+                self.actWarning.setEnabled(False)
+        else:
+            msg = 'No previous warnings to show'
+            QMessageBox.information(self, 'No data', msg)
+            self.actWarning.setEnabled(False)
 
     def start_wait_cursor(self):
         """Block mouse events by wait cursor."""
@@ -876,6 +925,12 @@ class MainWindow(QMainWindow):
             'Reset layout', self)
         actResetSplit.triggered.connect(self.reset_split_sizes)
 
+        self.actWarning = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}warning.png'),
+            'Show warings', self)
+        self.actWarning.triggered.connect(self.display_previous_warnings)
+        self.actWarning.setEnabled(False)
+
         actQuit = QAction('&Quit', self)
         actQuit.setShortcut('Ctrl+Q')
         actQuit.triggered.connect(self.exit_app)
@@ -907,6 +962,8 @@ class MainWindow(QMainWindow):
 
         tb.addWidget(QLabel('             '))
         tb.addActions([actResetSplit, actRenameDICOM, actSettings])
+        tb.addWidget(QLabel('             '))
+        tb.addAction(self.actWarning)
 
     def create_modality_selector(self):
         """Groupbox with modality selection."""
@@ -929,13 +986,13 @@ class MainWindow(QMainWindow):
     def create_test_tabs(self):
         """Initiate GUI for the stacked test tabs."""
         self.sTestTabs = QStackedWidget()
-        self.tabCT = imageQC.ui.ui_test_tabs.TestTabCT(self)
-        self.tabXray = imageQC.ui.ui_test_tabs.TestTabXray(self)
-        self.tabNM = imageQC.ui.ui_test_tabs.TestTabNM(self)
-        self.tabSPECT = imageQC.ui.ui_test_tabs.TestTabSPECT(self)
-        self.tabPET = imageQC.ui.ui_test_tabs.TestTabPET(self)
-        self.tabMR = imageQC.ui.ui_test_tabs.TestTabMR(self)
-        self.tabVendor = imageQC.ui.ui_test_tabs.TestTabVendor(self)
+        self.tabCT = ui_test_tabs.TestTabCT(self)
+        self.tabXray = ui_test_tabs.TestTabXray(self)
+        self.tabNM = ui_test_tabs.TestTabNM(self)
+        self.tabSPECT = ui_test_tabs.TestTabSPECT(self)
+        self.tabPET = ui_test_tabs.TestTabPET(self)
+        self.tabMR = ui_test_tabs.TestTabMR(self)
+        self.tabVendor = ui_test_tabs.TestTabVendor(self)
 
         self.sTestTabs.addWidget(self.tabCT)
         self.sTestTabs.addWidget(self.tabXray)
@@ -948,6 +1005,7 @@ class MainWindow(QMainWindow):
     def create_result_tabs(self):
         """Initiate GUI for the stacked result tabs."""
         self.tabResults = QTabWidget()
+        self.tabResults.currentChanged.connect(self.refresh_results_display)
         self.wResTable = ResultTableWidget(self)
         self.wResPlot = ResultPlotWidget(self, ResultPlotCanvas(self))
         self.wResImage = ResultImageWidget(self)
@@ -980,16 +1038,25 @@ class TreeFileList(QTreeWidget):
 
         Returns
         -------
-        selrows : list of int
-            selected rows
+        sel_rows : list of int
         """
-        selrows = []
+        sel_rows = []
         for sel in self.selectedIndexes():
             if sel.column() > -1:
-                selrows.append(sel.row())
-        if len(selrows) > 0:
-            selrows = list(set(selrows))  # remove duplicates
-        return selrows
+                sel_rows.append(sel.row())
+        if len(sel_rows) > 0:
+            sel_rows = list(set(sel_rows))  # remove duplicates
+        return sel_rows
+
+    def get_marked_imgs_current_test(self):
+        """Get images (idx) marked for current test.
+
+        Returns
+        -------
+        marked_img_ids : list of int
+        """
+        marked_img_ids = [i for i, im in enumerate(self.main.imgs) if im.marked]
+        return marked_img_ids
 
     def update_file_list(self):
         """Populate tree with filepath/pattern and test indicators."""
@@ -1329,6 +1396,7 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         except ValueError:
             pass
 
+
 class GenericImageToolbarPosVal(QToolBar):
     """Toolbar for showing cursor position and value."""
 
@@ -1547,35 +1615,6 @@ class ImageCanvas(GenericImageCanvas):
             self.draw()
         self.current_image = nparr
 
-    '''
-    def profile_draw(self, x2, y2):
-        """Draw line for profile."""
-        self.profile_remove()
-
-        plotstatus = False
-
-        if self.main.vGUI.last_clicked_pos != (-1, -1):
-            x1 = self.main.vGUI.last_clicked_pos[0]
-            y1 = self.main.vGUI.last_clicked_pos[1]
-            if np.sqrt((x2-x1)**2 + (y2-y1)**2) > self.profile_length:
-                self.ax.add_artist(matplotlib.lines.Line2D(
-                    [x1, x2], [y1, y2],
-                    color='red', linewidth=self.main.vGUI.annotations_line_thick,
-                    gid='profile'))
-                self.draw()
-                plotstatus = True
-
-        return plotstatus
-
-    def profile_remove(self):
-        """Clear profile line."""
-        if hasattr(self.ax, 'lines'):
-            for line in self.ax.lines:
-                if line.get_gid() == 'profile':
-                    line.remove()
-                    break
-    '''
-
     def roi_draw(self):
         """Update ROI countours on image."""
         if hasattr(self, 'contours'):
@@ -1592,196 +1631,201 @@ class ImageCanvas(GenericImageCanvas):
                 except ValueError:
                     pass
         if hasattr(self.ax, 'lines'):
-            for l_idx, line in enumerate(self.ax.lines):
-                if l_idx > 1:
-                    try:
-                        line.remove()
-                    except ValueError:
-                        pass
+            n_lines = len(self.ax.lines)
+            if n_lines > 2:
+                for i in range(n_lines - 2):
+                    self.ax.lines[-1].remove()
 
         self.ax.texts.clear()
 
         if self.main.current_roi is not None:
+            self.linewidth = self.main.vGUI.annotations_line_thick
+            self.fontsize = self.main.vGUI.annotations_font_size
 
-            linewidth = self.main.vGUI.annotations_line_thick
-            fontsize = self.main.vGUI.annotations_font_size
-
-            if self.main.current_test in ['Hom', 'Gho']:
-                colors = ['red', 'blue', 'green', 'yellow', 'cyan']
-                self.contours = []
-                for i in range(5):
-                    mask = np.where(self.main.current_roi[i], 0, 1)
-                    contour = self.ax.contour(
-                        mask, levels=[0.9],
-                        colors=colors[i], alpha=0.5, linewidths=linewidth)
-                    self.contours.append(contour)
-
-            elif self.main.current_test == 'CTn':
-                self.contours = []
-                ctn_table = self.main.current_paramset.ctn_table
-                for i in range(len(ctn_table.materials)):
-                    mask = np.where(self.main.current_roi[i], 0, 1)
-                    contour = self.ax.contour(
-                        mask, levels=[0.9],
-                        colors='red', alpha=0.5, linewidths=linewidth)
-                    self.contours.append(contour)
-                    mask_pos = np.where(mask == 0)
-                    xpos = np.mean(mask_pos[1])
-                    ypos = np.mean(mask_pos[0])
-                    if np.isfinite(xpos) and np.isfinite(ypos):
-                        self.ax.text(xpos, ypos, ctn_table.materials[i],
-                                     fontsize=fontsize, color='red')
-
-                if len(self.main.current_roi) == 2 * len(ctn_table.materials):
-                    # draw search rois
-                    nroi = len(ctn_table.materials)
-                    for i in range(nroi, 2 * nroi):
-                        mask = np.where(self.main.current_roi[i], 0, 1)
-                        contour = self.ax.contour(
-                            mask, levels=[0.9],
-                            colors='blue', alpha=0.5, linewidths=linewidth)
-                        self.contours.append(contour)
-
-            elif self.main.current_test == 'Sli':
-                h_colors = ['k', 'g', 'pink', 'c']
-                v_colors = ['b', 'r']
-                search_margin = self.main.current_paramset.sli_search_width
-                background_length = self.main.current_paramset.sli_background_width
-                pix = self.main.imgs[self.main.vGUI.active_img_no].pix
-                background_length = background_length / pix[0]
-                for l_idx, line in enumerate(self.main.current_roi['h_lines']):
-                    y1, x1, y2, x2 = line
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x1, x2], [y1, y2],
-                        color=h_colors[l_idx], linewidth=linewidth,
-                        linestyle='dotted',
-                        ))
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x1, x2], [y1 - search_margin, y2 - search_margin],
-                        color=h_colors[l_idx], linewidth=1.
-                        ))
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x1, x2], [y1 + search_margin, y2 + search_margin],
-                        color=h_colors[l_idx], linewidth=1.
-                        ))
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x1 + background_length, x1 + background_length],
-                        [y1 - search_margin, y1 + search_margin],
-                        color=h_colors[l_idx], linewidth=1.
-                        ))
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x2 - background_length, x2 - background_length],
-                        [y2 - search_margin, y2 + search_margin],
-                        color=h_colors[l_idx], linewidth=1.
-                        ))
-                for l_idx, line in enumerate(self.main.current_roi['v_lines']):
-                    y1, x1, y2, x2 = line
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x1, x2], [y1, y2],
-                        color=v_colors[l_idx], linewidth=linewidth,
-                        linestyle='dotted',
-                        ))
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x1 - search_margin, x2 - search_margin], [y1, y2],
-                        color=v_colors[l_idx], linewidth=1.
-                        ))
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x1 + search_margin, x2 + search_margin], [y1, y2],
-                        color=v_colors[l_idx], linewidth=1.
-                        ))
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x1 - search_margin, x1 + search_margin],
-                        [y1 + background_length, y1 + background_length],
-                        color=v_colors[l_idx], linewidth=1.
-                        ))
-                    self.ax.add_artist(matplotlib.lines.Line2D(
-                        [x2 - search_margin, x2 + search_margin],
-                        [y2 - background_length, y2 - background_length],
-                        color=v_colors[l_idx], linewidth=1.
-                        ))
-
-            elif self.main.current_test == 'MTF':
-                if isinstance(self.main.current_roi, list):
-                    this_roi = self.main.current_roi[1]  # bead show background rim
-                else:
-                    this_roi = self.main.current_roi
-
-                mask = np.where(this_roi, 0, 1)
-                self.contours = []
-                contour = self.ax.contour(
-                    mask, levels=[0.9],
-                    colors='red', alpha=0.5, linewidths=linewidth)
-                self.contours.append(contour)
-
-            elif self.main.current_test == 'Uni':
-                colors = ['red', 'blue']
-                self.contours = []
-                for i in range(2):
-                    mask = np.where(self.main.current_roi[i], 0, 1)
-                    contour = self.ax.contour(
-                        mask, levels=[0.9],
-                        colors=colors[i], alpha=0.5, linewidths=linewidth)
-                    self.contours.append(contour)
-
-            elif self.main.current_test == 'SNI':
-                colors = ['red', 'blue']
-                self.contours = []
-                # 2 large
-                for i in range(2):
-                    mask = np.where(self.main.current_roi[i+1], 0, 1)
-                    contour = self.ax.contour(
-                        mask, levels=[0.9],
-                        colors=colors[i], alpha=0.5, linewidths=linewidth)
-                    self.contours.append(contour)
-                # first 2 small with contour, else only label S1..S6
-                colors = ['green', 'cyan']
-                for i in range(6):
-                    mask = np.where(self.main.current_roi[i+3], 0, 1)
-                    color = 'yellow'
-                    if i < 2:
-                        contour = self.ax.contour(
-                            mask, levels=[0.9],
-                            colors=colors[i], alpha=0.5, linewidths=linewidth)
-                        self.contours.append(contour)
-                        color = colors[i]
-                    mask_pos = np.where(mask == 0)
-                    xpos = np.mean(mask_pos[1])
-                    ypos = np.mean(mask_pos[0])
-                    if np.isfinite(xpos) and np.isfinite(ypos):
-                        self.ax.text(xpos-fontsize, ypos+fontsize, f'S{i}',
-                                     fontsize=fontsize, color=color)
-
-            elif self.main.current_test == 'PIU':
-                mask = np.where(self.main.current_roi, 0, 1)
-                self.contours = []
-                contour = self.ax.contour(
-                    mask, levels=[0.9],
-                    colors='red', alpha=0.5, linewidths=linewidth)
-                self.contours.append(contour)
-                # display min, max pos
-                self.scatters = []
-                min_idx, max_idx = get_min_max_pos_2d(
-                    self.main.active_img, self.main.current_roi)
-                scatter = self.ax.scatter(min_idx[1], min_idx[0], s=40,
-                                          c='blue', marker='D')
-                self.scatters.append(scatter)
-                self.ax.text(min_idx[1], min_idx[0]+10,
-                             'min', fontsize=fontsize, color='blue')
-                scatter = self.ax.scatter(max_idx[1], max_idx[0], s=40,
-                                          c='fuchsia', marker='D')
-                self.scatters.append(scatter)
-                self.ax.text(max_idx[1], max_idx[0]+10,
-                             'max', fontsize=fontsize, color='fuchsia')
-
+            class_method = getattr(self, self.main.current_test, None)
+            if class_method is not None:
+                class_method()
             else:
-                mask = np.where(self.main.current_roi, 0, 1)
-                self.contours = []
+                self.add_contours_to_all_rois()
+        self.draw()
+
+    def add_contours_to_all_rois(self, colors=None, reset_contours=True,
+                                 roi_indexes=None):
+        """Draw all ROIs in self.main.current_roi (list) with specific colors.
+
+        Parameters
+        ----------
+        colors : list of str, optional
+            Default is None = all red
+        reset_contours : bool, optional
+            Default is True
+        roi_indexes : list of int, optional
+            roi indexes to draw. Default is None = all
+        """
+        this_roi = self.main.current_roi
+        if not isinstance(self.main.current_roi, list):
+            this_roi = [self.main.current_roi]
+
+        if reset_contours:
+            self.contours = []
+        if colors is None:
+            colors = ['red' for i in range(len(this_roi))]
+        if roi_indexes is None:
+            roi_indexes = list(np.arange(len(this_roi)))
+
+        for i in roi_indexes:
+            mask = np.where(this_roi[i], 0, 1)
+            contour = self.ax.contour(
+                mask, levels=[0.9],
+                colors=colors[i], alpha=0.5, linewidths=self.linewidth)
+            self.contours.append(contour)
+
+    def Hom(self):
+        """Draw Hom ROI."""
+        colors = ['red', 'blue', 'green', 'yellow', 'cyan']
+        self.add_contours_to_all_rois(colors=colors)
+
+    def CTn(self):
+        """Draw CTn ROI."""
+        self.contours = []
+        ctn_table = self.main.current_paramset.ctn_table
+        for i in range(len(ctn_table.materials)):
+            mask = np.where(self.main.current_roi[i], 0, 1)
+            contour = self.ax.contour(
+                mask, levels=[0.9],
+                colors='red', alpha=0.5, linewidths=self.linewidth)
+            self.contours.append(contour)
+            mask_pos = np.where(mask == 0)
+            xpos = np.mean(mask_pos[1])
+            ypos = np.mean(mask_pos[0])
+            if np.isfinite(xpos) and np.isfinite(ypos):
+                self.ax.text(xpos, ypos, ctn_table.materials[i],
+                             fontsize=self.fontsize, color='red')
+
+        if len(self.main.current_roi) == 2 * len(ctn_table.materials):
+            # draw search rois
+            nroi = len(ctn_table.materials)
+            for i in range(nroi, 2 * nroi):
+                mask = np.where(self.main.current_roi[i], 0, 1)
                 contour = self.ax.contour(
                     mask, levels=[0.9],
-                    colors='red', alpha=0.5, linewidths=linewidth)
+                    colors='blue', alpha=0.5, linewidths=self.linewidth)
                 self.contours.append(contour)
 
-        self.draw()
+    def Sli(self):
+        """Draw Slicethickness search lines."""
+        h_colors = ['k', 'g', 'pink', 'c']
+        v_colors = ['b', 'r']
+        search_margin = self.main.current_paramset.sli_search_width
+        background_length = self.main.current_paramset.sli_background_width
+        pix = self.main.imgs[self.main.vGUI.active_img_no].pix
+        background_length = background_length / pix[0]
+        for l_idx, line in enumerate(self.main.current_roi['h_lines']):
+            y1, x1, y2, x2 = line
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x1, x2], [y1, y2],
+                color=h_colors[l_idx], linewidth=self.linewidth,
+                linestyle='dotted',
+                ))
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x1, x2], [y1 - search_margin, y2 - search_margin],
+                color=h_colors[l_idx], linewidth=0.5*self.linewidth,
+                ))
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x1, x2], [y1 + search_margin, y2 + search_margin],
+                color=h_colors[l_idx], linewidth=0.5*self.linewidth,
+                ))
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x1 + background_length, x1 + background_length],
+                [y1 - search_margin, y1 + search_margin],
+                color=h_colors[l_idx], linewidth=0.5*self.linewidth
+                ))
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x2 - background_length, x2 - background_length],
+                [y2 - search_margin, y2 + search_margin],
+                color=h_colors[l_idx], linewidth=0.5*self.linewidth
+                ))
+        for l_idx, line in enumerate(self.main.current_roi['v_lines']):
+            y1, x1, y2, x2 = line
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x1, x2], [y1, y2],
+                color=v_colors[l_idx], linewidth=self.linewidth,
+                linestyle='dotted',
+                ))
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x1 - search_margin, x2 - search_margin], [y1, y2],
+                color=v_colors[l_idx], linewidth=0.5*self.linewidth
+                ))
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x1 + search_margin, x2 + search_margin], [y1, y2],
+                color=v_colors[l_idx], linewidth=0.5*self.linewidth
+                 ))
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x1 - search_margin, x1 + search_margin],
+                [y1 + background_length, y1 + background_length],
+                color=v_colors[l_idx], linewidth=0.5*self.linewidth
+                ))
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x2 - search_margin, x2 + search_margin],
+                [y2 - background_length, y2 - background_length],
+                color=v_colors[l_idx], linewidth=0.5*self.linewidth
+                ))
+
+    def MTF(self):
+        """Draw MTF ROI."""
+        if (
+                self.main.current_modality == 'CT'
+                and self.main.current_paramset.mtf_type == 0):
+            # bead show background rim
+            self.add_contours_to_all_rois(roi_indexes=[1])
+        else:
+            self.add_contours_to_all_rois(colors = ['red', 'blue', 'green', 'cyan'])
+
+    def Uni(self):
+        """Draw NM uniformity ROI."""
+        self.add_contours_to_all_rois(colors=['red', 'blue'])
+
+    def SNI(self):
+        """Draw NM uniformity ROI."""
+        self.add_contours_to_all_rois(
+            colors=['red', 'blue'], roi_indexes=[1, 2])  # 2 large
+        self.add_contours_to_all_rois(
+            colors=['green', 'cyan'], reset_contours=False,
+            roi_indexes=[3, 4])  # 2 first small, else only label
+
+        for i in range(6):
+            mask = np.where(self.main.current_roi[i+3], 0, 1)
+            color = 'yellow'
+            mask_pos = np.where(mask == 0)
+            xpos = np.mean(mask_pos[1])
+            ypos = np.mean(mask_pos[0])
+            if np.isfinite(xpos) and np.isfinite(ypos):
+                self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
+                             f'S{i}',
+                             fontsize=self.fontsize, color=color)
+
+    def PIU(self):
+        """Draw MR PIU ROI."""
+        self.add_contours_to_all_rois()
+        # display min, max pos
+        self.scatters = []
+        min_idx, max_idx = get_min_max_pos_2d(
+            self.main.active_img, self.main.current_roi)
+        scatter = self.ax.scatter(min_idx[1], min_idx[0], s=40,
+                                  c='blue', marker='D')
+        self.scatters.append(scatter)
+        self.ax.text(min_idx[1], min_idx[0]+10,
+                     'min', fontsize=self.fontsize, color='blue')
+        scatter = self.ax.scatter(max_idx[1], max_idx[0], s=40,
+                                  c='fuchsia', marker='D')
+        self.scatters.append(scatter)
+        self.ax.text(max_idx[1], max_idx[0]+10,
+                     'max', fontsize=self.fontsize, color='fuchsia')
+
+    def Gho(self):
+        """Draw MR Ghosting ROI."""
+        colors = ['red', 'blue', 'green', 'yellow', 'cyan']
+        self.add_contours_to_all_rois(colors=colors)
 
 
 class ImageNavigationToolbar(NavigationToolbar2QT):
@@ -2602,7 +2646,6 @@ class ResultTable(QTableWidget):
             selected table row also change the selection in image list.
             Default is True
         """
-        self.clear()
         if values_rows == [[]]:
             n_cols = len(values_cols)
             n_rows = len(row_labels)
@@ -2685,298 +2728,39 @@ class ResultPlotCanvas(uir.PlotCanvas):
     def plot(self):
         """Refresh plot."""
         self.ax.cla()
-        title = ''
+        self.title = ''
         self.xtitle = 'x'
-        ytitle = 'y'
-        default_range_x = [None, None]
-        default_range_y = [None, None]
-        legend_location = 'upper right'
-        xvals = []
-        yvals = []
+        self.ytitle = 'y'
+        self.default_range_x = [None, None]
+        self.default_range_y = [None, None]
+        self.legend_location = 'upper right'
         self.curves = []
+        self.zpos_all = [img.zpos for img in self.main.imgs]
+        self.marked_this = self.main.treeFileList.get_marked_imgs_current_test()
 
-        zpos_all = [img.zpos for img in self.main.imgs]
-        img_nos = []
-
-        if self.main.current_test in [*self.main.results]:
-            if self.main.current_test == 'ROI':
-                for i, row in enumerate(self.main.results['ROI']['values']):
-                    if len(row) > 0:
-                        xvals.append(i)
-                        yvals.append(row[0])
-                curve = {'label': 'Average',
-                         'xvals': xvals,
-                         'yvals': yvals,
-                         'style': '-b'}
-                self.curves.append(curve)
-                self.xtitle = 'Image index'
-                ytitle = 'Average pixel value'
-                if self.main.current_modality in ['Xray', 'NM']:
-                    self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
-                    self.ax.set_xticks(xvals)
-
-            elif self.main.current_test == 'HUw':
-                for i, row in enumerate(self.main.results['HUw']['values']):
-                    if len(row) > 0:
-                        img_nos.append(i)
-                        xvals.append(zpos_all[i])
-                        yvals.append(row[0])
-                curve = {'label': 'Average HU',
-                         'xvals': xvals,
-                         'yvals': yvals,
-                         'style': '-r'}
-                self.curves.append(curve)
-                self.xtitle = 'zpos (mm)'
-                if None in xvals:
-                    xvals = img_nos
-                    self.xtitle = 'Image number'
-                ytitle = 'Average HU'
-                tolmax = {'label': 'tolerance max',
-                          'xvals': [min(xvals), max(xvals)],
-                          'yvals': [4, 4],
-                          'style': '--k'}
-                tolmin = tolmax.copy()
-                tolmin['yvals'] = [-4, -4]
-                tolmin['label'] = 'tolerance min'
-                self.curves.append(tolmin)
-                self.curves.append(tolmax)
-                default_range_y = [-6, 6]
-
-            elif self.main.current_test == 'Hom':
-
-                if self.main.current_modality == 'CT':
-                    title = 'Difference (HU) from center'
-                    yvals12 = []
-                    yvals15 = []
-                    yvals18 = []
-                    yvals21 = []
-                    for i, row in enumerate(self.main.results['Hom']['values']):
-                        if len(row) > 0:
-                            img_nos.append(i)
-                            xvals.append(zpos_all[i])
-                            yvals12.append(row[5])
-                            yvals15.append(row[6])
-                            yvals18.append(row[7])
-                            yvals21.append(row[8])
-                    self.curves.append(
-                        {'label': 'at 12', 'xvals': xvals,
-                         'yvals': yvals12, 'style': '-b'})
-                    self.curves.append(
-                        {'label': 'at 15', 'xvals': xvals,
-                         'yvals': yvals15, 'style': '-g'})
-                    self.curves.append(
-                        {'label': 'at 18', 'xvals': xvals,
-                         'yvals': yvals18, 'style': '-y'})
-                    self.curves.append(
-                        {'label': 'at 21', 'xvals': xvals,
-                         'yvals': yvals21, 'style': '-c'})
-                    self.xtitle = 'zpos (mm)'
-                    if None in xvals:
-                        xvals = img_nos
-                        self.xtitle = 'Image number'
-                    ytitle = 'Difference (HU)'
-                    tolmax = {'label': 'tolerance max',
-                              'xvals': [min(xvals), max(xvals)],
-                              'yvals': [4, 4],
-                              'style': '--k'}
-                    tolmin = tolmax.copy()
-                    tolmin['label'] = 'tolerance min'
-                    tolmin['yvals'] = [-4, -4]
-                    self.curves.append(tolmin)
-                    self.curves.append(tolmax)
-                    default_range_y = [-6, 6]
-                elif self.main.current_modality == 'PET':
-                    title = '% difference from mean of all means'
-                    yvalsC = []
-                    yvals12 = []
-                    yvals15 = []
-                    yvals18 = []
-                    yvals21 = []
-                    for i, row in enumerate(self.main.results['Hom']['values']):
-                        if len(row) > 0:
-                            img_nos.append(i)
-                            xvals.append(zpos_all[i])
-                            yvalsC.append(row[5])
-                            yvals12.append(row[6])
-                            yvals15.append(row[7])
-                            yvals18.append(row[8])
-                            yvals21.append(row[9])
-                    self.curves.append(
-                        {'label': 'Center', 'xvals': xvals,
-                         'yvals': yvalsC, 'style': '-r'})
-                    self.curves.append(
-                        {'label': 'at 12', 'xvals': xvals,
-                         'yvals': yvals12, 'style': '-b'})
-                    self.curves.append(
-                        {'label': 'at 15', 'xvals': xvals,
-                         'yvals': yvals15, 'style': '-g'})
-                    self.curves.append(
-                        {'label': 'at 18', 'xvals': xvals,
-                         'yvals': yvals18, 'style': '-y'})
-                    self.curves.append(
-                        {'label': 'at 21', 'xvals': xvals,
-                         'yvals': yvals21, 'style': '-c'})
-                    self.xtitle = 'zpos (mm)'
-                    if None in xvals:
-                        xvals = img_nos
-                        self.xtitle = 'Image number'
-                    ytitle = '% difference'
-                    tolmax = {'label': 'tolerance max',
-                              'xvals': [min(xvals), max(xvals)],
-                              'yvals': [5, 5],
-                              'style': '--k'}
-                    tolmin = tolmax.copy()
-                    tolmin['label'] = 'tolerance min'
-                    tolmin['yvals'] = [-5, -5]
-                    self.curves.append(tolmin)
-                    self.curves.append(tolmax)
-                    default_range_y = [-7, 7]
-
-            elif self.main.current_test == 'CTn':
-                title = 'CT linearity'
-                ytitle = 'Relative mass density'
-                yvals = self.main.current_paramset.ctn_table.relative_mass_density
-                imgno = self.main.vGUI.active_img_no
-                xvals = self.main.results['CTn']['values'][imgno]
-                self.curves.append(
-                    {'label': 'HU mean', 'xvals': xvals,
-                     'yvals': yvals, 'style': '-bo'})
-                fit_r2 = self.main.results['CTn']['values_sup'][imgno][0]
-                fit_b = self.main.results['CTn']['values_sup'][imgno][1]
-                fit_a = self.main.results['CTn']['values_sup'][imgno][2]
-                yvals = fit_a * np.array(xvals) + fit_b
-                self.curves.append(
-                    {'label': 'fitted', 'xvals': xvals,
-                     'yvals': yvals, 'style': 'b:'}
-                    )
-                at = matplotlib.offsetbox.AnchoredText(
-                    f'$R^2$ = {fit_r2:.4f}', loc='lower right')
-                self.ax.add_artist(at)
-                self.xtitle = 'HU value'
-
-            elif self.main.current_test == 'Sli':
-
-                if self.main.current_modality == 'CT':
-                    title = 'Profiles for slice thickness calculations'
-                    imgno = self.main.vGUI.active_img_no
-                    details_dict = self.main.results['Sli']['details_dict'][imgno]
-                    n_pix = len(details_dict['profiles'][0])
-                    xvals = [details_dict['dx'] * i for i in range(n_pix)]
-                    if self.main.current_paramset.sli_type == 0:
-                        styles = ['k', 'g', 'b', 'r']
-                    elif self.main.current_paramset.sli_type == 1:
-                        styles = ['k', 'g', 'b', 'r', 'pink', 'c']
-                    elif self.main.current_paramset.sli_type == 2:
-                        styles = ['b', 'r']
-                    for l_idx, profile in enumerate(details_dict['profiles']):
-                        self.curves.append({'label': details_dict['labels'][l_idx],
-                                            'xvals': xvals,
-                                            'yvals': profile,
-                                            'style': styles[l_idx]})
-                        self.curves.append({
-                            'label': '_nolegend_',
-                            'xvals': [min(xvals), max(xvals)],
-                            'yvals': [details_dict['background'][l_idx]] * 2,
-                            'style': ':'+styles[l_idx]})
-                        self.curves.append({
-                            'label': '_nolegend_',
-                            'xvals': [min(xvals), max(xvals)],
-                            'yvals': [details_dict['peak'][l_idx]] * 2,
-                            'style': ':'+styles[l_idx]})
-                        self.curves.append({
-                            'label': '_nolegend_',
-                            'xvals': [details_dict['start_x'][l_idx],
-                                      details_dict['end_x'][l_idx]],
-                            'yvals': [details_dict['halfpeak'][l_idx]] * 2,
-                            'style': '--'+styles[l_idx]})
-                    self.xtitle = 'pos (mm)'
-                    ytitle = 'HU'
-
-            elif self.main.current_test == 'Uni':
-                plot_idx = self.main.tabNM.uni_plot.currentIndex()
-                if plot_idx == 0:
-                    title = 'Uniformity result for all images'
-                    yvals_iu_ufov = []
-                    yvals_du_ufov = []
-                    yvals_iu_cfov = []
-                    yvals_du_cfov = []
-                    xvals = []
-                    for i, row in enumerate(self.main.results['Uni']['values']):
-                        if len(row) > 0:
-                            xvals.append(i)
-                            yvals_iu_ufov.append(row[0])
-                            yvals_du_ufov.append(row[1])
-                            yvals_iu_cfov.append(row[2])
-                            yvals_du_cfov.append(row[3])
-                    if len(xvals) > 1:
-                        self.xtitle = 'Image number'
-
-                    self.curves.append(
-                        {'label': 'IU UFOV', 'xvals': xvals,
-                         'yvals': yvals_iu_ufov, 'style': '-bo'})
-                    self.curves.append(
-                        {'label': 'DU UFOV', 'xvals': xvals,
-                         'yvals': yvals_du_ufov, 'style': '-ro'})
-                    self.curves.append(
-                        {'label': 'IU CFOV', 'xvals': xvals,
-                         'yvals': yvals_iu_cfov, 'style': ':bo'})
-                    self.curves.append(
-                        {'label': 'DU CFOV', 'xvals': xvals,
-                         'yvals': yvals_du_cfov, 'style': ':ro'})
-                    self.xtitle = 'Image number'
-                    ytitle = 'Uniformity %'
-                    default_range_y = [0, 7]
-                elif plot_idx == 1:
-                    title = 'Curvature correction check'
-                    imgno = self.main.vGUI.active_img_no
-                    details_dict = self.main.results['Uni']['details_dict'][imgno]
-                    if 'correction_matrix' in details_dict:
-                        # averaging central 10% rows/cols
-                        temp_img = self.main.active_img
-                        corrected_img = details_dict['corrected_image']
-                        sz_y, sz_x = corrected_img.shape
-                        nx = round(0.05 * sz_x)
-                        ny = round(0.05 * sz_y)
-                        xhalf = round(sz_x/2)
-                        yhalf = round(sz_y/2)
-                        prof_y = np.mean(temp_img[:, xhalf-nx:xhalf+nx], axis=1)
-                        prof_x = np.mean(temp_img[yhalf-ny:yhalf+ny, :], axis=0)
-                        corr_prof_y = np.mean(
-                            corrected_img[:, xhalf-nx:xhalf+nx], axis=1)
-                        corr_prof_x = np.mean(
-                            corrected_img[yhalf-ny:yhalf+ny, :], axis=0)
-                        self.curves.append({'label': 'Central 10% rows corrected',
-                                            'xvals': np.arange(len(corr_prof_x)),
-                                            'yvals': corr_prof_x,
-                                            'style': 'r'})
-                        self.curves.append({'label': 'Central 10% rows original',
-                                            'xvals': np.arange(len(prof_x)),
-                                            'yvals': prof_x,
-                                            'style': ':r'})
-                        self.curves.append({'label': 'Central 10% columns corrected',
-                                            'xvals': np.arange(len(corr_prof_y)),
-                                            'yvals': corr_prof_y,
-                                            'style': 'b'})
-                        self.curves.append({'label': 'Central 10% columns original',
-                                            'xvals': np.arange(len(prof_y)),
-                                            'yvals': prof_y,
-                                            'style': ':b'})
-                        self.xtitle = 'pixel number'
-                        ytitle = 'Average pixel value'
-                        legend_location = 'lower center'
-                    else:
-                        at = matplotlib.offsetbox.AnchoredText(
-                            'No curvature correction applied',
-                            prop=dict(size=self.main.vGUI.annotations_font_size,
-                                      color='red'),
-                            frameon=False, loc='upper left')
-                        self.ax.add_artist(at)
+        if self.main.vGUI.active_img_no in self.marked_this:
+            if self.main.current_test in self.main.results:
+                if self.main.results[self.main.current_test] is not None:
+                    class_method = getattr(self, self.main.current_test, None)
+                    if class_method is not None:
+                        class_method()
 
         if len(self.curves) > 0:
             x_only_int = True
             for curve in self.curves:
-                self.ax.plot(curve['xvals'], curve['yvals'],
-                             curve['style'], label=curve['label'])
+                if 'markersize' in curve:
+                    markersize = curve['markersize']
+                else:
+                    markersize = 6.
+                if 'color' in curve:
+                    self.ax.plot(curve['xvals'], curve['yvals'],
+                                 curve['style'], label=curve['label'],
+                                 markersize=markersize,
+                                 color=curve['color'])
+                else:
+                    self.ax.plot(curve['xvals'], curve['yvals'],
+                                 curve['style'], label=curve['label'],
+                                 markersize=markersize)
                 if x_only_int:
                     xx = list(curve['xvals'])
                     if not isinstance(xx[0], int):
@@ -2985,20 +2769,648 @@ class ResultPlotCanvas(uir.PlotCanvas):
                 self.ax.xaxis.set_major_locator(
                     matplotlib.ticker.MaxNLocator(integer=True))
             if len(self.curves) > 1:
-                self.ax.legend(loc=legend_location)
-            if len(title) > 0:
-                self.ax.set_title(title)
+                self.ax.legend(loc=self.legend_location)
+            if len(self.title) > 0:
+                self.ax.set_title(self.title)
                 self.fig.subplots_adjust(0.15, 0.25, 0.95, 0.85)
             else:
                 self.fig.subplots_adjust(0.15, 0.2, 0.95, .95)
             self.ax.set_xlabel(self.xtitle)
-            self.ax.set_ylabel(ytitle)
-            if None not in default_range_x:
-                self.ax.set_xlim(default_range_x)
-            if None not in default_range_y:
-                self.ax.set_ylim(default_range_y)
+            self.ax.set_ylabel(self.ytitle)
+            if None not in self.default_range_x:
+                self.ax.set_xlim(self.default_range_x)
+            if None not in self.default_range_y:
+                self.ax.set_ylim(self.default_range_y)
+        else:
+            self.ax.axis('off')
 
         self.draw()
+
+    def test_values_outside_yrange(self, yrange):
+        """Set yrange to min/max (=None) if values outside default range."""
+        for curve in self.curves:
+            if yrange[0] is not None:
+                if min(curve['yvals']) < yrange[0]:
+                    yrange[0] = None
+            if yrange[1] is not None:
+                if max(curve['yvals']) > yrange[1]:
+                    yrange[1] = None
+            if not any(yrange):
+                break
+        return yrange
+
+    def ROI(self):
+        """Prepare plot for test ROI."""
+        xvals = []
+        yvals = []
+        for i, row in enumerate(self.main.results['ROI']['values']):
+            if len(row) > 0:
+                xvals.append(i)
+                yvals.append(row[0])
+        curve = {'label': 'Average',
+                 'xvals': xvals,
+                 'yvals': yvals,
+                 'style': '-b'}
+        self.curves.append(curve)
+        self.xtitle = 'Image index'
+        self.ytitle = 'Average pixel value'
+        if self.main.current_modality in ['Xray', 'NM']:
+            self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
+            self.ax.set_xticks(xvals)
+
+    def Hom(self):
+        """Prepare plot for test Hom."""
+        if self.main.current_modality == 'CT':
+            self.title = 'Difference (HU) from center'
+            img_nos = []
+            xvals = []
+            yvals12 = []
+            yvals15 = []
+            yvals18 = []
+            yvals21 = []
+            for i, row in enumerate(self.main.results['Hom']['values']):
+                if len(row) > 0:
+                    img_nos.append(i)
+                    xvals.append(self.zpos_all[i])
+                    yvals12.append(row[5])
+                    yvals15.append(row[6])
+                    yvals18.append(row[7])
+                    yvals21.append(row[8])
+            self.curves.append(
+                {'label': 'at 12', 'xvals': xvals,
+                 'yvals': yvals12, 'style': '-b'})
+            self.curves.append(
+                {'label': 'at 15', 'xvals': xvals,
+                 'yvals': yvals15, 'style': '-g'})
+            self.curves.append(
+                {'label': 'at 18', 'xvals': xvals,
+                 'yvals': yvals18, 'style': '-y'})
+            self.curves.append(
+                {'label': 'at 21', 'xvals': xvals,
+                 'yvals': yvals21, 'style': '-c'})
+            self.xtitle = 'zpos (mm)'
+            if None in xvals:
+                xvals = img_nos
+                self.xtitle = 'Image number'
+            self.ytitle = 'Difference (HU)'
+            tolmax = {'label': 'tolerance max',
+                      'xvals': [min(xvals), max(xvals)],
+                      'yvals': [4, 4],
+                      'style': '--k'}
+            tolmin = tolmax.copy()
+            tolmin['label'] = 'tolerance min'
+            tolmin['yvals'] = [-4, -4]
+            self.curves.append(tolmin)
+            self.curves.append(tolmax)
+            self.default_range_y = self.test_values_outside_yrange([-6, 6])
+        elif self.main.current_modality == 'PET':
+            self.title = '% difference from mean of all means'
+            yvalsC = []
+            yvals12 = []
+            yvals15 = []
+            yvals18 = []
+            yvals21 = []
+            for i, row in enumerate(self.main.results['Hom']['values']):
+                if len(row) > 0:
+                    img_nos.append(i)
+                    xvals.append(self.zpos_all[i])
+                    yvalsC.append(row[5])
+                    yvals12.append(row[6])
+                    yvals15.append(row[7])
+                    yvals18.append(row[8])
+                    yvals21.append(row[9])
+            self.curves.append(
+                {'label': 'Center', 'xvals': xvals,
+                 'yvals': yvalsC, 'style': '-r'})
+            self.curves.append(
+                {'label': 'at 12', 'xvals': xvals,
+                 'yvals': yvals12, 'style': '-b'})
+            self.curves.append(
+                {'label': 'at 15', 'xvals': xvals,
+                 'yvals': yvals15, 'style': '-g'})
+            self.curves.append(
+                {'label': 'at 18', 'xvals': xvals,
+                 'yvals': yvals18, 'style': '-y'})
+            self.curves.append(
+                {'label': 'at 21', 'xvals': xvals,
+                 'yvals': yvals21, 'style': '-c'})
+            self.xtitle = 'zpos (mm)'
+            if None in xvals:
+                xvals = img_nos
+                self.xtitle = 'Image number'
+            self.ytitle = '% difference'
+            tolmax = {'label': 'tolerance max',
+                      'xvals': [min(xvals), max(xvals)],
+                      'yvals': [5, 5],
+                      'style': '--k'}
+            tolmin = tolmax.copy()
+            tolmin['label'] = 'tolerance min'
+            tolmin['yvals'] = [-5, -5]
+            self.curves.append(tolmin)
+            self.curves.append(tolmax)
+            self.default_range_y = self.test_values_outside_yrange([-7, 7])
+
+    def CTn(self):
+        """Prepare plot for test CTn."""
+        self.title = 'CT linearity'
+        self.ytitle = 'Relative mass density'
+        yvals = self.main.current_paramset.ctn_table.relative_mass_density
+        imgno = self.main.vGUI.active_img_no
+        xvals = self.main.results['CTn']['values'][imgno]
+        self.curves.append(
+            {'label': 'HU mean', 'xvals': xvals,
+             'yvals': yvals, 'style': '-bo'})
+        fit_r2 = self.main.results['CTn']['values_sup'][imgno][0]
+        fit_b = self.main.results['CTn']['values_sup'][imgno][1]
+        fit_a = self.main.results['CTn']['values_sup'][imgno][2]
+        yvals = fit_a * np.array(xvals) + fit_b
+        self.curves.append(
+            {'label': 'fitted', 'xvals': xvals,
+             'yvals': yvals, 'style': 'b:'}
+            )
+        at = matplotlib.offsetbox.AnchoredText(
+            f'$R^2$ = {fit_r2:.4f}', loc='lower right')
+        self.ax.add_artist(at)
+        self.xtitle = 'HU value'
+
+    def HUw(self):
+        """Prepare plot for test HUw."""
+        xvals = []
+        yvals = []
+        img_nos = []
+        for i, row in enumerate(self.main.results['HUw']['values']):
+            if len(row) > 0:
+                img_nos.append(i)
+                xvals.append(self.zpos_all[i])
+                yvals.append(row[0])
+        curve = {'label': 'Average HU',
+                 'xvals': xvals,
+                 'yvals': yvals,
+                 'style': '-r'}
+        self.curves.append(curve)
+        self.xtitle = 'zpos (mm)'
+        if None in xvals:
+            xvals = img_nos
+            self.xtitle = 'Image number'
+        self.ytitle = 'Average HU'
+        tolmax = {'label': 'tolerance max',
+                  'xvals': [min(xvals), max(xvals)],
+                  'yvals': [4, 4],
+                  'style': '--k'}
+        tolmin = tolmax.copy()
+        tolmin['yvals'] = [-4, -4]
+        tolmin['label'] = 'tolerance min'
+        self.curves.append(tolmin)
+        self.curves.append(tolmax)
+        self.default_range_y = self.test_values_outside_yrange([-6, 6])
+
+    def Sli(self):
+        """Prepare plot for test Sli."""
+        if self.main.current_modality == 'CT':
+            self.title = 'Profiles for slice thickness calculations'
+            imgno = self.main.vGUI.active_img_no
+            details_dict = self.main.results['Sli']['details_dict'][imgno]
+            n_pix = len(details_dict['profiles'][0])
+            xvals = [details_dict['dx'] * i for i in range(n_pix)]
+            if self.main.current_paramset.sli_type == 0:
+                styles = ['k', 'g', 'b', 'r']
+            elif self.main.current_paramset.sli_type == 1:
+                styles = ['k', 'g', 'b', 'r', 'pink', 'c']
+            elif self.main.current_paramset.sli_type == 2:
+                styles = ['b', 'r']
+            for l_idx, profile in enumerate(details_dict['profiles']):
+                self.curves.append({'label': details_dict['labels'][l_idx],
+                                    'xvals': xvals,
+                                    'yvals': profile,
+                                    'style': styles[l_idx]})
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [min(xvals), max(xvals)],
+                    'yvals': [details_dict['background'][l_idx]] * 2,
+                    'style': ':'+styles[l_idx]})
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [min(xvals), max(xvals)],
+                    'yvals': [details_dict['peak'][l_idx]] * 2,
+                    'style': ':'+styles[l_idx]})
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [details_dict['start_x'][l_idx],
+                              details_dict['end_x'][l_idx]],
+                    'yvals': [details_dict['halfpeak'][l_idx]] * 2,
+                    'style': '--'+styles[l_idx]})
+            self.xtitle = 'pos (mm)'
+            self.ytitle = 'HU'
+
+    def MTF(self):
+        """Prepare plot for test MTF."""
+        imgno = self.main.vGUI.active_img_no
+        rowno = imgno
+        if self.main.results['MTF']['pr_image']:
+            details_dicts = self.main.results['MTF']['details_dict'][imgno]
+            if isinstance(details_dicts, dict):
+                details_dicts = [details_dicts]
+        else:
+            details_dicts = self.main.results['MTF']['details_dict']
+            rowno = 0
+
+        def prepare_plot_MTF():
+            nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
+            try:
+                mtf_cy_pr_mm = self.main.current_paramset.mtf_cy_pr_mm
+            except AttributeError:
+                mtf_cy_pr_mm = True
+            if mtf_cy_pr_mm is False:
+                nyquist_freq = 10. * nyquist_freq
+
+            self.xtitle = 'frequency [1/mm]' if mtf_cy_pr_mm else 'frequency [1/cm]'
+            self.ytitle = 'MTF'
+
+            colors = ['k', 'r']  # gaussian black, discrete red
+            linestyles = ['-', '--']
+            infotext = ['gaussian', 'discrete']
+            prefix = ['g', 'd']
+            suffix = [' x', ' y'] if len(details_dicts) == 2 else ['']
+            for ddno, dd in enumerate(details_dicts):
+                for no in range(len(prefix)):
+                    key = f'{prefix[no]}MTF_details'
+                    dd_this = dd[key]
+                    xvals = dd_this['MTF_freq']
+                    if mtf_cy_pr_mm is False:
+                        xvals = 10. * xvals  # convert to /cm
+                    yvals = dd_this['MTF']
+                    self.curves.append({
+                        'label': infotext[no] + ' MTF' + suffix[ddno],
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': linestyles[ddno] + colors[no]
+                         })
+
+            if 'MTF_filtered' in details_dicts[0]['gMTF_details']:
+                yvals = details_dicts[0]['gMTF_details']['MTF_filtered']
+                if yvals is not None:
+                    xvals = details_dicts[0]['gMTF_details']['MTF_freq']
+                    if mtf_cy_pr_mm is False:
+                        xvals = 10. * xvals  # convert to /cm
+                    yvals = details_dicts[0]['gMTF_details']['MTF_filtered']
+                    self.curves.append({
+                        'label': 'gaussian MTF pre-smoothed',
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': '--b'
+                         })
+
+            self.default_range_y = self.test_values_outside_yrange([0, 1.3])
+            self.default_range_x = [0, 1.1 * nyquist_freq]
+            self.curves.append({
+                'label': '_nolegend_',
+                'xvals': [nyquist_freq, nyquist_freq],
+                'yvals': [0, 1.3],
+                'style': ':k'
+                 })
+            self.ax.text(0.9*nyquist_freq, 0.5, 'Nyquist frequency',
+                         ha='left', size=8, color='gray')
+
+            # MTF %
+            values = self.main.results[self.main.current_test]['values'][rowno]
+            if self.main.current_modality == 'Xray':
+                yvals = [[0, .5]]
+                xvals = [[values[-1], values[-1]]]
+            else:
+                yvals = [[0, .5], [0, .1], [0, .02]]
+                xvals = [[values[i], values[i]] for i in range(3)]
+            for i in range(len(xvals)):
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': xvals[i],
+                    'yvals': yvals[i],
+                    'style': ':k'
+                     })
+            # MTF lp
+            if self.main.current_modality == 'Xray':
+                yvals = [[values[i], values[i]] for i in range(5)]
+                xvals = [[0, .5], [0, 1], [0, 1.5], [0, 2], [0, 2.5]]
+                for i in range(len(xvals)):
+                    self.curves.append({
+                        'label': '_nolegend_',
+                        'xvals': xvals[i],
+                        'yvals': yvals[i],
+                        'style': ':k'
+                         })
+
+        def prepare_plot_LSF():
+            self.xtitle = 'pos (mm)'
+            self.ytitle = 'LSF'
+            self.legend_location = 'upper left'
+
+            linestyles = ['-', '--']
+            suffix = [' x', ' y'] if len(details_dicts) == 2 else ['']
+            lbl_prefilter = ''
+            prefilter = False
+            if 'sigma_prefilter' in details_dicts[0]:
+                prefilter = True
+                lbl_prefilter = ' presmoothed'
+            for ddno, dd in enumerate(details_dicts):
+                xvals = dd['LSF_x']
+                yvals = dd['LSF']
+                self.curves.append({
+                    'label': 'LSF' + suffix[ddno],
+                    'xvals': xvals,
+                    'yvals': yvals,
+                    'style': linestyles[ddno] + 'r'
+                     })
+                dd_this = dd['gMTF_details']
+                if prefilter:
+                    xvals = dd_this['LSF_fit_x']
+                    yvals = dd_this['LSF_prefit']
+                    self.curves.append({
+                        'label': f'LSF{lbl_prefilter}' + suffix[ddno],
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': linestyles[ddno] + 'b'
+                         })
+                xvals = dd_this['LSF_fit_x']
+                yvals = dd_this['LSF_fit']
+                self.curves.append({
+                    'label': f'LSF{lbl_prefilter} - gaussian fit' + suffix[ddno],
+                    'xvals': xvals,
+                    'yvals': yvals,
+                    'style': linestyles[ddno] + 'k'
+                     })
+
+                if ddno == 0:
+                    dd_this = dd['dMTF_details']
+                    if 'cut_width' in dd_this:
+                        cw = dd_this['cut_width']
+                        if cw > 0:
+                            minmax = [np.min(yvals), np.max(yvals)]
+                            for x in [-1, 1]:
+                                self.curves.append({
+                                    'label': '_nolegend_',
+                                    'xvals': [x * cw] * 2,
+                                    'yvals': minmax,
+                                    'style': ':k'
+                                    })
+                                self.ax.text(
+                                    x * cw, np.mean(minmax), 'cut',
+                                    ha='left', size=8, color='gray')
+                            if 'cut_width_fade' in dd_this:
+                                cwf = dd_this['cut_width_fade']
+                                print(f' cut_width {cw} fade {cwf}')
+                                if cwf > cw:
+                                    for x in [-1, 1]:
+                                        self.curves.append({
+                                            'label': '_nolegend_',
+                                            'xvals': [x * cwf] * 2,
+                                            'yvals': minmax,
+                                            'style': ':k'
+                                            })
+                                        self.ax.text(
+                                            x * cwf, np.mean(minmax), 'fade',
+                                            ha='left', size=8, color='gray')
+                            self.default_range_x = [-1.5*cw, 1.5*cw]
+
+        def prepare_plot_sorted_pix():
+            try:
+                xvals = details_dicts[0]['sorted_pixels_x']
+                proceed = True
+            except KeyError:
+                proceed = False
+            use_edge_data = False
+            edge_details_dicts = None
+            if proceed is False:
+                if 'edge_details' in details_dicts[0]:
+                    edge_details_dicts = details_dicts[0]['edge_details']
+                    try:
+                        xvals = edge_details_dicts[0]['sorted_pixels_x']
+                        proceed = True
+                        use_edge_data = True
+                    except KeyError:
+                        proceed = False
+
+            if proceed:
+                self.xtitle = 'pos (mm)'
+                self.ytitle = 'Pixel value'
+                if use_edge_data:
+                    sorted_pixels = [ed['sorted_pixels'] for ed in edge_details_dicts]
+                else:
+                    sorted_pixels = details_dicts[0]['sorted_pixels']
+
+                for no, yvals in enumerate(sorted_pixels):
+                    if no == 0:
+                        self.curves.append({
+                            'label': 'Sorted pixels',
+                            'xvals': xvals,
+                            'yvals': yvals,
+                            'style': '.',
+                            'color': 'darkgray',
+                            'markersize': 2.,
+                             })
+                    else:
+                        self.curves[-1]['xvals'] = np.append(
+                            self.curves[-1]['xvals'], xvals)
+                        self.curves[-1]['yvals'] = np.append(
+                            self.curves[-1]['yvals'], yvals)
+                if 'interpolated_x' in details_dicts[0]:
+                    xvals = details_dicts[0]['interpolated_x']
+                    yvals = details_dicts[0]['interpolated']
+                    self.curves.append({
+                        'label': 'Interpolated',
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': '-r'
+                         })
+                    yvals = details_dicts[0]['presmoothed']
+                    self.curves.append({
+                        'label': 'Presmoothed',
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': '-b'
+                         })
+                if 'ESF' in details_dicts[0]:
+                    xvals = details_dicts[0]['LSF_x']
+                    if isinstance(details_dicts[0]['ESF'], list):
+                        for ESF in details_dicts[0]['ESF']:
+                            lbl = f' {no}' if len(details_dicts[0]['ESF']) > 1 else ''
+                            self.curves.append({
+                                'label': f'ESF{lbl}',
+                                'xvals': xvals,
+                                'yvals': ESF,
+                                'style': '-r'
+                                 })
+
+        def prepare_plot_centered_profiles():
+            self.xtitle = 'pos (mm)'
+            self.ytitle = 'Pixel value'
+            self.main.active_img
+
+            linestyles = ['-', '--']  # x, y
+            colors = ['g', 'b', 'r', 'k', 'c', 'm']
+            if len(details_dicts) == 2:
+                center_xy = [details_dicts[i]['center'] for i in range(2)]
+                submatrix = [details_dicts[0]['matrix']]
+            else:
+                center_xy = details_dicts[0]['center_xy']
+                submatrix = details_dicts[0]['matrix']
+
+            marked_imgs = self.main.treeFileList.get_marked_imgs_current_test()
+            pix = self.main.imgs[marked_imgs[0]].pix[0]
+            for no, sli in enumerate(submatrix):
+                if no in marked_imgs:
+                    suffix = f' {no}' if len(submatrix) > 1 else ''
+                    szy, szx = sli.shape
+                    xvals = pix * (np.arange(szx) - center_xy[0])
+                    yvals = sli[round(center_xy[0]), :]
+                    self.curves.append({
+                        'label': 'x' + suffix,
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': linestyles[0] + colors[no % len(colors)]
+                         })
+                    xvals = pix * (np.arange(szy) - center_xy[1])
+                    yvals = sli[:, round(center_xy[1])]
+                    self.curves.append({
+                        'label': 'y' + suffix,
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': linestyles[1] + colors[no % len(colors)]
+                         })
+
+        def prepare_plot_edge_position():
+            self.xtitle = 'pos (mm)'
+            self.ytitle = 'ROI row index'
+
+            if 'edge_details' in details_dicts[0]:
+                eds = details_dicts[0]['edge_details']
+                colors = ['r', 'b', 'g', 'c']
+                deg = u'\N{DEGREE SIGN}'
+                txt_info = []
+                for edno, ed in enumerate(eds):
+                    lbl = f' {edno}' if len(eds) > 1 else ''
+                    xvals = ed['edge_pos']
+                    yvals = ed['edge_row']
+                    self.curves.append({
+                        'label': f'edge{lbl}',
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': '.',
+                        'color': 'darkgray',
+                        'markersize': 2.,
+                         })
+                    xvals = ed['edge_fit_x']
+                    yvals = ed['edge_fit_y']
+                    self.curves.append({
+                        'label': f'fit edge{lbl}',
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': f'-{colors[edno]}'
+                         })
+                    lbl = f'{edno}: ' if len(eds) > 1 else ''
+                    txt_info.append(
+                        f'{lbl}$R^2$ = {ed["edge_r2"]:.4f}, angle = {ed["angle"]:.2f}{deg}'
+                        )
+
+                at = matplotlib.offsetbox.AnchoredText(
+                    '\n'.join(txt_info), loc='lower right')
+                self.ax.add_artist(at)
+
+        test_widget = self.main.sTestTabs.currentWidget()
+        try:
+            sel_text = test_widget.mtf_plot.currentText()
+        except AttributeError:
+            sel_text = ''
+        if sel_text == 'MTF':
+            prepare_plot_MTF()
+        elif sel_text == 'LSF':
+            prepare_plot_LSF()
+        elif sel_text == 'Sorted pixel values':
+            prepare_plot_sorted_pix()
+        elif sel_text == 'Centered xy profiles':
+            prepare_plot_centered_profiles()
+        elif sel_text == 'Edge position':
+            prepare_plot_edge_position()
+        self.title = sel_text
+
+    def Uni(self):
+        """Prepare plot for test Uni."""
+        plot_idx = self.main.tabNM.uni_plot.currentIndex()
+        if plot_idx == 0:
+            self.title = 'Uniformity result for all images'
+            yvals_iu_ufov = []
+            yvals_du_ufov = []
+            yvals_iu_cfov = []
+            yvals_du_cfov = []
+            xvals = []
+            for i, row in enumerate(self.main.results['Uni']['values']):
+                if len(row) > 0:
+                    xvals.append(i)
+                    yvals_iu_ufov.append(row[0])
+                    yvals_du_ufov.append(row[1])
+                    yvals_iu_cfov.append(row[2])
+                    yvals_du_cfov.append(row[3])
+            if len(xvals) > 1:
+                self.xtitle = 'Image number'
+
+            self.curves.append(
+                {'label': 'IU UFOV', 'xvals': xvals,
+                 'yvals': yvals_iu_ufov, 'style': '-bo'})
+            self.curves.append(
+                {'label': 'DU UFOV', 'xvals': xvals,
+                 'yvals': yvals_du_ufov, 'style': '-ro'})
+            self.curves.append(
+                {'label': 'IU CFOV', 'xvals': xvals,
+                 'yvals': yvals_iu_cfov, 'style': ':bo'})
+            self.curves.append(
+                {'label': 'DU CFOV', 'xvals': xvals,
+                 'yvals': yvals_du_cfov, 'style': ':ro'})
+            self.xtitle = 'Image number'
+            self.ytitle = 'Uniformity %'
+            self.default_range_y = self.test_values_outside_yrange([0, 7])
+        elif plot_idx == 1:
+            self.title = 'Curvature correction check'
+            imgno = self.main.vGUI.active_img_no
+            details_dict = self.main.results['Uni']['details_dict'][imgno]
+            if 'correction_matrix' in details_dict:
+                # averaging central 10% rows/cols
+                temp_img = self.main.active_img
+                corrected_img = details_dict['corrected_image']
+                sz_y, sz_x = corrected_img.shape
+                nx = round(0.05 * sz_x)
+                ny = round(0.05 * sz_y)
+                xhalf = round(sz_x/2)
+                yhalf = round(sz_y/2)
+                prof_y = np.mean(temp_img[:, xhalf-nx:xhalf+nx], axis=1)
+                prof_x = np.mean(temp_img[yhalf-ny:yhalf+ny, :], axis=0)
+                corr_prof_y = np.mean(
+                    corrected_img[:, xhalf-nx:xhalf+nx], axis=1)
+                corr_prof_x = np.mean(
+                    corrected_img[yhalf-ny:yhalf+ny, :], axis=0)
+                self.curves.append({'label': 'Central 10% rows corrected',
+                                    'xvals': np.arange(len(corr_prof_x)),
+                                    'yvals': corr_prof_x,
+                                    'style': 'r'})
+                self.curves.append({'label': 'Central 10% rows original',
+                                    'xvals': np.arange(len(prof_x)),
+                                    'yvals': prof_x,
+                                    'style': ':r'})
+                self.curves.append({'label': 'Central 10% columns corrected',
+                                    'xvals': np.arange(len(corr_prof_y)),
+                                    'yvals': corr_prof_y,
+                                    'style': 'b'})
+                self.curves.append({'label': 'Central 10% columns original',
+                                    'xvals': np.arange(len(prof_y)),
+                                    'yvals': prof_y,
+                                    'style': ':b'})
+                self.xtitle = 'pixel number'
+                self.ytitle = 'Average pixel value'
+                self.legend_location = 'lower center'
+            else:
+                at = matplotlib.offsetbox.AnchoredText(
+                    'No curvature correction applied',
+                    prop=dict(size=self.main.vGUI.annotations_font_size,
+                              color='red'),
+                    frameon=False, loc='upper left')
+                self.ax.add_artist(at)
 
 
 class ResultImageWidget(GenericImageWidget):
@@ -3038,51 +3450,27 @@ class ResultImageCanvas(GenericImageCanvas):
     def result_image_draw(self):
         """Refresh result image."""
         self.ax.cla()
-        nparr = None
-        imgno = self.main.vGUI.active_img_no
-        cmap = 'gray'
-        min_val = None
-        max_val = None
-        title = ''
-        details_dict = {}
+        self.current_image = None
+        self.cmap = 'gray'
+        self.min_val = None
+        self.max_val = None
+        self.title = ''
 
-        if self.main.current_test in [*self.main.results]:
-            if self.main.current_test == 'Uni':
-                if self.main.current_paramset.uni_sum_first:
-                    try:
-                        details_dict = self.main.results['Uni']['details_dict'][0]
-                    except KeyError:
-                        pass
-                else:
-                    try:
-                        details_dict = self.main.results['Uni']['details_dict'][imgno]
-                    except KeyError:
-                        pass
-                cmap = 'viridis'
-                type_img = self.main.tabNM.uni_result_image.currentIndex()
-                if type_img == 0:
-                    title = 'Differential uniformity map in UFOV (max in x/y direction)'
-                    if 'du_matrix' in details_dict:
-                        nparr = details_dict['du_matrix']
-                elif type_img == 1:
-                    title = 'Processed image minimum 6.4 mm pr pix'
-                    if 'matrix' in details_dict:
-                        nparr = details_dict['matrix']
-                elif type_img == 2:
-                    title = 'Curvature corrected image'
-                    if 'corrected_image' in details_dict:
-                        nparr = details_dict['corrected_image']
-                
+        if self.main.current_test in self.main.results:
+            if self.main.results[self.main.current_test] is not None:
+                class_method = getattr(self, self.main.current_test, None)
+                if class_method is not None:
+                    class_method()
 
-        self.current_image = nparr
-        if nparr is not None:
-            if min_val is None:
-                min_val = np.min(nparr)
-            if max_val is None:
-                max_val = np.max(nparr)
+        if self.current_image is not None:
+            if self.min_val is None:
+                self.min_val = np.min(self.current_image)
+            if self.max_val is None:
+                self.max_val = np.max(self.current_image)
             self.img = self.ax.imshow(
-                nparr, cmap=cmap, vmin=min_val, vmax=max_val)
-            self.ax.set_title(title)
+                self.current_image,
+                cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
+            self.ax.set_title(self.title)
         else:
             self.img = self.ax.imshow(np.zeros((100, 100)))
             at = matplotlib.offsetbox.AnchoredText(
@@ -3092,6 +3480,34 @@ class ResultImageCanvas(GenericImageCanvas):
             self.ax.add_artist(at)
         self.ax.axis('off')
         self.draw()
+
+    def Uni(self):
+        """Prepare result image for test Uni."""
+        if self.main.current_paramset.uni_sum_first:
+            try:
+                details_dict = self.main.results['Uni']['details_dict'][0]
+            except KeyError:
+                details_dict = {}
+        else:
+            try:
+                details_dict = self.main.results['Uni']['details_dict'][
+                    self.main.vGUI.active_img_no]
+            except KeyError:
+                details_dict = {}
+        self.cmap = 'viridis'
+        type_img = self.main.tabNM.uni_result_image.currentIndex()
+        if type_img == 0:
+            self.title = 'Differential uniformity map in UFOV (max in x/y direction)'
+            if 'du_matrix' in details_dict:
+                self.current_image = details_dict['du_matrix']
+        elif type_img == 1:
+            self.title = 'Processed image minimum 6.4 mm pr pix'
+            if 'matrix' in details_dict:
+                self.current_image = details_dict['matrix']
+        elif type_img == 2:
+            self.title = 'Curvature corrected image'
+            if 'corrected_image' in details_dict:
+                self.current_image = details_dict['corrected_image']
 
 
 class ResultImageNavigationToolbar(NavigationToolbar2QT):
@@ -3112,8 +3528,9 @@ class ResultImageNavigationToolbar(NavigationToolbar2QT):
 class StatusBar(QStatusBar):
     """Tweeks to QStatusBar."""
 
-    def __init__(self):
+    def __init__(self, parent):
         super().__init__()
+        self.main = parent
         self.setStyleSheet("QStatusBar{padding-left: 8px;}")
         self.default_color = self.palette().window().color().name()
         self.message = QLabel('')
@@ -3122,10 +3539,18 @@ class StatusBar(QStatusBar):
         self.timer = QTimer()
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.clearMessage)
+        self.saved_warnings = []
 
-    def showMessage(self, txt, timeout=0):
+    def showMessage(self, txt, timeout=0, warning=False):
         """Set background color when message is shown."""
-        self.setStyleSheet("QStatusBar{background:#6e94c0;}")
+        if warning:
+            self.setStyleSheet("QStatusBar{background:#efb412;}")
+            timeout = 2000
+            txt_ = f'{ctime()}: {self.main.current_test}: {txt}'
+            self.saved_warnings.append(txt_)
+            self.main.actWarning.setEnabled(True)
+        else:
+            self.setStyleSheet("QStatusBar{background:#6e94c0;}")
         self.message.setText(txt)
         if timeout > 0:
             self.timer.start(timeout)

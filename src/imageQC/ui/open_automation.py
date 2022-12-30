@@ -17,11 +17,13 @@ from PyQt5.QtWidgets import (
     QFileDialog, QMessageBox
     )
 
+# imageQC block start
 import imageQC.config.config_func as cff
 import imageQC.ui.reusables as uir
 from imageQC.config.iQCconstants import ENV_ICON_PATH, QUICKTEST_OPTIONS
-import imageQC.ui.settings
+import imageQC.ui.settings as settings
 import imageQC.scripts.automation as automation
+# imageQC block end
 
 
 class OpenAutomationDialog(QDialog):
@@ -314,7 +316,7 @@ class OpenAutomationDialog(QDialog):
             mod = self.templates_mod[tempno]
             if self.templates_is_vendor[tempno]:
                 view = 'Templates vendor files'
-            dlg = imageQC.ui.settings.SettingsDialog(
+            dlg = settings.SettingsDialog(
                 self.main, initial_view=view)
             #modality=mod, template_id=self.templates_id[tempno])
             dlg.exec()

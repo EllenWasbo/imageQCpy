@@ -17,10 +17,12 @@ from PyQt5.QtWidgets import (
     QFileDialog, QDialogButtonBox,
 )
 
+# imageQC block start
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.ui.reusables import (
     FontItalic, LabelItalic, LabelHeader, HLine, ToolBarBrowse)
 from imageQC.scripts.dcm import find_all_valid_dcm_files, read_dcm_info
+# imageQC block end
 
 
 class OpenMultiDialog(QDialog):

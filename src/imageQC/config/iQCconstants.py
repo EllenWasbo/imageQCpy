@@ -9,8 +9,10 @@ Constants accessible for several modules within imageQC.
 import os
 # import configparser
 
+# imageQC block start
 import imageQC.config.config_classes as cfc
 import imageQC.config.iQCconstants_functions as iQCconstants_functions
+# imageQC block end
 
 
 USERNAME = os.getlogin()
@@ -22,7 +24,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.0alpha'
+VERSION = '3.0.1alpha'
 '''if os.path.exists(cfg_path):
     config = configparser.ConfigParser()
     try:
@@ -75,12 +77,9 @@ CALCULATION_OPTIONS = ['=', 'min', 'max', 'mean', 'stdev', 'max abs']
 
 roi_headers = ['Average', 'Stdev']
 
-# altSup always at end (index -1)
 HEADERS = {
     'CT': {
-        'ROI': {
-            'alt0': roi_headers
-            },
+        'ROI': {'alt0': roi_headers},
         'Hom': {
             'alt0': ['HU at12', 'HU at15', 'HU at18', 'HU at21', 'HU center',
                      'diff at12', 'diff at15', 'diff at18', 'diff at21'],
@@ -91,9 +90,7 @@ HEADERS = {
             'alt0': ['CT number (HU)', 'Noise=Stdev (HU)',
                      'Diff avg noise(%)', 'Avg noise (HU)']
             },
-        'CTn': {
-            'altSup': ['R-squared', 'fitted intercept', 'fitted slope']
-            },
+        'CTn': {},
         'Sli': {
             'alt0': ['Nominal', 'H1', 'H2', 'V1', 'V2', 'Avg',
                      'Diff nominal (%)'],
@@ -107,17 +104,11 @@ HEADERS = {
             'alt1': ['MTF 50%', 'MTF 10%', 'MTF 2%'],
             'alt2': ['MTF 50%', 'MTF 10%', 'MTF 2%']
             },
-        'HUw': {
-            'alt0': ['CT number (HU)', 'Noise=Stdev']
-            },
-        'Rin': {
-            'alt0': ['Min diff from trend (HU)', 'Max diff from trend (HU)']
-            }
+        'HUw': {'alt0': ['CT number (HU)', 'Noise=Stdev']},
+        'Rin': {'alt0': ['Min diff from trend (HU)', 'Max diff from trend (HU)']}
         },
     'Xray': {
-        'ROI': {
-            'alt0': roi_headers
-            },
+        'ROI': {'alt0': roi_headers},
         'Hom': {
             'alt0': ['Center', 'ROI 1', 'ROI 2', 'ROI 3', 'ROI 4',
                      'Std Center', 'Std 1', 'Std 2', 'Std 3', 'Std 4'],
@@ -128,28 +119,18 @@ HEADERS = {
                      'C - avg %', 'ROI1 - avg %', 'ROI2 - avg %',
                      'ROI3 - avg %', 'ROI4 - avg %']
             },
-        'Noi': {
-            'alt0': ['Avg pixel value', 'Noise=Stdev']
-            },
+        'Noi': {'alt0': ['Avg pixel value', 'Noise=Stdev']},
         'MTF': {
             'alt0': ['MTF @ 0.5/mm', 'MTF @ 1.0/mm', 'MTF @ 1.5/mm',
                      'MTF @ 2.0/mm', 'MTF @ 2.5/mm', 'Freq @ MTF 0.5']
             }
         },
     'NM': {
-        'ROI': {
-            'alt0': roi_headers
-            },
-        'Uni': {
-            'alt0': ['IU_UFOV %', 'DU_UFOV %', 'IU_CFOV %', 'DU_CFOV %'],
-            'altSup': ['FitX (mm from center)', 'FitY (mm from center)',
-                       'Fit distance (mm)']
-            },
+        'ROI': {'alt0': roi_headers},
+        'Uni': {'alt0': ['IU_UFOV %', 'DU_UFOV %', 'IU_CFOV %', 'DU_CFOV %']},
         'SNI': {
             'alt0': ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', 'SNI S2',
                      'SNI S3', 'SNI S4', 'SNI S5', 'SNI S6'],
-            'altSup': ['FitX (mm from center)', 'FitY (mm from center)',
-                       'Fit distance (mm)']
             },
         'Bar': {
             'alt0': ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',
@@ -157,18 +138,12 @@ HEADERS = {
             }
         },
     'SPECT': {
-        'ROI': {
-            'alt0': roi_headers
-            },
-        'MTF': {
-            },
-        'Con': {
-            }
+        'ROI': {'alt0': roi_headers},
+        'MTF': {},
+        'Con': {}
         },
     'PET': {
-        'ROI': {
-            'alt0': roi_headers
-            },
+        'ROI': {'alt0': roi_headers},
         'Hom': {
             'alt0': ['Center', 'at12', 'at15', 'at18', 'at21',
                      'dMean% C', 'dMean% at12', 'dMean% at15',
@@ -176,27 +151,53 @@ HEADERS = {
             }
         },
     'MR': {
-        'ROI': {
-            'alt0': roi_headers
-            },
-        'SNR': {
-            'alt0': ['S img 1', 'S img 2', 'S mean', 'stdev diff', 'SNR']
-            },
-        'PIU': {
-            'alt0': ['min', 'max', 'PIU'],
-            'altSup': ['x min (pix from lower left)', 'y min',
-                       'x max', 'y max']
-            },
-        'Gho': {
-            'alt0': ['Center', 'top', 'bottom', 'left', 'right', 'PSG']
-            },
+        'ROI': {'alt0': roi_headers},
+        'SNR': {'alt0': ['S img 1', 'S img 2', 'S mean', 'stdev diff', 'SNR']},
+        'PIU': {'alt0': ['min', 'max', 'PIU']},
+        'Gho': {'alt0': ['Center', 'top', 'bottom', 'left', 'right', 'PSG']},
         'Geo': {
             'alt0': ['width_0', 'width_90', 'width_45', 'width_135',
                      'GD_0', 'GD_90', 'GD_45', 'GD_135']
             },
-        'Sli': {
-            'alt0': ['Nominal (mm)', 'Measured (mm)', 'Diff (mm)', 'Diff (%)']
-            }
+        'Sli': {'alt0': ['Nominal (mm)', 'Measured (mm)', 'Diff (mm)', 'Diff (%)']}
+        }
+    }
+
+# all modalities should be present with at least {}
+# altAll if same supplement table for all
+# else same alt0..n as for HEADERS ([] if none)
+HEADERS_SUP = {
+    'CT': {
+        'Hom': {
+            'altAll': ['Stdev at12', 'Stdev at15', 'Stdev at18', 'Stdev at21',
+                       'Stdev Center']
+            },
+        'CTn': {'altAll': ['R-squared', 'fitted intercept', 'fitted slope']},
+        'MTF': {
+            'alt0': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
+                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
+            'alt1': ['A1', 'sigma1', 'A2', 'sigma2'],
+            'alt2': ['A1', 'sigma1', 'A2', 'sigma2']
+            },
+        },
+    'Xray': {},
+    'NM': {
+        'Uni': {
+            'altAll': ['FitX (mm from center)', 'FitY (mm from center)',
+                       'Fit distance (mm)']
+            },
+        'SNI': {
+            'altAll': ['FitX (mm from center)', 'FitY (mm from center)',
+                       'Fit distance (mm)']
+            },
+        },
+    'SPECT': {},
+    'PET':  {},
+    'MR': {
+        'PIU': {
+            'altAll': ['x min (pix from lower left)', 'y min',
+                       'x max', 'y max']
+            },
         }
     }
 

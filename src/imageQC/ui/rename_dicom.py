@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
     QMessageBox
     )
 
+# imageQC block start
 from imageQC.ui.reusables import (
     ProgressModal, LabelItalic, ToolBarBrowse, proceed_question)
 from imageQC.ui.settings import RenamePatternWidget
@@ -27,6 +28,7 @@ from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.scripts.dcm import find_all_valid_dcm_files, get_dcm_info_list
 from imageQC.scripts.mini_methods_format import (
     valid_path, generate_uniq_filepath)
+# imageQC block end
 
 
 class RenameDicomDialog(QDialog):

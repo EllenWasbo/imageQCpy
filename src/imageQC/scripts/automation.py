@@ -6,7 +6,7 @@ Run automatic tests based on settings.
 @author: Ellen Wasbø
 """
 from __future__ import annotations
-#from dataclasses import dataclass, field
+
 import os
 from pathlib import Path
 from fnmatch import fnmatch
@@ -14,6 +14,7 @@ import logging
 
 import pydicom
 
+# imageQC block start
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
 from imageQC.scripts.input_main_no_gui import InputMain
@@ -24,28 +25,11 @@ from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.scripts.mini_methods_format import valid_path
 import imageQC.config.config_classes as cfc
 from imageQC.ui.reusables import proceed_question
+# imageQC block end
 
 pydicom.config.future_behavior(True)
 logger = logging.getLogger(__name__)
 
-'''
-@dataclass
-class InputMain:
-    """Dataclass with values as MainWindow when without main window."""
-
-    current_modality: str = 'CT'
-    current_test: str = 'DCM'
-    current_paramset: dict = field(default_factory=dict)
-    # converted from dict to paramset of correct modality when used
-    current_quicktest: cfc.QuickTestTemplate = field(
-        default_factory=cfc.QuickTestTemplate)
-    tag_infos: list = field(default_factory=list)
-    imgs: list = field(default_factory=list)
-    results: dict = field(default_factory=dict)
-    current_group_indicators: list = field(default_factory=list)
-    # string for each image if output set pr group with quicktest (paramset.output)
-    automation_active: bool = True
-'''
 
 def run_automation_non_gui(sysargv):
     """Run automation without GUI based on sys.argv."""

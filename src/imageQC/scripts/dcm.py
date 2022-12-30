@@ -17,10 +17,11 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMessageBox, QDialog, QTextEdit
 
+# imageQC block start
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS, ENV_ICON_PATH
 from imageQC.scripts.mini_methods_format import get_format_strings
 from imageQC.config.config_classes import TagPatternFormat
-
+# imageQC block end
 
 pydicom.config.future_behavior(True)
 

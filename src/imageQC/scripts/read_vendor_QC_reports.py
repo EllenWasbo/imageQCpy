@@ -10,7 +10,10 @@ import datetime
 import xml.etree.ElementTree as ET
 
 import pdfplumber
-from charset_normalizer import md__mypyc
+try:  # only needed with pyinstaller, importerror if run from spyder
+    from charset_normalizer import md__mypyc
+except ImportError:
+    pass
 
 #TODO - fnmatch is case insensitive on Windows. Adding option for .lower for handeling other os
 

@@ -194,7 +194,7 @@ class QuickTestOutputSub:
     """Class for holding details for element of QuickTestOutputTemplates."""
 
     label: str = ''  # header_ prefix when header included
-    alternative: int = 0
+    alternative: int = 0  # if supplement table starting with 10
     columns: list = field(default_factory=lambda: [])  # list of ints
     calculation: str = '='
     per_group: bool = False
@@ -274,7 +274,7 @@ class ParamSetXray(ParamSetCommon):
     # if non-zero - same distance to center for all (half if distance is zero)
     hom_tab_alt: int = 0  # alternatives for what to calculate in table
     noi_percent: int = 90
-    mtf_type: int = 1
+    mtf_type: int = 1  # exponential=0, gaussian=1, None(discrete)=2
     mtf_roi_size_x: int = 20.
     mtf_roi_size_y: int = 50.
     mtf_plot: int = 3
@@ -284,6 +284,7 @@ class ParamSetXray(ParamSetCommon):
     mtf_offset_xy: list[float] = field(default_factory=lambda: [0., 0.])
     mtf_offset_mm: bool = False  # False = pix, True = mm
     mtf_auto_center: bool = False
+    mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     nps_roi_size: int = 256
     nps_sub_size: int = 5

@@ -14,12 +14,14 @@ from dataclasses import asdict
 
 from PyQt5.QtWidgets import QMessageBox, QFileDialog
 
+# imageQC block start
 from imageQC.config.iQCconstants import (
     USERNAME, APPDATA, TEMPDIR, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER,
     CONFIG_FNAMES, USER_PREFS_FNAME
     )
 import imageQC.config.config_classes as cfc
 import imageQC.ui.ui_dialogs as uid
+# imageQC block end
 
 
 def test_config_folder(widget):

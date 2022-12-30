@@ -6,15 +6,14 @@ Created on Tue Feb 15 13:42:55 2022
 """
 import scipy.io
 import numpy as np
-import pandas as pd
 import copy
-from PyQt5.QtCore import QFile, QIODevice
-from io import BytesIO
 
+# imageQC block start
 import imageQC.config.config_classes as cfc
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants_functions import empty_template_dict
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
+# imageQC block end
 
 # attribute name pair where IDL attribute name is not only uppercase of PY attributename
 idl_py_attr = [

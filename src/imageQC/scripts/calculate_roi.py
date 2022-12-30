@@ -8,14 +8,23 @@ Calculation processes for the different tests.
 
 import numpy as np
 from scipy import ndimage
+from skimage import feature
 
+# imageQC block start
 from imageQC.scripts.mini_methods_calculate import (
     get_width_center_at_threshold, rotate_point
     )
+# imageQC block end
 
 
 def get_rois(image, image_number, input_main):
     """Get ROI array depending on test, modality and input image.
+
+    INFO:
+    The inner functions pr testcode should return either
+    roi_array or
+    (roi_array, errmsg)
+    Ther roi_array should either be a numpy 2d.array or a list of numpy 2d.arrays.
 
     Parameters
     ----------
@@ -34,8 +43,10 @@ def get_rois(image, image_number, input_main):
         dimension ndarray according to input image or one extra dimension
         True/False where True = inside ROI, False = outside ROI
         dict if slice thickness CT
+    errmsg : str or list of str or None
     """
     roi_array = None
+    errmsg = None
 
     test_code = input_main.current_test
     paramset = input_main.current_paramset
@@ -49,58 +60,70 @@ def get_rois(image, image_number, input_main):
     except AttributeError:
         delta_xya = [0, 0, 0.0]
 
-    if test_code == 'ROI':
+    def ROI():
+        roi_this = None
         # roi_type 0=circular, 1=rectangular, 2=rectangular wi
         if paramset.roi_type == 0:
             roi_size_in_pix = paramset.roi_radius / image_dict.pix[0]
-            roi_array = get_roi_circle(
+            roi_this = get_roi_circle(
                 img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
         else:
             w = paramset.roi_x / image_dict.pix[0]
             h = paramset.roi_y / image_dict.pix[1]
-            roi_array = get_roi_rectangle(
+            roi_this = get_roi_rectangle(
                 img_shape, roi_width=w, roi_height=h,
                 offcenter_xy=delta_xya[0:2])
             if paramset.roi_type == 2:  # rotated ROI
-                roi_array = ndimage.rotate(
+                roi_this = ndimage.rotate(
                     roi_array, paramset.roi_a, reshape=False)
 
-    elif test_code == 'Hom':
-        roi_array = get_roi_hom(image_dict, paramset,
-                                delta_xya=delta_xya,
-                                modality=input_main.current_modality)
+        return roi_this
 
-    elif test_code == 'Noi':
+    def Hom():
+        return get_roi_hom(
+            image_dict, paramset, delta_xya=delta_xya,
+            modality=input_main.current_modality)
+
+    def Noi():
+        roi_this = None
         if input_main.current_modality == 'CT':
             roi_size_in_pix = paramset.noi_roi_size / image_dict.pix[0]
-            roi_array = get_roi_circle(
+            roi_this = get_roi_circle(
                 img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
         if input_main.current_modality == 'Xray':
             w = 0.01 * paramset.noi_percent * img_shape[1]
             h = 0.01 * paramset.noi_percent * img_shape[0]
-            roi_array = get_roi_rectangle(
+            roi_this = get_roi_rectangle(
                 img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
 
-    elif test_code == 'HUw':
+        return roi_this
+
+    def HUw():
         roi_size_in_pix = paramset.huw_roi_size / image_dict.pix[0]
-        roi_array = get_roi_circle(
+        return get_roi_circle(
             img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
 
-    elif test_code == 'MTF':
-        if input_main.current_modality == 'CT':
-            off_center_xy = delta_xya[0:2]
-            roi_size_in_pix = paramset.mtf_roi_size / image_dict.pix[0]
+    def MTF():
+        roi_this = None
+        errmsg = None
+        off_center_xy = delta_xya[0:2]
+        try:
             if paramset.mtf_offset_mm:
                 extra_xy = np.array(paramset.mtf_offset_xy) / image_dict.pix[0]
             else:
                 extra_xy = np.array(paramset.mtf_offset_xy)
             off_center_xy = np.add(extra_xy, np.array(off_center_xy))
+        except AttributeError:
+            pass
+
+        if input_main.current_modality == 'CT':
+            roi_size_in_pix = paramset.mtf_roi_size / image_dict.pix[0]
             if paramset.mtf_type == 0:  # bead
                 if paramset.mtf_auto_center:
                     yxmax = get_max_pos_yx(image)
                     off_center_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
-                roi_array = [[], []]
-                roi_array[0] = get_roi_rectangle(
+                roi_this = [[], []]
+                roi_this[0] = get_roi_rectangle(
                     img_shape,
                     roi_width=2*roi_size_in_pix + 1,
                     roi_height=2*roi_size_in_pix + 1,
@@ -111,71 +134,130 @@ def get_rois(image, image_number, input_main):
                     roi_width=2*(roi_size_in_pix + bg_width_in_pix) + 1,
                     roi_height=2*(roi_size_in_pix + bg_width_in_pix) + 1,
                     offcenter_xy=off_center_xy)
-                background_outer[roi_array[0] == True] = False
-                roi_array[1] = background_outer
-            elif paramset.mtf_type == 1:  # wire
+                background_outer[roi_this[0] == True] = False
+                roi_this[1] = background_outer
+            else:  # circular edge / wire
                 if paramset.mtf_auto_center:
-                    pass#find postion of max in image or summed image? (summed of marked for gui, sum of group for actual calc)
-                roi_array = get_roi_rectangle(
-                    img_shape,
-                    roi_width=2*roi_size_in_pix + 1,
-                    roi_height=2*roi_size_in_pix + 1,
-                    offcenter_xy=delta_xya[0:2])
-            else:  # circular edge
-                if paramset.mtf_auto_center:
-                    pass#find position of center of max plateu?
-                roi_array = get_roi_circle(
-                    img_shape,
-                    (delta_xya[0], delta_xya[1]), roi_size_in_pix)
+                    # heavy filtering, find max pixel
+                    filt_img = ndimage.gaussian_filter(image, sigma=5)
+                    yxmax = get_max_pos_yx(filt_img)
+                    off_center_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
+
+                if paramset.mtf_type == 1:  # wire
+                    roi_this = get_roi_rectangle(
+                        img_shape,
+                        roi_width=2*roi_size_in_pix + 1,
+                        roi_height=2*roi_size_in_pix + 1,
+                        offcenter_xy=off_center_xy)
+                elif paramset.mtf_type == 2:  # circular edge
+                    roi_this = get_roi_circle(
+                        img_shape, off_center_xy, roi_size_in_pix)
+
         elif input_main.current_modality == 'Xray':
             dx = delta_xya[0]  # center of ROI
             dy = delta_xya[1]
+            roi_sz_xy = [
+                paramset.mtf_roi_size_x / image_dict.pix[0],
+                paramset.mtf_roi_size_y / image_dict.pix[1]
+                ]
             if paramset.mtf_auto_center:
-                pass
-                #center of object, then 4 rois - left/right top/btm roi + mean?
-                #or x closest to center
+                rect_dict = find_rectangle_object(image)
+                if rect_dict['centers_of_edges_xy'] is not None:
+                    centers_of_edges_xy = rect_dict['centers_of_edges_xy']
+                    cent = [image.shape[1] // 2, image.shape[0] // 2]
+                    off_xy = [
+                        [xy[0] - cent[0], xy[1] - cent[1]]
+                        for xy in centers_of_edges_xy]
+                    if paramset.mtf_auto_center_type == 1:
+                        # find most central edge
+                        distsq = [np.sum(np.power(xy, 2)) for xy in off_xy]
+                        idx_min = np.argmin(distsq)
+                        height_idx = idx_min % 2
+                        width_idx = 1 if height_idx == 0 else 0
+                        roi_this = get_roi_rectangle(
+                            img_shape,
+                            roi_width=roi_sz_xy[width_idx],
+                            roi_height=roi_sz_xy[height_idx],
+                            offcenter_xy=off_xy[idx_min]
+                            )
+                    else:
+                        roi_this = []
+                        for i in range(len(off_xy)):
+                            height_idx = i % 2
+                            width_idx = 1 if height_idx == 0 else 0
+                            roi_this.append(get_roi_rectangle(
+                                img_shape,
+                                roi_width=roi_sz_xy[width_idx],
+                                roi_height=roi_sz_xy[height_idx],
+                                offcenter_xy=off_xy[i]
+                                )
+                            )
+
             else:
                 if any(paramset.mtf_offset_xy):
                     if paramset.mtf_offset_mm:
-                        dx += paramset.mtf_offset_xy[0] / image_dict.pix[0]
-                        dy += paramset.mtf_offset_xy[1] / image_dict.pix[0]
+                        dx += roi_sz_xy[0]
+                        dy += roi_sz_xy[1]
                     else:
                         dx += paramset.mtf_offset_xy[0]
                         dy += paramset.mtf_offset_xy[1]
-            roi_array = get_roi_rectangle(
-                img_shape,
-                roi_width=paramset.mtf_roi_size_x / image_dict.pix[0],
-                roi_height=paramset.mtf_roi_size_y / image_dict.pix[0],
-                offcenter_xy=[dx, dy]
-                )
+                roi_this = get_roi_rectangle(
+                    img_shape,
+                    roi_width=paramset.mtf_roi_size_x / image_dict.pix[0],
+                    roi_height=paramset.mtf_roi_size_y / image_dict.pix[0],
+                    offcenter_xy=[dx, dy]
+                    )
 
-    elif test_code == 'CTn':
-        roi_array = get_roi_ctn(image, image_dict, paramset, delta_xya=delta_xya)
+        return (roi_this, errmsg)
 
-    elif test_code == 'Sli':
+    def CTn():
+        return get_roi_ctn(image, image_dict, paramset, delta_xya=delta_xya)
+
+    def Sli():
+        roi_this = None
         if input_main.current_modality == 'CT':
-            roi_array = get_slicethickness_start_stop(
+            roi_this, errmsg = get_slicethickness_start_stop(
                 image_dict, paramset, delta_xya)
         elif input_main.current_modality == 'MR':
             pass#TODO
 
-    elif test_code == 'Uni':
-        roi_array = get_ratio_NM(
+        return (roi_this, errmsg)
+
+    def Uni():
+        return get_ratio_NM(
             image, image_dict,
             ufov_ratio=paramset.uni_ufov_ratio,
             cfov_ratio=paramset.uni_cfov_ratio
             )
 
-    elif test_code == 'SNI':
-        roi_array = get_roi_SNI(image, image_dict, paramset)
+    def SNI():
+        return get_roi_SNI(image, image_dict, paramset)
 
-    elif test_code in ['SNR', 'PIU', 'Gho']:
-        roi_array = get_roi_circle_MR(image, image_dict,
-                                      paramset, test_code,
-                                      (delta_xya[0], delta_xya[1])
-                                      )
+    def SNR():
+        return get_roi_circle_MR(
+            image, image_dict, paramset, test_code, (delta_xya[0], delta_xya[1])
+            )
 
-    return roi_array
+    def PIU():
+        return get_roi_circle_MR(
+            image, image_dict, paramset, test_code, (delta_xya[0], delta_xya[1])
+            )
+
+    def Gho():
+        return get_roi_circle_MR(
+            image, image_dict, paramset, test_code, (delta_xya[0], delta_xya[1])
+            )
+
+    try:
+        res = locals()[test_code]()
+        if isinstance(res, tuple):
+            roi_array, errmsg = res
+        else:
+            roi_array = res
+    except KeyError:
+        pass
+
+    return (roi_array, errmsg)
 
 
 def get_max_pos_yx(image):
@@ -304,6 +386,7 @@ def get_roi_hom(image_dict,
     -------
     roi_all : list of np.array
     """
+    errmsg = None
     off_centers = []  # [x,y] = center of roi relative to centerpos
 
     roi_size_in_pix = test_params.hom_roi_size / image_dict.pix[0]
@@ -335,9 +418,8 @@ def get_roi_hom(image_dict,
 
         roi_array = []
         for i in range(5):
-            this_roi = get_roi_circle(
-                image_dict.shape, tuple(off_centers[i]), roi_size_in_pix)
-            roi_array.append(this_roi)
+            roi_array.append(get_roi_circle(
+                image_dict.shape, tuple(off_centers[i]), roi_size_in_pix))
 
     elif modality == 'Xray':
         # central + 1 roi in each quadrant
@@ -397,9 +479,9 @@ def get_roi_hom(image_dict,
 
         roi_array = []
         for i in range(5):
-            this_roi = get_roi_circle(
-                image_dict.shape, tuple(off_centers[i]), roi_size_in_pix)
-            roi_array.append(this_roi)
+            roi_array.append(get_roi_circle(
+                image_dict.shape, tuple(off_centers[i]), roi_size_in_pix))
+
     else:
         roi_array = None
 
@@ -426,10 +508,12 @@ def get_roi_ctn(image, image_dict, test_params, delta_xya=[0, 0, 0.]):
     roi_all : list of np.array
         one 2d array for each material
         x 2 = first for actual ROI, next for search ROI (larger)
+    errmsg
     """
     roi_size_in_pix = round(test_params.ctn_roi_size / image_dict.pix[0])
 
     roi_array = None
+    errmsg = None
 
     if roi_size_in_pix > 0:
         n_rois = len(test_params.ctn_table.pos_x)
@@ -453,23 +537,29 @@ def get_roi_ctn(image, image_dict, test_params, delta_xya=[0, 0, 0.]):
             search_size_in_pix = round(
                 test_params.ctn_search_size / image_dict.pix[0])
             for r in range(n_rois):
-                this_roi = get_roi_circle(
+                roi_search_array.append(get_roi_circle(
                     image_dict.shape, tuple(off_centers[r]),
-                    search_size_in_pix)
-                roi_search_array.append(this_roi)
+                    search_size_in_pix))
 
             # adjust off_center by finding center of object within
             radius = search_size_in_pix
             cy = 0.5 * image_dict.shape[0]
             cx = 0.5 * image_dict.shape[1]
             outer_val_ring_mask = get_outer_ring(radius)
+            n_err = 0
             for r in range(n_rois):
                 y = round(off_centers[r][1] + cy)
                 x = round(off_centers[r][0] + cx)
                 subarr = image[y-radius:y+radius, x-radius:x+radius]
                 roi_mask = roi_search_array[r][y-radius:y+radius, x-radius:x+radius]
-                background_arr = np.ma.masked_array(subarr, mask=outer_val_ring_mask)
-                subarr[roi_mask == False] = np.mean(background_arr)
+                try:
+                    background_arr = np.ma.masked_array(
+                        subarr, mask=outer_val_ring_mask)
+                    subarr[roi_mask == False] = np.mean(background_arr)
+                except np.ma.core.MaskError:
+                    n_err += 1
+                    txt = 'all' if n_err == n_rois else 'some'
+                    errmsg = f'Failed finding center of circle for {txt} ROIs.'
                 size_y, size_x = subarr.shape
                 if size_y > 0 and size_x > 0:
                     prof_y = np.sum(subarr, axis=1)
@@ -484,14 +574,13 @@ def get_roi_ctn(image, image_dict, test_params, delta_xya=[0, 0, 0.]):
 
         roi_array = []
         for r in range(n_rois):
-            this_roi = get_roi_circle(
-                image_dict.shape, tuple(off_centers[r]), roi_size_in_pix)
-            roi_array.append(this_roi)
+            roi_array.append(get_roi_circle(
+                image_dict.shape, tuple(off_centers[r]), roi_size_in_pix))
 
         if len(roi_search_array) == n_rois:
             roi_array.extend(roi_search_array)
 
-    return roi_array
+    return (roi_array, errmsg)
 
 
 def get_ratio_NM(image, image_dict, ufov_ratio=0.95, cfov_ratio=0.75):
@@ -512,6 +601,7 @@ def get_ratio_NM(image, image_dict, ufov_ratio=0.95, cfov_ratio=0.75):
     -------
     roi_array : list of np.array
         one 2d array for UFOV [0] and CFOV [1]
+    errmsg
     """
     roi_array = []
 
@@ -557,7 +647,9 @@ def get_roi_SNI(image, image_dict, test_params):
     roi : list of ndarray
         2d arrays with type 'bool'
         2 large ROIs (left, rigth), 6 smaller ROIs left to right, top to bottom
+    errmsg
     """
+    errmsg = None
     roi_full, not_used = get_ratio_NM(
         image, image_dict, ufov_ratio=test_params.sni_area_ratio)
     roi_array = [roi_full]
@@ -566,7 +658,7 @@ def get_roi_SNI(image, image_dict, test_params):
     width_y = np.count_nonzero(rows)
     cols = np.max(roi_full, axis=0)
     width_x = np.count_nonzero(cols)
-    large_dim = width_y
+    large_dim = min([width_x, width_y])
     small_dim = round(0.5*large_dim)
 
     idxs_col = np.where(cols == True)
@@ -595,7 +687,7 @@ def get_roi_SNI(image, image_dict, test_params):
     roi_array.append(np.flipud(upper_mid))
     roi_array.append(np.flipud(np.fliplr(upper_left)))
 
-    return roi_array
+    return (roi_array, errmsg)
 
 
 def get_roi_circle_MR(image, image_dict, test_params, test_code, delta_xy):
@@ -619,7 +711,7 @@ def get_roi_circle_MR(image, image_dict, test_params, test_code, delta_xy):
     Returns
     -------
     roi : ndarray
-        2d array with type 'bool'
+        2d array with type bool
     """
     roi_array = None
 
@@ -706,7 +798,9 @@ def get_slicethickness_start_stop(image_info, paramset, dxya):
         h_lines: [[r0,c0,r1,c1],[r0,c0,r1,c1]]
         v_lines: as h_lines
         number of lines depend on paramset.sli_type
+    errmsg
     """
+    errmsg = None
     size_xhalf = 0.5 * image_info.shape[1]
     size_yhalf = 0.5 * image_info.shape[0]
     prof_half = 0.5 * (paramset.sli_ramp_length / image_info.pix[0])
@@ -802,4 +896,73 @@ def get_slicethickness_start_stop(image_info, paramset, dxya):
                 y2 = center_y - dist*cos_rot - prof_half*sin_rot
             h_lines.append([round(y1), round(x1), round(y2), round(x2)])
 
-    return {'h_lines': h_lines, 'v_lines': v_lines}
+    return ({'h_lines': h_lines, 'v_lines': v_lines}, errmsg)
+
+
+def find_rectangle_object(image):
+    """Detect rectangle in image.
+
+    Parameters
+    ----------
+    image : np.array
+
+    Returns
+    -------
+    dict:
+        centers_of_edges_xy : list of list
+            for each edge (top, right, btm, left) [x, y]
+            longest/most central edge if not full rect in image
+        corners_xy : list of list
+            [toplft, toprgt, btmrgt, btmlft] [x, y]
+            None if not 4 corners
+    """
+    centers_of_edges_xy = None
+    corners_xy = None
+
+    # find corners by thresholded matrix (min max found from inner quarter)
+    x_h = image.shape[1] // 2
+    x_q = x_h // 2
+    y_h = image.shape[0] // 2
+    y_q = y_h // 2
+    inner_img = image[y_h - y_q:y_h + y_q, x_h - x_q:x_h + x_q]
+    threshold = 0.5 * (np.min(inner_img) + np.max(inner_img))
+    image_binary = np.zeros(image.shape)
+    image_binary[image > threshold] = 1.
+    corn = feature.corner_peaks(
+        feature.corner_fast(image_binary, 10),
+        min_distance=10
+        )
+    #TODO adjust min_distance? exclude_borders also uses this value if not set
+    if corn.shape[1] == 2:
+        ys = np.array([c[0] for c in corn])
+        xs = np.array([c[1] for c in corn])
+        if corn.shape[0] == 4:
+            # sort corners in toplft, toprgt, btmrgt, btmlft
+            # first sort top to btm
+            ys_sortidx = np.argsort(ys)
+            ys_sort = ys[ys_sortidx]
+            xs_sort = xs[ys_sortidx]
+            # top lft to rgt
+            if xs_sort[0] > xs_sort[1]:
+                xs_sort = np.append(np.flip(xs_sort[:2]), xs_sort[2:])
+                ys_sort = np.append(np.flip(xs_sort[:2]), ys_sort[2:])
+            # btm rgt to lft
+            if xs_sort[3] > xs_sort[2]:
+                xs_sort = np.append(xs_sort[:2], np.flip(xs_sort[2:]))
+                ys_sort = np.append(ys_sort[:2], np.flip(ys_sort[2:]))
+
+            xs_diff = np.diff(np.append(xs_sort, xs_sort[0]))
+            ys_diff = np.diff(np.append(ys_sort, ys_sort[0]))
+
+            centers_of_edges_xy = [
+                [xs_sort[i] + xs_diff[i] // 2, ys_sort[i] + ys_diff[i] // 2]
+                for i in range(4)
+                ]
+
+            corners_xy = [[xs_sort[i], ys_sort[i]] for i in range(xs_sort.size)]
+            centers_of_edges_xy
+
+    #TODO find edges also if full rectangle not imaged
+
+    return {'centers_of_edges_xy': centers_of_edges_xy,
+            'corners_xy' : corners_xy}

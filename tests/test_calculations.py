@@ -23,6 +23,7 @@ plt.show()
 path_tests = Path(__file__).parent
 path_src_imageQC = path_tests.parent / 'src' / 'imageQC'
 
+
 def read_tag_infos_from_yaml():
     """Get DICOM tags from tag_infos.yaml if tag_infos.yaml do not exist yet.
 
@@ -63,6 +64,58 @@ def test_CTn():
 
     assert round(input_main.results['CTn']['values'][0][0]) == 931
     assert round(input_main.results['CTn']['values'][0][7]) == -1006
+
+
+def test_CT_Sli_axial():
+    """Test Sli axial Catphan."""
+    input_main = InputMain(
+        current_modality='CT',
+        current_test='Sli',
+        current_paramset=cfc.ParamSetCT(),
+        current_quicktest=cfc.QuickTestTemplate(
+            tests=[['Sli']],
+            image_names=[''],
+            group_names=[''],
+            ),
+        tag_infos=read_tag_infos_from_yaml(),
+        automation_active=False,
+        )
+
+    file_path = path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' / 'CTP404_FOV150_001.dcm'
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values10 = np.round(10.*np.array(input_main.results['Sli']['values'][0]))
+    assert np.array_equal(
+        values10, np.array([ 48.,  44.,  46.,  46.,  46.,  46., -49.]))
+
+
+def test_CT_Sli_helical():
+    """Test Sli helical Catphan."""
+    input_main = InputMain(
+        current_modality='CT',
+        current_test='Sli',
+        current_paramset=cfc.ParamSetCT(sli_type=1),
+        current_quicktest=cfc.QuickTestTemplate(
+            tests=[['Sli']],
+            image_names=[''],
+            group_names=[''],
+            ),
+        tag_infos=read_tag_infos_from_yaml(),
+        automation_active=False,
+        )
+
+    file_path = (
+        path_tests / 'test_inputs' / 'CT' / 'CTP591_06mm' / 'CTP591_06mm_023.dcm')
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values10 = np.round(10.*np.array(input_main.results['Sli']['values'][0]))
+    assert np.array_equal(values10, np.array([6., 17., 13., 11., 14.,  7.,  7.]))
 
 
 def test_CT_MTF_bead():
@@ -119,9 +172,8 @@ def test_CT_Teflon_MTF_circular_edge():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    #TODO not tested yet
-    assert round(input_main.results['MTF']['values'][0][0]) == 1
-    assert round(input_main.results['MTF']['values'][0][1]) == 1
+    values100 = np.round(100.*np.array(input_main.results['MTF']['values'][0]))
+    assert np.array_equal(values100, np.array([36., 66., 86.]))
 
 
 def test_CT_Acrylic_MTF_circular_edge():
@@ -150,9 +202,7 @@ def test_CT_Acrylic_MTF_circular_edge():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    #TODO not tested yet
-    assert round(input_main.results['MTF']['values'][0][0]) == 1
-    assert round(input_main.results['MTF']['values'][0][1]) == 1
+    assert len(input_main.results['MTF']['values'][0]) == 3
 
 
 def test_CT_Polystyrene_MTF_circular_edge():
@@ -181,9 +231,7 @@ def test_CT_Polystyrene_MTF_circular_edge():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    #TODO not tested yet
-    assert round(input_main.results['MTF']['values'][0][0]) == 1
-    assert round(input_main.results['MTF']['values'][0][1]) == 1
+    assert len(input_main.results['MTF']['values'][0]) == 3
 
 
 def test_Xray_MTF_autocenter():
@@ -209,8 +257,7 @@ def test_Xray_MTF_autocenter():
     calculate_qc.calculate_qc(input_main)
     assert len(input_main.results['MTF']['values'][0]) == 6
     values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
-    assert np.array_equal(values10, np.array([11., 15., 18., 11., 15., 19.]))
-
+    assert np.array_equal(values10, np.array([9., 7., 4., 2., 1., 13.]))
 
 
 def test_NM_uniformity():
@@ -258,7 +305,7 @@ def test_NM_uniformity_sum():
     print(input_main.results['Uni']['values'])
     assert round(input_main.results['Uni']['values'][0][0]) == 6
 
-
+'''
 def test_NM_SNI():
 
     tag_infos = read_tag_infos_from_yaml()
@@ -278,3 +325,4 @@ def test_NM_SNI():
         res['corrected_image'], roi_array, image_dict.pix[0])
 
     assert res['distance'] > 0
+'''

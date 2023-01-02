@@ -20,7 +20,6 @@ from imageQC.config.iQCconstants import (
     CONFIG_FNAMES, USER_PREFS_FNAME
     )
 import imageQC.config.config_classes as cfc
-import imageQC.ui.ui_dialogs as uid
 # imageQC block end
 
 
@@ -813,54 +812,6 @@ def correct_attribute_names(old_new_names=[]):
             status = False
 
     return (status, log)
-
-
-def reset_auto_template(auto_template=None, parent_widget=None):
-    """Move all files in path_input/Archive to path_input.
-
-    Parameters
-    ----------
-    auto_template : AutoTemplate
-    """
-    archive_path = Path(auto_template.path_input) / "Archive"
-    if archive_path.exists():
-        move_files = []
-        move_dirs = []
-        dirs = [x for x in archive_path.glob('*') if x.is_dir()]
-        if len(dirs) > 0:
-            dlg = uid.ResetAutoTemplateDialog(directories=dirs)
-            res = dlg.exec()
-            if res:
-                idxs = dlg.get_idxs()
-                move_dirs = [dirs[idx] for idx in idxs]
-                if len(move_dirs) > 0:
-                    for folder in move_dirs:
-                        files = [x for x in folder.glob('*') if x.is_file()]
-                        move_files.extend(files)
-        else:
-            files = [x for x in archive_path.glob('*') if x.is_file()]
-            if len(files) > 0:
-                dlg = uid.ResetAutoTemplateDialog(files=files)
-                move_files = [files[idx] for idx in idxs]
-            else:
-                QMessageBox.information(
-                    parent_widget, 'Found no files in Archive',
-                    f'Found no files in Archive for template {auto_template.label}')
-
-        if len(move_files) > 0:
-            for file in move_files:
-                file.rename(Path(auto_template.path_input) / file.name)
-            if len(move_dirs) > 0:
-                for folder in move_dirs:
-                    if not any(folder.iterdir()):
-                        folder.rmdir()
-            QMessageBox.information(
-                parent_widget, 'Finished moving files',
-                f'{len(move_files)} files moved out of Archive.')
-    else:
-        QMessageBox.information(
-            parent_widget, 'Found no Archive',
-            f'Found no Archive to reset for the template {auto_template.label}')
 
 
 def get_icon_path(user_pref_dark_mode):

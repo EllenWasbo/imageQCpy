@@ -196,13 +196,6 @@ class TestTabCommon(QTabWidget):
 
         #  continues in subclasses
 
-    def update_roi_and_results(self):
-        """Force update ROI and result table."""
-        self.main.update_roi()
-        if self.main.current_test in [*self.main.results]:
-            self.main.results[self.main.current_test] = None
-            self.main.refresh_results_display()
-
     def param_changed_from_gui(self, attribute='', update_roi=True,
                                clear_results=True, update_plot=True,
                                update_results_table=True, content=None):
@@ -298,7 +291,10 @@ class TestTabCommon(QTabWidget):
         if reset:
             pos = [0., 0.]
         else:
-            pos = list(self.main.vGUI.last_clicked_pos)
+            szImg_y, szImg_x = np.shape(self.main.active_img)
+            xpos = self.main.vGUI.last_clicked_pos[0] - 0.5 * szImg_x
+            ypos = self.main.vGUI.last_clicked_pos[1] - 0.5 * szImg_y
+            pos = [xpos, ypos]
         self.param_changed_from_gui(attribute=attribute, content=pos)
         self.update_displayed_params()
 
@@ -355,9 +351,9 @@ class TestTabCommon(QTabWidget):
             '''Reset offset''', self)
         tb_roi_offset.addActions(
             [self.btn_roi_offset, self.btn_roi_offset_reset])
-        self.btn_roi_offset.toggled.connect(
+        self.btn_roi_offset.triggered.connect(
             lambda: self.set_offset(attribute='roi_offset_xy'))
-        self.btn_roi_offset_reset.toggled.connect(
+        self.btn_roi_offset_reset.triggered.connect(
             lambda: self.set_offset(attribute='roi_offset_xy', reset=True))
         tb_roi_offset.addWidget(self.roi_offset_xy)
         tb_roi_offset.addWidget(self.roi_offset_mm)
@@ -547,7 +543,7 @@ class TestTabCT(TestTabCommon):
         self.sli_search_width.setValue(paramset.sli_search_width)
         self.sli_average_width.setValue(paramset.sli_average_width)
         self.sli_type.setCurrentIndex(paramset.sli_type)
-        self.sli_signal_low_density.setChecked(paramset.sli_signal_low_density)
+        #DELETE?self.sli_signal_low_density.setChecked(paramset.sli_signal_low_density)
         """
         rin_median_filter_w: int = 0  # in pix on image
         rin_smooth_filter_w: float = 1.  # in mm on radial profile
@@ -579,6 +575,19 @@ class TestTabCT(TestTabCommon):
             self.sli_ramp_distance.setEnabled(False)
         else:
             self.sli_ramp_distance.setEnabled(True)
+
+    def update_Sli_plot_options(self):
+        self.sli_plot.clear()
+        items = ['all']
+        if self.sli_type.currentIndex() == 0:
+            items.extend(['H1 upper', 'H2 lower', 'V1 left', 'V2 right'])
+        elif self.sli_type.currentIndex() == 1:
+            items.extend(['H1 upper', 'H2 lower',
+                          'V1 left', 'V2 right', 'V1 inner', 'V2 inner'])
+        else:
+            items.extend(['V1 left', 'V2 right'])
+        self.sli_plot.addItems(items)
+        self.param_changed_from_gui(attribute='sli_type')
 
     def create_tab_Hom(self):
         """GUI of tab Homogeneity."""
@@ -647,13 +656,13 @@ class TestTabCT(TestTabCommon):
 
         self.sli_type = QComboBox()
         self.sli_type.addItems(ALTERNATIVES['CT']['Sli'])
-        self.sli_type.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='sli_type'))
-
+        self.sli_type.currentIndexChanged.connect(self.update_Sli_plot_options)
+        '''
         self.sli_signal_low_density = BoolSelectTests(
             self, attribute='sli_signal_low_density',
             text_true='higher',
             text_false='lower')
+        '''
 
         self.sli_ramp_distance = QDoubleSpinBox(decimals=1, minimum=0.1)
         self.sli_ramp_distance.valueChanged.connect(
@@ -677,18 +686,24 @@ class TestTabCT(TestTabCommon):
         self.sli_average_width.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_average_width'))
 
+        self.sli_plot = QComboBox()
+        self.update_Sli_plot_options()
+        self.sli_plot.currentIndexChanged.connect(self.main.refresh_results_display)
+
         vLO = QVBoxLayout()
         hLO_type = QHBoxLayout()
         hLO_type.addWidget(QLabel('Ramp type'))
         hLO_type.addWidget(self.sli_type)
         hLO_type.addStretch()
         vLO.addLayout(hLO_type)
+        '''
         hLO_dens = QHBoxLayout()
         hLO_dens.addWidget(QLabel('Ramp density is'))
         hLO_dens.addWidget(self.sli_signal_low_density)
         hLO_dens.addWidget(QLabel('than background'))
         hLO_dens.addStretch()
         vLO.addLayout(hLO_dens)
+        '''
 
         f1 = QFormLayout()
         f1.addRow(QLabel('Center to ramp distance (mm)'),
@@ -700,6 +715,7 @@ class TestTabCT(TestTabCommon):
                   self.sli_average_width)
         f2.addRow(QLabel('Background from profile outer (mm)'),
                   self.sli_background_width)
+        f2.addRow(QLabel('Plot image profiles'), self.sli_plot)
         hLO1 = QHBoxLayout()
         hLO1.addLayout(f1)
         hLO1.addLayout(f2)
@@ -855,9 +871,9 @@ class TestTabCT(TestTabCommon):
             '''Reset offset''', self)
         tb_mtf_offset.addActions(
             [self.btn_mtf_offset, self.btn_mtf_offset_reset])
-        self.btn_mtf_offset.toggled.connect(
+        self.btn_mtf_offset.triggered.connect(
             lambda: self.set_offset(attribute='mtf_offset_xy'))
-        self.btn_mtf_offset_reset.toggled.connect(
+        self.btn_mtf_offset_reset.triggered.connect(
             lambda: self.set_offset(attribute='mtf_offset_xy', reset=True))
         tb_mtf_offset.addWidget(self.mtf_offset_xy)
         tb_mtf_offset.addWidget(self.mtf_offset_mm)
@@ -1102,9 +1118,9 @@ class TestTabXray(TestTabCommon):
             '''Reset offset''', self)
         tb_mtf_offset.addActions(
             [self.btn_mtf_offset, self.btn_mtf_offset_reset])
-        self.btn_mtf_offset.toggled.connect(
+        self.btn_mtf_offset.triggered.connect(
             lambda: self.set_offset(attribute='mtf_offset_xy'))
-        self.btn_mtf_offset_reset.toggled.connect(
+        self.btn_mtf_offset_reset.triggered.connect(
             lambda: self.set_offset(attribute='mtf_offset_xy', reset=True))
         tb_mtf_offset.addWidget(self.mtf_offset_xy)
         tb_mtf_offset.addWidget(self.mtf_offset_mm)
@@ -2371,7 +2387,7 @@ class CTnTable(QTableWidget):
         elif col == 3:
             self.main.current_paramset.ctn_table.relative_mass_density = val
         self.parent.flag_edit(True)
-        self.parent.update_roi_and_results()
+        self.parent.main.update_roi(clear_results_test=True)
 
     def update_table(self):
         """Populate table with current HUnumberTable."""
@@ -2401,4 +2417,4 @@ class CTnTable(QTableWidget):
         self.resizeColumnsToContents()
         self.resizeRowsToContents()
         self.blockSignals(False)
-        self.parent.update_roi_and_results()
+        self.parent.main.update_roi(clear_results_test=True)

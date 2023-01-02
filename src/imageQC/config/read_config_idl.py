@@ -315,8 +315,8 @@ class ConfigIdl2Py():
                 paramset.CT.sli_average_width = cp.RAMPAVG[0]
             if 'RAMPTYPE' in param_names:
                 paramset.CT.sli_type = cp.RAMPTYPE[0]
-            if 'RAMPDENS' in param_names:
-                paramset.CT.sli_signal_low_density = cp.RAMPDENS[0]
+            #DELETE? if 'RAMPDENS' in param_names:
+            #DELETE?    paramset.CT.sli_signal_low_density = cp.RAMPDENS[0]
             if 'RINGMEDIAN' in param_names:
                 paramset.CT.rin_median_filter_w = cp.RINGMEDIAN[0]
             if 'RINGSMOOTH' in param_names:

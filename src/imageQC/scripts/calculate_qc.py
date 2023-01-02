@@ -370,12 +370,15 @@ def calculate_qc(input_main):
                             if calculate_new_roi:
                                 prev_roi[test], errmsg = get_rois(
                                     image, i, input_main)
-                                errmsgs.append(errmsg)
+                                if errmsg is not None:
+                                    errmsgs.append(f'{test} get ROI slice{i}:')
+                                    errmsgs.append(errmsg)
 
                             result, errmsg = calculate_2d(
                                 image, prev_roi[test], img_infos[i],
                                 modality, paramset, test, delta_xya)
                             if len(errmsg) > 0:
+                                errmsgs.append(f'{test} slice {i}:')
                                 errmsgs.extend(errmsg)
                             if test not in [*input_main.results]:
                                 # initiate results
@@ -416,6 +419,8 @@ def calculate_qc(input_main):
             if any(marked_3d):
                 results, errmsg = calculate_3d(
                     matrix, marked_3d, input_main)
+                if len(errmsg) > 0:
+                    errmsgs.extend(errmsg)
                 for test in results:
                     input_main.results[test] = results[test]
                     if test == 'SNR':
@@ -432,22 +437,26 @@ def calculate_qc(input_main):
                     'pr_image': True
                     }
 
+    msgs = []
     if len(errmsgs) > 0:
         # flatten errmsgs and remove None and '' from errmsgs
-        new_msgs = []
         for suberr in errmsgs:
             if suberr is not None:
                 if isinstance(suberr, list):
-                    new_msgs.extend([err for err in suberr if err not in [None, '']])
+                    msgs.extend([err for err in suberr if err not in [None, '']])
                 else:
-                    new_msgs.append(suberr)  # str
-        #TODO display messages - in GUI or codeline / log
+                    msgs.append(suberr)  # str
+    if len(msgs) > 0:
+        input_main.display_errmsg(msgs)
+    else:
+        if 'MainWindow' in str(type(input_main)):
+            if input_main.automation_active is False:
+                input_main.statusBar.showMessage('Finished', 1000)
 
     if 'MainWindow' in str(type(input_main)):
         if input_main.automation_active is False:
             input_main.current_test = current_test_before
             input_main.refresh_results_display()
-            input_main.statusBar.showMessage('Finished', 1000)
             input_main.stop_wait_cursor()
 
 
@@ -493,7 +502,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
     '''Copy when new testcode
     def <testcode>():
         ....
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
     '''
 
     def ROI():
@@ -504,7 +513,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             values = [avg_val, std_val]
         headers = HEADERS[modality][test_code]['alt0']
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def Noi():
         if image2d is not None:
@@ -520,7 +529,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             if image2d is not None:
                 values = [avg_val, std_val]
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def Hom():
         headers_sup = []  # do not remove - needed here although already set
@@ -565,7 +574,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 diffs = [100.*(avgs[i] - avg)/avg for i in range(5)]
                 values = avgs + diffs
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def CTn():
         headers = paramset.ctn_table.materials
@@ -579,7 +588,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 res = sp.stats.linregress(
                     values, paramset.ctn_table.relative_mass_density)
                 values_sup = [res.rvalue**2, res.intercept, res.slope]
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def HUw():
         headers = HEADERS[modality][test_code]['alt0']
@@ -588,7 +597,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             avg_val = np.mean(arr)
             std_val = np.std(arr)
             values = [avg_val, std_val]
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def Sli():
         if modality == 'CT':
@@ -596,11 +605,15 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             headers = HEADERS[modality][test_code]['alt' + str(alt)]
             if image2d is not None:
                 lines = roi_array
-                values, details_dict, errlogg = calculate_slicethickness_CT(
+                values, details_dict, errmsg = calculate_slicethickness_CT(
                     image2d, image_info, paramset, lines, delta_xya)
                 if alt == 0:
-                    values.append(np.mean(values[1:]))
-                    values.append(100. * (values[-1] - values[0]) / values[0])
+                    try:
+                        values.append(np.mean(values[1:]))
+                        values.append(100. * (values[-1] - values[0]) / values[0])
+                    except TypeError:
+                        values.append(None)
+                        values.append(None)
         elif modality == 'MR':
             headers = HEADERS[modality][test_code]['alt0']
             if image2d is not None:
@@ -609,7 +622,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         else:
             pass
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def MTF():
         if image2d is not None:
@@ -657,7 +670,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
                 values = details[prefix + 'MTF_details']['values']
 
-        return (headers, values, headers_sup, values_sup, details, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def Uni():
         headers = HEADERS[modality][test_code]['alt0']
@@ -683,7 +696,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             details_dict['du_matrix'] = res['du_matrix']
             values = res['values']
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def SNI():
         headers = HEADERS[modality][test_code]['alt0']
@@ -705,11 +718,9 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 image_input = image2d
             res = calculate_NM_SNI(
                 image_input, roi_array, image_info.pix[0])
-            #details_dict['matrix'] = res['matrix']
-            #details_dict['du_matrix'] = res['du_matrix']
             values = res['values']
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def PIU():
         headers = HEADERS[modality][test_code]['alt0']
@@ -727,7 +738,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             values_sup = [min_idx[1], min_idx[0],
                           max_idx[1], max_idx[0]]
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     def Gho():
         headers = HEADERS[modality][test_code]['alt0']
@@ -743,10 +754,10 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             values = avgs
             values.append(PSG)
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt)
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
 
     try:
-        headers, values, headers_sup, values_sup, details_dict, alt = locals()[
+        headers, values, headers_sup, values_sup, details_dict, alt, errmsg = locals()[
             test_code]()
     except KeyError:
         pass
@@ -791,12 +802,12 @@ def calculate_3d(matrix, marked_3d, input_main):
     '''Copy when new testcode
     def <testcode>(images_to_test):
         ....
-        return {
+        return ({
             'values': [values], 'headers': headers,
             'alternative': alternative (default 0),
             'values_sup': [values_sup], 'headers_sup': headers_sup,
             'details_dict': [{}]
-            }
+            }, errmsg)
     '''
 
     def MTF(images_to_test):
@@ -823,13 +834,13 @@ def calculate_3d(matrix, marked_3d, input_main):
 
                 if paramset.mtf_type == 1:  # wire
                     if len(images_to_test) > 2:
-                        details_dict = calculate_MTF_3d_line(
+                        details_dict, errmsg = calculate_MTF_3d_line(
                             sub, roi_array[rows][:, cols], images_to_test,
                             img_infos, paramset)
                     else:
                         pass#TODO errormessage not possible with < 3 slices
                 elif paramset.mtf_type == 2:  # circular disc
-                    details_dict = calculate_MTF_circular_edge(
+                    details_dict, errmsg = calculate_MTF_circular_edge(
                         sub, roi_array[rows][:, cols],
                         img_infos[images_to_test[0]].pix[0], paramset)
 
@@ -838,11 +849,11 @@ def calculate_3d(matrix, marked_3d, input_main):
                 values_sup = details_dict['gMTF_details']['LSF_fit_params']
                 details_dict['matrix'] = sub
 
-        return {
+        return ({
             'values': [values], 'headers': headers, 'alternative': paramset.mtf_type,
             'values_sup': [values_sup], 'headers_sup': headers_sup,
             'details_dict': [details_dict]
-            }
+            }, errmsg)
 
     def SNR(images_to_test):
         # use two and two images
@@ -883,9 +894,9 @@ def calculate_3d(matrix, marked_3d, input_main):
         if len(idxs_first_imgs) > 0:
             for res_i, img_i in enumerate(len(idxs_first_imgs)):
                 values[img_i] = values_first_imgs[res_i]
-        return {
+        return ({
             'values': values, 'headers': headers, 'alternative': 0
-            }
+            }, errmsg)
 
     def sum_matrix(images_to_test):
         sum_matrix = matrix[images_to_test[0]]
@@ -904,7 +915,7 @@ def calculate_3d(matrix, marked_3d, input_main):
             image_input, roi_array, img_infos[0].pix[0])
         values = res['values']
 
-        return {'values': [values], 'headers': headers, 'alternative': 0}
+        return ({'values': [values], 'headers': headers, 'alternative': 0}, errmsg)
 
     def SNI(images_to_test):
         headers = HEADERS[modality][test_code]['alt0']
@@ -920,10 +931,10 @@ def calculate_3d(matrix, marked_3d, input_main):
             }
         values = res['values']
 
-        return {
+        return ({
             'values': [values], 'headers': headers, 'alternative': 0,
             'details_dict': [details_dict]
-            }
+            }, errmsg)
 
     for test_code in all_tests:
         images_to_test = []
@@ -932,10 +943,11 @@ def calculate_3d(matrix, marked_3d, input_main):
                 images_to_test.append(i)
 
         try:
-            res_dict = locals()[
+            res_dict, errmsg = locals()[
                 test_code](images_to_test)
         except KeyError:
             res_dict = {}
+            errmsg = f'Calculations for current test {test_code} not specified yet.'
 
         if any(res_dict):
             results[test_code] = res_dict
@@ -1019,42 +1031,48 @@ def calculate_slicethickness_CT(image, img_info, paramset, lines, delta_xya):
         according to defined headers of selected test type
     details_dict: dict
         dictionary with image profiles that form the basis of the calculations
+    errmsgs : list of str
     """
-    details_dict = {'profiles': [],
+    details_dict = {'profiles': [], 'envelope_profiles': [],
                     'background': [], 'peak': [], 'halfpeak': [],
                     'start_x': [], 'end_x': []}
-    err_logg = []
+    errmsgs = []
 
+    sli_signal_low_density = False
     if paramset.sli_type == 0:
-        details_dict['labels'] = ['lower H1', 'upper H2', 'right V1', 'left V2']
+        details_dict['labels'] = ['upper H1', 'lower H2', 'left V1', 'right V2']
     elif paramset.sli_type == 1:
         details_dict['labels'] = [
-            'lower H1', 'upper H2', 'right V1', 'left V2', 'inner V1', 'inner V2']
+            'upper H1', 'lower H2', 'left V1', 'right V2', 'inner V1', 'inner V2']
     elif paramset.sli_type == 2:
-        details_dict['labels'] = ['right', 'left']
+        details_dict['labels'] = ['left', 'right']
+        sli_signal_low_density = True
 
+    pno = 0
     for line in lines['h_lines']:
-        profile, err_msg = get_profile_sli(image, paramset, line)
+        profile, errmsg = get_profile_sli(image, paramset, line)
         details_dict['profiles'].append(profile)
-        err_logg.append(err_msg)
+        if errmsg is not None:
+            errmsgs.append(f'{details_dict["labels"][pno]}: {errmsg}')
+        pno += 1
     for line in lines['v_lines']:
-        profile, err_msg = get_profile_sli(image, paramset, line, direction='v')
+        profile, errmsg = get_profile_sli(image, paramset, line, direction='v')
         details_dict['profiles'].append(profile)
-        err_logg.append(err_msg)
+        if errmsg is not None:
+            errmsgs.append(f'{details_dict["labels"][pno]}: {errmsg}')
+        pno += 1
     details_dict['dx'] = img_info.pix[0] * np.cos(np.deg2rad(delta_xya[2]))
 
     values = [img_info.slice_thickness]
     n_background = round(paramset.sli_background_width / img_info.pix[0])
-    for profile in details_dict['profiles']:
+    for pno, profile in enumerate(details_dict['profiles']):
         slice_thickness = None
         background_start = np.mean(profile[0:n_background])
         background_end = np.mean(profile[-n_background:])
         background = 0.5 * (background_start + background_end)
         details_dict['background'].append(background)
-        profile_orig = profile
-        background_orig = background
         profile = profile - background
-        if paramset.sli_signal_low_density:
+        if sli_signal_low_density:
             peak_value = np.min(profile)
             profile = -1. * profile
             background = -1. * background
@@ -1062,58 +1080,75 @@ def calculate_slicethickness_CT(image, img_info, paramset, lines, delta_xya):
             peak_value = np.max(profile)
         details_dict['peak'].append(peak_value + background)
         halfmax = 0.5 * peak_value
-        '''TODO delete?
-        if paramset.sli_signal_low_density:
-            halfmax_orig = 0.5 * (np.min(profile_orig) + background_orig)
-        else:
-            halfmax_orig = halfmax
-        '''
         details_dict['halfpeak'].append(halfmax + background)
 
         if paramset.sli_type == 0:  # wire ramp Catphan
-            width, center = mmcalc.get_width_center_at_threshold(profile, halfmax)
+            width, center = mmcalc.get_width_center_at_threshold(
+                profile, halfmax, force_above=True)
             if width is not None:
                 slice_thickness = 0.42 * width * img_info.pix[0]  # 0.42*FWHM
                 if delta_xya[2] != 0:
                     slice_thickness = slice_thickness / np.cos(
                         np.deg2rad(delta_xya[2]))
-                    details_dict['start_x'].append((center - 0.5 * width) * img_info.pix[0])
-                    details_dict['end_x'].append((center + 0.5 * width) * img_info.pix[0])
+                details_dict['start_x'].append((center - 0.5 * width) * img_info.pix[0])
+                details_dict['end_x'].append((center + 0.5 * width) * img_info.pix[0])
+            else:
+                details_dict['start_x'].append(0)
+                details_dict['end_x'].append(0)
         else:  # beaded ramp, find envelope curve
             # find upper envelope curve
-            derived = profile - np.roll(profile, 1)
-            subz = np.where(derived < 0) - 1
-            dsubz = subz - np.roll(subz, 1)
-            ss = [] * len(dsubz)
-            ss[1] = 1
-            for s in range(2, len(dsubz)):
-                if dsubz[s] > 1:
-                    ss[s] = 1
-            idxes = np.where(ss == 1)
-            idxmax = subz[idxes]
-            #TODO find envelope pythonic
-            '''
-            envelope = INTERPOL(profile[idxmax] ,idxmax, INDGEN(N_ELEMENTS(vec)));interpolate to regular stepsize
-            res=getWidthAtThreshold(vecInt, halfmax)
-            zinc=1.
-            IF ramptype EQ 1 AND l GE 4 THEN zinc=.25;0.25mm z spacing between beads
-            resArr[l+1,i]=zinc/2.0*(res(0)*pix(0)/cos(daRad)) ; 2mm axial spacing
-            ENDELSE
-            structTemp=CREATE_STRUCT('background',backGrOrig,'nBackGr',nPixBackG,'vector',vecOrig,'halfMax',halfMaxOrig,'firstLast',[res(1)-res(0)/2.,res(1)+res(0)/2.],'peakVal',peakVal)
-            IF l EQ sta THEN lineStruct=CREATE_STRUCT('L'+STRING(l, FORMAT='(i0)'),structTemp) ELSE lineStruct=CREATE_STRUCT(lineStruct,'L'+STRING(l, FORMAT='(i0)'),structTemp)
-            '''
+            local_max = (np.diff(np.sign(np.diff(profile))) < 0).nonzero()[0] + 1
+            new_x, envelope_y = mmcalc.resample(profile[local_max], local_max, 1,
+                                                n_steps=len(profile))
+            width, center = mmcalc.get_width_center_at_threshold(
+                envelope_y, halfmax)
+            details_dict['envelope_profiles'].append(envelope_y + background)
+            if width is not None:
+                xy_increment = 2  # mm spacing between beads in xy-direction
+                z_increment = 1  # mm spacing between beads in z-direction
+                if paramset.sli_type == 1 and pno > 3:
+                    z_increment = 0.25  # inner beaded ramps
+                slice_thickness = (z_increment/xy_increment) * width * img_info.pix[0]
+                details_dict['start_x'].append((center - 0.5 * width) * img_info.pix[0])
+                details_dict['end_x'].append((center + 0.5 * width) * img_info.pix[0])
+            else:
+                details_dict['start_x'].append(0)
+                details_dict['end_x'].append(0)
+
+        if slice_thickness is None:
+            errmsgs.append(
+                f'{details_dict["labels"][pno]}: failed finding slicethickness')
+            if delta_xya[2] != 0:
+                slice_thickness = slice_thickness / np.cos(np.deg2rad(delta_xya[2]))
 
         values.append(slice_thickness)
 
-    return (values, details_dict, err_logg)
+    return (values, details_dict, errmsgs)
 
 
 def get_profile_sli(image, paramset, line, direction='h'):
+    """Extract (averaged) profile from image based on xy coordinates.
 
-    profile = []
-    err_logg = []
+    Parameters
+    ----------
+    image : np.2darray.
+    paramset : ParamSetXX
+        depending on modality - defined in config_classes
+    line : tuple of float
+        row0, col0, row1, col1
+    direction : str, optional
+        define direction for averaging if specified in paramset. The default is 'h'.
+
+    Returns
+    -------
+    profile : np.1darray
+    errmsg : str
+    """
+    profile = None
+    errmsg = None
     n_search = round(paramset.sli_search_width)
     n_avg = paramset.sli_average_width
+    sli_signal_low_density = True if paramset.sli_type == 2 else False
 
     r0, c0, r1, c1 = line
     if n_search > 0:
@@ -1126,7 +1161,7 @@ def get_profile_sli(image, paramset, line, direction='h'):
                 rr, cc = skimage.draw.line(r0, c0+i, r1, c1+i)
             profiles.append(image[rr, cc])
             profile_sums.append(np.sum(image[rr, cc]))
-        if paramset.sli_signal_low_density:
+        if sli_signal_low_density:
             max_sum = np.min(profile_sums)
         else:
             max_sum = np.max(profile_sums)
@@ -1139,12 +1174,12 @@ def get_profile_sli(image, paramset, line, direction='h'):
                 profile = np.mean(profiles[max_i-n_avg:max_i+n_avg+1],
                                   axis=0)
             else:
-                err_logg = 'Not average.'  # TODO better msg
+                errmsg = 'Profile too close to border to be averaged.'
     else:
         rr, cc = skimage.draw.line(r0, c0, r1, c1)
         profile = image[rr, cc]
 
-    return (profile, err_logg)
+    return (profile, errmsg)
 
 
 def calculate_MTF_point(matrix, img_info, paramset):
@@ -1504,43 +1539,46 @@ def calculate_MTF_edge(matrix, pix, paramset):
 
         width, center = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/2)
 
-        # Calculate gaussian and discrete MTF
-        cw = 0
-        try:
-            cut_lsf = paramset.mtf_cut_lsf
-            cut_lsf_fwhm = paramset.mtf_cut_lsf_w
-        except AttributeError:
-            cut_lsf = False
-            cut_lsf_fwhm = None
-        if cut_lsf:
-            LSF_no_filt, cw, _ = mmcalc.cut_and_fade_LSF(
-                LSF_no_filt, center=center, fwhm=width,
-                cut_width=cut_lsf_fwhm)
-        dMTF_details = mmcalc.get_MTF_discrete(LSF_no_filt, dx=step_size)
-        dMTF_details['cut_width'] = cw * step_size
+        if width is not None:
+            # Calculate gaussian and discrete MTF
+            cw = 0
+            try:
+                cut_lsf = paramset.mtf_cut_lsf
+                cut_lsf_fwhm = paramset.mtf_cut_lsf_w
+            except AttributeError:
+                cut_lsf = False
+                cut_lsf_fwhm = None
+            if cut_lsf:
+                LSF_no_filt, cw, _ = mmcalc.cut_and_fade_LSF(
+                    LSF_no_filt, center=center, fwhm=width,
+                    cut_width=cut_lsf_fwhm)
+            dMTF_details = mmcalc.get_MTF_discrete(LSF_no_filt, dx=step_size)
+            dMTF_details['cut_width'] = cw * step_size
 
-        LSF_x = step_size * (np.arange(LSF.size) - center)
+            LSF_x = step_size * (np.arange(LSF.size) - center)
 
-        gMTF_details = mmcalc.get_MTF_gauss(
-            LSF, dx=step_size, prefilter_sigma=sigma_f*step_size, gaussfit='single')
+            gMTF_details = mmcalc.get_MTF_gauss(
+                LSF, dx=step_size, prefilter_sigma=sigma_f*step_size, gaussfit='single')
 
-        lp_vals = [0.5, 1, 1.5, 2, 2.5]
-        gMTF_details['values'] = mmcalc.get_curve_values(
-                gMTF_details['MTF'], gMTF_details['MTF_freq'], lp_vals)
-        gMTF_details['values'].extend(mmcalc.get_curve_values(
-                gMTF_details['MTF_freq'], gMTF_details['MTF'], [0.5]))
-        dMTF_details['values'] = mmcalc.get_curve_values(
-                dMTF_details['MTF'], dMTF_details['MTF_freq'], lp_vals,
-                force_first_below=True)
-        dMTF_details['values'].extend(mmcalc.get_curve_values(
-                dMTF_details['MTF_freq'], dMTF_details['MTF'], [0.5],
-                force_first_below=True))
+            lp_vals = [0.5, 1, 1.5, 2, 2.5]
+            gMTF_details['values'] = mmcalc.get_curve_values(
+                    gMTF_details['MTF'], gMTF_details['MTF_freq'], lp_vals)
+            gMTF_details['values'].extend(mmcalc.get_curve_values(
+                    gMTF_details['MTF_freq'], gMTF_details['MTF'], [0.5]))
+            dMTF_details['values'] = mmcalc.get_curve_values(
+                    dMTF_details['MTF'], dMTF_details['MTF_freq'], lp_vals,
+                    force_first_below=True)
+            dMTF_details['values'].extend(mmcalc.get_curve_values(
+                    dMTF_details['MTF_freq'], dMTF_details['MTF'], [0.5],
+                    force_first_below=True))
 
-        details_dict = {
-            'LSF_x': LSF_x, 'LSF': LSF_no_filt, 'ESF': ESF_all,
-            'sigma_prefilter': sigma_f*step_size,
-            'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details,
-            'edge_details': details_dicts_edge}
+            details_dict = {
+                'LSF_x': LSF_x, 'LSF': LSF_no_filt, 'ESF': ESF_all,
+                'sigma_prefilter': sigma_f*step_size,
+                'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details,
+                'edge_details': details_dicts_edge}
+        else:
+            errmsg = 'Could not find edge.'
 
     return (details_dict, errmsg)
 
@@ -1567,6 +1605,7 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
     details_dict
     """
     details_dict = {}
+    errmsg = []
 
     try:
         if matrix.ndim == 2:
@@ -1576,19 +1615,21 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
 
     # find center of disc with high precision
     center_xy = []
-    for sli in matrix:
+    errtxt = ''
+    for slino, sli in enumerate(matrix):
         if sli is not None:
-            center_xy.append(mmcalc.center_xy_of_disc(sli, roi=roi))
-    center_x = [vals[0] for vals in center_xy]
-    if -1 in center_x:
-        center_x.remove(-1)
-    center_y = [vals[1] for vals in center_xy]
-    if -1 in center_y:
-        center_y.remove(-1)
-    if len(center_x) > 0 and len(center_y) > 0:
+            center_this = mmcalc.center_xy_of_disc(sli, roi=roi)
+            if None not in center_this:
+                center_xy.append(center_this)
+            else:
+                errtxt = ', '.join(errtxt, str(slino))
+    if errtxt != '':
+        errmsg = f'Could not find center of object for slice {errtxt}'
+    if len(center_xy) > 0:
+        center_x = [vals[0] for vals in center_xy]
+        center_y = [vals[1] for vals in center_xy]
         center_xy = [np.mean(np.array(center_x)), np.mean(np.array(center_y))]
 
-    if len(center_xy) > 0:
         # sort pixel values from center
         dist_map = get_distance_map_point(
             matrix[0].shape,
@@ -1619,7 +1660,6 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
         sigma_n = 0.1 * pix // np.median(diff_x)  # TODO *.5?
         if sigma_n > 0:
             values = sp.ndimage.gaussian_filter(values, sigma=sigma_n)
-
         # rebin to 1/10th pix size
         step_size = .1 * pix
         new_x, new_y = mmcalc.resample(
@@ -1631,50 +1671,53 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
 
         width, center = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/2)
 
-        # Discrete MTF
-        # modality specific settings
-        fade_lsf_fwhm = 0
-        cw = 0
-        cwf = 0
-        try:
-            cut_lsf = paramset.mtf_cut_lsf
-            cut_lsf_fwhm = paramset.mtf_cut_lsf_w
+        if width is not None:
+            # Discrete MTF
+            # modality specific settings
+            fade_lsf_fwhm = 0
+            cw = 0
+            cwf = 0
             try:
-                fade_lsf_fwhm = paramset.mtf_cut_lsf_w_fade
+                cut_lsf = paramset.mtf_cut_lsf
+                cut_lsf_fwhm = paramset.mtf_cut_lsf_w
+                try:
+                    fade_lsf_fwhm = paramset.mtf_cut_lsf_w_fade
+                except AttributeError:
+                    pass
             except AttributeError:
-                pass
-        except AttributeError:
-            cut_lsf = False
-            cut_lsf_fwhm = None
+                cut_lsf = False
+                cut_lsf_fwhm = None
 
-        if cut_lsf:
-            LSF_no_filt, cw, cwf = mmcalc.cut_and_fade_LSF(
-                LSF_no_filt, center=center, fwhm=width,
-                cut_width=cut_lsf_fwhm, fade_width=fade_lsf_fwhm)
-        dMTF_details = mmcalc.get_MTF_discrete(LSF_no_filt, dx=step_size)
-        dMTF_details['cut_width'] = cw * step_size
-        dMTF_details['cut_width_fade'] = cwf * step_size
+            if cut_lsf:
+                LSF_no_filt, cw, cwf = mmcalc.cut_and_fade_LSF(
+                    LSF_no_filt, center=center, fwhm=width,
+                    cut_width=cut_lsf_fwhm, fade_width=fade_lsf_fwhm)
+            dMTF_details = mmcalc.get_MTF_discrete(LSF_no_filt, dx=step_size)
+            dMTF_details['cut_width'] = cw * step_size
+            dMTF_details['cut_width_fade'] = cwf * step_size
 
-        LSF_x = step_size * (np.arange(LSF.size) - center)
+            LSF_x = step_size * (np.arange(LSF.size) - center)
 
-        gMTF_details = mmcalc.get_MTF_gauss(
-            LSF, dx=step_size, prefilter_sigma=sigma_f*step_size, gaussfit='double')
+            gMTF_details = mmcalc.get_MTF_gauss(
+                LSF, dx=step_size, prefilter_sigma=sigma_f*step_size, gaussfit='double')
 
-        gMTF_details['values'] = mmcalc.get_curve_values(
-                gMTF_details['MTF_freq'], gMTF_details['MTF'], [0.5, 0.1, 0.02])
-        dMTF_details['values'] = mmcalc.get_curve_values(
-                dMTF_details['MTF_freq'], dMTF_details['MTF'], [0.5, 0.1, 0.02],
-                force_first_below=True)
+            gMTF_details['values'] = mmcalc.get_curve_values(
+                    gMTF_details['MTF_freq'], gMTF_details['MTF'], [0.5, 0.1, 0.02])
+            dMTF_details['values'] = mmcalc.get_curve_values(
+                    dMTF_details['MTF_freq'], dMTF_details['MTF'], [0.5, 0.1, 0.02],
+                    force_first_below=True)
 
-        details_dict = {
-            'center_xy': center_xy,
-            'LSF_x': LSF_x, 'LSF': LSF_no_filt,
-            'sigma_prefilter': sigma_f*step_size,
-            'sorted_pixels_x': dists, 'sorted_pixels': values_all,
-            'interpolated_x': new_x, 'interpolated': new_y, 'presmoothed': ESF_filtered,
-            'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details}
+            details_dict = {
+                'center_xy': center_xy,
+                'LSF_x': LSF_x, 'LSF': LSF_no_filt,
+                'sigma_prefilter': sigma_f*step_size,
+                'sorted_pixels_x': dists, 'sorted_pixels': values_all,
+                'interpolated_x': new_x, 'interpolated': new_y, 'presmoothed': ESF_filtered,
+                'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details}
+        else:
+            errmsg = 'Could not find circular edge.'
 
-    return details_dict
+    return (details_dict, errmsg)
 
 
 def get_corrections_point_source(

@@ -24,7 +24,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.1alpha'
+VERSION = '3.0.2alpha'
 '''if os.path.exists(cfg_path):
     config = configparser.ConfigParser()
     try:

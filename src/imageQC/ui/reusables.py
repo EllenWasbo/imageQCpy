@@ -8,7 +8,6 @@ User interface classes for different uses and reuses in ImageQC.
 from time import time
 import copy
 import os
-import numpy as np
 
 from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import (
@@ -24,7 +23,6 @@ from PyQt5.QtWidgets import (
     )
 import matplotlib
 import matplotlib.figure
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg, NavigationToolbar2QT)
 import pandas as pd
 
@@ -263,10 +261,6 @@ class TextDisplay(ImageQCDialog):
                  read_only=True,
                  min_width=1000, min_height=1000):
         super().__init__(parent_widget)
-        #self.setWindowIcon(
-        #    QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        #self.setWindowFlags(
-        #    self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         txtEdit = QTextEdit('', self)
         txtEdit.setPlainText(text)
         txtEdit.setReadOnly(read_only)
@@ -274,9 +268,10 @@ class TextDisplay(ImageQCDialog):
         txtEdit.setMinimumWidth(min_width)
         txtEdit.setMinimumHeight(min_height)
         self.setWindowTitle(title)
-        self.setMinimumWidth(1000)
-        self.setMinimumHeight(800)
+        self.setMinimumWidth(min_width)
+        self.setMinimumHeight(min_height)
         self.show()
+
 
 class ProgressModal(QProgressDialog):
     """Redefine QProgressDialog to set wanted behaviour."""
@@ -883,13 +878,7 @@ class FormatDialog(ImageQCDialog):
 
     def __init__(self, parent, format_string='', DICOM_display=False):
         super().__init__(parent)
-
         self.setWindowTitle('Set format')
-        #self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        #self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        #self.setWindowFlags(
-        #    self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-
         self.cbox_decimals = QComboBox()
         self.cbox_padding = QComboBox()
         self.prefix = QLineEdit('')
@@ -1570,8 +1559,6 @@ class QuickTestOutputSubDialog(QDialog):
         fLO.addRow(QLabel(''), self.chk_per_group)
         fLO.addRow(QLabel('Header:'), self.txt_header)
         fLO.addRow(LabelItalic(
-            '    Default is column_nameheader_imagelabel or header_grouplabel, ignored if = and > 1 column'))
-        fLO.addRow(LabelItalic(
             '    header_imagelabel or header_grouplabel, ignored if = and > 1 column'))
 
         vLO.addLayout(fLO)
@@ -1607,10 +1594,11 @@ class QuickTestOutputSubDialog(QDialog):
             except KeyError:
                 alts = ['-']
             '''
+            TODO delete? new solution not fully tested
             try:
                 altsup = HEADERS_SUP[self.modality][testcode]#['altSup']
                 if len(altsup) > 0:
-                    breakpoint() # add alternative sup not just sup if not supAll
+                    # add alternative sup not just sup if not supAll
                     if alts[0] == '-':
                         alts = ['Results table', self.suplement_txt]
                     else:
@@ -1630,10 +1618,6 @@ class QuickTestOutputSubDialog(QDialog):
             self.cbox_alternatives.blockSignals(False)
         if update_columns:  # fill text in columns
             cols = []
-            '''
-            if self.cbox_alternatives.currentText() == self.suplement_txt:
-                cols = HEADERS[self.modality][testcode]['altSup']
-            '''
             idx_alt = self.cbox_alternatives.currentIndex()
             if self.cbox_table.currentIndex() == 1:
                 if testcode in HEADERS_SUP[self.modality]:
@@ -1690,7 +1674,6 @@ class QuickTestOutputSubDialog(QDialog):
         -------
         qtsub : QuickTestOutputSub
         """
-        
         qtsub = cfc.QuickTestOutputSub()
         qtsub.label = self.txt_header.text()
 
@@ -2143,13 +2126,7 @@ class PlotCanvas(FigureCanvasQTAgg):
         self.main = main
         self.fig = matplotlib.figure.Figure(dpi=150)
         FigureCanvasQTAgg.__init__(self, self.fig)
-        #self.setParent = parent
         self.ax = self.fig.add_subplot(111)
-        '''
-        self.img = self.ax.imshow(np.zeros((2, 2)))
-        self.ax.cla()
-        self.ax.axis('off')
-        '''
 
     def draw(self):
         """Avoid super().draw when figure collapsed by sliders."""
@@ -2192,10 +2169,5 @@ class PlotCanvas(FigureCanvasQTAgg):
             if '(mm)' in xtitle:
                 unit = ' mm'
             self.ax.set_title(f'Profile lengt:h {length:.1f} {unit}')
-            #self.fig.subplots_adjust(0.15, 0.25, 0.95, 0.85)
-            #at = matplotlib.offsetbox.AnchoredText(
-            #    f'Profile length {length:.1f} {unit}',
-            #    frameon=False, loc=2)
-            #self.ax.add_artist(at)
 
         self.draw()

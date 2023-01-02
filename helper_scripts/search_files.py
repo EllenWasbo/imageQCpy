@@ -9,9 +9,9 @@ import glob
 import os
 from pathlib import Path
 
-directory = Path(__file__).parent / 'src'
+directory = Path(__file__).parent.parent / 'src'
 
-search_string = "breakpoint"
+search_string = "get_width_center"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

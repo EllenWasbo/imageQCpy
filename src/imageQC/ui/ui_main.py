@@ -98,7 +98,7 @@ class GuiVariables():
     # related to loaded images, used in GUI
     active_img_no: int = -1
     # which img number in imgDicts is currently on display
-    last_clicked_pos: tuple = (-1, -1)
+    last_clicked_pos: tuple = (-1, -1)  # x,y
 
     panel_width: int = 1400
     panel_height: int = 700
@@ -492,7 +492,7 @@ class MainWindow(QMainWindow):
                     self.update_roi()
                     self.refresh_results_display()
 
-    def update_roi(self):
+    def update_roi(self, clear_results_test=False):
         """Recalculate ROI."""
         errmsg = None
         if self.active_img is not None:
@@ -503,6 +503,14 @@ class MainWindow(QMainWindow):
             self.current_roi = None
         self.wImageDisplay.canvas.roi_draw()
         self.display_errmsg(errmsg)
+        if clear_results_test:
+            if self.current_test in [*self.results]:
+                self.results[self.current_test] = None
+                self.refresh_results_display()
+
+    def reset_results(self):
+        self.results = {}
+        self.refresh_results_display()
 
     def update_results(self, n_added_imgs=0, deleted_idxs=[], sort_idxs=[]):
         """Update self.results if added / deleted images.
@@ -570,11 +578,19 @@ class MainWindow(QMainWindow):
             if self.current_test in self.results:
                 self.hide_rgt_top()  # maximize results displays first time
 
-        wid = self.tabResults.currentWidget()
-
-        if isinstance(wid, ResultTableWidget) and update_table:
-            if self.tabResults.currentIndex() == 0:
-                if self.current_test in self.results:
+        print(f'cur idx {self.tabResults.currentIndex()}')
+        if self.current_test not in self.results:
+            # clear all
+            self.wResTable.result_table.clear()
+            self.wResTableSup.result_table.clear()
+            self.wResPlot.plotcanvas.plot()
+            self.wResImage.canvas.result_image_draw()
+        else:
+            # update only active
+            wid = self.tabResults.currentWidget()
+            if isinstance(wid, ResultTableWidget) and update_table:
+                if self.tabResults.currentIndex() == 0:
+                    print('ready to update table')
                     try:
                         self.wResTable.result_table.fill_table(
                             col_labels=self.results[self.current_test]['headers'],
@@ -584,9 +600,6 @@ class MainWindow(QMainWindow):
                     except (KeyError, TypeError):
                         self.wResTable.result_table.clear()
                 else:
-                    self.wResTable.result_table.clear()
-            else:
-                if self.current_test in self.results:
                     try:
                         self.wResTableSup.result_table.fill_table(
                             col_labels=self.results[self.current_test]['headers_sup'],
@@ -595,13 +608,11 @@ class MainWindow(QMainWindow):
                                 self.current_test]['pr_image'])
                     except (KeyError, TypeError):
                         self.wResTableSup.result_table.clear()
-                else:
-                    self.wResTableSup.result_table.clear()
 
-        elif isinstance(wid, ResultPlotWidget):
-            self.wResPlot.plotcanvas.plot()
-        elif isinstance(wid, ResultImageWidget):
-            self.wResImage.canvas.result_image_draw()
+            elif isinstance(wid, ResultPlotWidget):
+                self.wResPlot.plotcanvas.plot()
+            elif isinstance(wid, ResultImageWidget):
+                self.wResImage.canvas.result_image_draw()
 
     def refresh_img_display(self):
         """Refresh image related gui."""
@@ -785,8 +796,9 @@ class MainWindow(QMainWindow):
             if isinstance(errmsg, str):
                 self.statusBar.showMessage(errmsg, 2000, warning=True)
             elif isinstance(errmsg, list):
-                # show in popup
-                pass#TODO
+                self.statusBar.showMessage(
+                    'Finished with issues', 2000, warning=True,
+                    add_warnings=errmsg)
 
     def display_previous_warnings(self):
         """Display saved statusbar warnings."""
@@ -1714,8 +1726,8 @@ class ImageCanvas(GenericImageCanvas):
 
     def Sli(self):
         """Draw Slicethickness search lines."""
-        h_colors = ['k', 'g', 'pink', 'c']
-        v_colors = ['b', 'r']
+        h_colors = ['k', 'g']
+        v_colors = ['b', 'r', 'm', 'c']
         search_margin = self.main.current_paramset.sli_search_width
         background_length = self.main.current_paramset.sli_background_width
         pix = self.main.imgs[self.main.vGUI.active_img_no].pix
@@ -2043,6 +2055,7 @@ class CenterWidget(QGroupBox):
 
             self.main.wImageDisplay.canvas.draw()
             self.main.update_roi()
+            self.main.reset_results()
 
     def reset_delta(self):
         """Reset center displacement and rotation."""
@@ -2627,6 +2640,12 @@ class ResultTable(QTableWidget):
         if self.linked_image_list:
             self.main.set_active_img(self.currentRow())
 
+    def clear(self):
+        """Also update visual table."""
+        super().clear()
+        self.setRowCount(0)
+        self.setColumnCount(0)
+
     def fill_table(self, row_labels=[], col_labels=[],
                    values_cols=[[]], values_rows=[[]],
                    linked_image_list=True):
@@ -2820,10 +2839,10 @@ class ResultPlotCanvas(uir.PlotCanvas):
 
     def Hom(self):
         """Prepare plot for test Hom."""
+        img_nos = []
+        xvals = []
         if self.main.current_modality == 'CT':
             self.title = 'Difference (HU) from center'
-            img_nos = []
-            xvals = []
             yvals12 = []
             yvals15 = []
             yvals18 = []
@@ -2975,14 +2994,27 @@ class ResultPlotCanvas(uir.PlotCanvas):
             if self.main.current_paramset.sli_type == 0:
                 styles = ['k', 'g', 'b', 'r']
             elif self.main.current_paramset.sli_type == 1:
-                styles = ['k', 'g', 'b', 'r', 'pink', 'c']
+                styles = ['k', 'g', 'b', 'r', 'm', 'c']
             elif self.main.current_paramset.sli_type == 2:
                 styles = ['b', 'r']
-            for l_idx, profile in enumerate(details_dict['profiles']):
+
+            if self.main.tabCT.sli_plot.currentIndex() == 0:  # plot all
+                l_idxs = list(np.arange(len(details_dict['profiles'])))
+            else:
+                l_idxs = [self.main.tabCT.sli_plot.currentIndex() - 1]
+            for l_idx in l_idxs:
                 self.curves.append({'label': details_dict['labels'][l_idx],
                                     'xvals': xvals,
-                                    'yvals': profile,
+                                    'yvals': details_dict['profiles'][l_idx],
                                     'style': styles[l_idx]})
+                try:
+                    self.curves.append({'label': details_dict['labels'][l_idx],
+                                        'xvals': xvals,
+                                        'yvals': details_dict[
+                                            'envelope_profiles'][l_idx],
+                                        'style': f'--{styles[l_idx]}'})
+                except IndexError:
+                    pass
                 self.curves.append({
                     'label': '_nolegend_',
                     'xvals': [min(xvals), max(xvals)],
@@ -3156,7 +3188,6 @@ class ResultPlotCanvas(uir.PlotCanvas):
                                     ha='left', size=8, color='gray')
                             if 'cut_width_fade' in dd_this:
                                 cwf = dd_this['cut_width_fade']
-                                print(f' cut_width {cw} fade {cwf}')
                                 if cwf > cw:
                                     for x in [-1, 1]:
                                         self.curves.append({
@@ -3541,13 +3572,18 @@ class StatusBar(QStatusBar):
         self.timer.timeout.connect(self.clearMessage)
         self.saved_warnings = []
 
-    def showMessage(self, txt, timeout=0, warning=False):
+    def showMessage(self, txt, timeout=0, warning=False, add_warnings=[]):
         """Set background color when message is shown."""
         if warning:
             self.setStyleSheet("QStatusBar{background:#efb412;}")
             timeout = 2000
-            txt_ = f'{ctime()}: {self.main.current_test}: {txt}'
-            self.saved_warnings.append(txt_)
+            if len(add_warnings) == 0:
+                txt_ = f'{ctime()}: {txt}'
+                self.saved_warnings.append(txt_)
+            else:
+                txt_ = f'{ctime()}:'
+                self.saved_warnings.append(txt_)
+                self.saved_warnings.extend(add_warnings)
             self.main.actWarning.setEnabled(True)
         else:
             self.setStyleSheet("QStatusBar{background:#6e94c0;}")

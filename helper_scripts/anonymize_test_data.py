@@ -29,11 +29,11 @@ class filedialog(QWidget):
         filenames = fnames[0]
         if len(filenames) > 0:
             out_folder = ''
-            dlg = QFileDialog()
-            dlg.setFileMode(QFileDialog.Directory)
-            if dlg.exec():
-                fname = dlg.selectedFiles()
-                out_folder = fname[0]
+            p = Path(__file__).parent.parent / 'tests' / 'test_inputs'
+            path_test_input = str(p)
+            out_res = QFileDialog.getExistingDirectory(
+                self, 'Save in folder', path_test_input)
+            out_folder = out_res
             if out_folder != '':
                 for filename in filenames:
                     pd = pydicom.dcmread(filename)
@@ -63,7 +63,10 @@ class filedialog(QWidget):
                     new_filename = ''
                     new_filename += pd['Modality'].value
                     new_filename += '_' + pd['SeriesDescription'].value
-                    new_filename += '_' + pd['ProtocolName'].value
+                    try:
+                        new_filename += '_' + pd['ProtocolName'].value
+                    except KeyError:
+                        pass
                     new_filename += '_' + f"{pd['InstanceNumber'].value:03}"
                     new_filename += '.dcm'
 

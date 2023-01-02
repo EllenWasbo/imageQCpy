@@ -29,3 +29,11 @@ class InputMain:
     current_group_indicators: list = field(default_factory=list)
     # string for each image if output set pr group with quicktest (paramset.output)
     automation_active: bool = True
+
+    def display_errmsg(self, errmsg):
+        """Display error messages on console."""
+        if errmsg is not None:
+            if isinstance(errmsg, str):
+                print(errmsg)
+            elif isinstance(errmsg, list):
+                print('/n'.join(errmsg))

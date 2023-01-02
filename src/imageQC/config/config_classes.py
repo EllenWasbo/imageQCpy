@@ -249,8 +249,8 @@ class ParamSetCT(ParamSetCommon):
     sli_search_width: int = 10
     sli_average_width: int = 1
     sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom
-    sli_signal_low_density: bool = False
-    # False = wire/ramp higher density than backgroun
+    #sli_signal_low_density: bool = False
+    # False = wire/ramp higher density than background
     rin_median_filter_w: int = 0  # in pix on image
     rin_smooth_filter_w: float = 1.  # in mm on radial profile
     rin_range: list[float] = field(default_factory=lambda: [5., 65.])

@@ -19,6 +19,8 @@ will add <pkgname>. to these statements
 
 import glob
 import os
+from pathlib import Path
+from tkinter import Tk
 from tkinter import filedialog, messagebox
 
 pkgname = 'imageQC'
@@ -35,14 +37,15 @@ def add_pkg(line):
                 new_line = f'{line[:7]}{search_string}{line[7:]}'
     return (found_in_line, new_line)
 
-directory = filedialog.askdirectory(title=f'Locate src folder of {pkgname}')
+root_tk = Tk()
+directory = filedialog.askdirectory(
+    title=f'Locate src folder of {pkgname}',
+    initialdir=str(Path(__file__).parent.parent))
 if any(directory):
     res = messagebox.askyesnocancel(
         title=f'Remove or add?',
         message=f'Remove {pkgname}. (Yes) or add (No)')
-    remove_pkgname_dot = True
-    if res == 'No':
-        remove_pkgname_dot = False
+    remove_pkgname_dot = res
     if res is not None:
         search_string = f'{pkgname}.'
         start_stop_string = f'# {pkgname} block'
@@ -81,3 +84,5 @@ if any(directory):
                             for lin in lines:
                                 f.write(lin)
         print('Finished')
+
+root_tk.destroy()

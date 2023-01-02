@@ -31,8 +31,9 @@ def gauss(x, A, sigma):
 def gauss_fit(x, y, fwhm=0):
     """Fit x,y to gaussian curve."""
     if fwhm == 0:
-        fwhm, center = get_width_center_at_threshold(y, np.max(y)/2)
-        fwhm = fwhm * (x[1] - x[0])
+        width, center = get_width_center_at_threshold(y, np.max(y)/2)
+        if width is not None:
+            fwhm = width * (x[1] - x[0])
     sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
     A = max(y)
     popt, pcov = curve_fit(
@@ -52,8 +53,9 @@ def gauss_double_fit(x, y, fwhm1=0):
     """Fit x,y to double gaussian - (centered, 1 positive and 1 negative amplitude)."""
     A1 = np.max(y) - 2 * np.min(y)
     if fwhm1 == 0:
-        fwhm1, center = get_width_center_at_threshold(y, np.max(y)/2)
-        fwhm1 = fwhm1 * (x[1] - x[0])
+        width, center = get_width_center_at_threshold(y, np.max(y)/2)
+        if width is not None:
+            fwhm1 = width * (x[1] - x[0])
     sigma1 = fwhm1 / (2 * np.sqrt(2 * np.log(2)))
     A2 = 2 * np.min(y)
     sigma2 = 2 * sigma1
@@ -93,42 +95,46 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
     """
     popt = None
     width, center = get_width_center_at_threshold(LSF, 0.5 * max(LSF))
-    LSF_x = dx * (np.arange(LSF.size) - center)
-    A2 = None
-    sigma2 = None
-    if gaussfit == 'double':
-        popt = gauss_double_fit(LSF_x, LSF, fwhm1=width * dx)
-        if len(popt) == 4:
-            A1, sigma1, A2, sigma2 = popt
-            LSF_fit = gauss_double(LSF_x, *popt)
-        else:
-            A1, sigma1 = popt
-            LSF_fit = gauss(LSF_x, *popt)
-    else:  # single
-        A1, sigma1 = gauss_fit(LSF_x, LSF)
-        LSF_fit = gauss(LSF_x, A1, sigma1)
+    if center is not None:
+        LSF_x = dx * (np.arange(LSF.size) - center)
+        A2 = None
+        sigma2 = None
+        if gaussfit == 'double':
+            popt = gauss_double_fit(LSF_x, LSF, fwhm1=width * dx)
+            if len(popt) == 4:
+                A1, sigma1, A2, sigma2 = popt
+                LSF_fit = gauss_double(LSF_x, *popt)
+            else:
+                A1, sigma1 = popt
+                LSF_fit = gauss(LSF_x, *popt)
+        else:  # single
+            A1, sigma1 = gauss_fit(LSF_x, LSF)
+            LSF_fit = gauss(LSF_x, A1, sigma1)
 
-    n_steps = 200  # sample 20 steps from 0 to 1 stdv MTF curve (stdev = 1/sigma1)
-    # TODO user configurable n_steps
-    k_vals = np.arange(n_steps) * (10./n_steps) / sigma1
-    MTF = gauss(k_vals, A1*sigma1, 1/sigma1)
-    if A2 is not None and sigma2 is not None:
-        F2 = gauss(k_vals, A2*sigma2, 1/sigma2)
-        MTF = np.add(MTF, F2)
-    MTF_filtered = None
-    if prefilter_sigma is not None:
-        if prefilter_sigma > 0:
-            F_filter = gauss(k_vals, 1., 1/prefilter_sigma)
-            MTF_filtered = 1/MTF[0] * MTF  # for display
-            MTF = np.divide(MTF, F_filter)
-    MTF = 1/MTF[0] * MTF
-    k_vals = k_vals / (2*np.pi)
+        n_steps = 200  # sample 20 steps from 0 to 1 stdv MTF curve (stdev = 1/sigma1)
+        # TODO user configurable n_steps
+        k_vals = np.arange(n_steps) * (10./n_steps) / sigma1
+        MTF = gauss(k_vals, A1*sigma1, 1/sigma1)
+        if A2 is not None and sigma2 is not None:
+            F2 = gauss(k_vals, A2*sigma2, 1/sigma2)
+            MTF = np.add(MTF, F2)
+        MTF_filtered = None
+        if prefilter_sigma is not None:
+            if prefilter_sigma > 0:
+                F_filter = gauss(k_vals, 1., 1/prefilter_sigma)
+                MTF_filtered = 1/MTF[0] * MTF  # for display
+                MTF = np.divide(MTF, F_filter)
+        MTF = 1/MTF[0] * MTF
+        k_vals = k_vals / (2*np.pi)
+        details = {
+            'LSF_fit_x': LSF_x, 'LSF_fit': LSF_fit, 'LSF_prefit': LSF,
+            'LSF_fit_params': popt,
+            'MTF_freq': k_vals, 'MTF': MTF, 'MTF_filtered': MTF_filtered
+            }
+    else:
+        details = {}
 
-    return {
-        'LSF_fit_x': LSF_x, 'LSF_fit': LSF_fit, 'LSF_prefit': LSF,
-        'LSF_fit_params': popt,
-        'MTF_freq': k_vals, 'MTF': MTF, 'MTF_filtered': MTF_filtered
-        }
+    return details
 
 
 def get_MTF_discrete(LSF, dx=1, padding_factor=1):
@@ -219,7 +225,8 @@ def center_xy_of_disc(matrix2d, threshold=None, roi=None, mode='mean'):
     return center_xy
 
 
-def get_width_center_at_threshold(profile, threshold, get_widest=False):
+def get_width_center_at_threshold(
+        profile, threshold, get_widest=False, force_above=False):
     """Get width and center of largest group in profile above threshold.
 
     Parameters
@@ -227,8 +234,10 @@ def get_width_center_at_threshold(profile, threshold, get_widest=False):
     profile : np.array or list
         vector
     threshold : float
-    get_widest : bool
+    get_widest : bool, optional
         True if ignore inner differences, just match first/last. Default is False
+    force_above : bool, optional
+        True if center_indexes locked to above threshold. Default is False.
 
     Returns
     -------
@@ -239,8 +248,8 @@ def get_width_center_at_threshold(profile, threshold, get_widest=False):
         center position of center values above or below threshold
         if failed -1
     """
-    width = -1
-    center = -1
+    width = None
+    center = None
 
     if isinstance(profile, list):
         profile = np.array(profile)
@@ -249,7 +258,7 @@ def get_width_center_at_threshold(profile, threshold, get_widest=False):
     below = np.where(profile < threshold)
 
     if len(above[0]) > 2 and len(below[0]) > 2:
-        if above[0][0] >= 1:
+        if above[0][0] >= 1 or force_above:
             center_indexes = above[0]
         else:
             center_indexes = below[0]
@@ -276,25 +285,25 @@ def get_width_center_at_threshold(profile, threshold, get_widest=False):
                 first = group_start[largest_group]
                 last = first + group_size[largest_group] - 1
 
-            if first == 0:
-                first = 1
-            if last == len(profile) - 1:
-                last = len(profile) - 2
-            # interpolate to find more exact width and center
-            dy = profile[first] - threshold
-            if profile[first] != profile[first-1]:
-                dx = dy / (profile[first] - profile[first-1])
+            if first == 0 or last == len(profile) - 1:
+                width = None
+                center = None
             else:
-                dx = 0
-            x1 = first - dx
-            dy = profile[last] - threshold
-            if profile[last] != profile[last+1]:
-                dx = dy / (profile[last] - profile[last+1])
-            else:
-                dx = 0
-            x2 = last + dx
-            center = 0.5 * (x1+x2)
-            width = x2 - x1
+                # interpolate to find more exact width and center
+                dy = profile[first] - threshold
+                if profile[first] != profile[first-1]:
+                    dx = dy / (profile[first] - profile[first-1])
+                else:
+                    dx = 0
+                x1 = first - dx
+                dy = profile[last] - threshold
+                if profile[last] != profile[last+1]:
+                    dx = dy / (profile[last] - profile[last+1])
+                else:
+                    dx = 0
+                x2 = last + dx
+                center = 0.5 * (x1+x2)
+                width = x2 - x1
 
     return (width, center)
 

@@ -11,9 +11,7 @@ from scipy import ndimage
 from skimage import feature
 
 # imageQC block start
-from imageQC.scripts.mini_methods_calculate import (
-    get_width_center_at_threshold, rotate_point
-    )
+import imageQC.scripts.mini_methods_calculate as mmcalc
 # imageQC block end
 
 
@@ -62,17 +60,24 @@ def get_rois(image, image_number, input_main):
 
     def ROI():
         roi_this = None
+
+        if paramset.roi_offset_mm:
+            extra_xy = np.array(paramset.roi_offset_xy) / image_dict.pix[0]
+        else:
+            extra_xy = np.array(paramset.roi_offset_xy)
+        off_center_xy = tuple(np.add(extra_xy, np.array(delta_xya[0:2])))
+
         # roi_type 0=circular, 1=rectangular, 2=rectangular wi
         if paramset.roi_type == 0:
             roi_size_in_pix = paramset.roi_radius / image_dict.pix[0]
             roi_this = get_roi_circle(
-                img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
+                img_shape, off_center_xy, roi_size_in_pix)
         else:
             w = paramset.roi_x / image_dict.pix[0]
             h = paramset.roi_y / image_dict.pix[1]
             roi_this = get_roi_rectangle(
                 img_shape, roi_width=w, roi_height=h,
-                offcenter_xy=delta_xya[0:2])
+                offcenter_xy=off_center_xy)
             if paramset.roi_type == 2:  # rotated ROI
                 roi_this = ndimage.rotate(
                     roi_array, paramset.roi_a, reshape=False)
@@ -120,7 +125,8 @@ def get_rois(image, image_number, input_main):
             roi_size_in_pix = paramset.mtf_roi_size / image_dict.pix[0]
             if paramset.mtf_type == 0:  # bead
                 if paramset.mtf_auto_center:
-                    yxmax = get_max_pos_yx(image)
+                    filt_img = ndimage.gaussian_filter(image, sigma=5)
+                    yxmax = get_max_pos_yx(filt_img)
                     off_center_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
                 roi_this = [[], []]
                 roi_this[0] = get_roi_rectangle(
@@ -138,7 +144,6 @@ def get_rois(image, image_number, input_main):
                 roi_this[1] = background_outer
             else:  # circular edge / wire
                 if paramset.mtf_auto_center:
-                    # heavy filtering, find max pixel
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)
                     off_center_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
@@ -211,7 +216,7 @@ def get_rois(image, image_number, input_main):
         return (roi_this, errmsg)
 
     def CTn():
-        return get_roi_ctn(image, image_dict, paramset, delta_xya=delta_xya)
+        return get_roi_CTn(image, image_dict, paramset, delta_xya=delta_xya)
 
     def Sli():
         roi_this = None
@@ -488,7 +493,7 @@ def get_roi_hom(image_dict,
     return roi_array
 
 
-def get_roi_ctn(image, image_dict, test_params, delta_xya=[0, 0, 0.]):
+def get_roi_CTn(image, image_dict, test_params, delta_xya=[0, 0, 0.]):
     """Calculate roi array with center roi and periferral rois.
 
     Parameters
@@ -516,6 +521,7 @@ def get_roi_ctn(image, image_dict, test_params, delta_xya=[0, 0, 0.]):
     errmsg = None
 
     if roi_size_in_pix > 0:
+        filt_image = ndimage.gaussian_filter(image, sigma=5)
         n_rois = len(test_params.ctn_table.pos_x)
         off_centers = []
         rot_a = np.deg2rad(delta_xya[2])
@@ -525,7 +531,7 @@ def get_roi_ctn(image, image_dict, test_params, delta_xya=[0, 0, 0.]):
             x += delta_xya[0]
             y += delta_xya[1]
             if rot_a != 0:
-                x, y = rotate_point(
+                x, y = mmcalc.rotate_point(
                     (x, y),
                     (delta_xya[0], delta_xya[1]),
                     delta_xya[2]
@@ -550,27 +556,31 @@ def get_roi_ctn(image, image_dict, test_params, delta_xya=[0, 0, 0.]):
             for r in range(n_rois):
                 y = round(off_centers[r][1] + cy)
                 x = round(off_centers[r][0] + cx)
-                subarr = image[y-radius:y+radius, x-radius:x+radius]
+                subarr = filt_image[y-radius:y+radius, x-radius:x+radius]
                 roi_mask = roi_search_array[r][y-radius:y+radius, x-radius:x+radius]
                 try:
                     background_arr = np.ma.masked_array(
                         subarr, mask=outer_val_ring_mask)
                     subarr[roi_mask == False] = np.mean(background_arr)
                 except np.ma.core.MaskError:
-                    n_err += 1
-                    txt = 'all' if n_err == n_rois else 'some'
-                    errmsg = f'Failed finding center of circle for {txt} ROIs.'
+                    pass
                 size_y, size_x = subarr.shape
                 if size_y > 0 and size_x > 0:
                     prof_y = np.sum(subarr, axis=1)
                     prof_x = np.sum(subarr, axis=0)
                     # get width at halfmax and center for profiles
-                    width_x, center_x = get_width_center_at_threshold(
+                    width_x, center_x = mmcalc.get_width_center_at_threshold(
                         prof_x, 0.5 * (max(prof_x) + min(prof_x)))
-                    width_y, center_y = get_width_center_at_threshold(
+                    width_y, center_y = mmcalc.get_width_center_at_threshold(
                         prof_y, 0.5 * (max(prof_y) + min(prof_y)))
-                    off_centers[r][1] += center_y - radius
-                    off_centers[r][0] += center_x - radius
+                    if center_y is not None:
+                        off_centers[r][1] += center_y - radius
+                    if center_x is not None:
+                        off_centers[r][0] += center_x - radius
+                    if center_y is None or center_x is None:
+                        n_err += 1
+                        txt = 'all' if n_err == n_rois else 'some'
+                        errmsg = f'Failed finding center of object for {txt} ROIs.'
 
         roi_array = []
         for r in range(n_rois):
@@ -719,11 +729,11 @@ def get_roi_circle_MR(image, image_dict, test_params, test_code, delta_xy):
     prof_y = np.max(image, axis=1)
     prof_x = np.max(image, axis=0)
     # get width at halfmax and center for profiles
-    width_x, center_x = get_width_center_at_threshold(
+    width_x, center_x = mmcalc.get_width_center_at_threshold(
         prof_x, 0.5 * (max(prof_x)+min(prof_x)))
-    width_y, center_y = get_width_center_at_threshold(
+    width_y, center_y = mmcalc.get_width_center_at_threshold(
         prof_y, 0.5 * (max(prof_y)+min(prof_y)))
-    if width_x > -1 and width_y > -1:
+    if width_x is not None and width_y is not None:
         radius = -1
         width = 0.5 * (width_x + width_y)
         optimize_center = True
@@ -820,47 +830,13 @@ def get_slicethickness_start_stop(image_info, paramset, dxya):
     center_x = size_xhalf + dxya[0]
     center_y = size_yhalf + dxya[1]
 
-    # vertical line 1
-    if dxya[2] == 0:
-        x1 = center_x - dist
-        x2 = x1
-        y1 = center_y - prof_half
-        y2 = center_y + prof_half
-    else:
-        x1 = center_x - dist*cos_rot - prof_half*sin_rot
-        x2 = center_x - dist*cos_rot + prof_half*sin_rot
-        y1 = center_y + dist*sin_rot - prof_half*cos_rot
-        y2 = center_y + dist*sin_rot + prof_half*cos_rot
-    v_lines.append([round(y1), round(x1), round(y2), round(x2)])
-
-    # vertical line 2
-    if dxya[2] == 0:
-        x1 = center_x + dist
-        x2 = x1
-    else:
-        x1 = center_x + dist*cos_rot - prof_half*sin_rot
-        x2 = center_x + dist*cos_rot + prof_half*sin_rot
-        y1 = center_y - dist*sin_rot - prof_half*cos_rot
-        y2 = center_y - dist*sin_rot + prof_half*cos_rot
-    v_lines.append([round(y1), round(x1), round(y2), round(x2)])
-
+    # Horizontal profiles
     if paramset.sli_type in [0, 1]:  # Catphan wire or beaded
 
         # first horizontal line coordinates
         if dxya[2] == 0:
             x1 = center_x - prof_half
             x2 = center_x + prof_half
-            y1 = center_y + dist
-            y2 = y1
-        else:
-            x1 = center_x + dist*sin_rot - prof_half*cos_rot
-            x2 = center_x + dist*sin_rot + prof_half*cos_rot
-            y1 = center_y + dist*cos_rot + prof_half*sin_rot
-            y2 = center_y + dist*cos_rot - prof_half*sin_rot
-        h_lines.append([round(y1), round(x1), round(y2), round(x2)])
-
-        # second horizontal line coordinates
-        if dxya[2] == 0:
             y1 = center_y - dist
             y2 = y1
         else:
@@ -870,31 +846,47 @@ def get_slicethickness_start_stop(image_info, paramset, dxya):
             y2 = center_y - dist*cos_rot - prof_half*sin_rot
         h_lines.append([round(y1), round(x1), round(y2), round(x2)])
 
-        if paramset.sli_type == 1:  # Catphan beaded helical
-            dist = dist_b
-            # third horizontal line coordinates
-            if dxya[2] == 0:
-                x1 = center_x - prof_half
-                x2 = center_x + prof_half
-                y1 = center_y + dist
-                y2 = y1
-            else:
-                x1 = center_x + dist*sin_rot - prof_half*cos_rot
-                x2 = center_x + dist*sin_rot + prof_half*cos_rot
-                y1 = center_y + dist*cos_rot + prof_half*sin_rot
-                y2 = center_y + dist*cos_rot - prof_half*sin_rot
-            h_lines.append([round(y1), round(x1), round(y2), round(x2)])
+        # second horizontal line coordinates
+        if dxya[2] == 0:
+            y1 = center_y + dist
+            y2 = y1
+        else:
+            x1 = center_x + dist*sin_rot - prof_half*cos_rot
+            x2 = center_x + dist*sin_rot + prof_half*cos_rot
+            y1 = center_y + dist*cos_rot + prof_half*sin_rot
+            y2 = center_y + dist*cos_rot - prof_half*sin_rot
+        h_lines.append([round(y1), round(x1), round(y2), round(x2)])
 
-            # forth horizontal line coordinates
-            if dxya[2] == 0:
-                y1 = center_y - dist
-                y2 = y1
-            else:
-                x1 = center_x - dist*sin_rot - prof_half*cos_rot
-                x2 = center_x - dist*sin_rot + prof_half*cos_rot
-                y1 = center_y - dist*cos_rot + prof_half*sin_rot
-                y2 = center_y - dist*cos_rot - prof_half*sin_rot
-            h_lines.append([round(y1), round(x1), round(y2), round(x2)])
+    # Vertical profiles
+    if paramset.sli_type == 1:  # Catphan beaded helical
+        dists = [dist, dist_b]
+    else:
+        dists = [dist]
+
+    for dist in dists:
+        # vertical line 1
+        if dxya[2] == 0:
+            x1 = center_x - dist
+            x2 = x1
+            y1 = center_y - prof_half
+            y2 = center_y + prof_half
+        else:
+            x1 = center_x - dist*cos_rot - prof_half*sin_rot
+            x2 = center_x - dist*cos_rot + prof_half*sin_rot
+            y1 = center_y + dist*sin_rot - prof_half*cos_rot
+            y2 = center_y + dist*sin_rot + prof_half*cos_rot
+        v_lines.append([round(y1), round(x1), round(y2), round(x2)])
+    
+        # vertical line 2
+        if dxya[2] == 0:
+            x1 = center_x + dist
+            x2 = x1
+        else:
+            x1 = center_x + dist*cos_rot - prof_half*sin_rot
+            x2 = center_x + dist*cos_rot + prof_half*sin_rot
+            y1 = center_y - dist*sin_rot - prof_half*cos_rot
+            y2 = center_y - dist*sin_rot + prof_half*cos_rot
+        v_lines.append([round(y1), round(x1), round(y2), round(x2)])
 
     return ({'h_lines': h_lines, 'v_lines': v_lines}, errmsg)
 

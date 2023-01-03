@@ -578,7 +578,7 @@ class MainWindow(QMainWindow):
             if self.current_test in self.results:
                 self.hide_rgt_top()  # maximize results displays first time
 
-        print(f'cur idx {self.tabResults.currentIndex()}')
+        #print(f'cur idx {self.tabResults.currentIndex()}')
         if self.current_test not in self.results:
             # clear all
             self.wResTable.result_table.clear()
@@ -590,7 +590,7 @@ class MainWindow(QMainWindow):
             wid = self.tabResults.currentWidget()
             if isinstance(wid, ResultTableWidget) and update_table:
                 if self.tabResults.currentIndex() == 0:
-                    print('ready to update table')
+                    #print('ready to update table')
                     try:
                         self.wResTable.result_table.fill_table(
                             col_labels=self.results[self.current_test]['headers'],
@@ -1791,11 +1791,28 @@ class ImageCanvas(GenericImageCanvas):
             # bead show background rim
             self.add_contours_to_all_rois(roi_indexes=[1])
         else:
-            self.add_contours_to_all_rois(colors = ['red', 'blue', 'green', 'cyan'])
+            self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
 
     def Uni(self):
         """Draw NM uniformity ROI."""
         self.add_contours_to_all_rois(colors=['red', 'blue'])
+
+    def Dim(self):
+        """Draw search ROI for rods and resulting centerpositions if any."""
+        self.add_contours_to_all_rois(roi_indexes=[0, 1, 2, 3])
+        if 'Dim' in self.main.results:
+            if 'details_dict' in self.main.results['Dim']:
+                details_dict = self.main.results['Dim'][
+                    'details_dict'][self.main.vGUI.active_img_no]
+                if 'centers_x' in details_dict:
+                    xs = details_dict['centers_x']
+                    ys = details_dict['centers_y']
+                    for i in range(4):
+                        self.ax.add_artist(matplotlib.lines.Line2D(
+                            [xs[i-1], xs[i]], [ys[i-1], ys[i]],
+                            color='r', linewidth=self.linewidth,
+                            linestyle='dotted',
+                            ))
 
     def SNI(self):
         """Draw NM uniformity ROI."""

@@ -502,6 +502,7 @@ class TestTabCT(TestTabCommon):
         self.create_tab_MTF()
         self.create_tab_CTn()
         self.create_tab_HUw()
+        self.create_tab_Dim()
 
         self.addTab(self.tabHom, "Homogeneity")
         self.addTab(self.tabNoi, "Noise")
@@ -509,6 +510,7 @@ class TestTabCT(TestTabCommon):
         self.addTab(self.tabMTF, "MTF")
         self.addTab(self.tabCTn, "CT number")
         self.addTab(self.tabHUw, "HU water")
+        self.addTab(self.tabDim, "Dimensions")
 
     def update_displayed_params(self):
         """Display parameters according to current_paramset of main."""
@@ -917,6 +919,25 @@ class TestTabCT(TestTabCommon):
         vLO.addWidget(self.btnRunMTF)
 
         self.tabMTF.setLayout(vLO)
+
+    def create_tab_Dim(self):
+        """GUI of tab Dim. Test distance of rods in Catphan."""
+        self.tabDim = QWidget()
+        vLO = QVBoxLayout()
+
+        vLO.addWidget(QLabel('Calculate distance between rods in Catphan'))
+        vLO.addWidget(QLabel(
+            'NB: difference from expected distance in supplement table'))
+
+        vLO.addStretch()
+
+        self.btnRunDim = QPushButton('Calculate linear dimensions.')
+        self.btnRunDim.setToolTip('Run test')
+        self.btnRunDim.clicked.connect(self.run_current)
+        vLO.addWidget(self.btnRunDim)
+        vLO.addStretch()
+
+        self.tabDim.setLayout(vLO)
 
 
 class TestTabXray(TestTabCommon):

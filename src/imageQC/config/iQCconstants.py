@@ -24,7 +24,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.2alpha'
+VERSION = '3.0.3alpha'
 '''if os.path.exists(cfg_path):
     config = configparser.ConfigParser()
     try:
@@ -47,7 +47,7 @@ USER_PREFS_FNAME = 'user_preferences.yaml'
 
 QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
-           'HUw', 'Rin', 'NPS', 'Dim'],
+           'HUw', 'Dim', 'Rin', 'NPS'],
     'Xray': ['DCM', 'ROI', 'Hom', 'Noi', 'MTF', 'NPS', 'Var'],
     'NM': ['DCM', 'ROI', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
     'SPECT': ['DCM', 'ROI', 'MTF', 'Con'],
@@ -105,6 +105,9 @@ HEADERS = {
             'alt2': ['MTF 50%', 'MTF 10%', 'MTF 2%']
             },
         'HUw': {'alt0': ['CT number (HU)', 'Noise=Stdev']},
+        'Dim': {
+            'alt0': ['Upper', 'Lower', 'Left', 'Right', 'Diagonal 1', 'Diagonal 2']
+            },
         'Rin': {'alt0': ['Min diff from trend (HU)', 'Max diff from trend (HU)']}
         },
     'Xray': {
@@ -178,6 +181,9 @@ HEADERS_SUP = {
                      'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
             'alt1': ['A1', 'sigma1', 'A2', 'sigma2'],
             'alt2': ['A1', 'sigma1', 'A2', 'sigma2']
+            },
+        'Dim': {
+            'alt0': ['Upper', 'Lower', 'Left', 'Right', 'Diagonal 1', 'Diagonal 2']
             },
         },
     'Xray': {},

@@ -377,9 +377,10 @@ def calculate_qc(input_main):
                             result, errmsg = calculate_2d(
                                 image, prev_roi[test], img_infos[i],
                                 modality, paramset, test, delta_xya)
-                            if len(errmsg) > 0:
-                                errmsgs.append(f'{test} slice {i}:')
-                                errmsgs.extend(errmsg)
+                            if errmsg is not None:
+                                if len(errmsg) > 0:
+                                    errmsgs.append(f'{test} slice {i}:')
+                                    errmsgs.extend(errmsg)
                             if test not in [*input_main.results]:
                                 # initiate results
                                 input_main.results[test] = {
@@ -415,12 +416,16 @@ def calculate_qc(input_main):
                         # diff from avg (%)
                         row[2] = 100.0 * (row[1] - avg_noise) / avg_noise
                         row[3] = avg_noise
+                if 'Dim' in flattened_marked:
+                    if 'MainWindow' in str(type(input_main)):
+                        input_main.update_roi()
 
             if any(marked_3d):
                 results, errmsg = calculate_3d(
                     matrix, marked_3d, input_main)
-                if len(errmsg) > 0:
-                    errmsgs.extend(errmsg)
+                if errmsg is not None:
+                    if len(errmsg) > 0:
+                        errmsgs.extend(errmsg)
                 for test in results:
                     input_main.results[test] = results[test]
                     if test == 'SNR':
@@ -626,6 +631,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
     def MTF():
         if image2d is not None:
+            errmsg = None
             if modality == 'CT':
                 alt = paramset.mtf_type
                 headers = HEADERS[modality][test_code]['alt' + str(alt)]
@@ -671,6 +677,57 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 values = details[prefix + 'MTF_details']['values']
 
         return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+
+    def Dim():
+        headers = HEADERS[modality][test_code]['alt0']
+        headers_sup = HEADERS_SUP[modality][test_code]['alt0']
+        errmsg = []
+        if image2d is not None:
+            dx, dy = roi_array[-1]
+            centers_x = []
+            centers_y = []
+            for i in range(4):
+                rows = np.max(roi_array[i], axis=1)
+                cols = np.max(roi_array[i], axis=0)
+                sub = image2d[rows][:, cols]
+                prof_y = np.sum(sub, axis=1)
+                prof_x = np.sum(sub, axis=0)
+                width_x, center_x = mmcalc.get_width_center_at_threshold(
+                    prof_x, 0.5 * (max(prof_x) + min(prof_x)))
+                width_y, center_y = mmcalc.get_width_center_at_threshold(
+                    prof_y, 0.5 * (max(prof_y) + min(prof_y)))
+                centers_x.append(center_x - prof_x.size / 2 + dx[i])
+                centers_y.append(center_y - prof_y.size / 2 + dy[i])
+            if all(centers_x) and all(centers_y):
+                pix = image_info.pix[0]
+                diffs = []
+                dds = []
+                dist = 50.
+                diag_dist = np.sqrt(2*50**2)
+                for i in range(4):
+                    diff = pix * np.sqrt(
+                        (centers_x[i] - centers_x[-i-1])**2
+                        + (centers_y[i] - centers_y[-i-1])**2
+                        )
+                    diffs.append(diff)
+                    dds.append(diff - dist)
+                d1 = pix * np.sqrt(
+                    (centers_x[2] - centers_x[0])**2
+                    + (centers_y[2] - centers_y[0])**2
+                    )
+                d2 = pix * np.sqrt(
+                    (centers_x[3] - centers_x[1])**2
+                    + (centers_y[3] - centers_y[1])**2
+                    )
+                values = [diffs[1], diffs[3], diffs[0], diffs[2], d1, d2]
+                values_sup = [dds[1], dds[3], dds[0], dds[2],
+                              d1 - diag_dist, d2 - diag_dist]
+                details_dict = {'centers_x': centers_x, 'centers_y': centers_y}
+            else:
+                errmsg = 'Could not find center of all 4 rods.'
+
+        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+
 
     def Uni():
         headers = HEADERS[modality][test_code]['alt0']

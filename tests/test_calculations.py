@@ -89,7 +89,33 @@ def test_CT_Sli_axial():
     calculate_qc.calculate_qc(input_main)
     values10 = np.round(10.*np.array(input_main.results['Sli']['values'][0]))
     assert np.array_equal(
-        values10, np.array([ 48.,  44.,  46.,  46.,  46.,  46., -49.]))
+        values10, np.array([48., 44., 46., 46., 46., 46., -49.]))
+
+
+def test_CT_Dim():
+    input_main = InputMain(
+        current_modality='CT',
+        current_test='Dim',
+        current_paramset=cfc.ParamSetCT(),
+        current_quicktest=cfc.QuickTestTemplate(
+            tests=[['Dim']],
+            image_names=[''],
+            group_names=['']
+            ),
+        tag_infos=read_tag_infos_from_yaml(),
+        automation_active=False
+        )
+
+    file_path = (
+        path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' / 'CTP404_FOV150_001.dcm')
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(np.array(input_main.results['Dim']['values'][0]))
+    assert np.array_equal(
+        values, np.array([50., 50., 50., 50., 71., 71.]))
 
 
 def test_CT_Sli_helical():

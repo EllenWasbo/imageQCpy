@@ -228,6 +228,38 @@ def get_rois(image, image_number, input_main):
 
         return (roi_this, errmsg)
 
+    def Dim():
+        roi_this = []
+        roi_size_in_pix = 10./image_dict.pix[0]  # search radius 10mm
+        dist = np.sqrt(2 * 25.**2)/image_dict.pix[0]
+        # search centers +/- 25mm from center
+
+        rotation_radians = np.deg2rad(delta_xya[2] - 45)
+        delta_rot = [np.cos(rotation_radians), np.sin(rotation_radians)]
+        delta_rotation_xy = [dist * x for x in delta_rot]
+
+        centers = [delta_xya[0:2] for i in range(4)]
+        dd_0, dd_1 = delta_rotation_xy
+        centers[0][0] += dd_1  # 12 o'clock - 45
+        centers[0][1] -= dd_0
+        centers[1][0] += dd_0  # 15 o'clock - 45
+        centers[1][1] += dd_1
+        centers[2][0] -= dd_1  # 18 o'clock - 45
+        centers[2][1] += dd_0
+        centers[3][0] -= dd_0  # 21 o'clock - 45
+        centers[3][1] -= dd_1
+
+        for center in centers:
+            roi_this.append(get_roi_circle(
+                img_shape, center, roi_size_in_pix))
+
+        centers_x = [x[0] + img_shape[1] // 2 for x in centers]
+        centers_y = [x[1] + img_shape[0] // 2 for x in centers]
+        roi_this.append([centers_x, centers_y])
+
+        return (roi_this, errmsg)
+
+
     def Uni():
         return get_ratio_NM(
             image, image_dict,

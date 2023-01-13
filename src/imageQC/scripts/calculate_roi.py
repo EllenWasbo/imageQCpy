@@ -259,6 +259,14 @@ def get_rois(image, image_number, input_main):
 
         return (roi_this, errmsg)
 
+    def STP():
+        roi_size_in_pix = paramset.stp_roi_size / image_dict.pix[0]
+        return get_roi_circle(img_shape, tuple(delta_xya[0:2]), roi_size_in_pix)
+
+    def Var():
+        roi_size_in_pix = paramset.var_roi_size / image_dict.pix[0]
+        return get_roi_rectangle(
+            img_shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
 
     def Uni():
         return get_ratio_NM(
@@ -423,9 +431,7 @@ def get_roi_hom(image_dict,
     -------
     roi_all : list of np.array
     """
-    errmsg = None
     off_centers = []  # [x,y] = center of roi relative to centerpos
-
     roi_size_in_pix = test_params.hom_roi_size / image_dict.pix[0]
 
     if modality in ['CT', 'PET']:

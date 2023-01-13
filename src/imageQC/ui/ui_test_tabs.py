@@ -407,29 +407,6 @@ class TestTabCommon(QTabWidget):
                 else:
                     tests.append([])
         self.main.current_quicktest.tests = tests
-        '''
-        n_marked = 0
-        qt = True if self.main.wQuickTest.gbQT.isChecked() else False
-        if qt:
-            for img in self.main.imgs:
-                if qt and self.main.current_test in img.marked_quicktest:
-                    tests.append([self.main.current_test])
-                    n_marked += 1
-                else:
-                    tests.append([])
-        else:
-            for img in self.main.imgs:
-                if img.marked:
-                    tests.append([self.main.current_test])
-                    n_marked += 1
-                else:
-                    tests.append([])
-        if n_marked > 0:
-            self.main.current_quicktest.tests = tests
-        else:
-            self.main.current_quicktest.tests = [
-                [self.main.current_test]] * len(self.main.imgs)
-        '''
         calculate_qc(self.main)
 
         if self.main.vGUI.active_img_no not in marked_this:
@@ -950,12 +927,14 @@ class TestTabXray(TestTabCommon):
         self.create_tab_Noi()
         self.create_tab_MTF()
         self.create_tab_NPS()
+        self.create_tab_STP()
         self.create_tab_Var()
 
         self.addTab(self.tabHom, "Homogeneity")
         self.addTab(self.tabNoi, "Noise")
         self.addTab(self.tabMTF, "MTF")
         self.addTab(self.tabNPS, "NPS")
+        self.addTab(self.tabSTP, "STP")
         self.addTab(self.tabVar, "Variance")
 
     def update_displayed_params(self):
@@ -985,6 +964,7 @@ class TestTabXray(TestTabCommon):
         npix_tot = ((self.nps_roi_size.value() * 2 - 1)
                     * self.nps_sub_size.value()) ** 2
         self.nps_npix.setText(f'{npix_tot}')
+        self.stp_roi_size.setValue(paramset.stp_roi_size)
         self.var_roi_size.setValue(paramset.var_roi_size)
 
         self.update_enabled()
@@ -1227,6 +1207,35 @@ class TestTabXray(TestTabCommon):
         vLO.addStretch()
 
         self.tabNPS.setLayout(vLO)
+
+    def create_tab_STP(self):
+        """GUI of tab STP."""
+        self.tabSTP = QWidget()
+        vLO = QVBoxLayout()
+
+        self.stp_roi_size = QDoubleSpinBox(decimals=1, minimum=1., singleStep=0.1)
+        self.stp_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='stp_roi_size'))
+
+        vLO.addWidget(uir.LabelItalic(
+            'Signal Transfer Properties (STP):<br>'
+            'Control that pixel values as proportional to dose.<br>'
+            'Currently no change to the image (linearization) available.'))
+
+        hLO = QHBoxLayout()
+        hLO.addWidget(QLabel('ROI size (mm)'))
+        hLO.addWidget(self.stp_roi_size)
+        hLO.addStretch()
+        vLO.addLayout(hLO)
+
+        vLO.addStretch()
+        self.btnRunSTP = QPushButton('Get mean in ROI')
+        self.btnRunSTP.setToolTip('Run test')
+        self.btnRunSTP.clicked.connect(self.run_current)
+        vLO.addWidget(self.btnRunSTP)
+
+        vLO.addStretch()
+        self.tabSTP.setLayout(vLO)
 
     def create_tab_Var(self):
         """GUI of tab Variance."""
@@ -2106,20 +2115,23 @@ class TestTabVendor(QWidget):
             res = {'status': False}
 
             if filetype == 'Siemens CT Constancy/Daily Reports (.pdf)':
-                fname = QFileDialog.getOpenFileName(
+                fname = QFileDialog.getOpenFileNames(
                         self, 'Open Siemens CT QC report files',
                         filter="PDF files (*.pdf)")
                 if len(fname[0]) > 0:
                     self.main.statusBar.showMessage(
-                        'Reading pdf file... takes a few seconds')
+                        'Reading pdf file(s)... takes a few seconds')
                     self.main.start_wait_cursor()
                     #QApplication.setOverrideCursor(Qt.WaitCursor)
                     #qApp.processEvents()
-                    txt = rvr.get_pdf_txt(fname[0])
-                    self.main.statusBar.showMessage(
-                        'Extracting data from pdf')
-                    res = rvr.read_Siemens_CT_QC(
-                        txt)
+                    for f in fname[0]:
+                        txt = rvr.get_pdf_txt(fname[0])
+                        self.main.statusBar.showMessage(
+                            'Extracting data from pdf')
+                        res_this = rvr.read_Siemens_CT_QC(
+                            txt)
+                        if res_this['status']:
+                            breakpoint()  # update res
                     self.main.stop_wait_cursor()
                     #QApplication.restoreOverrideCursor()
                     self.main.statusBar.showMessage('Finished', 1000)

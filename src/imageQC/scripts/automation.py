@@ -576,7 +576,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
     log_pre = f'Template {modality}/{auto_template.label}:'
     if os.path.exists(auto_template.path_input):
         p = Path(auto_template.path_input)
-        files = [x for x in p.glob('**/*') if x.is_file()]
+        files = [x for x in p.glob('*') if x.is_file()]
         if len(files) > 0:
             if parent_widget is None:
                 print(f'Reading {len(files)} new files for template ',
@@ -629,6 +629,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                     for i, img_info in enumerate(img_infos):
                         if uniq_date_uid == date_uid_list[i]:
                             img_infos_this.append(img_info)
+
+                    if len(auto_template.sort_pattern.list_tags) > 0:
+                        img_infos = dcm.sort_imgs(
+                            img_infos, auto_template.sort_pattern, tag_infos)
 
                     input_main_this.imgs = img_infos_this
                     input_main_this.results = {}

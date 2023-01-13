@@ -5,6 +5,8 @@ Calculation processes for the different tests.
 
 @author: Ellen Wasbø
 """
+from __future__ import annotations
+from dataclasses import dataclass, field, asdict
 import numpy as np
 import scipy as sp
 import skimage
@@ -19,6 +21,22 @@ import imageQC.scripts.mini_methods_calculate as mmcalc
 from imageQC.config.iQCconstants import HEADERS, HEADERS_SUP
 import imageQC.config.config_classes as cfc
 # imageQC block end
+
+
+@dataclass
+class Results:
+    """Class holding results."""
+
+    errmsg: list = field(default_factory=list)
+    headers: list = field(default_factory=list)
+    headers_sup: list = field(default_factory=list)
+    values: list = field(default_factory=list)
+    values_sup: list = field(default_factory=list)
+    values_info: str = ''
+    values_sup_info: str = ''
+    details_dict: dict = field(default_factory=dict)
+    alternative: int = 0
+    pr_image: bool = True
 
 
 def extract_values(values, columns=[], calculation='='):
@@ -95,7 +113,7 @@ def quicktest_output(input_main):
     image_names = [f'img{i}' for i in range(n_imgs)]
     group_names = input_main.current_quicktest.group_names
     if input_main.results != {}:
-        # headers
+        # image_names to headers?
         if input_main.current_paramset.output.include_header:
             set_names = input_main.current_quicktest.image_names
             if any(set_names):
@@ -106,7 +124,7 @@ def quicktest_output(input_main):
         #TODO if output_temp.transpose_table:
         #TODO if output_temp.include_filename:
 
-        include_header = True
+        include_header = True  # always included when automation if empty output file
         if input_main.automation_active is False:
             include_header = input_main.current_paramset.output.include_header
 
@@ -114,16 +132,18 @@ def quicktest_output(input_main):
             if test in input_main.current_paramset.output.tests:
                 output_subs = input_main.current_paramset.output.tests[test]
             else:
-                output_subs = [cfc.QuickTestOutputSub(columns=[])]
+                output_subs = [cfc.QuickTestOutputSub(columns=[])]  # default
 
             dm = input_main.current_paramset.output.decimal_mark
+
+            # for each sub-output for current test
             for sub in output_subs:
                 values = None
                 headers = None
                 if sub.alternative > 9:  # supplement table to output
                     values = input_main.results[test]['values_sup']
                     headers = input_main.results[test]['headers_sup']
-                elif sub.alternative == input_main.results[test]['alternative']:
+                else:
                     values = input_main.results[test]['values']
                     headers = input_main.results[test]['headers']
 
@@ -212,6 +232,7 @@ def quicktest_output(input_main):
                             for header in headers_this:
                                 all_headers_this.append(header + '_' + suffix)
                         header_list.extend(all_headers_this)
+                    breakpoint()
 
     return (string_list, header_list)
 
@@ -354,9 +375,10 @@ def calculate_qc(input_main):
 
                 for test in marked[i]:
                     input_main.current_test = test
-                    if test != 'DCM':
-                        if test in marked_3d[i] and matrix[i] is None:
-                            matrix[i] = image  # save image for later
+                    if test not in ['DCM', '']:
+                        if test in marked_3d[i]:
+                            if matrix[i] is None:  # only once
+                                matrix[i] = image  # save image for later
                         else:
                             calculate_new_roi = True
                             try:
@@ -374,36 +396,36 @@ def calculate_qc(input_main):
                                     errmsgs.append(f'{test} get ROI slice{i}:')
                                     errmsgs.append(errmsg)
 
-                            result, errmsg = calculate_2d(
+                            result = calculate_2d(
                                 image, prev_roi[test], img_infos[i],
                                 modality, paramset, test, delta_xya)
-                            if errmsg is not None:
-                                if len(errmsg) > 0:
-                                    errmsgs.append(f'{test} slice {i}:')
-                                    errmsgs.extend(errmsg)
+                            if result is not None:
+                                if result.errmsg is not None:
+                                    if len(result.errmsg) > 0:
+                                        errmsgs.append(f'{test} slice {i}:')
+                                        if isinstance(result.errmsg, str):
+                                            errmsgs.append(result.errmsg)
+                                        else:
+                                            errmsgs.extend(result.errmsg)
                             if test not in [*input_main.results]:
                                 # initiate results
                                 input_main.results[test] = {
-                                    'headers': [],
+                                    'headers': result.headers,
                                     'values': [[] for i in range(n_img)],
-                                    'alternative': 0,
-                                    'headers_sup': [],
+                                    'alternative': result.alternative,
+                                    'headers_sup': result.headers_sup,
                                     'values_sup': [[] for i in range(n_img)],
                                     'details_dict': [{} for i in range(n_img)],
-                                    'pr_image': True
+                                    'pr_image': True,
+                                    'values_info': result.values_info,
+                                    'values_sup_info': result.values_sup_info
                                     }
                             input_main.results[
-                                test]['values'][i] = result['values']
+                                test]['values'][i] = result.values
                             input_main.results[
-                                test]['values_sup'][i] = result['values_sup']
+                                test]['values_sup'][i] = result.values_sup
                             input_main.results[
-                                test]['details_dict'][i] = result['details_dict']
-                            if len(input_main.results[test]['headers']) == 0:
-                                input_main.results[
-                                    test]['headers'] = result['headers']
-                            if len(input_main.results[test]['headers_sup']) == 0:
-                                input_main.results[
-                                    test]['headers_sup'] = result['headers_sup']
+                                test]['details_dict'][i] = result.details_dict
 
             # post processing - where values depend on all images
             if modality == 'CT':
@@ -421,23 +443,25 @@ def calculate_qc(input_main):
                         input_main.update_roi()
 
             if any(marked_3d):
-                results, errmsg = calculate_3d(
+                results_dict = calculate_3d(
                     matrix, marked_3d, input_main)
-                if errmsg is not None:
-                    if len(errmsg) > 0:
-                        errmsgs.extend(errmsg)
-                for test in results:
-                    input_main.results[test] = results[test]
-                    if test == 'SNR':
-                        input_main.results[test]['pr_image'] = True
-                    else:
-                        input_main.results[test]['pr_image'] = False
+                for test in results_dict:
+                    if results_dict[test].errmsg is not None:
+                        if len(results_dict[test].errmsg) > 0:
+                            errmsgs.append(f'{test} slice {i}:')
+                        if isinstance(results_dict[test].errmsg, str):
+                            errmsgs.append(results_dict[test].errmsg)
+                        else:
+                            errmsgs.extend(results_dict[test].errmsg)
+
+                    input_main.results[test] = asdict(results_dict[test])
 
             # For test DCM
             if any(read_tags):
                 input_main.results['DCM'] = {
                     'headers': paramset.dcm_tagpattern.list_tags,
                     'values': tag_lists,
+                    'values_info': '',
                     'alternative': 0,
                     'pr_image': True
                     }
@@ -490,35 +514,19 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
     Returns
     -------
-    result : dict
-        headers: list[str] of headers of result
-        values: list of values
-            [column1, column2, ...] where column1 is list of column values
+    result : Results
     """
-    result = None
-    errmsg = []
-    headers = []
-    headers_sup = []
-    values = []
-    values_sup = []
-    details_dict = {}
-    alt = 0
-
-    '''Copy when new testcode
-    def <testcode>():
-        ....
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
-    '''
 
     def ROI():
+        values = []
         if image2d is not None:
             arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
             avg_val = np.mean(arr)
             std_val = np.std(arr)
             values = [avg_val, std_val]
         headers = HEADERS[modality][test_code]['alt0']
-
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+        res = Results(headers=headers, values=values)
+        return res
 
     def Noi():
         if image2d is not None:
@@ -534,11 +542,12 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             if image2d is not None:
                 values = [avg_val, std_val]
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+        res = Results(headers=headers, values=values)
+        return res
 
     def Hom():
-        headers_sup = []  # do not remove - needed here although already set
-        values_sup = []  # do not remove - needed here although already set
+        headers_sup = []
+        values_sup = []
         avgs = []
         stds = []
         alt = 0
@@ -579,7 +588,10 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 diffs = [100.*(avgs[i] - avg)/avg for i in range(5)]
                 values = avgs + diffs
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+        res = Results(headers=headers, values=values,
+                      headers_sup=headers_sup, values_sup=values_sup,
+                      alternative=alt)
+        return res
 
     def CTn():
         headers = paramset.ctn_table.materials
@@ -593,16 +605,22 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 res = sp.stats.linregress(
                     values, paramset.ctn_table.relative_mass_density)
                 values_sup = [res.rvalue**2, res.intercept, res.slope]
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+            res = Results(headers=headers, values=values,
+                          headers_sup=headers_sup, values_sup=values_sup)
+        else:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        return res
 
     def HUw():
         headers = HEADERS[modality][test_code]['alt0']
+        values = []
         if image2d is not None:
             arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
             avg_val = np.mean(arr)
             std_val = np.std(arr)
             values = [avg_val, std_val]
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+        res = Results(headers=headers, values=values)
+        return res
 
     def Sli():
         if modality == 'CT':
@@ -619,25 +637,34 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     except TypeError:
                         values.append(None)
                         values.append(None)
+                res = Results(
+                    headers=headers, values=values,
+                    details_dict=details_dict,
+                    alternative=alt, errmsg=errmsg)
+            else:
+                res = Results(headers=headers, alternative=alt)
         elif modality == 'MR':
             headers = HEADERS[modality][test_code]['alt0']
             if image2d is not None:
-                pass
+                res = Results(headers=headers)
                 #TODO
+            else:
+                res = Results(headers=headers)
         else:
-            pass
+            res = Results()
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+        return res
 
     def MTF():
-        if image2d is not None:
-            errmsg = None
-            if modality == 'CT':
-                alt = paramset.mtf_type
-                headers = HEADERS[modality][test_code]['alt' + str(alt)]
-                headers_sup = HEADERS_SUP[modality][test_code]['alt' + str(alt)]
-                # only bead method 2d (alt0)
-                #TODO round edge option 2d
+        if modality == 'CT':
+            # only bead method 2d (alt0)
+            #TODO round edge option 2d
+            alt = paramset.mtf_type
+            headers = HEADERS[modality][test_code]['alt' + str(alt)]
+            headers_sup = HEADERS_SUP[modality][test_code]['alt' + str(alt)]
+            if image2d is None:
+                res = Results(headers=headers, headers_sup=headers_sup)
+            else:
                 rows = np.max(roi_array[0], axis=1)
                 cols = np.max(roi_array[0], axis=0)
                 sub = image2d[rows][:, cols]
@@ -655,11 +682,17 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     list(details[0]['gMTF_details']['LSF_fit_params'])
                     + list(details[1]['gMTF_details']['LSF_fit_params'])
                     )
-            elif modality == 'Xray':
-                alt = paramset.mtf_type
-                headers = HEADERS[modality][test_code]['alt0']
-                headers_sup = []
-                values_sup = []
+                res = Results(
+                    headers=headers, values=values,
+                    headers_sup=headers_sup, values_sup=values_sup,
+                    details_dict=details, alternative=alt)
+
+        elif modality == 'Xray':
+            alt = paramset.mtf_type
+            headers = HEADERS[modality][test_code]['alt0']
+            if image2d is None:
+                res = Results(headers=headers, headers_sup=headers_sup)
+            else:
                 sub = []
                 if isinstance(roi_array, list):
                     for roi in roi_array:
@@ -676,13 +709,20 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
                 values = details[prefix + 'MTF_details']['values']
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+                res = Results(
+                    headers=headers, values=values,
+                    details_dict=details, alternative=alt, errmsg=errmsg)
+
+        return res
 
     def Dim():
         headers = HEADERS[modality][test_code]['alt0']
         headers_sup = HEADERS_SUP[modality][test_code]['alt0']
-        errmsg = []
-        if image2d is not None:
+        if image2d is None:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
+            errmsg = ''
+            details_dict = {}
             dx, dy = roi_array[-1]
             centers_x = []
             centers_y = []
@@ -726,13 +766,35 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             else:
                 errmsg = 'Could not find center of all 4 rods.'
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+            values_info = 'Distance [mm] between rods'
+            values_sup_info = (
+                'Difference [mm] from expected distance (50 mm) between rods.')
 
+            res = Results(
+                headers=headers, values=values, values_info=values_info,
+                headers_sup=headers_sup, values_sup=values_sup,
+                values_sup_info=values_sup_info,
+                details_dict=details_dict, errmsg=errmsg)
+
+        return res
+
+    def STP():
+        values = []
+        if image2d is not None:
+            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
+            avg_val = np.mean(arr)
+            std_val = np.std(arr)
+            values = [None, None, avg_val, std_val]
+        headers = HEADERS[modality][test_code]['alt0']
+        res = Results(headers=headers, values=values)
+        return res
 
     def Uni():
         headers = HEADERS[modality][test_code]['alt0']
         headers_sup = HEADERS_SUP[modality][test_code]['altAll']
-        if image2d is not None:
+        if image2d is None:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
             details_dict = {}
             values_sup = [None] * 3
             if paramset.uni_correct:
@@ -753,12 +815,19 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             details_dict['du_matrix'] = res['du_matrix']
             values = res['values']
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+            res = Results(
+                headers=headers, values=values,
+                headers_sup=headers_sup, values_sup=values_sup,
+                details_dict=details_dict)
+
+        return res
 
     def SNI():
         headers = HEADERS[modality][test_code]['alt0']
         headers_sup = HEADERS_SUP[modality][test_code]['altAll']
-        if image2d is not None:
+        if image2d is None:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
             details_dict = {}
             values_sup = [None] * 3
             if paramset.sni_correct:
@@ -777,14 +846,21 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 image_input, roi_array, image_info.pix[0])
             values = res['values']
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+            res = Results(
+                headers=headers, values=values,
+                headers_sup=headers_sup, values_sup=values_sup,
+                details_dict=details_dict)
+
+        return res
 
     def PIU():
         headers = HEADERS[modality][test_code]['alt0']
         # ['min', 'max', 'PIU'],
         headers_sup = HEADERS_SUP[modality][test_code]['altAll']
         # ['x min (pix from upper left)', 'y min', 'x max', 'y max']
-        if image2d is not None:
+        if image2d is None:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
             arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
             min_val = np.min(arr)
             max_val = np.max(arr)
@@ -795,12 +871,18 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             values_sup = [min_idx[1], min_idx[0],
                           max_idx[1], max_idx[0]]
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+            res = Results(
+                headers=headers, values=values,
+                headers_sup=headers_sup, values_sup=values_sup)
+
+        return res
 
     def Gho():
         headers = HEADERS[modality][test_code]['alt0']
         # ['Center', 'top', 'bottom', 'left', 'right', 'PSG']
-        if image2d is not None:
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
             avgs = []
             for i in range(np.shape(roi_array)[0]):
                 arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
@@ -810,20 +892,16 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 )/avgs[0])
             values = avgs
             values.append(PSG)
+            res = Results(headers=headers, values=values)
 
-        return (headers, values, headers_sup, values_sup, details_dict, alt, errmsg)
+        return res
 
     try:
-        headers, values, headers_sup, values_sup, details_dict, alt, errmsg = locals()[
-            test_code]()
+        result = locals()[test_code]()
     except KeyError:
-        pass
+        result = None
 
-    result = {'values': values, 'headers': headers, 'alternative': alt,
-              'values_sup': values_sup, 'headers_sup': headers_sup,
-              'details_dict': details_dict}
-
-    return (result, errmsg)
+    return result
 
 
 def calculate_3d(matrix, marked_3d, input_main):
@@ -842,10 +920,9 @@ def calculate_3d(matrix, marked_3d, input_main):
 
     Returns
     -------
-    results : dict
-        key = test code
-        value = as result of calculate_2d
-    errmsg
+    results : Results
+        NB if pr_image is False one row values should be [values]
+        and one details_dict should be [details_dict]
     """
     img_infos = input_main.imgs
     modality = input_main.current_modality
@@ -856,24 +933,15 @@ def calculate_3d(matrix, marked_3d, input_main):
     flat_marked = [item for sublist in marked_3d for item in sublist]
     all_tests = list(set(flat_marked))
 
-    '''Copy when new testcode
-    def <testcode>(images_to_test):
-        ....
-        return ({
-            'values': [values], 'headers': headers,
-            'alternative': alternative (default 0),
-            'values_sup': [values_sup], 'headers_sup': headers_sup,
-            'details_dict': [{}]
-            }, errmsg)
-    '''
-
     def MTF(images_to_test):
         if modality == 'CT':
             #TODO verify same kernel all images to test
             headers = HEADERS[modality][test_code][f'alt{paramset.mtf_type}']
             headers_sup = HEADERS_SUP[modality][test_code][f'alt{paramset.mtf_type}']
-            details_dict = {}
-            if len(images_to_test) > 0:
+            if len(images_to_test) == 0:
+                res = Results(headers=headers, headers_sup=headers_sup)
+            else:
+                details_dict = {}
                 sum_image = matrix[images_to_test[0]]
                 if len(images_to_test) > 1:
                     for imgNo in images_to_test[1:]:
@@ -906,54 +974,59 @@ def calculate_3d(matrix, marked_3d, input_main):
                 values_sup = details_dict['gMTF_details']['LSF_fit_params']
                 details_dict['matrix'] = sub
 
-        return ({
-            'values': [values], 'headers': headers, 'alternative': paramset.mtf_type,
-            'values_sup': [values_sup], 'headers_sup': headers_sup,
-            'details_dict': [details_dict]
-            }, errmsg)
+                res = Results(headers=headers, values=[values],
+                              headers_sup=headers_sup, values_sup=[values_sup],
+                              details_dict=[details_dict],
+                              alternative=paramset.mtf_type, pr_image=False,
+                              errmsg=errmsg)
+        else:
+            res = None
+
+        return res
 
     def SNR(images_to_test):
         # use two and two images
         values_first_imgs = []
         idxs_first_imgs = []
         headers = HEADERS[modality][test_code]['alt0']
-        if matrix.count(None) != len(matrix):
-            if len(images_to_test) > 1:
-                n_pairs = len(images_to_test)/2
-                for i in range(n_pairs):
-                    idx1 = images_to_test[i*2]
-                    idx2 = images_to_test[i*2+1]
-                    image1 = matrix[idx1]
-                    image2 = matrix[idx2]
-                    image_subtract = None
-                    if img_infos[idx1].shape == img_infos[idx2].shape:
-                        if img_infos[idx1].pix == img_infos[idx2].pix:
-                            roi_array, errmsg = get_rois(
-                                image1, images_to_test[i*2], input_main)
+        if matrix.count(None) == len(matrix) or len(images_to_test) == 1:
+            res = Results(headers=headers)
+        else:
+            n_pairs = len(images_to_test)/2
+            for i in range(n_pairs):
+                idx1 = images_to_test[i*2]
+                idx2 = images_to_test[i*2+1]
+                image1 = matrix[idx1]
+                image2 = matrix[idx2]
+                image_subtract = None
+                if img_infos[idx1].shape == img_infos[idx2].shape:
+                    if img_infos[idx1].pix == img_infos[idx2].pix:
+                        roi_array, errmsg = get_rois(
+                            image1, images_to_test[i*2], input_main)
 
-                            arr = np.ma.masked_array(
-                                image1, mask=np.invert(roi_array))
-                            avg1 = np.mean(arr)
-                            arr = np.ma.masked_array(
-                                image2, mask=np.invert(roi_array))
-                            avg2 = np.mean(arr)
-                            avg = 0.5*(avg1+avg2)
+                        arr = np.ma.masked_array(
+                            image1, mask=np.invert(roi_array))
+                        avg1 = np.mean(arr)
+                        arr = np.ma.masked_array(
+                            image2, mask=np.invert(roi_array))
+                        avg2 = np.mean(arr)
+                        avg = 0.5*(avg1+avg2)
 
-                            image_subtract = image1-image2
-                            arr = np.ma.masked_array(
-                                image_subtract, mask=np.invert(roi_array))
-                            stdev = np.std(arr)
-                            SNR = (avg * np.sqrt(2))/stdev
-                            values_first_imgs.append([avg1, avg2, avg, stdev, SNR])
-                            idxs_first_imgs.append([idx1])
+                        image_subtract = image1-image2
+                        arr = np.ma.masked_array(
+                            image_subtract, mask=np.invert(roi_array))
+                        stdev = np.std(arr)
+                        SNR = (avg * np.sqrt(2))/stdev
+                        values_first_imgs.append([avg1, avg2, avg, stdev, SNR])
+                        idxs_first_imgs.append([idx1])
 
-        values = [[] for i in range(len(img_infos))]
-        if len(idxs_first_imgs) > 0:
-            for res_i, img_i in enumerate(len(idxs_first_imgs)):
-                values[img_i] = values_first_imgs[res_i]
-        return ({
-            'values': values, 'headers': headers, 'alternative': 0
-            }, errmsg)
+            values = [[] for i in range(len(img_infos))]
+            if len(idxs_first_imgs) > 0:
+                for res_i, img_i in enumerate(len(idxs_first_imgs)):
+                    values[img_i] = values_first_imgs[res_i]
+
+            res = Results(values=values, headers=headers, errmsg=errmsg, pr_image=True)
+        return res
 
     def sum_matrix(images_to_test):
         sum_matrix = matrix[images_to_test[0]]
@@ -964,34 +1037,42 @@ def calculate_3d(matrix, marked_3d, input_main):
     def Uni(images_to_test):
         headers = HEADERS[modality][test_code]['alt0']
         #headers_sup = HEADERS_SUP[modality][test_code]['altAll']
-        image_input = sum_matrix(images_to_test)  # always if 3d option
-        #TODO warning that corrections are ignored, makes no sence in 3d option
-        roi_array, errmsg = get_rois(
-            image_input, images_to_test[0], input_main)
-        res = calculate_NM_uniformity(
-            image_input, roi_array, img_infos[0].pix[0])
-        values = res['values']
+        if len(images_to_test) == 0:
+            res = Results(headers=headers)
+        else:
+            image_input = sum_matrix(images_to_test)  # always if 3d option
+            #TODO warning that corrections are ignored, makes no sence in 3d option
+            roi_array, errmsg = get_rois(
+                image_input, images_to_test[0], input_main)
+            res = calculate_NM_uniformity(
+                image_input, roi_array, img_infos[0].pix[0])
+            values = res['values']
 
-        return ({'values': [values], 'headers': headers, 'alternative': 0}, errmsg)
+            res = Results(headers=headers, values=[values], errmsg=errmsg, pr_image=False)
+
+        return res
 
     def SNI(images_to_test):
         headers = HEADERS[modality][test_code]['alt0']
-        image_input = sum_matrix(images_to_test)  # always if 3d option
-        #TODO warning that corrections are ignored, makes no sence in 3d option
-        roi_array, errmsg = get_rois(
-            image_input, images_to_test[0], input_main)
-        res = calculate_NM_SNI(
-            image_input, roi_array, img_infos.pix[0])
-        details_dict = {
-            'matrix': res['matrix'],
-            'du_matrix': res['du_matrix']
-            }
-        values = res['values']
+        if len(images_to_test) == 0:
+            res = Results(headers=headers)
+        else:
+            image_input = sum_matrix(images_to_test)  # always if 3d option
+            #TODO warning that corrections are ignored, makes no sence in 3d option
+            roi_array, errmsg = get_rois(
+                image_input, images_to_test[0], input_main)
+            res = calculate_NM_SNI(
+                image_input, roi_array, img_infos.pix[0])
+            details_dict = {
+                'matrix': res['matrix'],
+                'du_matrix': res['du_matrix']
+                }
+            values = res['values']
 
-        return ({
-            'values': [values], 'headers': headers, 'alternative': 0,
-            'details_dict': [details_dict]
-            }, errmsg)
+            res = Results(headers=headers, values=[values],
+                          details_dict=[details_dict], errmsg=errmsg, pr_image=False)
+
+        return res
 
     for test_code in all_tests:
         images_to_test = []
@@ -1000,16 +1081,14 @@ def calculate_3d(matrix, marked_3d, input_main):
                 images_to_test.append(i)
 
         try:
-            res_dict, errmsg = locals()[
-                test_code](images_to_test)
+            result = locals()[test_code](images_to_test)
         except KeyError:
-            res_dict = {}
-            errmsg = f'Calculations for current test {test_code} not specified yet.'
+            result = None
 
-        if any(res_dict):
-            results[test_code] = res_dict
+        if result is not None:
+            results[test_code] = result
 
-    return (results, errmsg)
+    return results
 
 
 def get_distance_map_point(shape, center_dx=0., center_dy=0.):
@@ -1769,7 +1848,8 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
                 'LSF_x': LSF_x, 'LSF': LSF_no_filt,
                 'sigma_prefilter': sigma_f*step_size,
                 'sorted_pixels_x': dists, 'sorted_pixels': values_all,
-                'interpolated_x': new_x, 'interpolated': new_y, 'presmoothed': ESF_filtered,
+                'interpolated_x': new_x, 'interpolated': new_y,
+                'presmoothed': ESF_filtered,
                 'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details}
         else:
             errmsg = 'Could not find circular edge.'

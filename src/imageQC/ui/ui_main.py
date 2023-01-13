@@ -14,8 +14,8 @@ from dataclasses import dataclass
 import pandas as pd
 
 from PyQt5 import QtWidgets
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt, QEvent, QTimer
+from PyQt5.QtGui import QIcon, QScreen
+from PyQt5.QtCore import Qt, QEvent, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication, qApp, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QStackedWidget, QStatusBar, QSplitter, QGroupBox, QTabWidget,
@@ -110,6 +110,7 @@ class GuiVariables():
 
 class MainWindow(QMainWindow):
     """Class main window of imageQC."""
+    screenChanged = pyqtSignal(QScreen, QScreen)
 
     def __init__(self, scX=1400, scY=700):
         super().__init__()
@@ -371,16 +372,16 @@ class MainWindow(QMainWindow):
                 self.imgs[self.vGUI.active_img_no].filepath,
                 frame_number=self.imgs[self.vGUI.active_img_no].frame_number)
             if self.active_img is not None:
-                amin = np.amin(self.active_img)
-                amax = np.amax(self.active_img)
+                amin = round(np.amin(self.active_img))
+                amax = round(np.amax(self.active_img))
                 self.windowLevelWidget.minWL.setRange(amin, amax)
                 self.windowLevelWidget.maxWL.setRange(amin, amax)
                 if len(np.shape(self.active_img)) == 2:
                     szActy, szActx = np.shape(self.active_img)
                 else:
                     szActy, szActx, szActz = np.shape(self.active_img)
-                self.centerWidget.valDeltaX.setRange(-szActx/2, szActx/2)
-                self.centerWidget.valDeltaY.setRange(-szActy/2, szActy/2)
+                self.centerWidget.valDeltaX.setRange(-szActx//2, szActx//2)
+                self.centerWidget.valDeltaY.setRange(-szActy//2, szActy//2)
             self.dicomHeaderWidget.refresh_img_info(
                 self.imgs[self.vGUI.active_img_no].info_list_general,
                 self.imgs[self.vGUI.active_img_no].info_list_modality)
@@ -509,6 +510,7 @@ class MainWindow(QMainWindow):
                 self.refresh_results_display()
 
     def reset_results(self):
+        """Clear results and update display."""
         self.results = {}
         self.refresh_results_display()
 
@@ -557,9 +559,11 @@ class MainWindow(QMainWindow):
                     self.results[test] = {
                         'headers': res_dict['headers'],
                         'values': [],
+                        'values_info': res_dict['values_info'],
                         'alternative': res_dict['alternative'],
                         'headers_sup': res_dict['headers_sup'],
                         'values_sup': [],
+                        'values_sup_info': res_dict['values_sup_info'],
                         'details_dict': [],
                         'pr_image': True
                         }
@@ -578,7 +582,6 @@ class MainWindow(QMainWindow):
             if self.current_test in self.results:
                 self.hide_rgt_top()  # maximize results displays first time
 
-        #print(f'cur idx {self.tabResults.currentIndex()}')
         if self.current_test not in self.results:
             # clear all
             self.wResTable.result_table.clear()
@@ -589,25 +592,30 @@ class MainWindow(QMainWindow):
             # update only active
             wid = self.tabResults.currentWidget()
             if isinstance(wid, ResultTableWidget) and update_table:
-                if self.tabResults.currentIndex() == 0:
-                    #print('ready to update table')
-                    try:
-                        self.wResTable.result_table.fill_table(
-                            col_labels=self.results[self.current_test]['headers'],
-                            values_rows=self.results[self.current_test]['values'],
-                            linked_image_list=self.results[
-                                self.current_test]['pr_image'])
-                    except (KeyError, TypeError):
-                        self.wResTable.result_table.clear()
-                else:
-                    try:
-                        self.wResTableSup.result_table.fill_table(
-                            col_labels=self.results[self.current_test]['headers_sup'],
-                            values_rows=self.results[self.current_test]['values_sup'],
-                            linked_image_list=self.results[
-                                self.current_test]['pr_image'])
-                    except (KeyError, TypeError):
-                        self.wResTableSup.result_table.clear()
+                #if self.tabResults.currentIndex() == 0:
+                #print('ready to update table')
+                try:
+                    self.wResTable.result_table.fill_table(
+                        col_labels=self.results[self.current_test]['headers'],
+                        values_rows=self.results[self.current_test]['values'],
+                        linked_image_list=self.results[
+                            self.current_test]['pr_image'],
+                        table_info=self.results[self.current_test]['values_info']
+                        )
+                except (KeyError, TypeError):
+                    self.wResTable.result_table.clear()
+                #else:
+                try:
+                    self.wResTableSup.result_table.fill_table(
+                        col_labels=self.results[self.current_test]['headers_sup'],
+                        values_rows=self.results[self.current_test]['values_sup'],
+                        linked_image_list=self.results[
+                            self.current_test]['pr_image'],
+                        table_info=self.results[
+                            self.current_test]['values_sup_info']
+                        )
+                except (KeyError, TypeError):
+                    self.wResTableSup.result_table.clear()
 
             elif isinstance(wid, ResultPlotWidget):
                 self.wResPlot.plotcanvas.plot()
@@ -643,9 +651,6 @@ class MainWindow(QMainWindow):
         res = dlg.exec()  # returing TagPatternSort
         if res:
             sortTemplate = dlg.get_pattern()
-            # use sortTemplate
-            print(sortTemplate)
-            # TODO NB coordinate with TestTabs how to return
             self.imgs = dcm.sort_imgs(self.imgs, sortTemplate, self.tag_infos)
             self.treeFileList.update_file_list()
 
@@ -677,63 +682,87 @@ class MainWindow(QMainWindow):
                 self.vGUI.active_img_no = insertNo
             self.treeFileList.update_file_list()
 
+    def resize_main(self):
+        """Reset geometry of MainWindow."""
+        self.resize(
+            round(self.vGUI.panel_width*2+30),
+            round(self.vGUI.panel_height+50)
+            )
+        self.show()
+
     def reset_split_sizes(self):
         """Set and reset QSplitter sizes."""
         self.splitListRest.setSizes(
-            [self.vGUI.panel_height*0.2, self.vGUI.panel_height*0.8])
+            [round(self.vGUI.panel_height*0.2), round(self.vGUI.panel_height*0.8)])
         self.splitImgHeader.setSizes(
-            [self.vGUI.panel_height*0.55, self.vGUI.panel_height*0.25])
+            [round(self.vGUI.panel_height*0.55), round(self.vGUI.panel_height*0.25)])
         self.splitLeftImg.setSizes(
-            [self.vGUI.panel_width*0.32, self.vGUI.panel_width*0.68])
+            [round(self.vGUI.panel_width*0.32), round(self.vGUI.panel_width*0.68)])
         self.splitLftRgt.setSizes(
-            [self.vGUI.panel_width*1.2, self.vGUI.panel_width*0.8])
+            [round(self.vGUI.panel_width*1.2), round(self.vGUI.panel_width*0.8)])
         self.splitRgtTopRest.setSizes(
-            [self.vGUI.panel_height*0.2, self.vGUI.panel_height*0.8])
+            [round(self.vGUI.panel_height*0.2), round(self.vGUI.panel_height*0.8)])
         self.splitRgtMidBtm.setSizes(
-            [self.vGUI.panel_height*0.4, self.vGUI.panel_height*0.4])
+            [round(self.vGUI.panel_height*0.4), round(self.vGUI.panel_height*0.4)])
 
     def set_split_max_img(self):
         """Set QSplitter to maximized image."""
         self.splitListRest.setSizes(
-            [self.vGUI.panel_height*0.1, self.vGUI.panel_height*0.9])
+            [round(self.vGUI.panel_height*0.1), round(self.vGUI.panel_height*0.9)])
         self.splitImgHeader.setSizes(
-            [self.vGUI.panel_height*0.9, self.vGUI.panel_height*0.])
+            [round(self.vGUI.panel_height*0.9), round(self.vGUI.panel_height*0.)])
         self.splitLeftImg.setSizes(
-            [self.vGUI.panel_width*0., self.vGUI.panel_width*1.])
+            [0, self.vGUI.panel_width])
 
     def reset_split_max_img(self):
         """Set QSplitter to maximized image."""
         self.splitListRest.setSizes(
-            [self.vGUI.panel_height*0.2, self.vGUI.panel_height*0.8])
+            [round(self.vGUI.panel_height*0.2), round(self.vGUI.panel_height*0.8)])
         self.splitImgHeader.setSizes(
-            [self.vGUI.panel_height*0.55, self.vGUI.panel_height*0.25])
+            [round(self.vGUI.panel_height*0.55), round(self.vGUI.panel_height*0.25)])
         self.splitLeftImg.setSizes(
-            [self.vGUI.panel_width*0.32, self.vGUI.panel_width*0.68])
+            [round(self.vGUI.panel_width*0.32), round(self.vGUI.panel_width*0.68)])
 
     def set_maximize_results(self):
         """Set QSplitter to maximized results."""
         self.splitLftRgt.setSizes(
-            [self.vGUI.panel_width*0.8, self.vGUI.panel_width*1.2])
+            [round(self.vGUI.panel_width*0.8), round(self.vGUI.panel_width*1.2)])
         self.splitRgtTopRest.setSizes(
-            [self.vGUI.panel_height*0., self.vGUI.panel_height*1.])
+            [0, self.vGUI.panel_height])
         self.splitRgtMidBtm.setSizes(
-            [self.vGUI.panel_height*0., self.vGUI.panel_height*1.])
+            [0, self.vGUI.panel_height])
 
     def reset_maximize_results(self):
         """Set QSplitter to maximized results."""
         self.splitLftRgt.setSizes(
-            [self.vGUI.panel_width*1.2, self.vGUI.panel_width*0.8])
+            [round(self.vGUI.panel_width*1.2), round(self.vGUI.panel_width*0.8)])
         self.splitRgtTopRest.setSizes(
-            [self.vGUI.panel_height*0.2, self.vGUI.panel_height*0.8])
+            [round(self.vGUI.panel_height*0.2), round(self.vGUI.panel_height*0.8)])
         self.splitRgtMidBtm.setSizes(
-            [self.vGUI.panel_height*0.4, self.vGUI.panel_height*0.4])
+            [round(self.vGUI.panel_height*0.4), round(self.vGUI.panel_height*0.4)])
 
     def hide_rgt_top(self):
         """Hide QSplitter right top to better display results."""
         self.splitRgtTopRest.setSizes(
-            [self.vGUI.panel_height*0., self.vGUI.panel_height*1.])
+            [round(self.vGUI.panel_height*0.), round(self.vGUI.panel_height*1.)])
         self.splitRgtMidBtm.setSizes(
-            [self.vGUI.panel_height*0.5, self.vGUI.panel_height*0.5])
+            [round(self.vGUI.panel_height*0.5), round(self.vGUI.panel_height*0.5)])
+
+    def moveEvent(self, event):
+        oldScreen = QtWidgets.QApplication.screenAt(event.oldPos())
+        newScreen = QtWidgets.QApplication.screenAt(event.pos())
+
+        if not oldScreen == newScreen:
+            try:
+                if not oldScreen.geometry() == newScreen.geometry():
+                    sz = newScreen.geometry()
+                    self.vGUI.panel_width = round(0.48*sz.width())
+                    self.vGUI.panel_height = round(0.86*sz.height())
+                    self.resize_main()
+                    self.reset_split_sizes()
+            except AttributeError:
+                pass
+        return super().moveEvent(event)
 
     def run_auto_wizard(self):
         """Start the automation wizard."""
@@ -755,8 +784,10 @@ class MainWindow(QMainWindow):
         """Start Rename Dicom dialog."""
         open_file_names = [imgDict.filepath for imgDict in self.imgs]
         dlg = rename_dicom.RenameDicomDialog(
-            open_file_names, initial_modality=self.current_modality)
+            open_file_names, initial_modality=self.current_modality,
+            tag_infos=self.tag_infos)
         res = dlg.exec()
+        #TODO
         """
         open_files_are_renamed, new_names = dlg.new_names()
         selection = dlg.selection()
@@ -778,6 +809,8 @@ class MainWindow(QMainWindow):
         """Refresh data from settings files affecting GUI in main window."""
         self.lastload = time()
         status, path, self.user_prefs = cff.load_user_prefs()
+        if self.user_prefs.dark_mode:
+            plt.style.use('dark_background')
         status, path, self.paramsets = cff.load_settings(fname='paramsets')
         status, path, self.quicktests = cff.load_settings(
             fname='quicktest_templates')
@@ -786,9 +819,16 @@ class MainWindow(QMainWindow):
             fname='tag_patterns_special')
 
         #TODO verify settings against
-        #   version (available modalities and testcodes)
-        #   slettede filer med f.eks. paramset som linket til i andre
-        #   display paramset med endret tag_info attr.names
+        #   silent update to newest version attributes
+        #   deleted files with links? e.g. ParamSet to automation
+
+        try:  # avoid error before gui ready
+            self.wQuickTest.modality_dict = self.quicktests
+            self.wQuickTest.fill_template_list()
+            self.wParamset.modality_dict = self.paramsets
+            self.wParamset.fill_template_list()
+        except AttributeError:
+            pass
 
     def display_errmsg(self, errmsg):
         """Display error messages in statusbar or as popup if long."""
@@ -956,6 +996,8 @@ class MainWindow(QMainWindow):
         mSett = QMenu('&Settings', self)
         mSett.addAction(actSettings)
         mb.addMenu(mSett)
+        mLayout = QMenu('&Layout', self)
+        mLayout.addAction(actResetSplit)
         mb.addMenu(QMenu('&Help', self))
 
         # fill toolbar
@@ -982,7 +1024,7 @@ class MainWindow(QMainWindow):
         self.gb_modality = QGroupBox('Modality')
         self.gb_modality.setFont(uir.FontItalic())
         self.btnMode = QButtonGroup()
-        self.gb_modality.setFixedWidth(self.vGUI.panel_width*0.75)
+        self.gb_modality.setFixedWidth(round(self.vGUI.panel_width*0.75))
         lo = QHBoxLayout()
 
         for m, (key, val) in enumerate(QUICKTEST_OPTIONS.items()):
@@ -1039,7 +1081,7 @@ class TreeFileList(QTreeWidget):
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setAcceptDrops(True)
         self.setHeaderLabels(['Image', 'Frame', 'Test'])
-        self.setColumnWidth(0, 0.8*self.main.vGUI.panel_width)
+        self.setColumnWidth(0, round(0.8*self.main.vGUI.panel_width))
         self.setColumnWidth(1, 90)
         self.currentItemChanged.connect(self.main.update_active_img)
         self.installEventFilter(self)
@@ -1225,11 +1267,11 @@ class DicomHeaderWidget(QWidget):
             QIcon(f'{os.environ[ENV_ICON_PATH]}copy2clipboard.png'),
             "Send specified DICOM header information as table to clipboard",
             self)
-        #actDCMclipboard.triggered.connect(lambda: self.table_DCM('clipboard'))
+        actDCMclipboard.triggered.connect(lambda: self.table_dicom('clipboard'))
         actDCMexport = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}fileCSV.png'),
             "Save specified DICOM header information as .csv", self)
-        #actDCMexport.triggered.connect(lambda: self.table_DCM('csv'))
+        actDCMexport.triggered.connect(lambda: self.table_dicom('csv'))
         tb1.addActions([actDCMdump, actDCMclipboard])
         tb2.addAction(actDCMexport)
 
@@ -1241,6 +1283,68 @@ class DicomHeaderWidget(QWidget):
         self.listInfoModality.setHeaderLabels(['Modality specific attributes'])
         self.listInfoModality.setRootIsDecorated(False)
         hLO.addWidget(self.listInfoModality)
+
+    def table_dicom(self, output_type):
+        """Extract dicom header info pr image according to TagPatternFormat.
+
+        Parameters
+        ----------
+        output_type : str
+            'csv' or 'clipboard'
+        """
+        if len(self.main.imgs) == 0:
+            QMessageBox.information(self.main, 'No data',
+                                    'Open any images to extract data from.')
+        else:
+            pattern = cfc.TagPatternFormat()
+            finish_btn_txt = ('Save as .csv' if output_type == 'csv'
+                              else 'Copy to clipboard')
+            dlg = uir.TagPatternEditDialog(
+                initial_pattern=pattern,
+                modality=self.main.current_modality,
+                title='Extract DICOM header information',
+                typestr='format',
+                accept_text=finish_btn_txt,
+                reject_text='Cancel',
+                save_blocked=self.main.save_blocked)
+            res = dlg.exec()  # returning TagPatternFormat
+            if res:
+                # generate table
+                pattern = dlg.get_pattern()
+                n_img = len(self.main.imgs)
+                tag_lists = []
+                for i in range(n_img):
+                    self.main.statusBar.showMessage(
+                        f'Reading DICOM header {i} of {n_img}')
+                    tags = dcm.get_tags(
+                        self.main.imgs[i].filepath,
+                        frame_number=self.main.imgs[i].frame_number,
+                        tag_patterns=[pattern],
+                        tag_infos=self.main.tag_infos
+                        )
+                    tag_lists.append(tags[0])
+
+                df = {}
+                for c, attr in enumerate(pattern.list_tags):
+                    col = [row[c] for row in tag_lists]
+                    df[attr] = col
+                df = pd.DataFrame(df)
+
+                if output_type == 'csv':
+                    fname = QFileDialog.getSaveFileName(
+                        self, 'Save data as',
+                        filter="CSV file (*.csv)")
+                    if fname[0] != '':
+                        deci_mark = self.main.current_paramset.output.decimal_mark
+                        sep = ',' if deci_mark == '.' else ';'
+                        try:
+                            df.to_csv(fname[0], sep=sep, decimal=deci_mark, index=False)
+                        except IOError as e:
+                            QMessageBox.warning(self.main, 'Failed saving', e)
+                elif output_type == 'clipboard':
+                    df.to_clipboard(excel=True, index=False)
+                    QMessageBox.information(self.main, 'Data in clipboard',
+                                            'Data copied to clipboard.')
 
     def dump_dicom(self):
         """Dump dicom elements for active file to text."""
@@ -2249,14 +2353,17 @@ class WindowLevelWidget(QGroupBox):
                 minval = np.amin(self.main.active_img)
                 maxval = np.amax(self.main.active_img)
 
+            minval = np.round(minval)
+            maxval = np.round(maxval)
+
             self.update_window_level(minval, maxval)
             self.main.wImageDisplay.canvas.img.set_clim(vmin=minval, vmax=maxval)
             self.main.wImageDisplay.canvas.draw()
 
     def update_window_level(self, minval, maxval):
         """Update GUI for window level sliders."""
-        self.minWL.setValue(minval)
-        self.maxWL.setValue(maxval)
+        self.minWL.setValue(round(minval))
+        self.maxWL.setValue(round(maxval))
         self.minWLlbl.setText(f'{minval:.0f}')
         self.maxWLlbl.setText(f'{maxval:.0f}')
         self.lbl_center.setText(f'{0.5*(minval+maxval):.0f}')
@@ -2602,8 +2709,12 @@ class ResultTableWidget(QWidget):
         vlo_tb.addWidget(self.tb_copy)
         vlo_tb.addStretch()
 
-        self.result_table = ResultTable(self.main)
-        hlo.addWidget(self.result_table)
+        self.result_table = ResultTable(parent=self, main=self.main)
+        self.table_info = uir.LabelItalic('')
+        vlo_table = QVBoxLayout()
+        vlo_table.addWidget(self.table_info)
+        vlo_table.addWidget(self.result_table)
+        hlo.addLayout(vlo_table)
 
     def copy_table(self):
         """Copy contents of table to clipboard."""
@@ -2641,8 +2752,9 @@ class ResultTable(QTableWidget):
         for link to active image
     """
 
-    def __init__(self, main):
+    def __init__(self, parent=None, main=None):
         super().__init__()
+        self.parent = parent
         self.main = main
         self.linked_image_list = True
         self.cellClicked.connect(self.cell_selected)
@@ -2660,12 +2772,13 @@ class ResultTable(QTableWidget):
     def clear(self):
         """Also update visual table."""
         super().clear()
+        self.parent.table_info.setText('')
         self.setRowCount(0)
         self.setColumnCount(0)
 
     def fill_table(self, row_labels=[], col_labels=[],
                    values_cols=[[]], values_rows=[[]],
-                   linked_image_list=True):
+                   linked_image_list=True, table_info=''):
         """Populate table.
 
         Parameters
@@ -2682,6 +2795,7 @@ class ResultTable(QTableWidget):
             selected table row also change the selection in image list.
             Default is True
         """
+        self.parent.table_info.setText(table_info)
         if values_rows == [[]]:
             n_cols = len(values_cols)
             n_rows = len(row_labels)
@@ -3227,7 +3341,7 @@ class ResultPlotCanvas(uir.PlotCanvas):
             use_edge_data = False
             edge_details_dicts = None
             if proceed is False:
-                if 'edge_details' in details_dicts[0]:
+                if 'edge_details' in details_dicts[0]:  # from straight edge
                     edge_details_dicts = details_dicts[0]['edge_details']
                     try:
                         xvals = edge_details_dicts[0]['sorted_pixels_x']
@@ -3283,7 +3397,7 @@ class ResultPlotCanvas(uir.PlotCanvas):
                             self.curves.append({
                                 'label': f'ESF{lbl}',
                                 'xvals': xvals,
-                                'yvals': ESF,
+                                'yvals': ESF[:-1],
                                 'style': '-r'
                                  })
 

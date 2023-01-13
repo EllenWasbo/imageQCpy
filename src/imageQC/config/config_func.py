@@ -206,12 +206,18 @@ def save_user_prefs(userpref, parentwidget=None):
                     asdict(userpref), file,
                     default_flow_style=None, sort_keys=False)
             status = True
+            os.environ[ENV_CONFIG_FOLDER] = userpref.config_folder
 
     return (status, path)
 
 
-def load_user_prefs():
+def load_user_prefs(parent=None):
     """Load yaml file.
+
+    Parameters
+    ----------
+    parent : widget, optional
+        Default is None.
 
     Returns
     -------
@@ -253,23 +259,12 @@ def get_config_folder():
     str
         Config folder if exists else empty string.
     """
-    #config_folder = ''
-    #user_prefs = UserPreferences()
-    #p = os.path.join(APPDATA, USER_PREFS_FNAME)
     try:
         p = os.environ[ENV_CONFIG_FOLDER]
         config_folder = p if os.path.exists(p) else ''
     except KeyError:
         config_folder = ''
-    '''
-    if os.path.exists(p)
-        with open(p, 'r') as f:
-            doc = yaml.safe_load(f)
-            user_prefs = UserPreferences(**doc)
 
-        if os.path.exists(user_prefs.config_folder):
-            config_folder = user_prefs.config_folder
-    '''
     return config_folder
 
 
@@ -380,7 +375,8 @@ def load_settings(fname=''):
                     settings = []
                     for doc in docs:
                         if fname == 'tag_infos':
-                            settings.append(cfc.TagInfo(**doc))
+                            updated_doc = verify_input_dict(doc, cfc.TagInfo())
+                            settings.append(cfc.TagInfo(**updated_doc))
                     if fname == 'tag_infos':
                         taginfos_reset_sort_index(settings)
                 status = True
@@ -395,16 +391,20 @@ def load_settings(fname=''):
                             settings[mod] = []
                             for temp in doc:
                                 if fname == 'paramsets':
+                                    upd = verify_input_dict(
+                                        temp['dcm_tagpattern'],
+                                        cfc.TagPatternFormat())
                                     temp['dcm_tagpattern'] = (
-                                        cfc.TagPatternFormat(
-                                            **temp['dcm_tagpattern']))
+                                        cfc.TagPatternFormat(**upd))
                                     tests = {}
                                     for key, test in temp[
                                             'output']['tests'].items():
                                         tests[key] = []
                                         for sub in test:
+                                            upd = verify_input_dict(
+                                                sub, cfc.QuickTestOutputSub())
                                             tests[key].append(
-                                                cfc.QuickTestOutputSub(**sub))
+                                                cfc.QuickTestOutputSub(**upd))
                                     temp['output'] = (
                                         cfc.QuickTestOutputTemplate(
                                             include_header=temp[
@@ -417,50 +417,77 @@ def load_settings(fname=''):
                                                 'output']['include_filename'],
                                             tests=tests))
                                     if mod == 'CT':
+                                        upd = verify_input_dict(
+                                            temp['ctn_table'],
+                                            cfc.HUnumberTable())
                                         temp['ctn_table'] = (
-                                            cfc.HUnumberTable(
-                                                **temp['ctn_table']))
+                                            cfc.HUnumberTable(**upd))
+                                        upd = verify_input_dict(
+                                            temp, cfc.ParamSetCT())
                                         settings[mod].append(
-                                            cfc.ParamSetCT(**temp))
+                                            cfc.ParamSetCT(**upd))
                                     elif mod == 'Xray':
+                                        upd = verify_input_dict(
+                                            temp, cfc.ParamSetXray())
                                         settings[mod].append(
-                                            cfc.ParamSetXray(**temp))
+                                            cfc.ParamSetXray(**upd))
                                     elif mod == 'NM':
+                                        upd = verify_input_dict(
+                                            temp, cfc.ParamSetNM())
                                         settings[mod].append(
-                                            cfc.ParamSetNM(**temp))
+                                            cfc.ParamSetNM(**upd))
                                     elif mod == 'SPECT':
+                                        upd = verify_input_dict(
+                                            temp, cfc.ParamSetSPECT())
                                         settings[mod].append(
-                                            cfc.ParamSetSPECT(**temp))
+                                            cfc.ParamSetSPECT(**upd))
                                     elif mod == 'PET':
+                                        upd = verify_input_dict(
+                                            temp, cfc.ParamSetPET())
                                         settings[mod].append(
-                                            cfc.ParamSetPET(**temp))
+                                            cfc.ParamSetPET(**upd))
                                     elif mod == 'MR':
+                                        upd = verify_input_dict(
+                                            temp, cfc.ParamSetMR())
                                         settings[mod].append(
-                                            cfc.ParamSetMR(**temp))
+                                            cfc.ParamSetMR(**upd))
                                 elif fname == 'quicktest_templates':
+                                    upd = verify_input_dict(
+                                        temp, cfc.QuickTestTemplate())
                                     settings[mod].append(
-                                        cfc.QuickTestTemplate(**temp))
+                                        cfc.QuickTestTemplate(**upd))
                                 elif fname == 'auto_templates':
+                                    upd = verify_input_dict(
+                                        temp['sort_pattern'], cfc.TagPatternSort())
                                     temp['sort_pattern'] = (
-                                        cfc.TagPatternSort(
-                                            **temp['sort_pattern']))
-                                    settings[mod].append(
-                                        cfc.AutoTemplate(**temp))
+                                        cfc.TagPatternSort(**upd))
+                                    upd = verify_input_dict(temp, cfc.AutoTemplate())
+                                    settings[mod].append(cfc.AutoTemplate(**upd))
                                 elif fname == 'auto_vendor_templates':
+                                    upd = verify_input_dict(
+                                        temp, cfc.AutoVendorTemplate())
                                     settings[mod].append(
-                                        cfc.AutoVendorTemplate(**temp))
+                                        cfc.AutoVendorTemplate(**upd))
                                 elif fname == 'rename_patterns':
+                                    upd = verify_input_dict(
+                                        temp, cfc.RenamePattern())
                                     settings[mod].append(
-                                        cfc.RenamePattern(**temp))
+                                        cfc.RenamePattern(**upd))
                                 elif fname == 'tag_patterns_sort':
+                                    upd = verify_input_dict(
+                                        temp, cfc.TagPatternSort())
                                     settings[mod].append(
-                                        cfc.TagPatternSort(**temp))
+                                        cfc.TagPatternSort(**upd))
                                 elif fname == 'tag_patterns_format':
+                                    upd = verify_input_dict(
+                                        temp, cfc.TagPatternFormat())
                                     settings[mod].append(
-                                        cfc.TagPatternFormat(**temp))
+                                        cfc.TagPatternFormat(**upd))
                                 elif fname == 'tag_patterns_special':
+                                    upd = verify_input_dict(
+                                        temp, cfc.TagPatternFormat())
                                     settings[mod].append(
-                                        cfc.TagPatternFormat(**temp))
+                                        cfc.TagPatternFormat(**upd))
                     status = True
                 except:
                     return_default = True
@@ -469,12 +496,14 @@ def load_settings(fname=''):
                 with open(path, 'r') as file:
                     doc = yaml.safe_load(file)
                     if fname == 'auto_common':
-                        doc['filename_pattern'] = (
-                            cfc.TagPatternFormat(
-                                **doc['filename_pattern']))
-                        settings = cfc.AutoCommon(**doc)
+                        upd = verify_input_dict(
+                            doc['filename_pattern'], cfc.TagPatternFormat())
+                        doc['filename_pattern'] = (cfc.TagPatternFormat(**upd))
+                        upd = verify_input_dict(doc, cfc.AutoCommon())
+                        settings = cfc.AutoCommon(**upd)
                     elif fname == 'last_modified':
-                        settings = cfc.LastModified(**doc)
+                        upd = verify_input_dict(doc, cfc.LastModified())
+                        settings = cfc.LastModified(**upd)
                 status = True
                 #except: what to except.... wait for error
                 #    return_default = True
@@ -560,43 +589,62 @@ def save_settings(settings, fname=''):
     status = False
     path = ''
 
+    def try_save(input_data, override_path=None):
+        p = path
+        status = False
+        try_again = False
+        if override_path is not None:  # for testing/troubleshooting
+            p = override_path
+        try:
+            with open(p, 'w') as file:
+                if isinstance(input_data, list):
+                    yaml.safe_dump_all(
+                        input_data, file, default_flow_style=None, sort_keys=False)
+                else:
+                    yaml.safe_dump(
+                        input_data, file, default_flow_style=None, sort_keys=False)
+            status = True
+        except yaml.YAMLError as ex:
+            # try once more with eval(str(input_data))
+            try_again = True
+        except IOError as e:
+            QMessageBox.warning(None, "Failed saving",
+                                f'Failed saving to {p} {e}')
+        if try_again:
+            try:
+                breakpoint()
+                input_data = eval(str(input_data))
+                with open(p, 'w') as file:
+                    if isinstance(input_data, list):
+                        yaml.safe_dump_all(
+                            input_data, file, default_flow_style=None, sort_keys=False)
+                    else:
+                        yaml.safe_dump(
+                            input_data, file, default_flow_style=None, sort_keys=False)
+                status = True
+            except yaml.YAMLError as ex:
+                QMessageBox.warning(None, 'Failed saving',
+                                    f'Failed saving to {p} {ex}')
+                breakpoint()#TODO delete this
+        return status
+
     if fname != '':
         path = get_config_filename(fname, force=True)
         proceed = False
         if os.access(Path(path).parent, os.W_OK):
             proceed = True
         if proceed:
-            breakpoint()  # sometimes fails by empty file - check when (p settings)
             if CONFIG_FNAMES[fname]['saved_as'] == 'object_list':
-                try:
-                    with open(path, 'w') as file:
-                        yaml.safe_dump_all(
-                            [asdict(temp) for temp in settings],
-                            file, default_flow_style=None, sort_keys=False)
-                    status = True
-                except:
-                    pass
+                listofdict = [asdict(temp) for temp in settings]
+                status = try_save(listofdict)
             elif CONFIG_FNAMES[fname]['saved_as'] == 'modality_dict':
-                try:
-                    temp_dict = {}
-                    for key, val in settings.items():
-                        temp_dict[key] = [asdict(temp) for temp in val]
-                    with open(path, 'w') as file:
-                        yaml.safe_dump(
-                            temp_dict,
-                            file, default_flow_style=None, sort_keys=False)
-                    status = True
-                except:
-                    pass
+                temp_dict = {}
+                for key, val in settings.items():
+                    temp_dict[key] = [asdict(temp) for temp in val]
+                if temp_dict != {}:
+                    status = try_save(temp_dict)
             else:
-                try:
-                    with open(path, 'w') as file:
-                        yaml.safe_dump(
-                            asdict(settings),
-                            file, default_flow_style=None, sort_keys=False)
-                    status = True
-                except:
-                    pass
+                status = try_save(asdict(settings))
 
         if fname != 'last_modified':
             update_last_modified(fname)
@@ -604,19 +652,42 @@ def save_settings(settings, fname=''):
     return (status, path)
 
 
-def import_settings(
-        parent_widget=None,
-        new_paramsets=None, new_quicktests=None,
-        new_auto_common=None, new_auto_templates=None, new_auto_templates_vendor=None,
-        new_tag_infos=None, new_tag_patterns_format=None
-    ):
+def import_settings(import_main):
     """Import config settings."""
-    if new_paramsets is not None:
-        ok, path, paramsets = load_settings(fname='paramsets')
-        if path != '':
-            # check name conflict
-            pass
-    #TODO lots of
+    if import_main.tag_infos_new != []:
+        fname = 'tag_infos'
+        ok, path, tag_infos = load_settings(fname=fname)
+        tag_infos.extend(import_main.tag_infos_new)
+        tag_infos = taginfos_reset_sort_index(tag_infos)
+        breakpoint()
+        status, path = save_settings(tag_infos, fname=fname)
+
+    list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
+                  if item['saved_as'] == 'modality_dict']
+    for d in list_dicts:
+        new_temps = getattr(import_main, d, {})
+        if new_temps != {}:
+            ok, path, temps = load_settings(fname=d)
+            for key in temps:
+                if key in new_temps:
+                    if len(new_temps[key]) > 0:
+                        old_labels = [temp.label for temp in temps[key]]
+                        new_labels = [temp.label for temp in new_temps[key]]
+                        if old_labels == ['']:
+                            temps[key] = new_temps[key]
+                        else:
+                            for new_id, new_temp in enumerate(new_temps[key]):
+                                if new_labels[new_id] in old_labels:
+                                    new_temps[key][new_id].label = (
+                                        new_labels[new_id] + '_import')
+                                temps[key].append(new_temps[key][new_id])
+            status, path = save_settings(temps, fname=d)
+
+    try:
+        if import_main.auto_common.import_path != '':
+            status, path = save_settings(import_main.auto_common, fname='auto_common')
+    except AttributeError:
+        pass
 
 
 def get_paramsets_used_in_auto_templates(auto_templates):

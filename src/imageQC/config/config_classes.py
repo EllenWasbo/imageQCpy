@@ -16,8 +16,8 @@ class UserPreferences:
     config_folder: str = ''
     dark_mode: bool = False
     font_size: int = 8
-    annotations_line_thick: int = 3
-    annotations_font_size: int = 14
+    annotations_line_thick: int = 1
+    annotations_font_size: int = 8
 
 
 @dataclass
@@ -47,13 +47,15 @@ class TagInfo:
     # format [0xXX,0xXX] group, element
     value_id: int = -1
     # if tag multivalue - value id (-1) = use all, -2 == per frame
+    # -3 == combine all occurences of tag in sequence before valid = -2
+    #       (i.e.= pr frame pr detector (NM))
     sequence: list = field(default_factory=lambda: [''])
     # search for tag within defined sequences - default no  sequence= ['']
     # example: ['PerFrameFunctionalGroupsSequence','PlanePositionSequence']
     # if more than one option - duplicate attribute name
     #  - if first option not found, try next
-    limited2mod: list = field(default_factory=list)
-    # modality (imageQC) where this tag is valid, empty list = valid for all
+    limited2mod: list = field(default_factory=lambda: [''])
+    # modality (imageQC) where this tag is valid, '' = valid for all
     unit: str = ''
     protected: bool = False  # avoid deleting this tag
 
@@ -288,6 +290,7 @@ class ParamSetXray(ParamSetCommon):
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     nps_roi_size: int = 256
     nps_sub_size: int = 5
+    stp_roi_size: float = 11.3
     var_roi_size: float = 2.0
 
 

@@ -53,12 +53,11 @@ def read_tag_infos_from_yaml():
     """
     tag_infos = []
     f_text = ''
-    #try:
+
     file = QFile(":/config_defaults/tag_infos.yaml")
     file.open(QFile.ReadOnly | QFile.Text)
     f_text = QTextStream(file).readAll()
-    #except ImportError:  # e.g. while pytest
-    #    pass
+
     if f_text != '':
         docs = yaml.safe_load_all(f_text)
         for doc in docs:
@@ -152,6 +151,19 @@ def set_tag_patterns_special_default(quicktest_options, tag_infos):
         '', 'z=|:.1f|']
 
     return tag_patterns_special
+
+
+def set_auto_common_default():
+    """Set default filename_pattern for AutoCommon."""
+    filename_pattern = cfc.TagPatternFormat(
+        list_tags=[
+            'Modality', 'StationName', 'PatientID', 'AcquisitionDate',
+            'AcquisitionTime',
+            'SeriesDescription', 'ProtocolName', 'SeriesNumber', 'InstanceNumber'],
+        list_format=['', '', '', '', '|:06|', '', '', '', '']
+        )
+
+    return cfc.AutoCommon(filename_pattern=filename_pattern)
 
 
 def get_quicktest_output_default(modality):

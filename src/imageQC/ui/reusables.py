@@ -9,7 +9,8 @@ from time import time
 import copy
 import os
 
-from PyQt5.QtCore import Qt, QModelIndex
+import pandas as pd
+from PyQt5.QtCore import Qt, QModelIndex, QTimer
 from PyQt5.QtGui import (
     QIcon, QFont, QBrush, QColor, QPalette, QStandardItemModel
     )
@@ -19,12 +20,12 @@ from PyQt5.QtWidgets import (
     QToolBar, QAction, QComboBox, QRadioButton, QButtonGroup, QToolButton,
     QLabel, QPushButton, QListWidget, QLineEdit, QCheckBox, QTextEdit,
     QTreeWidget, QTreeWidgetItem, QTreeView,
-    QMessageBox, QProgressDialog, QInputDialog
+    QMessageBox, QProgressDialog, QInputDialog,
+    QStatusBar, qApp
     )
 import matplotlib
 import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg, NavigationToolbar2QT)
-import pandas as pd
 
 # imageQC block start
 from imageQC.scripts.mini_methods_format import val_2_str, get_format_strings
@@ -130,9 +131,9 @@ def add_to_modality_dict(
 
 
 class ImageQCDialog(QDialog):
-    """Dialog for plot."""
+    """Dialog for reuse with imageQC icon and flags."""
 
-    def __init__(self, parent):
+    def __init__(self):
         super().__init__()
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
         self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
@@ -260,7 +261,7 @@ class TextDisplay(ImageQCDialog):
     def __init__(self, parent_widget, text, title='',
                  read_only=True,
                  min_width=1000, min_height=1000):
-        super().__init__(parent_widget)
+        super().__init__()
         txtEdit = QTextEdit('', self)
         txtEdit.setPlainText(text)
         txtEdit.setReadOnly(read_only)
@@ -854,14 +855,17 @@ class TagPatternWidget(QWidget):
     def fill_list_tags(self, modality):
         """Find tags from tag_infos.yaml and fill list."""
         self.listTags.clear()
-        general_tags, included_tags = get_included_tags(
-            modality, self.parent.tag_infos)
-        self.listTags.addItems(included_tags)
-        if self.lock_on_general is False:
-            for i in range(self.listTags.count()):
-                if included_tags[i] in general_tags:
-                    self.listTags.item(i).setForeground(
-                        QBrush(QColor(110, 148, 192)))
+        try:
+            general_tags, included_tags = get_included_tags(
+                modality, self.parent.tag_infos)
+            self.listTags.addItems(included_tags)
+            if self.lock_on_general is False:
+                for i in range(self.listTags.count()):
+                    if included_tags[i] in general_tags:
+                        self.listTags.item(i).setForeground(
+                            QBrush(QColor(110, 148, 192)))
+        except AttributeError:
+            pass
 
     def double_click_tag(self, item):
         """Double click item = push item."""
@@ -874,10 +878,10 @@ class TagPatternWidget(QWidget):
 
 
 class FormatDialog(ImageQCDialog):
-    """Dialog to set format-string of tags in TagPattternFormat."""
+    """Dialog to set format-string of tags in TagPatternFormat."""
 
     def __init__(self, parent, format_string='', DICOM_display=False):
-        super().__init__(parent)
+        super().__init__()
         self.setWindowTitle('Set format')
         self.cbox_decimals = QComboBox()
         self.cbox_padding = QComboBox()
@@ -931,13 +935,14 @@ class FormatDialog(ImageQCDialog):
                 dec_string = format_str[
                     format_str.find(start)+1:format_str.rfind(end)]
                 self.cbox_decimals.setCurrentText(dec_string)
-            if format_str[0] == '0':
-                pos_dec = format_str.rfind('.')
-                if pos_dec != -1:
-                    pad_string = format_str[1:pos_dec]
-                else:
-                    pad_string = format_str[1:]
-                self.cbox_padding.setCurrentText(pad_string)
+            if len(format_str) > 0:
+                if format_str[0] == '0':
+                    pos_dec = format_str.rfind('.')
+                    if pos_dec != -1:
+                        pad_string = format_str[1:pos_dec]
+                    else:
+                        pad_string = format_str[1:]
+                    self.cbox_padding.setCurrentText(pad_string)
 
     def get_data(self):
         """Get formatting string.
@@ -1004,7 +1009,7 @@ class TagPatternEditDialog(QDialog):
         hLO_temps.addWidget(QLabel('Select template:'))
         self.cbox_templist = QComboBox()
         self.cbox_templist.setFixedWidth(200)
-        self.cbox_templist.currentIndexChanged.connect(
+        self.cbox_templist.activated.connect(
             self.update_clicked_template)
         if typestr != '':
             hLO_temps.addWidget(self.cbox_templist)
@@ -1122,7 +1127,9 @@ class TagPatternEditDialog(QDialog):
                 else:
                     self.templates[self.current_modality].append(new_temp)
 
-                self.save()
+                self.current_template = new_temp
+                self.current_labels.append(text)
+                self.save(label=text)
                 self.refresh_templist(selected_label=text)
 
     def save(self, label=None):
@@ -1257,6 +1264,7 @@ class QuickTestTreeView(QTreeView):
             item.setEditable(False)
             item.setCheckable(True)
         self.model.endInsertRows()
+        self.parent.nimgs.setText(f'{self.model.rowCount()}')
 
     def delete_row(self):
         """Delete selected row."""
@@ -1281,6 +1289,7 @@ class QuickTestTreeView(QTreeView):
                 temp.group_names.pop(rowno)
                 self.parent.current_template = copy.deepcopy(temp)
                 self.update_data(set_selected=rowno-1)
+            self.parent.nimgs.setText(f'{self.model.rowCount()}')
 
     def get_data(self):
         """Read current settings as edited by user.
@@ -1356,32 +1365,33 @@ class QuickTestOutputTreeView(QTreeView):
 
         temp = self.parent.current_template.output
         r = 0
-        for testcode, sett in temp.tests.items():
-            for s, sub in enumerate(sett):
-                self.model.insertRow(r)
-                self.model.setData(self.model.index(r, 0), testcode)
-                try:
-                    text_alt = ALTERNATIVES[
-                        self.parent.current_modality][
-                            testcode][sub.alternative]
-                except IndexError:
-                    # supplement table starting from 10
-                    text_alt = ALTERNATIVES[
-                        self.parent.current_modality][
-                            testcode][sub.alternative - 10]
-                except KeyError:
-                    text_alt = '-'
-                self.model.setData(self.model.index(r, 1), text_alt)
-                if len(sub.columns) > 0:
-                    text_col = str(sub.columns)
-                else:
-                    text_col = 'all'
-                self.model.setData(self.model.index(r, 2), text_col)
-                self.model.setData(self.model.index(r, 3), sub.calculation)
-                text_pr = 'Per group' if sub.per_group else 'Per image'
-                self.model.setData(self.model.index(r, 4), text_pr)
-                self.model.setData(self.model.index(r, 5), sub.label)
-                r += 1
+        if temp.tests != {}:
+            for testcode, sett in temp.tests.items():
+                for s, sub in enumerate(sett):
+                    self.model.insertRow(r)
+                    self.model.setData(self.model.index(r, 0), testcode)
+                    try:
+                        text_alt = ALTERNATIVES[
+                            self.parent.current_modality][
+                                testcode][sub.alternative]
+                    except IndexError:
+                        # supplement table starting from 10
+                        text_alt = ALTERNATIVES[
+                            self.parent.current_modality][
+                                testcode][sub.alternative - 10]
+                    except KeyError:
+                        text_alt = '-'
+                    self.model.setData(self.model.index(r, 1), text_alt)
+                    if len(sub.columns) > 0:
+                        text_col = str(sub.columns)
+                    else:
+                        text_col = 'all'
+                    self.model.setData(self.model.index(r, 2), text_col)
+                    self.model.setData(self.model.index(r, 3), sub.calculation)
+                    text_pr = 'Per group' if sub.per_group else 'Per image'
+                    self.model.setData(self.model.index(r, 4), text_pr)
+                    self.model.setData(self.model.index(r, 5), sub.label)
+                    r += 1
 
         self.setColumnWidth(0, 70)
         self.setColumnWidth(3, 110)
@@ -2044,7 +2054,7 @@ class PlotDialog(ImageQCDialog):
     """Dialog for plot."""
 
     def __init__(self, main, title=''):
-        super().__init__(self)
+        super().__init__()
         self.setWindowTitle(title)
         vLO = QVBoxLayout()
         self.setLayout(vLO)
@@ -2082,20 +2092,16 @@ class PlotWidget(QWidget):
     def copy_curves(self):
         """Copy contents of curves to clipboard."""
         decimal_mark = self.main.current_paramset.output.decimal_mark
-        xvalues = val_2_str(
-            self.plotcanvas.curves[0]['xvals'], decimal_mark=decimal_mark)
-        headers = [self.plotcanvas.xtitle]
-        values = [xvalues]
+        headers = []
+        values = []
         for curve in self.plotcanvas.curves:
-            if 'tolerance' not in curve['label']:
+            if 'tolerance' not in curve['label'] and 'nolegend' not in curve['label']:
+                xvalues = val_2_str(curve['xvals'], decimal_mark=decimal_mark)
                 yvalues = val_2_str(curve['yvals'], decimal_mark=decimal_mark)
+                values.append(xvalues)
                 values.append(yvalues)
+                headers.append(f'{curve["label"]}_{self.plotcanvas.xtitle}')
                 headers.append(curve['label'])
-        values_rows = [[]] * len(xvalues)
-        for c, col in enumerate(values):
-            for row in values_rows:
-                row.append(col)
-            values_rows[c]
 
         df = pd.DataFrame(values)
         df = df.transpose()
@@ -2124,6 +2130,8 @@ class PlotCanvas(FigureCanvasQTAgg):
 
     def __init__(self, main):
         self.main = main
+        if self.main.user_prefs.dark_mode:
+            matplotlib.pyplot.style.use('dark_background')
         self.fig = matplotlib.figure.Figure(dpi=150)
         FigureCanvasQTAgg.__init__(self, self.fig)
         self.ax = self.fig.add_subplot(111)
@@ -2171,3 +2179,93 @@ class PlotCanvas(FigureCanvasQTAgg):
             self.ax.set_title(f'Profile lengt:h {length:.1f} {unit}')
 
         self.draw()
+
+
+class ResetAutoTemplateDialog(ImageQCDialog):
+    """Dialog to move directories/files in input_path/Archive to input_path."""
+
+    def __init__(self, parent_widget, files=[], directories=[]):
+        super().__init__()
+        self.setWindowTitle('Reset Automation template')
+        self.setMinimumHeight(300)
+        self.setMinimumWidth(300)
+        files_or_folders = 'files'
+        if len(files) > 0:
+            self.list_elements = [file.name for file in files]
+        else:
+            self.list_elements = [folder.name for folder in directories]
+            files_or_folders = 'folders'
+
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
+
+        self.list_file_or_dirs = QListWidget()
+        self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)
+        self.list_file_or_dirs.addItems(self.list_elements)
+
+        vLO.addWidget(QLabel(
+            'Move files out of Archive to regard these files as incoming.'))
+        vLO.addStretch()
+        vLO.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
+        vLO.addWidget(self.list_file_or_dirs)
+        vLO.addStretch()
+        hLO_buttons = QHBoxLayout()
+        vLO.addLayout(hLO_buttons)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vLO.addWidget(self.buttonBox)
+
+
+    def get_idxs(self):
+        """Return selected elements in list.
+
+        Returns
+        -------
+        idxs : list of int
+            selected indexes
+        """
+        idxs = []
+        for sel in self.list_file_or_dirs.selectedIndexes():
+            idxs.append(sel.row())
+
+        return idxs
+
+
+class StatusBar(QStatusBar):
+    """Tweeks to QStatusBar."""
+
+    def __init__(self, parent):
+        super().__init__()
+        self.main = parent
+        self.setStyleSheet("QStatusBar{padding-left: 8px;}")
+        self.default_color = self.palette().window().color().name()
+        self.message = QLabel('')
+        self.message.setAlignment(Qt.AlignCenter)
+        self.addWidget(self.message, 1)
+        self.timer = QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.clearMessage)
+
+    def showMessage(self, txt, timeout=0, warning=False):
+        """Set background color when message is shown."""
+        if warning:
+            self.setStyleSheet("QStatusBar{background:#efb412;}")
+            timeout = 2000
+        else:
+            self.setStyleSheet("QStatusBar{background:#6e94c0;}")
+        self.message.setText(txt)
+        if timeout > 0:
+            self.timer.start(timeout)
+        else:
+            self.timer.start()
+        qApp.processEvents()
+
+    def clearMessage(self):
+        """Reset background and clear message."""
+        self.setStyleSheet(
+            "QStatusBar{background:" + self.default_color + ";}")
+        self.message.setText('')
+        qApp.processEvents()

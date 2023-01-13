@@ -4,20 +4,22 @@
 
 @author: Ellen Wasbo
 """
+from __future__ import annotations
+
 import os
 from time import time, ctime
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 import copy
 import numpy as np
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QBrush, QColor, QFont
 from PyQt5.QtWidgets import (
-    QApplication, qApp,
+    QApplication, qApp, QSizePolicy,
     QDialog, QWidget, QTreeWidget, QTreeWidgetItem, QStackedWidget, QTabWidget,
     QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QToolBar, QButtonGroup,
     QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox,
-    QListWidget, QComboBox,
+    QListWidget, QListWidgetItem, QComboBox,
     QAbstractScrollArea,
     QInputDialog, QMessageBox, QDialogButtonBox,
     QFileDialog
@@ -40,19 +42,22 @@ import imageQC.scripts.dcm as dcm
 # imageQC block end
 
 
-class SettingsDialog(QDialog):
+class SettingsDialog(uir.ImageQCDialog):
     """GUI setup for the settings dialog window."""
 
     def __init__(
-            self, main, initial_view='User local settings'):
+            self, main, initial_view='User local settings',
+            width1=200, width2=800,
+            import_review_mode=False):
         super().__init__()
         self.main = main
-
-        self.setWindowTitle('Settings manager')
-        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.import_review_mode = import_review_mode
+        if import_review_mode is False:
+            self.setWindowTitle('Settings manager')
+            width1 = self.main.vGUI.panel_width*0.3
+            width2 = self.main.vGUI.panel_width*1.7
+        else:
+            self.setWindowTitle('Import review - configuration settings')
 
         hLO = QHBoxLayout()
         self.setLayout(hLO)
@@ -63,134 +68,218 @@ class SettingsDialog(QDialog):
         hLO.addWidget(self.stacked_widget)
 
         self.treeSettings.setColumnCount(1)
-        self.treeSettings.setFixedWidth(self.main.vGUI.panel_width*0.5)
+        self.treeSettings.setFixedWidth(width1)
         self.treeSettings.setHeaderHidden(True)
         self.treeSettings.itemClicked.connect(self.change_widget)
 
-        self.stacked_widget.setFixedWidth(self.main.vGUI.panel_width*1.5)
+        self.stacked_widget.setFixedWidth(width2)
 
-        txt = 'Local settings'
-        self.item_user_settings = QTreeWidgetItem([txt])
-        self.treeSettings.addTopLevelItem(self.item_user_settings)
-        self.widget_user_settings = UserSettingsWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_user_settings)
-        self.list_txt_item_widget = [
-            (txt, self.item_user_settings, self.widget_user_settings)]
+        self.list_txt_item_widget = []
+        if import_review_mode is False:
+            txt = 'Local settings'
+            self.item_user_settings = QTreeWidgetItem([txt])
+            self.treeSettings.addTopLevelItem(self.item_user_settings)
+            self.widget_user_settings = UserSettingsWidget(
+                save_blocked=self.main.save_blocked)
+            self.stacked_widget.addWidget(self.widget_user_settings)
+            self.list_txt_item_widget = [
+                (txt, self.item_user_settings, self.widget_user_settings)]
 
-        txt = 'Config folder'
-        self.item_shared_settings = QTreeWidgetItem([txt])
-        self.treeSettings.addTopLevelItem(self.item_shared_settings)
-        self.widget_shared_settings = SharedSettingsWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_shared_settings)
-        self.list_txt_item_widget.append(
-            (txt, self.item_shared_settings, self.widget_shared_settings))
+            txt = 'Config folder'
+            self.item_shared_settings = QTreeWidgetItem([txt])
+            self.treeSettings.addTopLevelItem(self.item_shared_settings)
+            self.widget_shared_settings = SharedSettingsWidget(
+                save_blocked=self.main.save_blocked, width1=width1, width2=width2)
+            self.stacked_widget.addWidget(self.widget_shared_settings)
+            self.list_txt_item_widget.append(
+                (txt, self.item_shared_settings, self.widget_shared_settings))
+        else:
+            txt = 'Settings for import'
+            self.item_shared_settings = QTreeWidgetItem([txt])
+            self.treeSettings.addTopLevelItem(self.item_shared_settings)
+            self.widget_shared_settings = SharedSettingsImportWidget(self)
+            self.stacked_widget.addWidget(self.widget_shared_settings)
+            self.list_txt_item_widget.append(
+                (txt, self.item_shared_settings, self.widget_shared_settings))
 
         txt = 'DICOM tags'
         self.item_dicom_tags = QTreeWidgetItem([txt])
         self.item_shared_settings.addChild(self.item_dicom_tags)
         self.widget_dicom_tags = DicomTagsWidget(
-            save_blocked=self.main.save_blocked)
+            save_blocked=self.main.save_blocked,
+            import_review_mode=import_review_mode)
         self.stacked_widget.addWidget(self.widget_dicom_tags)
         self.list_txt_item_widget.append(
             (txt, self.item_dicom_tags, self.widget_dicom_tags))
 
-        txt = 'Special tag patterns'
-        self.item_tag_patterns_special = QTreeWidgetItem([txt])
-        self.item_dicom_tags.addChild(self.item_tag_patterns_special)
-        self.widget_tag_patterns_special = TagPatternSpecialWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_tag_patterns_special)
-        self.list_txt_item_widget.append(
-            (txt, self.item_tag_patterns_special,
-             self.widget_tag_patterns_special))
+        proceed = True
+        if import_review_mode:
+            if self.main.tag_patterns_special == {}:
+                proceed = False
+        if proceed:
+            txt = 'Special tag patterns'
+            self.item_tag_patterns_special = QTreeWidgetItem([txt])
+            self.item_dicom_tags.addChild(self.item_tag_patterns_special)
+            self.widget_tag_patterns_special = TagPatternSpecialWidget(
+                save_blocked=self.main.save_blocked,
+                import_review_mode=import_review_mode)
+            self.stacked_widget.addWidget(self.widget_tag_patterns_special)
+            self.list_txt_item_widget.append(
+                (txt, self.item_tag_patterns_special,
+                 self.widget_tag_patterns_special))
 
-        txt = 'Tag patterns - format'
-        self.item_tag_patterns_format = QTreeWidgetItem([txt])
-        self.item_dicom_tags.addChild(self.item_tag_patterns_format)
-        self.widget_tag_patterns_format = TagPatternFormatWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_tag_patterns_format)
-        self.list_txt_item_widget.append(
-            (txt, self.item_tag_patterns_format,
-             self.widget_tag_patterns_format))
+        proceed = True
+        if import_review_mode:
+            if self.main.tag_patterns_format == {}:
+                proceed = False
+        if proceed:
+            txt = 'Tag patterns - format'
+            self.item_tag_patterns_format = QTreeWidgetItem([txt])
+            self.item_dicom_tags.addChild(self.item_tag_patterns_format)
+            self.widget_tag_patterns_format = TagPatternFormatWidget(
+                save_blocked=self.main.save_blocked,
+                import_review_mode=import_review_mode)
+            self.stacked_widget.addWidget(self.widget_tag_patterns_format)
+            self.list_txt_item_widget.append(
+                (txt, self.item_tag_patterns_format,
+                 self.widget_tag_patterns_format))
 
-        txt = 'Rename patterns'
-        self.item_rename_patterns = QTreeWidgetItem([txt])
-        self.item_dicom_tags.addChild(self.item_rename_patterns)
-        self.widget_rename_patterns = RenamePatternWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_rename_patterns)
-        self.list_txt_item_widget.append(
-            (txt, self.item_rename_patterns,
-             self.widget_rename_patterns))
+        proceed = True
+        if import_review_mode:
+            if self.main.rename_patterns == {}:
+                proceed = False
+        if proceed:
+            txt = 'Rename patterns'
+            self.item_rename_patterns = QTreeWidgetItem([txt])
+            self.item_dicom_tags.addChild(self.item_rename_patterns)
+            self.widget_rename_patterns = RenamePatternWidget(
+                save_blocked=self.main.save_blocked,
+                import_review_mode=import_review_mode)
+            self.stacked_widget.addWidget(self.widget_rename_patterns)
+            self.list_txt_item_widget.append(
+                (txt, self.item_rename_patterns,
+                 self.widget_rename_patterns))
 
-        txt = 'Tag patterns - sort'
-        self.item_tag_patterns_sort = QTreeWidgetItem([txt])
-        self.item_dicom_tags.addChild(self.item_tag_patterns_sort)
-        self.widget_tag_patterns_sort = TagPatternSortWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_tag_patterns_sort)
-        self.list_txt_item_widget.append(
-            (txt, self.item_tag_patterns_sort, self.widget_tag_patterns_sort))
+        proceed = True
+        if import_review_mode:
+            if self.main.tag_patterns_sort == {}:
+                proceed = False
+        if proceed:
+            txt = 'Tag patterns - sort'
+            self.item_tag_patterns_sort = QTreeWidgetItem([txt])
+            self.item_dicom_tags.addChild(self.item_tag_patterns_sort)
+            self.widget_tag_patterns_sort = TagPatternSortWidget(
+                save_blocked=self.main.save_blocked,
+                import_review_mode=import_review_mode)
+            self.stacked_widget.addWidget(self.widget_tag_patterns_sort)
+            self.list_txt_item_widget.append(
+                (txt, self.item_tag_patterns_sort, self.widget_tag_patterns_sort))
 
-        txt = 'Parameter sets / output'
-        self.item_paramsets = QTreeWidgetItem([txt])
-        self.item_shared_settings.addChild(self.item_paramsets)
-        self.widget_paramsets = ParamSetsWidget(
-            save_blocked=self.main.save_blocked,
-            main_current_paramset=self.main.current_paramset,
-            main_current_modality=self.main.current_modality)
-        self.stacked_widget.addWidget(self.widget_paramsets)
-        self.list_txt_item_widget.append(
-            (txt, self.item_paramsets, self.widget_paramsets))
+        proceed = True
+        if import_review_mode:
+            if self.main.paramsets == {}:
+                proceed = False
+        if proceed:
+            txt = 'Parameter sets / output'
+            self.item_paramsets = QTreeWidgetItem([txt])
+            self.item_shared_settings.addChild(self.item_paramsets)
+            self.widget_paramsets = ParamSetsWidget(
+                save_blocked=self.main.save_blocked,
+                main_current_paramset=self.main.current_paramset,
+                main_current_modality=self.main.current_modality,
+                import_review_mode=import_review_mode)
+            self.stacked_widget.addWidget(self.widget_paramsets)
+            self.list_txt_item_widget.append(
+                (txt, self.item_paramsets, self.widget_paramsets))
 
-        txt = 'QuickTest templates'
-        self.item_quicktest_templates = QTreeWidgetItem([txt])
-        self.item_shared_settings.addChild(self.item_quicktest_templates)
-        self.widget_quicktest_templates = QuickTestTemplatesWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_quicktest_templates)
-        self.list_txt_item_widget.append(
-            (txt, self.item_quicktest_templates,
-             self.widget_quicktest_templates))
+        proceed = True
+        if import_review_mode:
+            if self.main.quicktest_templates == {}:
+                proceed = False
+        if proceed:
+            txt = 'QuickTest templates'
+            self.item_quicktest_templates = QTreeWidgetItem([txt])
+            self.item_shared_settings.addChild(self.item_quicktest_templates)
+            self.widget_quicktest_templates = QuickTestTemplatesWidget(
+                save_blocked=self.main.save_blocked,
+                import_review_mode=import_review_mode)
+            self.stacked_widget.addWidget(self.widget_quicktest_templates)
+            self.list_txt_item_widget.append(
+                (txt, self.item_quicktest_templates,
+                 self.widget_quicktest_templates))
 
-        txt = 'Automation'
-        self.item_auto_info = QTreeWidgetItem([txt])
-        self.item_shared_settings.addChild(self.item_auto_info)
-        self.widget_auto_info = AutoInfoWidget()
-        self.stacked_widget.addWidget(self.widget_auto_info)
-        self.list_txt_item_widget.append(
-            (txt, self.item_auto_info, self.widget_auto_info))
+        proceed = True
+        if import_review_mode:
+            if (
+                    self.main.auto_common.import_path == ''
+                    and self.main.auto_templates == {}
+                    and self.main.auto_vendor_templates == {}
+                    ):
+                proceed = False
+        if proceed:
+            txt = 'Automation'
+            self.item_auto_info = QTreeWidgetItem([txt])
+            self.item_shared_settings.addChild(self.item_auto_info)
+            self.widget_auto_info = AutoInfoWidget()
+            self.stacked_widget.addWidget(self.widget_auto_info)
+            self.list_txt_item_widget.append(
+                (txt, self.item_auto_info, self.widget_auto_info))
 
-        txt = 'Import settings'
-        self.item_auto_common = QTreeWidgetItem([txt])
-        self.item_auto_info.addChild(self.item_auto_common)
-        self.widget_auto_common = AutoCommonWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_auto_common)
-        self.list_txt_item_widget.append(
-            (txt, self.item_auto_common, self.widget_auto_common))
+            proceed = True
+            if import_review_mode:
+                if self.main.auto_common.import_path == '':
+                    proceed = False
+            if proceed:
+                txt = 'Import settings'
+                self.item_auto_common = QTreeWidgetItem([txt])
+                self.item_auto_info.addChild(self.item_auto_common)
+                self.widget_auto_common = AutoCommonWidget(
+                    save_blocked=self.main.save_blocked,
+                    import_review_mode=import_review_mode)
+                self.stacked_widget.addWidget(self.widget_auto_common)
+                self.list_txt_item_widget.append(
+                    (txt, self.item_auto_common, self.widget_auto_common))
 
-        txt = 'Templates DICOM'
-        self.item_auto_templates = QTreeWidgetItem([txt])
-        self.item_auto_info.addChild(self.item_auto_templates)
-        self.widget_auto_templates = AutoTemplateWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_auto_templates)
-        self.list_txt_item_widget.append(
-            (txt, self.item_auto_templates, self.widget_auto_templates))
+            proceed = True
+            if import_review_mode:
+                if self.main.auto_templates == {}:
+                    proceed = False
+                else:
+                    list_lens = [len(t) for mod, t
+                                 in self.main.auto_templates.items()]
+                    if max(list_lens) > 0:
+                        proceed = False
+            if proceed:
+                txt = 'Templates DICOM'
+                self.item_auto_templates = QTreeWidgetItem([txt])
+                self.item_auto_info.addChild(self.item_auto_templates)
+                self.widget_auto_templates = AutoTemplateWidget(
+                    save_blocked=self.main.save_blocked,
+                    import_review_mode=import_review_mode)
+                self.stacked_widget.addWidget(self.widget_auto_templates)
+                self.list_txt_item_widget.append(
+                    (txt, self.item_auto_templates, self.widget_auto_templates))
 
-        txt = 'Templates vendor files'
-        self.item_auto_vendor_templates = QTreeWidgetItem([txt])
-        self.item_auto_info.addChild(self.item_auto_vendor_templates)
-        self.widget_auto_vendor_templates = AutoVendorTemplateWidget(
-            save_blocked=self.main.save_blocked)
-        self.stacked_widget.addWidget(self.widget_auto_vendor_templates)
-        self.list_txt_item_widget.append(
-            (txt, self.item_auto_vendor_templates,
-             self.widget_auto_vendor_templates))
+            proceed = True
+            if import_review_mode:
+                if self.main.auto_vendor_templates == {}:
+                    proceed = False
+                else:
+                    list_lens = [len(t) for mod, t
+                                 in self.main.auto_vendor_templates.items()]
+                    if max(list_lens) > 0:
+                        proceed = False
+            if proceed:
+                txt = 'Templates vendor files'
+                self.item_auto_vendor_templates = QTreeWidgetItem([txt])
+                self.item_auto_info.addChild(self.item_auto_vendor_templates)
+                self.widget_auto_vendor_templates = AutoVendorTemplateWidget(
+                    save_blocked=self.main.save_blocked,
+                    import_review_mode=import_review_mode)
+                self.stacked_widget.addWidget(self.widget_auto_vendor_templates)
+                self.list_txt_item_widget.append(
+                    (txt, self.item_auto_vendor_templates,
+                     self.widget_auto_vendor_templates))
 
         item, widget = self.get_item_widget_from_txt(initial_view)
         self.treeSettings.setCurrentItem(item)
@@ -200,7 +289,11 @@ class SettingsDialog(QDialog):
         self.previous_selected_txt = initial_view
         self.current_selected_txt = initial_view
         self.initial_modality = self.main.current_modality
-        widget.update_from_yaml()
+
+        if import_review_mode is False:
+            widget.update_from_yaml()
+        else:
+            self.update_import_main()
 
     def get_item_widget_from_txt(self, txt):
         """Find tree item and stack widget based on item txt."""
@@ -238,7 +331,8 @@ class SettingsDialog(QDialog):
             new_item, new_widget = self.get_item_widget_from_txt(txtitem)
             self.stacked_widget.setCurrentWidget(new_widget)
             new_widget.current_modality = prev_widget.current_modality
-            new_widget.update_from_yaml()
+            if self.import_review_mode == False:
+                new_widget.update_from_yaml()
         else:
             item, widget = self.get_item_widget_from_txt(
                 self.previous_selected_txt)
@@ -265,12 +359,109 @@ class SettingsDialog(QDialog):
         else:
             event.accept()
 
+    def update_import_main(self):
+        """Update templates of all widgets according to import_main."""
+        if self.main.tag_infos != []:
+            self.widget_dicom_tags.templates = self.main.tag_infos
+            self.widget_dicom_tags.update_data()
+        list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
+                      if item['saved_as'] == 'modality_dict']
+        for d in list_dicts:
+            temps = getattr(self.main, d, {})
+            try:
+                widget = getattr(self, f'widget_{d}')
+                widget.templates = temps
+                try:
+                    widget.current_template = temps['CT'][0]
+                except IndexError:
+                    pass
+                widget.refresh_templist()
+            except AttributeError:
+                pass
+
+        if self.main.auto_common.import_path != '':
+            widget = self.widget_auto_common
+            widget.templates = self.main.auto_common
+            widget.current_template = widget.templates.filename_pattern
+            widget.update_data()
+
+    def set_marked(self, marked, import_all=False):
+        """Set type of marking to ImportMain."""
+        self.main.marked = marked
+        self.main.import_all = import_all
+        self.accept()
+
+    def get_marked(self):
+        """Extract marked or not ignored templates and update ImportMain.
+
+        Parameters
+        ----------
+        marked : bool
+            True if import all marked, False if import all but ignored.
+        """
+        import_main = self.main
+        marked = import_main.marked
+        include_all = import_main.include_all
+        if include_all is False:
+            list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
+                          if item['saved_as'] == 'modality_dict']
+
+            widget = self.widget_dicom_tags
+            try:
+                if marked:
+                    if len(widget.marked) == 0:
+                        import_main.tag_infos = []
+                    else:
+                        import_main.tag_infos = import_main.tag_infos[
+                            widget.marked]
+                else:
+                    if len(widget.marked_ignore) == 0:
+                        pass
+                    else:
+                        ignore_ids = widget.marked_ignore
+                        ignore_ids.sort(reverse=True)
+                        for ign_id in ignore_ids:
+                            del import_main.tag_infos[ign_id]
+            except AttributeError:
+                pass  # marked not set
+
+            for d in list_dicts:
+                temps = getattr(import_main, d, None)
+                try:
+                    widget = getattr(self, f'widget_{d}')
+                    temps = getattr(import_main, d)
+                    marked_this = widget.marked if marked else widget.marked_ignore
+                    for mo, marked_ids in marked_this.items():
+                        if len(marked_ids) == 0:
+                            if marked:
+                                temps[mo] = []
+                        else:
+                            if marked:
+                                temps[mo] = temps[marked_ids]
+                            else:
+                                marked_ids.sort(reverse=True)
+                                if len(marked_ids) > 0:
+                                    for ign_id in marked_ids:
+                                        del temps[mo][ign_id]
+                except AttributeError:
+                    pass  # marked not set
+
+            try:
+                widget = self.widget_auto_common
+                if marked is False and widget.marked_ignore:
+                    import_main.auto_common = None
+            except AttributeError:
+                import_main.auto_common = None  # marked not set
+
+        return import_main
+
 
 class StackWidget(QWidget):
     """Class for general widget attributes for the stacked widgets."""
 
     def __init__(self, header='', subtxt='', typestr='',
-                 mod_temp=False, grouped=False, editable=True):
+                 mod_temp=False, grouped=False, editable=True,
+                 import_review_mode=False):
         """Initiate StackWidget.
 
         Parameters
@@ -296,6 +487,7 @@ class StackWidget(QWidget):
         self.typestr = typestr
         self.mod_temp = mod_temp
         self.grouped = grouped
+        self.import_review_mode = import_review_mode
         self.current_modality = 'CT'  # default get from latest selection
         self.status_label = QLabel('')
 
@@ -310,7 +502,8 @@ class StackWidget(QWidget):
         if self.mod_temp:
             self.hLO = QHBoxLayout()
             self.vLO.addLayout(self.hLO)
-            self.wModTemp = ModTempSelector(self, editable=editable)
+            self.wModTemp = ModTempSelector(
+                self, editable=editable, import_review_mode=import_review_mode)
             self.hLO.addWidget(self.wModTemp)
             if self.grouped is False:
                 self.wModTemp.lbl_modality.setVisible(False)
@@ -394,9 +587,12 @@ class StackWidget(QWidget):
             The default is ''.
         """
         if self.grouped:
-            self.current_labels = \
-                [obj.label for obj
-                 in self.templates[self.current_modality]]
+            try:
+                self.current_labels = \
+                    [obj.label for obj
+                     in self.templates[self.current_modality]]
+            except KeyError:  # fx on import review mode from IDL SPECT
+                self.current_labels = []
         else:
             self.current_labels = [obj.label for obj in self.templates]
 
@@ -415,16 +611,42 @@ class StackWidget(QWidget):
             self.update_current_template(selected_id=tempno)
 
         self.wModTemp.list_temps.clear()
-        self.wModTemp.list_temps.addItems(self.current_labels)
+        if self.import_review_mode:
+            self.refresh_templist_icons()
+        else:
+            self.wModTemp.list_temps.addItems(self.current_labels)
         self.wModTemp.list_temps.setCurrentRow(tempno)
 
         if 'auto' in self.fname and 'temp' in self.fname:
-            active = [obj.active for obj in self.templates[self.current_modality]]
-            brush = QBrush(QColor(170, 170, 170))
-            for i in range(len(active)):
-                if active[i] is False:
-                    self.wModTemp.list_temps.item(i).setForeground(brush)
+            if self.current_modality in self.templates:
+                active = [obj.active for obj in self.templates[self.current_modality]]
+                brush = QBrush(QColor(170, 170, 170))
+                for i in range(len(active)):
+                    if active[i] is False:
+                        self.wModTemp.list_temps.item(i).setForeground(brush)
         self.update_data()
+
+    def refresh_templist_icons(self):
+        """Set green if marked for import and red if marked for ignore.
+
+        Used if import review mode.
+        """
+        if hasattr(self, 'marked'):
+            current_marked = self.marked[self.current_modality]
+            current_ignore = self.marked_ignore[self.current_modality]
+        else:
+            current_marked = []
+            current_ignore = []
+
+        for i, label in enumerate(self.current_labels):
+            if i in current_marked:
+                icon = QIcon(f'{os.environ[ENV_ICON_PATH]}ok.png')
+            elif i in current_ignore:
+                icon = QIcon(f'{os.environ[ENV_ICON_PATH]}deleteRed.png')
+            else:
+                icon = QIcon()
+
+            self.wModTemp.list_temps.addItem(QListWidgetItem(icon, label))
 
     def update_clicked_template(self):
         """Update data after new template selected (clicked)."""
@@ -664,7 +886,7 @@ class StackWidget(QWidget):
 class DummyStackWidgetForCopy(StackWidget):
     """...Copy this code as a template when starting on new stackwidget..."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, import_review_mode=False):
         header = ''
         subtxt = '''<br>'''
         # self.save_blocked = save_blocked # if mod_temp=True
@@ -672,11 +894,11 @@ class DummyStackWidgetForCopy(StackWidget):
         # if list of templates
         super().__init__(header, subtxt,
                          typestr='template',
-                         mod_temp=True)
+                         mod_temp=True, import_review_mode=False)
         # if grouped into modalities
         super().__init__(header, subtxt,
                          typestr='template',
-                         mod_temp=True, grouped=True)
+                         mod_temp=True, grouped=True, import_review_mode=False)
 
         self.fname = '...fname... as key in CONFIG_FNAMES'
         # self.empty_template = object default temp
@@ -705,7 +927,7 @@ class DummyStackWidgetForCopy(StackWidget):
 class ModTempSelector(QWidget):
     """Widget with modality selector, template selector and toolbar."""
 
-    def __init__(self, parent, editable=True):
+    def __init__(self, parent, editable=True, import_review_mode=False):
         super().__init__()
         self.parent = parent
         self.setFixedWidth(400)
@@ -731,62 +953,79 @@ class ModTempSelector(QWidget):
             self.parent.update_clicked_template)
         hLOlist.addWidget(self.list_temps)
 
-        if editable:
+        if import_review_mode:
             self.tb = QToolBar()
             self.tb.setOrientation(Qt.Vertical)
             hLOlist.addWidget(self.tb)
-            self.actClear = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}clear.png'),
-                'Clear ' + self.parent.typestr + ' (reset to default)', self)
-            self.actClear.triggered.connect(self.clear)
-            self.actAdd = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
-                'Add current values as new ' + self.parent.typestr, self)
-            self.actAdd.triggered.connect(self.add)
-            self.actSave = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'),
-                'Save current values to ' + self.parent.typestr, self)
-            self.actSave.triggered.connect(self.save)
-            self.actRename = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}rename.png'),
-                'Rename ' + self.parent.typestr, self)
-            self.actRename.triggered.connect(self.rename)
-            self.actDuplicate = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}duplicate.png'),
-                'Duplicate ' + self.parent.typestr, self)
-            self.actDuplicate.triggered.connect(self.duplicate)
-            actImport = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
-                'Import from .yaml', self)
-            actImport.triggered.connect(self.import_from_yaml)
-            self.actUp = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
-                'Move up', self)
-            self.actUp.triggered.connect(self.move_up)
-            self.actDown = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}moveDown.png'),
-                'Move down', self)
-            self.actDown.triggered.connect(self.move_down)
-            self.actDel = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
-                'Delete ' + self.parent.typestr, self)
-            self.actDel.triggered.connect(self.delete)
-
-            if self.parent.save_blocked:
-                self.actClear.setEnabled(False)
-                self.actAdd.setEnabled(False)
-                self.actSave.setEnabled(False)
-                self.actDuplicate.setEnabled(False)
-                self.actRename.setEnabled(False)
-                actImport.setEnabled(False)
-                self.actUp.setEnabled(False)
-                self.actDown.setEnabled(False)
-                self.actDel.setEnabled(False)
+            self.actImport = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}ok.png'),
+                'Mark ' + self.parent.typestr + ' for import', self)
+            self.actImport.triggered.connect(self.mark_import)
+            self.actIgnore = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}deleteRed.png'),
+                'Mark ' + self.parent.typestr + ' to ignore', self)
+            self.actIgnore.triggered.connect(
+                lambda: self.mark_import(ignore=True))
 
             self.tb.addActions(
-                [self.actClear, self.actAdd, self.actSave, self.actDuplicate,
-                 self.actRename, actImport, self.actUp,
-                 self.actDown, self.actDel])
+                [self.actImport, self.actIgnore])
+        else:
+            if editable:
+                self.tb = QToolBar()
+                self.tb.setOrientation(Qt.Vertical)
+                hLOlist.addWidget(self.tb)
+                self.actClear = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}clear.png'),
+                    'Clear ' + self.parent.typestr + ' (reset to default)', self)
+                self.actClear.triggered.connect(self.clear)
+                self.actAdd = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+                    'Add current values as new ' + self.parent.typestr, self)
+                self.actAdd.triggered.connect(self.add)
+                self.actSave = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'),
+                    'Save current values to ' + self.parent.typestr, self)
+                self.actSave.triggered.connect(self.save)
+                self.actRename = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}rename.png'),
+                    'Rename ' + self.parent.typestr, self)
+                self.actRename.triggered.connect(self.rename)
+                self.actDuplicate = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}duplicate.png'),
+                    'Duplicate ' + self.parent.typestr, self)
+                self.actDuplicate.triggered.connect(self.duplicate)
+                actImport = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
+                    'Import from .yaml', self)
+                actImport.triggered.connect(self.import_from_yaml)
+                self.actUp = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
+                    'Move up', self)
+                self.actUp.triggered.connect(self.move_up)
+                self.actDown = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}moveDown.png'),
+                    'Move down', self)
+                self.actDown.triggered.connect(self.move_down)
+                self.actDel = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+                    'Delete ' + self.parent.typestr, self)
+                self.actDel.triggered.connect(self.delete)
+
+                if self.parent.save_blocked:
+                    self.actClear.setEnabled(False)
+                    self.actAdd.setEnabled(False)
+                    self.actSave.setEnabled(False)
+                    self.actDuplicate.setEnabled(False)
+                    self.actRename.setEnabled(False)
+                    actImport.setEnabled(False)
+                    self.actUp.setEnabled(False)
+                    self.actDown.setEnabled(False)
+                    self.actDel.setEnabled(False)
+
+                self.tb.addActions(
+                    [self.actClear, self.actAdd, self.actSave, self.actDuplicate,
+                     self.actRename, actImport, self.actUp,
+                     self.actDown, self.actDel])
 
     def keyPressEvent(self, event):
         """Accept Delete key to delete templates."""
@@ -931,6 +1170,7 @@ class ModTempSelector(QWidget):
 
     def import_from_yaml(self):
         """Import template(s) from yaml."""
+        #TODO
         pass
 
     def delete(self, confirmed=False):
@@ -963,6 +1203,44 @@ class ModTempSelector(QWidget):
                     self.parent.save()
                     #TODO save_more - deleted something connected?
                     self.parent.refresh_templist(selected_id=row-1)
+
+    def mark_import(self, ignore=False):
+        """If import review mode: Mark template for import or ignore."""
+        if not hasattr(self.parent, 'marked'):  # initiate
+            if self.parent.grouped:
+                empty = {}
+                for key in QUICKTEST_OPTIONS:
+                    empty[key] = []
+            else:
+                empty = []
+            self.parent.marked_ignore = empty
+            self.parent.marked = copy.deepcopy(empty)
+
+        row = self.list_temps.currentRow()
+        if self.parent.grouped:
+            if ignore:
+                if row not in self.parent.marked_ignore[self.parent.current_modality]:
+                    self.parent.marked_ignore[self.parent.current_modality].append(row)
+                if row in self.parent.marked[self.parent.current_modality]:
+                    self.parent.marked[self.parent.current_modality].remove(row)
+            else:
+                if row not in self.parent.marked[self.parent.current_modality]:
+                    self.parent.marked[self.parent.current_modality].append(row)
+                if row in self.parent.marked_ignore[self.parent.current_modality]:
+                    self.parent.marked_ignore[self.parent.current_modality].remove(row)
+        else:
+            if ignore:
+                if row not in self.parent.marked_ignore:
+                    self.parent.marked_ignore.append(row)
+                if row in self.parent.marked:
+                    self.parent.marked.remove(row)
+            else:
+                if row not in self.parent.marked:
+                    self.parent.marked.append(row)
+                if row in self.parent.marked_ignore:
+                    self.parent.marked_ignore.remove(row)
+
+        self.parent.refresh_templist()
 
 
 class UserSettingsWidget(StackWidget):
@@ -1074,7 +1352,7 @@ class UserSettingsWidget(StackWidget):
 class SharedSettingsWidget(StackWidget):
     """Widget for shared settings."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, width1=200, width2=800):
         header = 'Config folder - shared settings'
         subtxt = '''Each of the sub-pages will display different settings
          saved in the config folder (specified in user settings).<br>
@@ -1082,6 +1360,8 @@ class SharedSettingsWidget(StackWidget):
         Several users may link to the same config folder and
          share these settings.'''
         super().__init__(header, subtxt)
+        self.width1 = width1
+        self.width2 = width2
 
         self.lbl_config_folder = QLabel('-- not defined --')
         self.list_files = QListWidget()
@@ -1164,36 +1444,68 @@ class SharedSettingsWidget(StackWidget):
                 self, 'Import config.dat from IDL version',
                 filter="dat file (*.dat)")
             if fname[0] != '':
-                config_idl = ConfigIdl2Py(fname[0])
+                ok, path, self.tag_infos = cff.load_settings(fname='tag_infos')
+                config_idl = ConfigIdl2Py(fname[0], self.tag_infos)
                 if len(config_idl.errmsg) > 0:
                     QMessageBox.warning(
                         self, 'Warnings', '\n'.join(config_idl.errmsg))
-                # fill templatels from idl
-                cff.import_settings(
+                import_main = ImportMain(
+                    tag_infos=config_idl.tag_infos_new,
+                    rename_patterns=config_idl.rename_patterns,
                     paramsets=config_idl.paramsets,
-                    quicktests=config_idl.quicktests,
+                    quicktest_templates=config_idl.quicktest_templates,
                     auto_common=config_idl.auto_common,
                     auto_templates=config_idl.auto_templates,
-                    auto_templates_vendor=config_idl.auto_templates_vendor,
-                    tag_infos=config_idl.tag_infos_new,
-                    tag_patterns_format=config_idl.dcm_additionals
+                    auto_vendor_templates=config_idl.auto_vendor_templates
                     )
+                if config_idl.paramsets != {}:
+                    import_main.current_paramset = config_idl.paramsets['CT'][0]
+                dlg = SettingsDialog(
+                    import_main, initial_view='Config folder',
+                    width1=self.width1, width2=self.width2,
+                    import_review_mode=True)
+                res = dlg.exec()
+                if res:
+                    import_main = dlg.get_marked()
+                    cff.import_settings(import_main)
                 self.update_from_yaml()
 
 
-class DicomTagDialog(QDialog):
+class SharedSettingsImportWidget(StackWidget):
+    """Widget to replace SharedSettingsWidget when import_review_mode."""
+
+    def __init__(self, settings_dialog):
+        header = 'Settings for import'
+        subtxt = '''Mark templates for import or mark templates to ignore.<br>
+        Then get back to this window to import according to your selections.'''
+        super().__init__(header, subtxt)
+        self.dlg = settings_dialog
+        btnAll = QPushButton('Import all templates')
+        btnAllBut = QPushButton('Import all except for those marked to ignore')
+        btnMarked = QPushButton('Import only marked templates')
+        self.vLO.addWidget(btnAll)
+        self.vLO.addWidget(btnMarked)
+        self.vLO.addWidget(btnAllBut)
+        self.vLO.addStretch()
+
+        btnAll.clicked.connect(
+            lambda: self.dlg.set_marked(True, import_all=True))
+        btnMarked.clicked.connect(self.dlg.set_marked)
+        btnAllBut.clicked.connect(
+            lambda: self.dlg.set_marked(False))
+
+    def update_from_import_main(self):
+        breakpoint()  #TODO delete this method?
+        pass
+
+
+class DicomTagDialog(uir.ImageQCDialog):
     """Dialog to add or edit tags for the DicomTagsWidget."""
 
     def __init__(self, tag_input=cfc.TagInfo()):
         super().__init__()
-
         self.tag_input = tag_input
-
         self.setWindowTitle('Add/edit DICOM tag')
-        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         self.sample_filepath = QLineEdit()
         self.sample_filepath.textChanged.connect(self.get_all_tags_in_file)
@@ -1510,7 +1822,7 @@ class DicomTagDialog(QDialog):
 class DicomTagsWidget(StackWidget):
     """Widget for Dicom Tags."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, import_review_mode=False):
         header = 'DICOM tags'
         subtxt = '''Customize list of available DICOM tags.<br>
         This information defines the available DICOM tags in ImageQC and how
@@ -1522,7 +1834,7 @@ class DicomTagsWidget(StackWidget):
         When reading an attribute with variants, the first variant
         (by sort index) will be searched first, if not found,
         the next variant will be searched.'''
-        super().__init__(header, subtxt)
+        super().__init__(header, subtxt, import_review_mode=import_review_mode)
         self.fname = 'tag_infos'
 
         self.indexes = []
@@ -1582,45 +1894,60 @@ class DicomTagsWidget(StackWidget):
         hLO_table.addWidget(tb)
         hLO_table.addStretch()
 
-        actAdd = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
-            'Add new tag to list', self)
-        actAdd.triggered.connect(self.add_tag)
-        actDuplicate = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}copy.png'),
-            'Duplicate tag to create variant', self)
-        actDuplicate.triggered.connect(self.duplicate_tag)
-        actEdit = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
-            'Edit details for the selected tag', self)
-        actEdit.triggered.connect(self.edit_tag)
-        actUp = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
-            'Move up', self)
-        actUp.triggered.connect(self.move_up)
-        actDown = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}moveDown.png'),
-            'Move down', self)
-        actDown.triggered.connect(self.move_down)
-        actDel = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
-            'Delete tag', self)
-        actDel.triggered.connect(self.delete)
-        actSave = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'),
-            'Save changes', self)
-        actSave.triggered.connect(self.save)
+        if import_review_mode:
+            actImport = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}ok.png'),
+                'Mark tag for import', self)
+            actImport.triggered.connect(self.mark_import)
+            actIgnore = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}deleteRed.png'),
+                'Mark tag to ignore', self)
+            actIgnore.triggered.connect(
+                lambda: self.mark_import(ignore=True))
 
-        tb.addActions([
-            actAdd, actDuplicate, actEdit, actUp, actDown, actDel, actSave])
+            tb.addActions(
+                [actImport, actIgnore])
 
-        if save_blocked:
-            actAdd.setEnabled(False)
-            actEdit.setEnabled(False)
-            actUp.setEnabled(False)
-            actDown.setEnabled(False)
-            actDel.setEnabled(False)
-            actSave.setEnabled(False)
+        else:
+            actAdd = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+                'Add new tag to list', self)
+            actAdd.triggered.connect(self.add_tag)
+            actDuplicate = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}copy.png'),
+                'Duplicate tag to create variant', self)
+            actDuplicate.triggered.connect(self.duplicate_tag)
+            actEdit = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
+                'Edit details for the selected tag', self)
+            actEdit.triggered.connect(self.edit_tag)
+            actUp = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
+                'Move up', self)
+            actUp.triggered.connect(self.move_up)
+            actDown = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}moveDown.png'),
+                'Move down', self)
+            actDown.triggered.connect(self.move_down)
+            actDel = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+                'Delete tag', self)
+            actDel.triggered.connect(self.delete)
+            actSave = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'),
+                'Save changes', self)
+            actSave.triggered.connect(self.save)
+
+            tb.addActions([
+                actAdd, actDuplicate, actEdit, actUp, actDown, actDel, actSave])
+
+            if save_blocked:
+                actAdd.setEnabled(False)
+                actEdit.setEnabled(False)
+                actUp.setEnabled(False)
+                actDown.setEnabled(False)
+                actDel.setEnabled(False)
+                actSave.setEnabled(False)
 
         self.vLO.addWidget(uir.HLine())
         self.vLO.addWidget(self.status_label)
@@ -1683,9 +2010,12 @@ class DicomTagsWidget(StackWidget):
                     ', '.join(self.templates[tempid].sequence),
                     f'{self.templates[tempid].sort_index:03}'
                     ]
-                row_strings[1] = (
-                        f'{self.templates[tempid].tag[0][2:]:0>4},'
-                        f'{self.templates[tempid].tag[1][2:]:0>4}')
+                if self.templates[tempid].tag[1] == '':
+                    row_strings[1] = self.templates[tempid].tag[0]
+                else:
+                    row_strings[1] = (
+                            f'{self.templates[tempid].tag[0][2:]:0>4},'
+                            f'{self.templates[tempid].tag[1][2:]:0>4}')
                 if self.templates[tempid].value_id != -1:
                     if self.templates[tempid].value_id == -2:
                         row_strings[2] = 'per frame'
@@ -1697,9 +2027,10 @@ class DicomTagsWidget(StackWidget):
         nrows = self.table_tags.topLevelItemCount()
         if set_selected_row < 0 or set_selected_row >= nrows:
             set_selected_row = 0
-        self.table_tags.setCurrentItem(
-            self.table_tags.topLevelItem(set_selected_row))
-        self.update_indexes()
+        if len(self.templates) > 0:
+            self.table_tags.setCurrentItem(
+                self.table_tags.topLevelItem(set_selected_row))
+            self.update_indexes()
 
     def mode_changed(self):
         """Update table if modality selection changes."""
@@ -1932,29 +2263,57 @@ class DicomTagsWidget(StackWidget):
                     msg.setDetailedText('\n'.join(log))
                 msg.exec()
 
+    def mark_import(self, ignore=False):
+        """If import review mode: Mark tag for import or ignore."""
+        if not hasattr(self, 'marked'):  # initiate
+            self.marked_ignore = []
+            self.marked = []
+
+        sel = self.table_tags.selectedIndexes()
+        row = sel[0].row()
+        item = self.table_tags.currentItem()
+        if ignore:
+            if row not in self.marked_ignore:
+                self.marked_ignore.append(row)
+            if row in self.marked:
+                self.marked.remove(row)
+            item.setBackground(0, QBrush(
+                    QColor(203, 91, 76)))
+        else:
+            if row not in self.marked:
+                self.marked.append(row)
+            if row in self.marked_ignore:
+                self.marked_ignore.remove(row)
+            item.setBackground(0, QBrush(
+                    QColor(127, 153, 85)))
+
 
 class TagPatternSpecialWidget(StackWidget):
     """Setup for editing the special (protected) tag patterns."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, import_review_mode=False):
         header = 'Special tag patterns'
         subtxt = '''These tag patterns each have a specific function
         and can not be renamed or deleted, just edited.'''
         self.save_blocked = save_blocked
         super().__init__(header, subtxt,
                          typestr='tag pattern',
-                         mod_temp=True, grouped=True)
+                         mod_temp=True, grouped=True,
+                         import_review_mode=import_review_mode)
 
         self.fname = 'tag_patterns_special'
         self.empty_template = cfc.TagPatternFormat()
 
         self.wTagPattern = uir.TagPatternWidget(self, typestr='format')
-        self.wModTemp.tb.removeAction(self.wModTemp.actAdd)
-        self.wModTemp.tb.removeAction(self.wModTemp.actRename)
-        self.wModTemp.tb.removeAction(self.wModTemp.actDuplicate)
-        self.wModTemp.tb.removeAction(self.wModTemp.actUp)
-        self.wModTemp.tb.removeAction(self.wModTemp.actDown)
-        self.wModTemp.tb.removeAction(self.wModTemp.actDel)
+        if import_review_mode is False:
+            self.wModTemp.tb.removeAction(self.wModTemp.actAdd)
+            self.wModTemp.tb.removeAction(self.wModTemp.actRename)
+            self.wModTemp.tb.removeAction(self.wModTemp.actDuplicate)
+            self.wModTemp.tb.removeAction(self.wModTemp.actUp)
+            self.wModTemp.tb.removeAction(self.wModTemp.actDown)
+            self.wModTemp.tb.removeAction(self.wModTemp.actDel)
+        else:
+            self.wTagPattern.setEnabled(False)
         self.wModTemp.list_temps.setFixedHeight(200)
         info_special = """<html><head/><body>
             <p><i><b>Annotate</b> define text for<br>
@@ -1983,7 +2342,7 @@ class TagPatternSpecialWidget(StackWidget):
 class TagPatternFormatWidget(StackWidget):
     """Setup for creating tag patterns for formatting."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, import_review_mode=False):
         header = 'Tag patterns for formatting'
         subtxt = '''Tag patterns can be used for<br>
         - renaming DICOM files based on the DICOM tags<br>
@@ -1991,12 +2350,15 @@ class TagPatternFormatWidget(StackWidget):
         self.save_blocked = save_blocked
         super().__init__(header, subtxt,
                          typestr='template',
-                         mod_temp=True, grouped=True)
+                         mod_temp=True, grouped=True,
+                         import_review_mode=import_review_mode)
 
         self.fname = 'tag_patterns_format'
         self.empty_template = cfc.TagPatternFormat()
 
         self.wTagPattern = uir.TagPatternWidget(self, typestr='format')
+        if import_review_mode:
+            self.wTagPattern.setEnabled(False)
         self.hLO.addWidget(self.wTagPattern)
 
         self.vLO.addWidget(uir.HLine())
@@ -2011,19 +2373,22 @@ class TagPatternFormatWidget(StackWidget):
 class TagPatternSortWidget(StackWidget):
     """Setup for creating tag patterns for sorting."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, import_review_mode=False):
         header = 'Tag patterns for sorting'
         subtxt = ('These tag patterns can be used for '
                   'sorting DICOM files based on the tags.')
         self.save_blocked = save_blocked
         super().__init__(header, subtxt,
                          typestr='template',
-                         mod_temp=True, grouped=True)
+                         mod_temp=True, grouped=True,
+                         import_review_mode=import_review_mode)
 
         self.fname = 'tag_patterns_sort'
         self.empty_template = cfc.TagPatternSort()
 
         self.wTagPattern = uir.TagPatternWidget(self, typestr='sort')
+        if import_review_mode:
+            self.wTagPattern.setEnabled(False)
         self.hLO.addWidget(self.wTagPattern)
 
         self.vLO.addWidget(uir.HLine())
@@ -2040,7 +2405,8 @@ class RenamePatternWidget(StackWidget):
 
     def __init__(
             self, initial_modality='CT',
-            header=None, subtxt=None, editable=True, save_blocked=False):
+            header=None, subtxt=None, editable=True, save_blocked=False,
+            import_review_mode=False):
         if header is None:
             header = 'Rename patterns'
         if subtxt is None:
@@ -2054,7 +2420,8 @@ class RenamePatternWidget(StackWidget):
         self.save_blocked = save_blocked
         super().__init__(header, subtxt,
                          typestr='template',
-                         mod_temp=True, grouped=True, editable=editable)
+                         mod_temp=True, grouped=True, editable=editable,
+                         import_review_mode=import_review_mode)
 
         self.fname = 'rename_patterns'
         self.empty_template = cfc.RenamePattern()
@@ -2062,6 +2429,8 @@ class RenamePatternWidget(StackWidget):
 
         self.wTagPattern = uir.TagPatternWidget(
             self, typestr='format', rename_pattern=True, editable=editable)
+        if import_review_mode:
+            self.wTagPattern.setEnabled(False)
         self.hLO.addWidget(self.wTagPattern)
 
         if editable:
@@ -2118,9 +2487,9 @@ class ParametersOutputWidget(QWidget):
         hLO_group = QHBoxLayout()
         vLO_general.addLayout(hLO_group)
         hLO_group.addWidget(self.list_group_by)
-        self.list_group_by.setFixedWidth(350)
+        self.list_group_by.setFixedWidth(200)
         self.tb_edit_group_by = uir.ToolBarEdit(tooltip='Edit list')
-        hLO_group.addWidget(self.tb_edit_group_by)
+        vLO_general.addWidget(self.tb_edit_group_by)
         self.tb_edit_group_by.actEdit.triggered.connect(self.edit_group_by)
 
         vLO_table = QVBoxLayout()
@@ -2133,6 +2502,7 @@ class ParametersOutputWidget(QWidget):
         hLO_table = QHBoxLayout()
         vLO_table.addLayout(hLO_table)
         hLO_table.addWidget(self.wOutputTable)
+        self.wOutputTable.setFixedWidth(800)
 
         self.tb = QToolBar()
         self.tb.setOrientation(Qt.Vertical)
@@ -2161,7 +2531,8 @@ class ParamSetsWidget(StackWidget):
 
     def __init__(self, save_blocked=False,
                  main_current_paramset=None,
-                 main_current_modality='CT'):
+                 main_current_modality='CT',
+                 import_review_mode=False):
         header = 'Parameter sets - manager'
         subtxt = '''The parameter sets contain both parameters for
         test settings and for output settings when results are copied
@@ -2173,13 +2544,16 @@ class ParamSetsWidget(StackWidget):
         self.main_current_paramset = main_current_paramset
         super().__init__(header, subtxt,
                          typestr='parameterset',
-                         mod_temp=True, grouped=True)
+                         mod_temp=True, grouped=True,
+                         import_review_mode=import_review_mode)
         self.fname = 'paramsets'
         self.empty_template = self.get_empty_paramset()
 
         self.tabs = QTabWidget()
         self.wParams = ParametersWidget(self)
         self.wOutput = ParametersOutputWidget(self)
+        if import_review_mode:
+            self.wOutput.setEnabled(False)
 
         self.tabs.addTab(self.wParams, 'Parameters')
         self.tabs.addTab(self.wOutput, 'Output parameters')
@@ -2282,7 +2656,7 @@ class ParamSetsWidget(StackWidget):
 class QuickTestTemplatesWidget(StackWidget):
     """Widget holding QuickTest pattern settings."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, import_review_mode=False):
         header = 'QuickTest templates'
         subtxt = '''Which tests to perform on which images.<br>
         Optionally also define the label for the images and/or groups.<br>
@@ -2295,13 +2669,23 @@ class QuickTestTemplatesWidget(StackWidget):
         self.save_blocked = save_blocked
         super().__init__(header, subtxt,
                          typestr='template',
-                         mod_temp=True, grouped=True)
+                         mod_temp=True, grouped=True,
+                         import_review_mode=import_review_mode)
         self.fname = 'quicktest_templates'
         self.empty_template = cfc.QuickTestTemplate()
         self.finished_init = False
+        
+        vLO = QVBoxLayout()
+        self.hLO.addLayout(vLO)
 
         self.wTestTable = uir.QuickTestTreeView(self)
-        self.hLO.addWidget(self.wTestTable)
+        vLO.addWidget(self.wTestTable)
+
+        hLO_nimgs = QHBoxLayout()
+        vLO.addLayout(hLO_nimgs)
+        hLO_nimgs.addWidget(QLabel('Minimum number of images expected: '))
+        self.lbl_nimgs = QLabel('')
+        hLO_nimgs.addWidget(self.lbl_nimgs)
 
         self.tb = QToolBar()
         self.tb.setOrientation(Qt.Vertical)
@@ -2316,12 +2700,17 @@ class QuickTestTemplatesWidget(StackWidget):
         actDel.triggered.connect(self.wTestTable.delete_row)
         self.tb.addActions([actAdd, actDel])
 
+        if import_review_mode:
+            self.wTestTable.setEnabled(False)
+            self.tb.setEnabled(False)
+
         self.vLO.addWidget(uir.HLine())
         self.vLO.addWidget(self.status_label)
 
     def update_data(self):
         """Update GUI with selected template."""
         self.wTestTable.update_data()
+        self.lbl_nimgs.setText(f'{len(self.current_template.tests)}')
 
     def get_current_template(self):
         """Get self.current_template."""
@@ -2331,7 +2720,7 @@ class QuickTestTemplatesWidget(StackWidget):
 class AutoInfoWidget(StackWidget):
     """Widget holding information about automation."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self):
         header = 'Automation'
         subtxt = (
             '''The main task for automation in imageQC is analysing constancy
@@ -2364,7 +2753,7 @@ class AutoInfoWidget(StackWidget):
         self.vLO.addStretch()
 
 
-class AutoDeleteDialog(QDialog):
+class AutoDeleteDialog(uir.ImageQCDialog):
     """Dialog to set auto delete option."""
 
     def __init__(self, attribute, tag_infos, value='', search_path=''):
@@ -2379,12 +2768,7 @@ class AutoDeleteDialog(QDialog):
             Value of DICOM attribute (if edit). Default is ''
         """
         super().__init__()
-
         self.setWindowTitle('Auto delete option')
-        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         self.attribute = attribute
         self.tag_infos = tag_infos
@@ -2442,7 +2826,7 @@ class AutoDeleteDialog(QDialog):
 class AutoCommonWidget(StackWidget):
     """Widget holding common settings for automation."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, import_review_mode=False):
         header = 'Import settings for automation'
         subtxt = (
             'Define general settings for the process of importing and sorting'
@@ -2451,11 +2835,32 @@ class AutoCommonWidget(StackWidget):
             ' process will simply rename the files according to the naming'
             ' template defined here.'
             )
-        super().__init__(header, subtxt)
+        super().__init__(header, subtxt, import_review_mode=import_review_mode)
         self.fname = 'auto_common'
 
-        self.import_path = QLineEdit()
+        if import_review_mode:
+            tb_marked = QToolBar()
+            actImport = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}ok.png'),
+                'Mark tag for import', self)
+            actImport.triggered.connect(self.mark_import)
+            actIgnore = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}deleteRed.png'),
+                'Mark tag to ignore', self)
+            actIgnore.triggered.connect(
+                lambda: self.mark_import(ignore=True))
 
+            tb_marked.addActions(
+                [actImport, actIgnore])
+            self.import_review_mark_txt = QLabel('Import and overwrite current')
+            tb_marked.addWidget(self.import_review_mark_txt)
+            hLO_import_tb = QHBoxLayout()
+            hLO_import_tb.addStretch()
+            hLO_import_tb.addWidget(tb_marked)
+            hLO_import_tb.addStretch()
+            self.vLO.addLayout(hLO_import_tb)
+
+        self.import_path = QLineEdit()
         self.import_path.setMinimumWidth(500)
         hLO_import_path = QHBoxLayout()
         hLO_import_path.addWidget(QLabel('Image pool path:'))
@@ -2536,12 +2941,17 @@ class AutoCommonWidget(StackWidget):
             self, typestr='format', lock_on_general=True)
         vLO_right.addWidget(self.wTagPattern)
 
-        btn_save = QPushButton('Save general automation settings')
-        btn_save.setIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'))
-        btn_save.clicked.connect(self.save_auto_common)
-        if save_blocked:
-            btn_save.setEnabled(False)
-        self.vLO.addWidget(btn_save)
+        if import_review_mode:
+            hLO_import_path.setEnabled(False)
+            hLO.setEnabled(False)
+            vLO_left.setEnabled(False)
+        else:
+            btn_save = QPushButton('Save general automation settings')
+            btn_save.setIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'))
+            btn_save.clicked.connect(self.save_auto_common)
+            if save_blocked:
+                btn_save.setEnabled(False)
+            self.vLO.addWidget(btn_save)
 
         self.vLO.addWidget(uir.HLine())
         self.vLO.addWidget(self.status_label)
@@ -2555,15 +2965,19 @@ class AutoCommonWidget(StackWidget):
         """
         self.lastload = time()
         ok, path, self.templates = cff.load_settings(fname=self.fname)
-        self.current_template = self.templates.filename_pattern
         ok, path, self.tag_infos = cff.load_settings(fname='tag_infos')
+        self.update_data()
+        self.flag_edit(False)
+
+    def update_data(self):
+        """Fill GUI with current data."""
+        self.current_template = self.templates.filename_pattern
         self.wTagPattern.fill_list_tags('')
         self.wTagPattern.update_data()
         self.import_path.setText(self.templates.import_path)
         self.ignore_since.setValue(self.templates.ignore_since)
         self.chk_ignore_since.setChecked(self.templates.ignore_since > 0)
         self.fill_auto_delete_list()
-        self.flag_edit(False)
 
     def save_auto_common(self):
         """Get current settings and save to yaml file."""
@@ -2650,11 +3064,21 @@ class AutoCommonWidget(StackWidget):
         if os.path.exists(os.path.join(ENV_USER_PREFS_PATH, LOG_FILENAME)):
             os.startfile(ENV_USER_PREFS_PATH)
 
+    def mark_import(self, ignore=False):
+        """If import review mode: Mark AutoCommon for import or ignore."""
+        if ignore:
+            self.marked = False
+            self.marked_ignore = True
+            self.import_review_mark_txt.setText('Ignore')
+        else:
+            self.marked = True
+            self.marked_ignore = False
+            self.import_review_mark_txt.setText('Import and overwrite current')
 
 class AutoTemplateWidget(StackWidget):
     """Widget holding automation settings."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, import_review_mode=False):
         header = 'Automation templates DICOM'
         subtxt = '''The automation templates hold information on how to
          perform automated testing on DICOM images.<br>
@@ -2663,7 +3087,8 @@ class AutoTemplateWidget(StackWidget):
         self.save_blocked = save_blocked
         super().__init__(header, subtxt,
                          typestr='template',
-                         mod_temp=True, grouped=True)
+                         mod_temp=True, grouped=True,
+                         import_review_mode=import_review_mode)
         self.fname = 'auto_templates'
         self.empty_template = cfc.AutoTemplate()
 
@@ -2793,6 +3218,9 @@ class AutoTemplateWidget(StackWidget):
         hlo_btm.addWidget(self.btn_move_modality)
         self.btn_move_modality.clicked.connect(self.move_modality)
 
+        if import_review_mode:
+            vLOtemp.setEnabled(False)
+
         self.vLO.addWidget(uir.HLine())
         self.vLO.addWidget(self.status_label)
 
@@ -2807,6 +3235,11 @@ class AutoTemplateWidget(StackWidget):
                 self.current_template.paramset_label)
         else:
             self.cbox_paramset.setCurrentIndex(0)
+        if self.current_template.quicktemp_label != '':
+            self.cbox_quicktest.setCurrentText(
+                self.current_template.quicktemp_label)
+        else:
+            self.cbox_quicktest.setCurrentIndex(0)
         self.fill_list_sort_by()
         self.chk_archive.setChecked(self.current_template.archive)
         self.chk_deactivate.setChecked(not self.current_template.active)
@@ -2941,14 +3374,15 @@ class AutoTemplateWidget(StackWidget):
 class AutoVendorTemplateWidget(StackWidget):
     """Widget holding automation settings."""
 
-    def __init__(self, save_blocked=False):
+    def __init__(self, save_blocked=False, import_review_mode=False):
         header = 'Automation templates vendor files'
         subtxt = '''The automation templates hold information on how to
          perform automated reading of vendor report files.<br>'''
         self.save_blocked = save_blocked
         super().__init__(header, subtxt,
                          typestr='template',
-                         mod_temp=True, grouped=True)
+                         mod_temp=True, grouped=True,
+                         import_review_mode=import_review_mode)
         self.fname = 'auto_vendor_templates'
         self.empty_template = cfc.AutoVendorTemplate()
 
@@ -3031,6 +3465,9 @@ class AutoVendorTemplateWidget(StackWidget):
         self.chk_deactivate.stateChanged.connect(
             lambda: self.flag_edit(True))
         vLOtemp.addStretch()
+
+        if import_review_mode:
+            vLOtemp.setEnabled(False)
 
         self.vLO.addWidget(uir.HLine())
         self.vLO.addWidget(self.status_label)
@@ -3124,3 +3561,28 @@ class AutoVendorTemplateWidget(StackWidget):
         """View output file as txt."""
         if os.path.exists(self.txt_output_path.text()):
             os.startfile(self.txt_output_path.text())
+
+
+@dataclass
+class ImportMain:
+    """Class to replace MainWindow + hold imported templates when import_review_mode."""
+
+    save_blocked: bool = True
+    marked: bool = True
+    include_all: bool = False
+    current_modality: str = 'CT'
+    current_paramset: dict = field(default_factory=dict)
+    current_quicktest: dict = field(default_factory=dict)
+    # converted from dict to paramset of correct modality when initialized
+    tag_infos: list = field(default_factory=list)
+    tag_infos_new: list = field(default_factory=list)
+    tag_patterns_special: dict = field(default_factory=dict)
+    tag_patterns_format: dict = field(default_factory=dict)
+    tag_patterns_sort: dict = field(default_factory=dict)
+    rename_patterns: dict = field(default_factory=dict)
+    quicktest_templates: dict = field(default_factory=dict)
+    paramsets: dict = field(default_factory=dict)
+    quicktests: dict = field(default_factory=dict)
+    auto_common: cfc.AutoCommon = field(default_factory=cfc.AutoCommon)
+    auto_templates: dict = field(default_factory=dict)
+    auto_vendor_templates: dict = field(default_factory=dict)

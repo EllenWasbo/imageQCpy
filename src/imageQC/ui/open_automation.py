@@ -20,7 +20,6 @@ from PyQt5.QtWidgets import (
 # imageQC block start
 import imageQC.config.config_func as cff
 import imageQC.ui.reusables as uir
-import imageQC.ui.ui_dialogs as uid
 from imageQC.config.iQCconstants import ENV_ICON_PATH, QUICKTEST_OPTIONS
 import imageQC.ui.settings as settings
 import imageQC.scripts.automation as automation
@@ -40,7 +39,7 @@ def reset_auto_template(auto_template=None, parent_widget=None):
         move_dirs = []
         dirs = [x for x in archive_path.glob('*') if x.is_dir()]
         if len(dirs) > 0:
-            dlg = uid.ResetAutoTemplateDialog(directories=dirs)
+            dlg = uir.ResetAutoTemplateDialog(parent_widget, directories=dirs)
             res = dlg.exec()
             if res:
                 idxs = dlg.get_idxs()
@@ -52,7 +51,7 @@ def reset_auto_template(auto_template=None, parent_widget=None):
         else:
             files = [x for x in archive_path.glob('*') if x.is_file()]
             if len(files) > 0:
-                dlg = uid.ResetAutoTemplateDialog(files=files)
+                dlg = uir.ResetAutoTemplateDialog(files=files)
                 move_files = [files[idx] for idx in idxs]
             else:
                 QMessageBox.information(
@@ -354,7 +353,7 @@ class OpenAutomationDialog(QDialog):
                 mod = self.templates_mod[tempno]
                 id_this = self.templates_id[tempno]
                 temp = self.templates[mod][id_this]
-                uid.reset_auto_template(auto_template=temp, parent_widget=self)
+                reset_auto_template(auto_template=temp, parent_widget=self)
 
     def edit_template(self):
         """Run settings with current template selected."""

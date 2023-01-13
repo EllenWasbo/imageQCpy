@@ -5,24 +5,34 @@ Tests on GUI.
 @author: ewas
 """
 import os
+from pathlib import Path
 
+import pytest
 from PyQt5 import QtCore
 
+import imageQC.resources
 from imageQC.ui.ui_main import MainWindow
+import imageQC.ui.settings as settings
+from imageQC.config.iQCconstants import (
+    ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER, ENV_ICON_PATH)
+from imageQC.config.config_func import get_icon_path
 
 
-def test_open_files(qtbot):
-    window = MainWindow()
-    window.show()
-    qtbot.addWidget(window)
+def prepare_main():
+    os.environ[ENV_USER_PREFS_PATH] = ''
+    os.environ[ENV_CONFIG_FOLDER] = ''
+    os.environ[ENV_ICON_PATH] = get_icon_path(False)
 
-    dir_tests = os.path.dirname(__file__)
-    p = os.path.join(dir_tests, 'test_inputs', 'DICOM', 'CTconstancy')
-    files = [x for x in p.glob('**/*') if x.is_file()]
-    window.open_files(file_list=files)
-    window.wQuickTest.gbQT.setChecked(True)
-    qtbot.keyClicks(window.wQuickTest.cbox_template, 'constancy')
 
-    #qtbot.mouseClick(window.findButton, QtCore.Qt.LeftButton)
-
-    assert len(window.imgs) == 13
+def test_run_test_CT_hom(qtbot):
+    prepare_main()
+    path_tests = Path(__file__).parent
+    file_path = path_tests / 'test_inputs' / 'CT' / 'CTP486'
+    files = [x for x in file_path.glob('**/*') if x.is_file()]
+    main = MainWindow()
+    qtbot.addWidget(main)
+    main.open_files(file_list=files)
+    assert len(main.imgs) == 3
+    main.tabCT.setCurrentIndex(2)
+    qtbot.mouseClick(main.tabCT.btnRunHom, QtCore.Qt.LeftButton)
+    assert len(main.results['Hom']['values']) == 3

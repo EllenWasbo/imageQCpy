@@ -24,7 +24,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.3alpha'
+VERSION = '3.0.4alpha'
 '''if os.path.exists(cfg_path):
     config = configparser.ConfigParser()
     try:
@@ -48,7 +48,7 @@ USER_PREFS_FNAME = 'user_preferences.yaml'
 QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
            'HUw', 'Dim', 'Rin', 'NPS'],
-    'Xray': ['DCM', 'ROI', 'Hom', 'Noi', 'MTF', 'NPS', 'Var'],
+    'Xray': ['DCM', 'ROI', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
     'NM': ['DCM', 'ROI', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
     'SPECT': ['DCM', 'ROI', 'MTF', 'Con'],
     'PET': ['DCM', 'ROI', 'Hom', 'Cro'],
@@ -126,7 +126,8 @@ HEADERS = {
         'MTF': {
             'alt0': ['MTF @ 0.5/mm', 'MTF @ 1.0/mm', 'MTF @ 1.5/mm',
                      'MTF @ 2.0/mm', 'MTF @ 2.5/mm', 'Freq @ MTF 0.5']
-            }
+            },
+        'STP': {'alt0': ['Dose', 'Q', 'Mean pix', 'Stdev pix']}
         },
     'NM': {
         'ROI': {'alt0': roi_headers},
@@ -258,7 +259,7 @@ CONFIG_FNAMES = {
         },
     'auto_common': {
         'saved_as': 'object',
-        'default': cfc.AutoCommon()
+        'default': iQCconstants_functions.set_auto_common_default()
         },
     'auto_templates': {
         'saved_as': 'modality_dict',

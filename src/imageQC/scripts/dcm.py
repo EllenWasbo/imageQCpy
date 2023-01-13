@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import pydicom
 import numpy as np
+import pandas as pd
 from dataclasses import dataclass, field
 from typing import Optional
 from pathlib import Path
@@ -323,11 +324,26 @@ def get_dcm_info_list(
             if data_element is not None:
                 if suffix == '' and unit_default_suffix:
                     suffix = f'{tag_infos[idx].unit}'
-                val = data_element.value
-                if isinstance(val, bytes):
-                    val = val.decode('utf-8')
-                if data_element.VM > 1:
+                if isinstance(data_element, list):
+                    val = []
+                    for elem in data_element:
+                        val.append(elem.value)
+                    VM = 2  # > 1
+                else:
+                    val = data_element.value
+                    if isinstance(val, bytes):
+                        val = val.decode('utf-8')
+                    VM = data_element.VM
+                if VM > 1:
                     value_id = tag_infos[idx].value_id
+                    if value_id == -3:
+                        if not isinstance(data_element, list):
+                            value_id = -1
+                        else:
+                            VMs = [elem.VM for elem in data_element]
+                            totVM = np.sum(np.array(VMs))
+                            if totVM != int(pydict.get('NumberOfFrames', -1)):
+                                value_id = -1
                     if value_id == -2:  # per frame, check if possible
                         if data_element.VM != int(pydict.get('NumberOfFrames', -1)):
                             value_id = -1
@@ -340,6 +356,11 @@ def get_dcm_info_list(
                         val_text = val
                     elif value_id == -2:
                         val_text = val
+                    elif value_id == -3:
+                        val_combined = []
+                        for elem in val:
+                            val_combined.extend(elem)
+                        val_text = val_combined
                     else:
                         val_text = val[value_id]
                     if format_string != '':
@@ -652,9 +673,24 @@ def get_tag_data(pd, tag_info=None):
             if seq[0] != '':
                 pd_sub = pd[seq[0]][0]
                 if len(seq) > 1:
+                    pd_sub = pd[seq[0]][0]
+                    pd_sub_final = pd[seq[0]]
                     for i in range(1, len(seq)):
                         pd_sub = pd_sub[seq[i]][0]
-                data_element = pd_sub[gr, el]
+                        pd_sub_final = pd_sub[seq[i]]
+                else:
+                    pd_sub_final = pd[seq[0]]
+
+                if tag_info.value_id == -3:  # combine data from all sequences
+                    if len(pd_sub_final.value) > 1:
+                        data_element = []
+                        for i in range(len(pd_sub_final.value)):
+                            sub = pd_sub_final[i]
+                            data_element.append(sub[gr, el])
+                    else:
+                        data_element = pd_sub[gr, el]
+                else:
+                    data_element = pd_sub[gr, el]
             else:
                 data_element = pd[gr, el]
         except KeyError:
@@ -753,15 +789,26 @@ def sort_imgs(img_infos, tag_pattern_sort, tag_infos):
     """
     infos = []
     for i in range(len(img_infos)):
-        info = get_tags(img_infos.filepath[i],
-                        frame_number=img_infos.frame_number[i],
+        info = get_tags(img_infos[i].filepath,
+                        frame_number=img_infos[i].frame_number,
                         tag_patterns=[tag_pattern_sort],
                         tag_infos=tag_infos)
-        infos.append(info)
-    print(infos)
-    #sorted_img_infos = 
-    pass
-    #return sorted_img_infos
+        infos.append(info[0])
+
+    df = {}
+    for c, attr in enumerate(tag_pattern_sort.list_tags):
+        col = [row[c] for row in infos]
+        df[attr] = col
+    df = pd.DataFrame(df)
+    sorted_infos = df.sort_values(
+        by=tag_pattern_sort.list_tags,
+        ascending=tag_pattern_sort.list_sort)
+
+    sorted_img_infos = []
+    for idx in sorted_infos.index:
+        sorted_img_infos.append(img_infos[idx])
+
+    return sorted_img_infos
 
 
 def dump_dicom(parent_widget, filename=''):
@@ -872,7 +919,6 @@ def sum_marked_images(img_infos, testcode=''):
             include = img_info.marked
         else:
             include = testcode in img_info.marked_quicktest
-        print(f'include {include} img_info.marked_quicktest {img_info.marked_quicktest}')
         if include:
             image, tags = get_img(
                 img_info.filepath,

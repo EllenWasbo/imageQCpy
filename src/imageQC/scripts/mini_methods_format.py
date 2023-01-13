@@ -139,7 +139,7 @@ def get_dynamic_formatstring(val):
     decimals = ''
     val = abs(val)
     if val == 0:
-        decimals = '.0'
+        decimals = '.3'
     elif val <= 1.0:
         decimals = '.3'
         if val < 0.1:
@@ -151,9 +151,9 @@ def get_dynamic_formatstring(val):
                     type_string = 'e'
     elif val > 1.:
         decimals = '.3'
-        if val > 100:
+        if val > 10:
             decimals = '.2'
-            if val > 1000:
+            if val > 100:
                 decimals = '.1'
                 if val > 1e+05:
                     decimals = '.0'

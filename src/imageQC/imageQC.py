@@ -35,6 +35,13 @@ def prepare_debug():
 if __name__ == '__main__':
     prepare_debug()  # not needen when not debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
+    # verify that config_folder exists
+    if user_prefs.config_folder != '':
+        if not os.path.exists(user_prefs.config_folder):
+            print(f'Config folder do not exist.({user_prefs.config_folder})', flush=True)
+            print('Config folder will be unlinked.', flush=True)
+            user_prefs.config_folder = ''
+
     os.environ[ENV_USER_PREFS_PATH] = user_prefs_path
     os.environ[ENV_ICON_PATH] = cff.get_icon_path(user_prefs.dark_mode)
     os.environ[ENV_CONFIG_FOLDER] = user_prefs.config_folder
@@ -130,10 +137,7 @@ if __name__ == '__main__':
                 {pressed_background}
                 }}""")
         myFont = QtGui.QFont()
-        try:
-            myFont.setPointSize(user_prefs.font_size)
-        except:
-            myFont.setPointSize(10)
+        myFont.setPointSize(user_prefs.font_size)
         app.setFont(myFont)
 
         if user_prefs.dark_mode:

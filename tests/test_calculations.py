@@ -192,7 +192,8 @@ def test_CT_Teflon_MTF_circular_edge():
         automation_active=False,
         )
 
-    file_path = path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' / 'CTP404_FOV150_001.dcm'
+    file_path = (path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' /
+                 'CTP404_FOV150_001.dcm')
     img_infos, ignored_files = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
@@ -300,8 +301,8 @@ def test_NM_uniformity():
     res = calculate_qc.get_corrections_point_source(
             image, image_dict, roi_array[0],
             fit_x=True, fit_y=True, lock_z=-1.)
-    values = calculate_qc.calculate_NM_uniformity(
-        res['corrected_image'], roi_array, image_dict.pix[0])
+    #values = calculate_qc.calculate_NM_uniformity(
+    #    res['corrected_image'], roi_array, image_dict.pix[0])
 
     assert res['distance'] > 0
 

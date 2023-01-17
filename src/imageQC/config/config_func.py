@@ -343,13 +343,15 @@ def load_default_ct_number_tables():
     return ct_number_tables
 
 
-def load_settings(fname=''):
+def load_settings(fname='', temp_config_folder=''):
     """Load settings from yaml file in config folder.
 
     Parameters
     ----------
     fname : str
         yaml filename without folder and extension
+    temp_config_folder : str
+        temporary config folder e.g. when import. Default is '' (ignored)
 
     Returns
     -------
@@ -366,7 +368,10 @@ def load_settings(fname=''):
 
     if fname != '':
         return_default = False
-        path = get_config_filename(fname)
+        if temp_config_folder == '':
+            path = get_config_filename(fname)
+        else:
+            path = str(Path(temp_config_folder) / f'{fname}.yaml')
         if path != '':
             if CONFIG_FNAMES[fname]['saved_as'] == 'object_list':
                 #try:
@@ -604,7 +609,7 @@ def save_settings(settings, fname=''):
                     yaml.safe_dump(
                         input_data, file, default_flow_style=None, sort_keys=False)
             status = True
-        except yaml.YAMLError as ex:
+        except yaml.YAMLError:
             # try once more with eval(str(input_data))
             try_again = True
         except IOError as e:
@@ -612,7 +617,6 @@ def save_settings(settings, fname=''):
                                 f'Failed saving to {p} {e}')
         if try_again:
             try:
-                breakpoint()
                 input_data = eval(str(input_data))
                 with open(p, 'w') as file:
                     if isinstance(input_data, list):
@@ -625,7 +629,6 @@ def save_settings(settings, fname=''):
             except yaml.YAMLError as ex:
                 QMessageBox.warning(None, 'Failed saving',
                                     f'Failed saving to {p} {ex}')
-                breakpoint()#TODO delete this
         return status
 
     if fname != '':
@@ -654,12 +657,12 @@ def save_settings(settings, fname=''):
 
 def import_settings(import_main):
     """Import config settings."""
+    any_same_name = False
     if import_main.tag_infos_new != []:
         fname = 'tag_infos'
         ok, path, tag_infos = load_settings(fname=fname)
         tag_infos.extend(import_main.tag_infos_new)
         tag_infos = taginfos_reset_sort_index(tag_infos)
-        breakpoint()
         status, path = save_settings(tag_infos, fname=fname)
 
     list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
@@ -680,6 +683,7 @@ def import_settings(import_main):
                                 if new_labels[new_id] in old_labels:
                                     new_temps[key][new_id].label = (
                                         new_labels[new_id] + '_import')
+                                    any_same_name = True
                                 temps[key].append(new_temps[key][new_id])
             status, path = save_settings(temps, fname=d)
 
@@ -688,6 +692,8 @@ def import_settings(import_main):
             status, path = save_settings(import_main.auto_common, fname='auto_common')
     except AttributeError:
         pass
+
+    return any_same_name
 
 
 def get_paramsets_used_in_auto_templates(auto_templates):
@@ -753,13 +759,26 @@ def taginfos_reset_sort_index(tag_infos):
         tag_info.sort_index = i
 
 
-def correct_attribute_names(old_new_names=[]):
+def tag_infos_difference(tag_infos_import, tag_infos):
+    """Compare imported tag_infos to current tag_infos and return tags to add."""
+    old_attr = [tag.attribute_name for tag in tag_infos]
+    tag_infos_new = []
+    for tag in tag_infos_import:
+        if tag.attribute_name not in old_attr:
+            tag_infos_new.append(tag)  # TODO chech if already with other name?
+    return tag_infos_new
+
+
+def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):
     """Change attribute_name in yaml files when tag_infos.yaml change name.
 
     Parameters
     ----------
     old_new_names : list of str, optional
         [[oldname1,newname1],[oldname2,newname2]...]. The default is [].
+        if not [] == also save updated
+    name: str, optional
+        one attribute name to test
 
     Returns
     -------
@@ -771,8 +790,11 @@ def correct_attribute_names(old_new_names=[]):
     status = True
     oks = []
     log = []
-    if len(old_new_names) > 0:
+    if old_new_names == []:
+        if name != '':
+            old_new_names = [[name, name]]
 
+    if len(old_new_names) > 0:
         fnames = ['tag_patterns_special', 'tag_patterns_format',
                   'tag_patterns_sort', 'rename_patterns', 'paramsets',
                   'auto_templates']
@@ -780,47 +802,65 @@ def correct_attribute_names(old_new_names=[]):
             ok, path, templates = load_settings(fname=fname)
             found_in = []
             for mod in templates:
-                for template in templates[mod]:
-                    found = []
-                    for oldnew in old_new_names:
-                        old_name, new_name = oldnew
-                        if 'patterns' in fname:
-                            if old_name in template.list_tags:
-                                for i in range(len(template.list_tags)):
-                                    if template.list_tags[i] == old_name:
-                                        template.list_tags[i] = new_name
-                                        found = [mod, template.label]
-                        if fname == 'rename_patterns':
-                            if old_name in template.list_tags2:
-                                for i in range(len(template.list_tags2)):
-                                    if template.list_tags2[i] == old_name:
-                                        template.list_tags2[i] = new_name
-                                        found = [mod, template.label]
-                        if fname == 'paramsets':
-                            if old_name in template.dcm_tagpattern.list_tags:
-                                list_tags = template.dcm_tagpattern.list_tags
-                                for i in range(len(list_tags)):
-                                    if list_tags[i] == old_name:
-                                        template.dcm_tagpattern.list_tags[
-                                            i] = new_name
-                                        if template.label != '':
+                proceed = True
+                if limited2mod != ['']:
+                    if mod not in limited2mod:
+                        proceed = False
+                if proceed:
+                    for template in templates[mod]:
+                        found = []
+                        for oldnew in old_new_names:
+                            old_name, new_name = oldnew
+                            if 'patterns' in fname:
+                                if old_name in template.list_tags:
+                                    for i in range(len(template.list_tags)):
+                                        if template.list_tags[i] == old_name:
+                                            template.list_tags[i] = new_name
                                             found = [mod, template.label]
-                                        else:
-                                            found = [mod, '(default)']
-                            # TODO output.group_by?
-                        if fname == 'auto_templates':
-                            if old_name in template.dicom_crit_attributenames:
-                                attr_list = template.dicom_crit_attributenames
-                                i = attr_list.index(old_name)
-                                template.dicom_crit_attributenames[i] = new_name
-                                found = [mod, template.label]
-                            if old_name in template.sort_pattern.list_tags:
-                                for i in range(len(template.sort_pattern.list_tags)):
-                                    if template.sort_pattern.list_tags[i] == old_name:
-                                        template.sort_pattern.list_tags[i] = new_name
-                                        found = [mod, template.label]
-                    if len(found) > 0:
-                        found_in.append(found)
+                            if fname == 'rename_patterns':
+                                if old_name in template.list_tags2:
+                                    for i in range(len(template.list_tags2)):
+                                        if template.list_tags2[i] == old_name:
+                                            template.list_tags2[i] = new_name
+                                            found = [mod, template.label]
+                            if fname == 'paramsets':
+                                if old_name in template.dcm_tagpattern.list_tags:
+                                    list_tags = template.dcm_tagpattern.list_tags
+                                    for i in range(len(list_tags)):
+                                        if list_tags[i] == old_name:
+                                            template.dcm_tagpattern.list_tags[
+                                                i] = new_name
+                                            if template.label != '':
+                                                found = [mod, template.label]
+                                            else:
+                                                found = [mod, '(default)']
+                                if old_name in template.output.group_by:
+                                    list_group_by = template.output.group_by
+                                    for i in range(len(list_group_by)):
+                                        if list_group_by[i] == old_name:
+                                            template.output.group_by[
+                                                i] = new_name
+                                            if template.label != '':
+                                                found = [mod, template.label]
+                                            else:
+                                                found = [mod, '(default)']
+                            if fname == 'auto_templates':
+                                if old_name in template.dicom_crit_attributenames:
+                                    attr_list = template.dicom_crit_attributenames
+                                    i = attr_list.index(old_name)
+                                    template.dicom_crit_attributenames[i] = new_name
+                                    found = [mod, template.label]
+                                if old_name in template.sort_pattern.list_tags:
+                                    for i in range(len(
+                                            template.sort_pattern.list_tags)):
+                                        if template.sort_pattern.list_tags[
+                                                i] == old_name:
+                                            template.sort_pattern.list_tags[
+                                                i] = new_name
+                                            found = [mod, template.label]
+                        if len(found) > 0:
+                            found_in.append(found)
+
             if len(found_in) > 0:
                 param_auto = {}
                 if fname == 'paramsets':
@@ -830,7 +870,10 @@ def correct_attribute_names(old_new_names=[]):
                     param_auto = get_paramsets_used_in_auto_templates(
                         auto_templates)
 
-                log.append(f'{fname} with changed attribute_names:')
+                if name == '':
+                    log.append(f'{fname} with changed attribute_names:')
+                else:
+                    log.append(f'{fname} using attribute_name {name}:')
                 for i in range(len(found_in)):
                     # modality: template.label
                     log.append(f'\t{found_in[i][0]}: {found_in[i][1]}')
@@ -842,15 +885,21 @@ def correct_attribute_names(old_new_names=[]):
                         if len(used_in) > 0:
                             log.append(f'\t\t used in AutoTemplate: {used_in}')
 
-                ok, path = save_settings(templates, fname=fname)
-                oks.append(ok)
-                if ok:
-                    log.append('Saved')
+                if name == '':  # save changes
+                    ok, path = save_settings(templates, fname=fname)
+                    oks.append(ok)
+                    if ok:
+                        log.append('Saved')
+                    else:
+                        log.append('Saving failed')
                 else:
-                    log.append('Saving failed')
+                    oks.append(False)
                 log.append('---')
             else:
-                log.append(f'{fname} - no change needed')
+                if name == '':
+                    log.append(f'{fname} - no change needed')
+                else:
+                    log.append(f'{fname} - attribute_name {name} not found')
 
         fname = 'auto_common'
         ok, path, template = load_settings(fname=fname)
@@ -868,15 +917,22 @@ def correct_attribute_names(old_new_names=[]):
                         template.filename_pattern.list_tags[i] = new_name
                         found = True
         if found:
-            log.append(f'{fname} changed attribute_names')
-            ok, path = save_settings(template, fname=fname)
-            oks.append(ok)
-            if ok:
-                log.append('Saved')
+            if name == '':
+                log.append(f'{fname} changed attribute_names')
+                ok, path = save_settings(template, fname=fname)
+                oks.append(ok)
+                if ok:
+                    log.append('Saved')
+                else:
+                    log.append('Saving failed')
             else:
-                log.append('Saving failed')
+                log.append(f'{fname} - attribute_name {name} used')
+                oks.append(False)
         else:
-            log.append(f'{fname} - no change needed')
+            if name == '':
+                log.append(f'{fname} - no change needed')
+            else:
+                log.append(f'{fname} - attribute_name {name} not found')
 
     if len(oks) > 0:
         if False in oks:

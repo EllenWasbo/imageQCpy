@@ -31,9 +31,9 @@ class LastModified:
     rename_patterns: list = field(default_factory=list)
     paramsets: list = field(default_factory=list)
     quicktest_templates: list = field(default_factory=list)
-    quicktest_output_templates: list = field(default_factory=list)
     auto_common: list = field(default_factory=list)
     auto_templates: list = field(default_factory=list)
+    auto_vendor_templates: list = field(default_factory=list)
 
 
 @dataclass
@@ -362,9 +362,12 @@ class ParamSetMR(ParamSetCommon):
     gho_optimize_center: bool = True
     gho_roi_cut_top: int = 0
     geo_actual_size: float = 190.
-    sli_tan_a: float = 0.1
-    sli_roi_w: float = 100.
-    sli_roi_h: float = 3.
+    geo_mask_outer: float = 10.
+    sli_tan_a: float = 0.1  # currently not in use
+    sli_ramp_length: float = 100.
+    sli_background_width: float = 5.
+    sli_search_width: int = 2
+    sli_average_width: int = 0  # currently not in use
     sli_dist_lower: float = -2.5
     sli_dist_upper: float = 2.5
     sli_optimize_center: bool = True
@@ -457,7 +460,7 @@ class AutoTemplate:
 
 @dataclass
 class AutoVendorTemplate:
-    """Dataclass for automation on vender file analysis."""
+    """Dataclass for automation on vendor file analysis."""
 
     label: str = ''
     path_input: str = ''
@@ -466,4 +469,3 @@ class AutoVendorTemplate:
     archive: bool = False
     file_type: str = ''
     active: bool = True
-

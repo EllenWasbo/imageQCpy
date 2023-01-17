@@ -24,7 +24,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.4alpha'
+VERSION = '3.0.5alpha'
 '''if os.path.exists(cfg_path):
     config = configparser.ConfigParser()
     try:
@@ -205,6 +205,7 @@ HEADERS_SUP = {
             'altAll': ['x min (pix from lower left)', 'y min',
                        'x max', 'y max']
             },
+        'Sli': {'altAll': ['FWHM upper (mm)', 'FWHM lower (mm)']}
         }
     }
 

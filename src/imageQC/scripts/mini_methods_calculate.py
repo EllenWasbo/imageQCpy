@@ -307,6 +307,57 @@ def get_width_center_at_threshold(
 
     return (width, center)
 
+
+def optimize_center(image, mask_outer=0, max_from_part=4):
+    """Find center and width of object in image.
+
+    Parameters
+    ----------
+    image : np.2darray
+    mask_outer : int, optional (float ok)
+        Number of outer pixels to mask when searching. The default is 0.
+    max_from_part : float, optional
+        1/part of central image to find max from average
+
+    Returns
+    -------
+    res : tuple of float or None
+        center_x, center_y, widht_x, width_y
+    """
+    # get maximum profiles x and y
+    mask_outer = round(mask_outer)
+    if mask_outer == 0:
+        prof_y = np.max(image, axis=1)
+        prof_x = np.max(image, axis=0)
+    else:
+        prof_y = np.max(image[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=1)
+        prof_x = np.max(image[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=0)
+    # get width at halfmax and center for profiles
+    max_from_part = round(max_from_part)
+    if max_from_part == 0:
+        max_from_part = 1
+    width_x, center_x = get_width_center_at_threshold(
+        prof_x, 0.5 * (
+            np.mean(prof_x[prof_x.size//max_from_part:-prof_x.size//max_from_part])
+            + min(prof_x)
+            ),
+        force_above=True)
+    width_y, center_y = get_width_center_at_threshold(
+        prof_y, 0.5 * (
+            np.mean(prof_y[prof_y.size//max_from_part:-prof_y.size//max_from_part])
+            + min(prof_y)
+            ),
+        force_above=True)
+    if width_x is not None and width_y is not None:
+        center_x += mask_outer
+        center_y += mask_outer
+        res = (center_x, center_y, width_x, width_y)
+    else:
+        res = None
+
+    return res
+
+
 def ESF_to_LSF(ESF, prefilter_sigma):
     """Calculate LSF spread function from edge spread function.
 

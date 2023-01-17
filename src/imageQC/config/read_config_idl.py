@@ -4,11 +4,12 @@ Convert config.dat from IDL version of imageQC to config_classes of py version.
 
 @author: EllenWasbo
 """
-import scipy.io
+#import scipy.io
 import numpy as np
 import copy
 
 # imageQC block start
+import imageQC.config.modified_scipy_io_idl as mod_scipy_io_idl
 import imageQC.config.config_classes as cfc
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants_functions import empty_template_dict
@@ -145,11 +146,11 @@ class ConfigIdl2Py():
         """
         d = {}
         try:
-            d = scipy.io.readsav(fname)
+            d = mod_scipy_io_idl.readsav(fname)
         except ValueError:
             self.errmsg.append(
-                'Error reading .dat file. Seen before if any templates named '
-                'just with underscore. Avoid that and try again.')
+                ('Error reading .dat file. Report the issue at '
+                 'https://github.com/EllenWasbo/imageQCpy/issues.'))
         if 'configs' in d.keys():
             # rename temps
             if 'renametemp' in d.keys():
@@ -520,8 +521,8 @@ class ConfigIdl2Py():
             if 'SLICE_MR_ROI' in param_names:
                 vals = list(cp.SLICE_MR_ROI[0])
                 paramset.MR.sli_tan_a = vals[0]
-                paramset.MR.sli_roi_w = vals[1]
-                paramset.MR.sli_roi_h = vals[2]
+                paramset.MR.sli_ramp_length = vals[1]
+                paramset.MR.sli_search_width = vals[2] // 2
                 paramset.MR.sli_dist_lower = vals[3]
                 paramset.MR.sli_dist_upper = vals[4]
                 paramset.MR.sli_optimize_center = bool(vals[5])
@@ -539,10 +540,19 @@ class ConfigIdl2Py():
                     if val in lbls_dcm_add:
                         idx = lbls_dcm_add.index(val)
                         add_pattern = self.dcm_additionals[mod_py(m)][idx]
+                        n_tags_before = len(paramsetXX.dcm_tagpattern.list_tags)
                         paramsetXX.dcm_tagpattern.list_tags.extend(
                             add_pattern.list_tags)
                         paramsetXX.dcm_tagpattern.list_format.extend(
                             add_pattern.list_format)
+                        if 'DCM' in [*paramsetXX.output.tests]:
+                            for attrno, attr in enumerate(add_pattern.list_tags):
+                                paramsetXX.output.tests['DCM'].append(
+                                    cfc.QuickTestOutputSub(
+                                        label=attr,
+                                        columns=[attrno + n_tags_before]
+                                        )
+                                    )
                     if cc.DEFCONFIGNO[0] == i:
                         self.paramsets[mod_py(m)].insert(0, paramsetXX)
                     else:
@@ -685,7 +695,11 @@ class ConfigIdl2Py():
         """
         def calc_str(no):
             strs = ['=', 'min','max','mean','stdev','max abs']
-            return strs[no]
+            try:
+                outstr = strs[no]
+            except IndexError:
+                outstr = '='
+            return outstr
 
         qto = {}
         for m, mv in c.items():
@@ -698,33 +712,36 @@ class ConfigIdl2Py():
                     upd_test_key = self.convert_quicktest_idl2py(
                         m, test_names=[tst])
                     if len(upd_test_key) > 0:
-                        if tstv[0].dtype != 'int16':
-                            outputs = self.as_dict(tstv[0])
-                            outputsThisTest = []
-                            for key, v in outputs.items():
-                                if int(v[0].ALT[0]) == -1:
-                                    dict_tags = self.as_dict(v[0].TAGS[0])
-                                    dict_formats = self.as_dict(v[0].TAGFORMATS[0])
-                                    tag_pattern = self.convert_tag_pattern(
-                                        dict_tags, dict_formats)
-                                    tag_pattern.label = tmp
-                                    self.dcm_additionals[mod_py(m)].append(tag_pattern)
-                                else:
-                                    if v[0].COLUMNS[0].size == 1:
-                                        col = [int(v[0].COLUMNS[0])]
+                        if tstv[0] is not None:  # modified scipy.io._idl
+                            if tstv[0].dtype != 'int16':
+                                outputs = self.as_dict(tstv[0])
+                                outputsThisTest = []
+                                for key, v in outputs.items():
+                                    if int(v[0].ALT[0]) == -1:
+                                        dict_tags = self.as_dict(v[0].TAGS[0])
+                                        dict_formats = self.as_dict(v[0].TAGFORMATS[0])
+                                        tag_pattern = self.convert_tag_pattern(
+                                            dict_tags, dict_formats)
+                                        tag_pattern.label = tmp
+                                        self.dcm_additionals[mod_py(m)].append(
+                                            tag_pattern)
                                     else:
-                                        col = [int(x)
-                                               for x in list(v[0].COLUMNS[0])]
-                                    outputsThisTest.append(
-                                        cfc.QuickTestOutputSub(
-                                            label=key,
-                                            alternative=int(v[0].ALT[0]),
-                                            columns=col,
-                                            calculation=calc_str(int(v[0].CALC[0])),
-                                            per_group=bool(v[0].PER_SERIES[0])
+                                        if v[0].COLUMNS[0].size == 1:
+                                            col = [int(v[0].COLUMNS[0])]
+                                        else:
+                                            col = [int(x)
+                                                   for x in list(v[0].COLUMNS[0])]
+                                        outputsThisTest.append(
+                                            cfc.QuickTestOutputSub(
+                                                label=key,
+                                                alternative=int(v[0].ALT[0]),
+                                                columns=col,
+                                                calculation=calc_str(int(v[0].CALC[0])),
+                                                per_group=bool(v[0].PER_SERIES[0])
+                                                )
                                             )
-                                        )
-                            testsThis[upd_test_key[0]] = outputsThisTest
+                                testsThis[upd_test_key[0]] = outputsThisTest
+
                     else:
                         self.errmsg.append(
                             f'Test name {tst} for modality {m} no longer'
@@ -742,6 +759,17 @@ class ConfigIdl2Py():
         c : dict
             loadtemp (automation templates) in config.dat converted from IDL
         """
+        def get_filetype(vendor_alt):
+            if len(vendor_alt) > 2:
+                filetype = ''
+                if vendor_alt[:3] == 'PDF':
+                    filetype = 'pdf'
+                elif vendor_alt[:3] == 'XML':
+                    filetype = 'xml'
+                else:
+                    filetype = 'txt'  # GE_QAP
+
+            return filetype
         auto_temps_mod = {}
         auto_temps_vendor_mod = {}
         n_unknown = 0
@@ -757,20 +785,29 @@ class ConfigIdl2Py():
                         vendor_alt = ''
                         if 'ALTERNATIVE' in keys:
                             if len(autos['ALTERNATIVE'][0]) > 0:
-                                vendor_alt = try_decode(autos['ALTERNATIVE'][0][0])
+                                vendor_alt = try_decode(autos['ALTERNATIVE'][0])
                         if len(vendor_alt) > 0:
-                            auto_temp = cfc.AutoVendorTemplate(label=tmp)
+                            auto_temp = cfc.AutoVendorTemplate(label=tmp, archive=True)
                             for aut, autv in autos.items():
                                 if aut == 'PATH':
-                                    auto_temp.path_input = try_decode(autv[0][0])
+                                    try:
+                                        auto_temp.path_input = try_decode(autv[0][0])
+                                    except IndexError:
+                                        pass
                                 elif aut == 'STATNAME':
-                                    auto_temp.station_name = try_decode(autv[0][0])
+                                    try:
+                                        auto_temp.station_name = try_decode(autv[0][0])
+                                    except IndexError:
+                                        pass
                                 elif aut == 'PATHAPP':
-                                    auto_temp.path_output = try_decode(autv[0][0])
-                                elif aut == 'ARCHIVE':
-                                    auto_temp.archive = bool(autv[0])
+                                    try:
+                                        auto_temp.path_output = try_decode(autv[0][0])
+                                    except IndexError:
+                                        pass
+                                #elif aut == 'ARCHIVE':
+                                #    auto_temp.archive = bool(autv[0])
                                 elif aut == 'ALTERNATIVE':
-                                    auto_temp.file_type = vendor_alt
+                                    auto_temp.file_type = get_filetype(vendor_alt)
                                 else:
                                     pass
 
@@ -783,7 +820,10 @@ class ConfigIdl2Py():
                                 if aut == 'PATH':
                                     auto_temp.path_input = try_decode(autv[0][0])
                                 elif aut == 'STATNAME':
-                                    auto_temp.station_name = try_decode(autv[0][0])
+                                    try:
+                                        auto_temp.station_name = try_decode(autv[0][0])
+                                    except IndexError:
+                                        pass
                                 elif aut == 'DCMCRIT' and autv[0].dtype != 'int16':
                                     if autv[0][0] != b'0000' and autv[0][1] != b'0000':
                                         dict_tags = {
@@ -808,9 +848,9 @@ class ConfigIdl2Py():
                                 elif aut == 'SORTASC' and len(sort_list) > 0:
                                     if isinstance(autv[0], np.ndarray):
                                         sort_asc = list(autv[0])
-                                        sort_asc = [bool(x) for x in sort_asc]
+                                        sort_asc = [not bool(x) for x in sort_asc]
                                     else:
-                                        sort_asc = [bool(autv[0])]
+                                        sort_asc = [not bool(autv[0])]
                                 elif aut == 'PARAMSET':
                                     auto_temp.paramset_label = try_decode(
                                         autv[0])
@@ -818,8 +858,11 @@ class ConfigIdl2Py():
                                     auto_temp.quicktemp_label = try_decode(
                                         autv[0])
                                 elif aut == 'PATHAPP':
-                                    auto_temp.path_output = try_decode(
-                                        autv[0][0])
+                                    try:
+                                        auto_temp.path_output = try_decode(
+                                            autv[0][0])
+                                    except IndexError:
+                                        pass
                                 elif aut == 'ARCHIVE':
                                     auto_temp.archive = bool(autv[0])
                                 elif aut == 'DELETEFILES':
@@ -830,7 +873,6 @@ class ConfigIdl2Py():
                                         autv[0])
                                 else:
                                     pass
-                            '''sort_pattern_label: str = '''
                             if len(sort_list) > 0:
                                 tag_pattern = self.convert_sortBy2tag_sort_template(
                                     sort_list, sort_asc, m)
@@ -1001,7 +1043,11 @@ class ConfigIdl2Py():
 
         for key, val in dict_tags.items():
             attribute_name = ''
-            tag = [hex(val[0][0]), hex(val[0][1])]
+            try:
+                tag = [hex(val[0][0]), hex(val[0][1])]
+            except TypeError:
+                # assume if isinstance(val[0][0], bytes):
+                tag = [hex(int(vv, 16)) for vv in val[0]]
             if tag in self.tag_infos_tags:
                 idx = self.tag_infos_tags.index(tag)
                 attribute_name = self.tag_infos_labels[idx]
@@ -1025,7 +1071,7 @@ class ConfigIdl2Py():
                 format_this = self.convert_format(val[0])
                 list_format.append(format_this)
         else:
-            list_format = [''] * len()
+            list_format = [''] * len(list_tags)
 
         if len(list_tags) > 0:
             tag_pattern = cfc.TagPatternFormat()

@@ -636,12 +636,6 @@ class TestTabCT(TestTabCommon):
         self.sli_type = QComboBox()
         self.sli_type.addItems(ALTERNATIVES['CT']['Sli'])
         self.sli_type.currentIndexChanged.connect(self.update_Sli_plot_options)
-        '''
-        self.sli_signal_low_density = BoolSelectTests(
-            self, attribute='sli_signal_low_density',
-            text_true='higher',
-            text_false='lower')
-        '''
 
         self.sli_ramp_distance = QDoubleSpinBox(decimals=1, minimum=0.1)
         self.sli_ramp_distance.valueChanged.connect(
@@ -675,14 +669,6 @@ class TestTabCT(TestTabCommon):
         hLO_type.addWidget(self.sli_type)
         hLO_type.addStretch()
         vLO.addLayout(hLO_type)
-        '''
-        hLO_dens = QHBoxLayout()
-        hLO_dens.addWidget(QLabel('Ramp density is'))
-        hLO_dens.addWidget(self.sli_signal_low_density)
-        hLO_dens.addWidget(QLabel('than background'))
-        hLO_dens.addStretch()
-        vLO.addLayout(hLO_dens)
-        '''
 
         f1 = QFormLayout()
         f1.addRow(QLabel('Center to ramp distance (mm)'),
@@ -1742,9 +1728,10 @@ class TestTabMR(TestTabCommon):
         self.gho_roi_cut_top.setValue(paramset.gho_roi_cut_top)
         self.gho_optimize_center.setChecked(paramset.gho_optimize_center)
         self.geo_actual_size.setValue(paramset.geo_actual_size)
-        self.sli_tan_a.setValue(paramset.sli_tan_a)
-        self.sli_roi_w.setValue(paramset.sli_roi_w)
-        self.sli_roi_h.setValue(paramset.sli_roi_h)
+        self.geo_mask_outer.setValue(paramset.geo_mask_outer)
+        # self.sli_tan_a.setValue(paramset.sli_tan_a)
+        self.sli_ramp_length.setValue(paramset.sli_ramp_length)
+        self.sli_search_width.setValue(paramset.sli_search_width)
         self.sli_dist_lower.setValue(paramset.sli_dist_lower)
         self.sli_dist_upper.setValue(paramset.sli_dist_upper)
         self.sli_optimize_center.setChecked(paramset.sli_optimize_center)
@@ -1949,7 +1936,13 @@ class TestTabMR(TestTabCommon):
         self.geo_actual_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='geo_actual_size'))
 
+        self.geo_mask_outer = QDoubleSpinBox(
+            decimals=0, minimum=0)
+        self.geo_mask_outer.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='geo_mask_outer'))
+
         f.addRow(QLabel('Actual width of phantom (mm)'), self.geo_actual_size)
+        f.addRow(QLabel('Mask outer image (mm)'), self.geo_mask_outer)
         hLO.addLayout(f)
         hLO.addStretch()
 
@@ -1970,33 +1963,35 @@ class TestTabMR(TestTabCommon):
         vLO = QVBoxLayout()
         info_txt = '''
         Based on NEMA MS-5 2018 and ACR MR Quality Control Manual, 2015<br><br>
-        Slice thickness = tan (wedge angle) * FWHM<br><br>
         Slice thickness ACR = 1/10 * harmonic mean of FWHM upper and lower =
         0.2 * upper * lower / (upper + lower)<br><br>
         FWHM will be calculated for the averaged profile within each ROI,
         max from medianfiltered profile.<br><br>
         If optimized, center of phantom will be found from maximum profiles.
         '''
+        # alt: Slice thickness = tan (wedge angle) * FWHM<br><br>
+        '''
+        self.sli_tan_a = QDoubleSpinBox(decimals=3, minimum=0.)
+        self.sli_tan_a.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_tan_a'))
+        '''
+
         hLO_top = QHBoxLayout()
         hLO_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
         vLO.addLayout(hLO_top)
 
-        self.sli_tan_a = QDoubleSpinBox(decimals=3, minimum=0.)
-        self.sli_tan_a.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='sli_tan_a'))
-
-        self.sli_roi_w = QDoubleSpinBox(
+        self.sli_ramp_length = QDoubleSpinBox(
             decimals=1, minimum=0., maximum=200., singleStep=0.1)
-        self.sli_roi_w.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='sli_roi_w'))
-        self.sli_roi_h = QDoubleSpinBox(decimals=1, minimum=0., singleStep=0.1)
-        self.sli_roi_h.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='sli_roi_h'))
+        self.sli_ramp_length.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_ramp_length'))
+        self.sli_search_width = QDoubleSpinBox(decimals=0, minimum=0)
+        self.sli_search_width.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_search_width'))
 
-        self.sli_dist_lower = QDoubleSpinBox(decimals=1, minimum=0., singleStep=0.1)
+        self.sli_dist_lower = QDoubleSpinBox(decimals=1, singleStep=0.1)
         self.sli_dist_lower.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_dist_lower'))
-        self.sli_dist_upper = QDoubleSpinBox(decimals=1, minimum=0., singleStep=0.1)
+        self.sli_dist_upper = QDoubleSpinBox(decimals=1, singleStep=0.1)
         self.sli_dist_upper.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_dist_upper'))
 
@@ -2005,16 +2000,9 @@ class TestTabMR(TestTabCommon):
             lambda: self.param_changed_from_gui(
                 attribute='sli_optimize_center'))
 
-        hLO_size = QHBoxLayout()
-        hLO_size.addWidget(QLabel('ROI width / height (mm)'))
-        hLO_size.addWidget(self.sli_roi_w)
-        hLO_size.addWidget(QLabel('/'))
-        hLO_size.addWidget(self.sli_roi_h)
-        hLO_size.addStretch()
-        vLO.addLayout(hLO_size)
         hLO_dist = QHBoxLayout()
         hLO_dist.addWidget(QLabel(
-            'ROI distance from image center upper / lower (mm)'))
+            'Profile distance from image center upper / lower (mm)'))
         hLO_dist.addWidget(self.sli_dist_upper)
         hLO_dist.addWidget(QLabel('/'))
         hLO_dist.addWidget(self.sli_dist_lower)
@@ -2023,10 +2011,21 @@ class TestTabMR(TestTabCommon):
 
         hLO = QHBoxLayout()
         f1 = QFormLayout()
-        f1.addRow(QLabel('tangens of wedge angle'), self.sli_tan_a)
+        f1.addRow(QLabel('Profile length (mm)'), self.sli_ramp_length)
+        f1.addRow(QLabel('Profile search margin (pix)'), self.sli_search_width)
+        # f1.addRow(QLabel('Tangens of wedge angle'), self.sli_tan_a)
         f1.addRow(QLabel('Optimize center'), self.sli_optimize_center)
         hLO.addLayout(f1)
-        hLO.addStretch()
+
+        vLO_right = QVBoxLayout()
+        hLO.addLayout(vLO_right)
+        vLO_right.addStretch()
+        self.sli_plot = QComboBox()
+        self.sli_plot.addItems(['both', 'upper', 'lower'])
+        self.sli_plot.currentIndexChanged.connect(self.main.refresh_results_display)
+        f2 = QFormLayout()
+        f2.addRow(QLabel('Plot image profiles'), self.sli_plot)
+        vLO_right.addLayout(f2)
         vLO.addLayout(hLO)
         vLO.addStretch()
 

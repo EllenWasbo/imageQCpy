@@ -41,6 +41,9 @@ def read_tag_infos_from_yaml():
     return tag_infos
 
 
+tag_infos = read_tag_infos_from_yaml()
+
+
 def test_CTn():
     input_main = InputMain(
         current_modality='CT',
@@ -51,7 +54,7 @@ def test_CTn():
             image_names=[''],
             group_names=['']
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False
         )
 
@@ -77,7 +80,7 @@ def test_CT_Sli_axial():
             image_names=[''],
             group_names=[''],
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False,
         )
 
@@ -102,7 +105,7 @@ def test_CT_Dim():
             image_names=[''],
             group_names=['']
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False
         )
 
@@ -129,7 +132,7 @@ def test_CT_Sli_helical():
             image_names=[''],
             group_names=[''],
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False,
         )
 
@@ -159,7 +162,7 @@ def test_CT_MTF_bead():
             image_names=[''],
             group_names=['']
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False
         )
 
@@ -188,7 +191,7 @@ def test_CT_Teflon_MTF_circular_edge():
             image_names=[''],
             group_names=[''],
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False,
         )
 
@@ -216,7 +219,7 @@ def test_CT_Acrylic_MTF_circular_edge():
             image_names=[['']] * 3,
             group_names=[['']] * 3,
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False,
         )
 
@@ -245,7 +248,7 @@ def test_CT_Polystyrene_MTF_circular_edge():
             image_names=[['']] * 3,
             group_names=[['']] * 3,
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False,
         )
 
@@ -272,7 +275,7 @@ def test_Xray_MTF_autocenter():
             image_names=[''],
             group_names=['']
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False
         )
 
@@ -289,7 +292,7 @@ def test_Xray_MTF_autocenter():
 
 def test_NM_uniformity():
 
-    tag_infos = read_tag_infos_from_yaml()
+    #tag_infos = read_tag_infos_from_yaml()
     file_path = path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist.dcm'
     img_infos, ignored_files = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=tag_infos)
@@ -318,7 +321,7 @@ def test_NM_uniformity_sum():
             image_names=[''] * 132,
             group_names=[''] * 132
             ),
-        tag_infos=read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False
         )
 
@@ -353,3 +356,61 @@ def test_NM_SNI():
 
     assert res['distance'] > 0
 '''
+
+def test_MR_SNR():
+
+    tests = [[''] for x in range(11)]
+    tests[2] = ['SNR']
+    tests[9] = ['SNR']
+    input_main = InputMain(
+        current_modality='MR',
+        current_test='SNR',
+        current_paramset=cfc.ParamSetMR(),
+        current_quicktest=cfc.QuickTestTemplate(
+            tests=tests,
+            image_names=[''] * 11,
+            group_names=[''] * 11
+            ),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (
+        path_tests / 'test_inputs' / 'MR' / 'ACR.dcm')
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(np.array(input_main.results['SNR']['values'][2]))
+    assert np.array_equal(
+        values, np.array([289., 290., 290.,   8.,  50.]))
+
+
+def test_MR_Geo():
+
+    tests = [[''] for x in range(11)]
+    tests[5] = ['Geo']
+    input_main = InputMain(
+        current_modality='MR',
+        current_test='Geo',
+        current_paramset=cfc.ParamSetMR(),
+        current_quicktest=cfc.QuickTestTemplate(
+            tests=tests,
+            image_names=[''] * 11,
+            group_names=[''] * 11
+            ),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (
+        path_tests / 'test_inputs' / 'MR' / 'ACR.dcm')
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(np.array(input_main.results['Geo']['values'][5]))
+    assert np.array_equal(
+        values[:4], np.array([189., 189., 189., 189.]))

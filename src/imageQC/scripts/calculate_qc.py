@@ -232,7 +232,6 @@ def quicktest_output(input_main):
                             for header in headers_this:
                                 all_headers_this.append(header + '_' + suffix)
                         header_list.extend(all_headers_this)
-                    breakpoint()
 
     return (string_list, header_list)
 
@@ -448,7 +447,7 @@ def calculate_qc(input_main):
                 for test in results_dict:
                     if results_dict[test].errmsg is not None:
                         if len(results_dict[test].errmsg) > 0:
-                            errmsgs.append(f'{test} slice {i}:')
+                            errmsgs.append(f'{test}:')
                         if isinstance(results_dict[test].errmsg, str):
                             errmsgs.append(results_dict[test].errmsg)
                         else:
@@ -628,7 +627,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             headers = HEADERS[modality][test_code]['alt' + str(alt)]
             if image2d is not None:
                 lines = roi_array
-                values, details_dict, errmsg = calculate_slicethickness_CT(
+                values, details_dict, errmsg = calculate_slicethickness(
                     image2d, image_info, paramset, lines, delta_xya)
                 if alt == 0:
                     try:
@@ -645,9 +644,28 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 res = Results(headers=headers, alternative=alt)
         elif modality == 'MR':
             headers = HEADERS[modality][test_code]['alt0']
+            # ['Nominal (mm)', 'Slice thickness (mm)', 'Diff (mm)', 'Diff (%)']
+            headers_sup = HEADERS_SUP[modality][test_code]['altAll']
+            # FWHM1, FWHM2
             if image2d is not None:
-                res = Results(headers=headers)
-                #TODO
+                lines = roi_array
+                values, details_dict, errmsg = calculate_slicethickness(
+                    image2d, image_info, paramset, lines, delta_xya, modality='MR')
+                values_sup = values[1:3]
+                try:
+                    fwhm = values[1:3]
+                    slice_thickness = 0.2 * (fwhm[0] * fwhm[1])/(fwhm[0] + fwhm[1])
+                    values[1] = slice_thickness
+                    values[2] = values[1] - values[0]
+                    values.append(100. * values[2] / values[0])
+                except TypeError:
+                    values.append(None)
+                    values.append(None)
+                res = Results(
+                    headers=headers, values=values,
+                    headers_sup=headers_sup, values_sup=values_sup,
+                    details_dict=details_dict,
+                    alternative=0, errmsg=errmsg)
             else:
                 res = Results(headers=headers)
         else:
@@ -896,6 +914,60 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
         return res
 
+    def Geo():
+        headers = HEADERS[modality][test_code]['alt0']
+        # ['width_0', 'width_90', 'width_45', 'width_135',
+        #         'GD_0', 'GD_90', 'GD_45', 'GD_135']
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            mask_outer = round(paramset.geo_mask_outer / image_info.pix[0])
+            actual_size = paramset.geo_actual_size
+            rotate =[0, 45]
+            widths = []
+            for r in rotate:
+                if r > 0:
+                    minval = np.min(image2d)
+                    inside = np.full(image_info.shape, False)
+                    inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
+                    image2d[inside == False] = minval
+                    im = sp.ndimage.rotate(image2d, r, reshape=False, cval=minval)
+                else:
+                    im = image2d
+                # get maximum profiles x and y
+                if mask_outer == 0:
+                    prof_y = np.max(im, axis=1)
+                    prof_x = np.max(im, axis=0)
+                else:
+                    prof_y = np.max(
+                        im[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=1)
+                    prof_x = np.max(
+                        im[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=0)
+                # get width at halfmax and center for profiles
+                width_x, center_x = mmcalc.get_width_center_at_threshold(
+                    prof_x, 0.5 * (
+                        max(prof_x[prof_x.size//4:-prof_x.size//4])+min(prof_x)),
+                    force_above=True)
+                width_y, center_y = mmcalc.get_width_center_at_threshold(
+                    prof_y, 0.5 * (
+                        max(prof_y[prof_y.size//4:-prof_y.size//4])+min(prof_y)),
+                    force_above=True)
+                if width_x is not None and width_y is not None:
+                    widths.append(width_x * image_info.pix[0])
+                    widths.append(width_y * image_info.pix[0])
+                else:
+                    break
+
+            if len(widths) == 4:
+                values = widths
+                GDs = 100./actual_size * (np.array(widths) - actual_size)
+                values.extend(list(GDs))
+                res = Results(headers=headers, values=values)
+            else:
+                res = Results(headers=headers, errmsg='Failed finding object size')
+
+        return res
+
     try:
         result = locals()[test_code]()
     except KeyError:
@@ -970,8 +1042,12 @@ def calculate_3d(matrix, marked_3d, input_main):
                         img_infos[images_to_test[0]].pix[0], paramset)
 
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
-                values = details_dict[prefix + 'MTF_details']['values']
-                values_sup = details_dict['gMTF_details']['LSF_fit_params']
+                try:
+                    values = details_dict[prefix + 'MTF_details']['values']
+                    values_sup = details_dict['gMTF_details']['LSF_fit_params']
+                except KeyError:
+                    values = None
+                    values_sup = None
                 details_dict['matrix'] = sub
 
                 res = Results(headers=headers, values=[values],
@@ -989,10 +1065,10 @@ def calculate_3d(matrix, marked_3d, input_main):
         values_first_imgs = []
         idxs_first_imgs = []
         headers = HEADERS[modality][test_code]['alt0']
-        if matrix.count(None) == len(matrix) or len(images_to_test) == 1:
+        if len(images_to_test) <= 1:
             res = Results(headers=headers)
         else:
-            n_pairs = len(images_to_test)/2
+            n_pairs = len(images_to_test)//2
             for i in range(n_pairs):
                 idx1 = images_to_test[i*2]
                 idx2 = images_to_test[i*2+1]
@@ -1003,7 +1079,6 @@ def calculate_3d(matrix, marked_3d, input_main):
                     if img_infos[idx1].pix == img_infos[idx2].pix:
                         roi_array, errmsg = get_rois(
                             image1, images_to_test[i*2], input_main)
-
                         arr = np.ma.masked_array(
                             image1, mask=np.invert(roi_array))
                         avg1 = np.mean(arr)
@@ -1018,11 +1093,11 @@ def calculate_3d(matrix, marked_3d, input_main):
                         stdev = np.std(arr)
                         SNR = (avg * np.sqrt(2))/stdev
                         values_first_imgs.append([avg1, avg2, avg, stdev, SNR])
-                        idxs_first_imgs.append([idx1])
+                        idxs_first_imgs.append(idx1)
 
             values = [[] for i in range(len(img_infos))]
             if len(idxs_first_imgs) > 0:
-                for res_i, img_i in enumerate(len(idxs_first_imgs)):
+                for res_i, img_i in enumerate(idxs_first_imgs):
                     values[img_i] = values_first_imgs[res_i]
 
             res = Results(values=values, headers=headers, errmsg=errmsg, pr_image=True)
@@ -1081,6 +1156,7 @@ def calculate_3d(matrix, marked_3d, input_main):
                 images_to_test.append(i)
 
         try:
+            input_main.current_test = test_code
             result = locals()[test_code](images_to_test)
         except KeyError:
             result = None
@@ -1144,8 +1220,9 @@ def get_distance_map_edge(shape, slope=0., intercept=0.):
     return distance_map
 
 
-def calculate_slicethickness_CT(image, img_info, paramset, lines, delta_xya):
-    """Calculate slice thickness for CT.
+def calculate_slicethickness(
+        image, img_info, paramset, lines, delta_xya, modality='CT'):
+    """Calculate slice thickness for CT and MR.
 
     Parameters
     ----------
@@ -1153,7 +1230,7 @@ def calculate_slicethickness_CT(image, img_info, paramset, lines, delta_xya):
         2d image
     img_info : DcmInfo
         as defined in scripts/dcm.py
-    paramset : ParamSetCT
+    paramset : ParamSetCT or ParamsetMR
         settings for the test as defined in config_classes.py
     lines : dict
         h_lines, v_lines as defined in
@@ -1175,14 +1252,17 @@ def calculate_slicethickness_CT(image, img_info, paramset, lines, delta_xya):
     errmsgs = []
 
     sli_signal_low_density = False
-    if paramset.sli_type == 0:
-        details_dict['labels'] = ['upper H1', 'lower H2', 'left V1', 'right V2']
-    elif paramset.sli_type == 1:
-        details_dict['labels'] = [
-            'upper H1', 'lower H2', 'left V1', 'right V2', 'inner V1', 'inner V2']
-    elif paramset.sli_type == 2:
-        details_dict['labels'] = ['left', 'right']
-        sli_signal_low_density = True
+    if modality == 'CT':
+        if paramset.sli_type == 0:
+            details_dict['labels'] = ['upper H1', 'lower H2', 'left V1', 'right V2']
+        elif paramset.sli_type == 1:
+            details_dict['labels'] = [
+                'upper H1', 'lower H2', 'left V1', 'right V2', 'inner V1', 'inner V2']
+        elif paramset.sli_type == 2:
+            details_dict['labels'] = ['left', 'right']
+            sli_signal_low_density = True
+    else:
+        details_dict['labels'] = ['upper', 'lower']
 
     pno = 0
     for line in lines['h_lines']:
@@ -1218,46 +1298,71 @@ def calculate_slicethickness_CT(image, img_info, paramset, lines, delta_xya):
         halfmax = 0.5 * peak_value
         details_dict['halfpeak'].append(halfmax + background)
 
-        if paramset.sli_type == 0:  # wire ramp Catphan
+        if modality == 'CT':
+            if paramset.sli_type == 0:  # wire ramp Catphan
+                width, center = mmcalc.get_width_center_at_threshold(
+                    profile, halfmax, force_above=True)
+                if width is not None:
+                    slice_thickness = 0.42 * width * img_info.pix[0]  # 0.42*FWHM
+                    if delta_xya[2] != 0:
+                        slice_thickness = slice_thickness / np.cos(
+                            np.deg2rad(delta_xya[2]))
+                    details_dict['start_x'].append(
+                        (center - 0.5 * width) * img_info.pix[0])
+                    details_dict['end_x'].append(
+                        (center + 0.5 * width) * img_info.pix[0])
+                else:
+                    details_dict['start_x'].append(0)
+                    details_dict['end_x'].append(0)
+            else:  # beaded ramp, find envelope curve
+                # find upper envelope curve
+                local_max = (np.diff(np.sign(np.diff(profile))) < 0).nonzero()[0] + 1
+                new_x, envelope_y = mmcalc.resample(profile[local_max], local_max, 1,
+                                                    n_steps=len(profile))
+                width, center = mmcalc.get_width_center_at_threshold(
+                    envelope_y, halfmax)
+                details_dict['envelope_profiles'].append(envelope_y + background)
+                if width is not None:
+                    xy_increment = 2  # mm spacing between beads in xy-direction
+                    z_increment = 1  # mm spacing between beads in z-direction
+                    if paramset.sli_type == 1 and pno > 3:
+                        z_increment = 0.25  # inner beaded ramps
+                    slice_thickness = (
+                        (z_increment/xy_increment) * width * img_info.pix[0])
+                    if delta_xya[2] != 0:
+                        slice_thickness = (
+                            slice_thickness / np.cos(np.deg2rad(delta_xya[2])))
+                    details_dict['start_x'].append(
+                        (center - 0.5 * width) * img_info.pix[0])
+                    details_dict['end_x'].append(
+                        (center + 0.5 * width) * img_info.pix[0])
+                else:
+                    details_dict['start_x'].append(0)
+                    details_dict['end_x'].append(0)
+
+            if slice_thickness is None:
+                errmsgs.append(
+                    f'{details_dict["labels"][pno]}: failed finding slicethickness')
+
+            values.append(slice_thickness)
+
+        else:  # MR
             width, center = mmcalc.get_width_center_at_threshold(
                 profile, halfmax, force_above=True)
             if width is not None:
-                slice_thickness = 0.42 * width * img_info.pix[0]  # 0.42*FWHM
+                fwhm_this = width * img_info.pix[0]
                 if delta_xya[2] != 0:
-                    slice_thickness = slice_thickness / np.cos(
-                        np.deg2rad(delta_xya[2]))
-                details_dict['start_x'].append((center - 0.5 * width) * img_info.pix[0])
-                details_dict['end_x'].append((center + 0.5 * width) * img_info.pix[0])
+                    fwhm_this = fwhm_this / np.cos(np.deg2rad(delta_xya[2]))
+                values.append(fwhm_this)
+                details_dict['start_x'].append(
+                    (center - 0.5 * width) * img_info.pix[0])
+                details_dict['end_x'].append(
+                    (center + 0.5 * width) * img_info.pix[0])
             else:
                 details_dict['start_x'].append(0)
                 details_dict['end_x'].append(0)
-        else:  # beaded ramp, find envelope curve
-            # find upper envelope curve
-            local_max = (np.diff(np.sign(np.diff(profile))) < 0).nonzero()[0] + 1
-            new_x, envelope_y = mmcalc.resample(profile[local_max], local_max, 1,
-                                                n_steps=len(profile))
-            width, center = mmcalc.get_width_center_at_threshold(
-                envelope_y, halfmax)
-            details_dict['envelope_profiles'].append(envelope_y + background)
-            if width is not None:
-                xy_increment = 2  # mm spacing between beads in xy-direction
-                z_increment = 1  # mm spacing between beads in z-direction
-                if paramset.sli_type == 1 and pno > 3:
-                    z_increment = 0.25  # inner beaded ramps
-                slice_thickness = (z_increment/xy_increment) * width * img_info.pix[0]
-                details_dict['start_x'].append((center - 0.5 * width) * img_info.pix[0])
-                details_dict['end_x'].append((center + 0.5 * width) * img_info.pix[0])
-            else:
-                details_dict['start_x'].append(0)
-                details_dict['end_x'].append(0)
-
-        if slice_thickness is None:
-            errmsgs.append(
-                f'{details_dict["labels"][pno]}: failed finding slicethickness')
-            if delta_xya[2] != 0:
-                slice_thickness = slice_thickness / np.cos(np.deg2rad(delta_xya[2]))
-
-        values.append(slice_thickness)
+                errmsgs.append(
+                    f'{details_dict["labels"][pno]}: failed finding slicethickness')
 
     return (values, details_dict, errmsgs)
 
@@ -1284,7 +1389,10 @@ def get_profile_sli(image, paramset, line, direction='h'):
     errmsg = None
     n_search = round(paramset.sli_search_width)
     n_avg = paramset.sli_average_width
-    sli_signal_low_density = True if paramset.sli_type == 2 else False
+    if hasattr(paramset, 'sli_type'):
+        sli_signal_low_density = True if paramset.sli_type == 2 else False
+    else:
+        sli_signal_low_density = False
 
     r0, c0, r1, c1 = line
     if n_search > 0:
@@ -1758,7 +1866,10 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
             if None not in center_this:
                 center_xy.append(center_this)
             else:
-                errtxt = ', '.join(errtxt, str(slino))
+                if errtxt == '':
+                    errtxt = str(slino)
+                else:
+                    errtxt = ', '.join([errtxt, str(slino)])
     if errtxt != '':
         errmsg = f'Could not find center of object for slice {errtxt}'
     if len(center_xy) > 0:

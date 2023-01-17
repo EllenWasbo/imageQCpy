@@ -219,12 +219,9 @@ def get_rois(image, image_number, input_main):
         return get_roi_CTn(image, image_dict, paramset, delta_xya=delta_xya)
 
     def Sli():
-        roi_this = None
-        if input_main.current_modality == 'CT':
-            roi_this, errmsg = get_slicethickness_start_stop(
-                image_dict, paramset, delta_xya)
-        elif input_main.current_modality == 'MR':
-            pass#TODO
+        roi_this, errmsg = get_slicethickness_start_stop(
+            image, image_dict, paramset, delta_xya,
+            modality=input_main.current_modality)
 
         return (roi_this, errmsg)
 
@@ -289,6 +286,11 @@ def get_rois(image, image_number, input_main):
             )
 
     def Gho():
+        return get_roi_circle_MR(
+            image, image_dict, paramset, test_code, (delta_xya[0], delta_xya[1])
+            )
+
+    def Geo():
         return get_roi_circle_MR(
             image, image_dict, paramset, test_code, (delta_xya[0], delta_xya[1])
             )
@@ -763,15 +765,14 @@ def get_roi_circle_MR(image, image_dict, test_params, test_code, delta_xy):
     """
     roi_array = None
 
-    # get maximum profiles x and y
-    prof_y = np.max(image, axis=1)
-    prof_x = np.max(image, axis=0)
-    # get width at halfmax and center for profiles
-    width_x, center_x = mmcalc.get_width_center_at_threshold(
-        prof_x, 0.5 * (max(prof_x)+min(prof_x)))
-    width_y, center_y = mmcalc.get_width_center_at_threshold(
-        prof_y, 0.5 * (max(prof_y)+min(prof_y)))
-    if width_x is not None and width_y is not None:
+    mask_outer = 0
+    if test_code == 'Geo':
+        mask_outer = round(test_params.geo_mask_outer / image_dict.pix[0])
+
+    res = mmcalc.optimize_center(image, mask_outer)
+    if res is not None:
+        center_x, center_y, width_x, width_y = res
+
         radius = -1
         width = 0.5 * (width_x + width_y)
         optimize_center = True
@@ -786,12 +787,18 @@ def get_roi_circle_MR(image, image_dict, test_params, test_code, delta_xy):
             radius = test_params.gho_roi_central / image_dict.pix[0]
             optimize_center = test_params.gho_optimize_center
             cut_top = test_params.gho_roi_cut_top
+        elif test_code == 'Geo':
+            radius = test_params.geo_actual_size / image_dict.pix[0] / 2
         if optimize_center:
             delta_xy = (
                 center_x - 0.5*image_dict.shape[1],
                 center_y - 0.5*image_dict.shape[0]
                 )
         roi_array = get_roi_circle(image_dict.shape, delta_xy, radius)
+        if mask_outer > 0:
+            inside = np.full(image_dict.shape, False)
+            inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
+            roi_array = [roi_array, inside]
 
         if cut_top > 0:
             cut_top = cut_top / image_dict.pix[1]
@@ -828,7 +835,7 @@ def get_roi_circle_MR(image, image_dict, test_params, test_code, delta_xy):
     return roi_array
 
 
-def get_slicethickness_start_stop(image_info, paramset, dxya):
+def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='CT'):
     """Get start and stop coordinates for lines for slicethickness test CT.
 
     Parameters
@@ -851,12 +858,25 @@ def get_slicethickness_start_stop(image_info, paramset, dxya):
     errmsg = None
     size_xhalf = 0.5 * image_info.shape[1]
     size_yhalf = 0.5 * image_info.shape[0]
-    prof_half = 0.5 * (paramset.sli_ramp_length / image_info.pix[0])
-    if paramset.sli_type != 1:
-        dist = paramset.sli_ramp_distance / image_info.pix[0]
+    prof_half = 0.5 * paramset.sli_ramp_length / image_info.pix[0]
+    if modality == 'CT':
+        if paramset.sli_type != 1:
+            dist = paramset.sli_ramp_distance / image_info.pix[0]
+        else:
+            dist = 45. / image_info.pix[0]  # beaded ramp Catphan outer ramps
+        dist_b = 25. / image_info.pix[0]  # beaded ramp Catphan inner ramps
     else:
-        dist = 45. / image_info.pix[0]  # beaded ramp Catphan outer ramps
-    dist_b = 25. / image_info.pix[0]  # beaded ramp Catphan inner ramps
+        dist = [
+            paramset.sli_dist_upper / image_info.pix[0],
+            paramset.sli_dist_lower / image_info.pix[0]
+            ]
+        if paramset.sli_optimize_center:
+            mask_outer = 10 / image_info.pix[0]
+            res = mmcalc.optimize_center(image, mask_outer)
+            if res is not None:
+                center_x, center_y, _, _ = res
+                dxya[0] = center_x - 0.5*image_info.shape[1]
+                dxya[1] = center_y - 0.5*image_info.shape[0]
 
     # for each line: [y1, x1, y2, x2]
     h_lines = []
@@ -868,63 +888,78 @@ def get_slicethickness_start_stop(image_info, paramset, dxya):
     center_x = size_xhalf + dxya[0]
     center_y = size_yhalf + dxya[1]
 
-    # Horizontal profiles
-    if paramset.sli_type in [0, 1]:  # Catphan wire or beaded
+    # Horizontal profiles CT
+    if modality == 'CT':
+        if paramset.sli_type in [0, 1]:  # Catphan wire or beaded
 
-        # first horizontal line coordinates
-        if dxya[2] == 0:
-            x1 = center_x - prof_half
-            x2 = center_x + prof_half
-            y1 = center_y - dist
-            y2 = y1
-        else:
-            x1 = center_x - dist*sin_rot - prof_half*cos_rot
-            x2 = center_x - dist*sin_rot + prof_half*cos_rot
-            y1 = center_y - dist*cos_rot + prof_half*sin_rot
-            y2 = center_y - dist*cos_rot - prof_half*sin_rot
-        h_lines.append([round(y1), round(x1), round(y2), round(x2)])
+            # first horizontal line coordinates
+            if dxya[2] == 0:
+                x1 = center_x - prof_half
+                x2 = center_x + prof_half
+                y1 = center_y - dist
+                y2 = y1
+            else:
+                x1 = center_x - dist*sin_rot - prof_half*cos_rot
+                x2 = center_x - dist*sin_rot + prof_half*cos_rot
+                y1 = center_y - dist*cos_rot + prof_half*sin_rot
+                y2 = center_y - dist*cos_rot - prof_half*sin_rot
+            h_lines.append([round(y1), round(x1), round(y2), round(x2)])
 
-        # second horizontal line coordinates
-        if dxya[2] == 0:
-            y1 = center_y + dist
-            y2 = y1
-        else:
-            x1 = center_x + dist*sin_rot - prof_half*cos_rot
-            x2 = center_x + dist*sin_rot + prof_half*cos_rot
-            y1 = center_y + dist*cos_rot + prof_half*sin_rot
-            y2 = center_y + dist*cos_rot - prof_half*sin_rot
-        h_lines.append([round(y1), round(x1), round(y2), round(x2)])
-
-    # Vertical profiles
-    if paramset.sli_type == 1:  # Catphan beaded helical
-        dists = [dist, dist_b]
+            # second horizontal line coordinates
+            if dxya[2] == 0:
+                y1 = center_y + dist
+                y2 = y1
+            else:
+                x1 = center_x + dist*sin_rot - prof_half*cos_rot
+                x2 = center_x + dist*sin_rot + prof_half*cos_rot
+                y1 = center_y + dist*cos_rot + prof_half*sin_rot
+                y2 = center_y + dist*cos_rot - prof_half*sin_rot
+            h_lines.append([round(y1), round(x1), round(y2), round(x2)])
     else:
-        dists = [dist]
+        for d in dist:
+            if dxya[2] == 0:
+                x1 = center_x - prof_half
+                x2 = center_x + prof_half
+                y1 = center_y - d
+                y2 = y1
+            else:
+                x1 = center_x - d*sin_rot - prof_half*cos_rot
+                x2 = center_x - d*sin_rot + prof_half*cos_rot
+                y1 = center_y - d*cos_rot + prof_half*sin_rot
+                y2 = center_y - d*cos_rot - prof_half*sin_rot
+            h_lines.append([round(y1), round(x1), round(y2), round(x2)])
 
-    for dist in dists:
-        # vertical line 1
-        if dxya[2] == 0:
-            x1 = center_x - dist
-            x2 = x1
-            y1 = center_y - prof_half
-            y2 = center_y + prof_half
+    if modality == 'CT':
+        # Vertical profiles
+        if paramset.sli_type == 1:  # Catphan beaded helical
+            dists = [dist, dist_b]
         else:
-            x1 = center_x - dist*cos_rot - prof_half*sin_rot
-            x2 = center_x - dist*cos_rot + prof_half*sin_rot
-            y1 = center_y + dist*sin_rot - prof_half*cos_rot
-            y2 = center_y + dist*sin_rot + prof_half*cos_rot
-        v_lines.append([round(y1), round(x1), round(y2), round(x2)])
-    
-        # vertical line 2
-        if dxya[2] == 0:
-            x1 = center_x + dist
-            x2 = x1
-        else:
-            x1 = center_x + dist*cos_rot - prof_half*sin_rot
-            x2 = center_x + dist*cos_rot + prof_half*sin_rot
-            y1 = center_y - dist*sin_rot - prof_half*cos_rot
-            y2 = center_y - dist*sin_rot + prof_half*cos_rot
-        v_lines.append([round(y1), round(x1), round(y2), round(x2)])
+            dists = [dist]
+
+        for dist in dists:
+            # vertical line 1
+            if dxya[2] == 0:
+                x1 = center_x - dist
+                x2 = x1
+                y1 = center_y - prof_half
+                y2 = center_y + prof_half
+            else:
+                x1 = center_x - dist*cos_rot - prof_half*sin_rot
+                x2 = center_x - dist*cos_rot + prof_half*sin_rot
+                y1 = center_y + dist*sin_rot - prof_half*cos_rot
+                y2 = center_y + dist*sin_rot + prof_half*cos_rot
+            v_lines.append([round(y1), round(x1), round(y2), round(x2)])
+
+            # vertical line 2
+            if dxya[2] == 0:
+                x1 = center_x + dist
+                x2 = x1
+            else:
+                x1 = center_x + dist*cos_rot - prof_half*sin_rot
+                x2 = center_x + dist*cos_rot + prof_half*sin_rot
+                y1 = center_y - dist*sin_rot - prof_half*cos_rot
+                y2 = center_y - dist*sin_rot + prof_half*cos_rot
+            v_lines.append([round(y1), round(x1), round(y2), round(x2)])
 
     return ({'h_lines': h_lines, 'v_lines': v_lines}, errmsg)
 

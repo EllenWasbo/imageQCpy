@@ -98,9 +98,6 @@ class OpenAutomationDialog(QDialog):
         ok, path, self.tag_infos = cff.load_settings(fname='tag_infos')
         self.lastload_auto_common = time()
 
-        #TODO if any failed
-        #TODO if no templates - message
-
         self.txt_import_path = QLineEdit(self.auto_common.import_path)
 
         vLO = QVBoxLayout()
@@ -179,14 +176,16 @@ class OpenAutomationDialog(QDialog):
         actOpenResultFile.triggered.connect(self.open_result_file)
         actResetTemplate = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}reset.png'),
-            'Move files for selected template(s) out of "Archive" folder to re-run automation',
+            ('Move files for selected template(s) out of "Archive" folder to '
+             're-run automation'),
             self)
         actResetTemplate.triggered.connect(self.reset_auto_template)
         actSettings = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}gears.png'),
             'Edit templates', self)
         actSettings.triggered.connect(self.edit_template)
-        tb_temps.addActions([actRefresh, actOpenResultFile,actResetTemplate,actSettings])
+        tb_temps.addActions(
+            [actRefresh, actOpenResultFile, actResetTemplate, actSettings])
 
         hLO_temps.addWidget(self.list_templates)
         vLO_buttons = QVBoxLayout()
@@ -203,6 +202,8 @@ class OpenAutomationDialog(QDialog):
         btn_run_all.clicked.connect(self.run_all)
         btn_run_selected.clicked.connect(self.run_selected)
         btn_run_selected_files.clicked.connect(self.run_selected_files)
+
+        self.refresh_list()
 
     def locate_folder(self, widget):
         """Locate folder and set widget.text() to path.
@@ -249,15 +250,19 @@ class OpenAutomationDialog(QDialog):
     def import_sort(self):
         """Import and sort images from image pool."""
         path = self.txt_import_path.text()
-        ignore_since = 0
-        if self.chk_ignore_since.isChecked():
-            ignore_since = self.spin_ignore_since.value()
-        log_import = automation.import_incoming(
-            self.templates, self.tag_infos, parent_widget=self,
-            ignore_since=ignore_since)
-        if len(log_import) > 0:
+        if Path(path).exists():
+            ignore_since = 0
+            if self.chk_ignore_since.isChecked():
+                ignore_since = self.spin_ignore_since.value()
+            log_import = automation.import_incoming(
+                self.templates, self.tag_infos, parent_widget=self,
+                ignore_since=ignore_since)
+            if len(log_import) > 0:
+                QMessageBox.information(
+                    self, 'Information', '\n'.join(log_import))
+        else:
             QMessageBox.information(
-                self, 'Information', '\n'.join(log_import))
+                self, 'Warning', 'Import path not defined or do not exist.')
 
     def count_files(self, folder_path):
         """Count number of files in path.
@@ -271,9 +276,12 @@ class OpenAutomationDialog(QDialog):
         n_files : int
         """
         n_files = 0
-        for path in os.listdir(folder_path):
-            if os.path.isfile(os.path.join(folder_path, path)):
-                n_files += 1
+        try:
+            for path in os.listdir(folder_path):
+                if os.path.isfile(os.path.join(folder_path, path)):
+                    n_files += 1
+        except FileNotFoundError:
+            n_files = -1
 
         return n_files
 
@@ -328,7 +336,8 @@ class OpenAutomationDialog(QDialog):
         """Refresh list of templates with count = True."""
         templist = self.get_template_list(count=True)
         self.list_templates.clear()
-        self.list_templates.addItems(templist)
+        if len(templist) > 0:
+            self.list_templates.addItems(templist)
 
     def open_result_file(self):
         """Display result file."""
@@ -343,6 +352,11 @@ class OpenAutomationDialog(QDialog):
             path = temp.path_output
             if os.path.exists(path):
                 os.startfile(path)
+            else:
+                QMessageBox.warning(
+                    self, 'File not found',
+                    f'File not found {path}'
+                    )
 
     def reset_auto_template(self):
         """Move files from Archive to input_path."""
@@ -361,12 +375,11 @@ class OpenAutomationDialog(QDialog):
         sel = self.list_templates.selectedIndexes()
         if len(sel) > 0:
             tempno = sel[0].row()
-            mod = self.templates_mod[tempno]
+            # DELETE? mod = self.templates_mod[tempno]
             if self.templates_is_vendor[tempno]:
                 view = 'Templates vendor files'
             dlg = settings.SettingsDialog(
                 self.main, initial_view=view)
-            #modality=mod, template_id=self.templates_id[tempno])
             dlg.exec()
 
     def run_all(self):
@@ -411,9 +424,9 @@ class OpenAutomationDialog(QDialog):
             for i, tempno in enumerate(tempnos):
                 mod = self.templates_mod[tempno]
                 if self.templates_is_vendor[tempno]:
-                    temp_this = self.templates_vendor[mod][tempno]
+                    temp_this = self.templates_vendor[mod][self.templates_id[tempno]]
                 else:
-                    temp_this = self.templates[mod][tempno]
+                    temp_this = self.templates[mod][self.templates_id[tempno]]
 
                 pre_selected_files = []
                 if select_files:
@@ -453,6 +466,7 @@ class OpenAutomationDialog(QDialog):
                         log.append(msg)
                 if len(not_written) > 0:
                     #TODO offer to clipboard
+                    breakpoint()
                     pass
 
             self.automation_active = False
@@ -463,4 +477,3 @@ class OpenAutomationDialog(QDialog):
             if len(log) > 0:
                 QMessageBox.warning(
                     self, 'Automation log', '\n'.join(msg))
-

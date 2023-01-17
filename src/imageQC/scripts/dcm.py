@@ -139,13 +139,23 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     prefix_separator='', suffix_separator='',
                     )
             attrib['slice_thickness'] = -1.
-            if '[' in slice_thickness:
-                slice_thickness = slice_thickness[1:-1]
-            try:
-                attrib['slice_thickness'] = float(slice_thickness)
-            except ValueError:
-                pass
+            if isinstance(slice_thickness, str):
+                if '[' in slice_thickness:
+                    slice_thickness = slice_thickness[1:-1]
+                try:
+                    attrib['slice_thickness'] = float(slice_thickness)
+                except ValueError:
+                    pass
+            elif isinstance(slice_thickness, list):
+                try:
+                    attrib['slice_thickness'] = float(str(slice_thickness[1][0]))
+                    # TODO? not assume same
+                except ValueError:
+                    pass
+
             attrib['pix'] = [0, 0]
+            if isinstance(pix, list):
+                pix = str(pix[1][0])  # TODO? not assume same
             pix = pix[1:-1]
             pix = pix.split(',')
             if len(pix) == 2:
@@ -164,10 +174,11 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
 
             nm_radius = []
             if mod in ['NM', 'SPECT']:
-                #attrib nm_radius
+                # attrib nm_radius
                 nm_radius = get_dcm_info_list(
                         pd,
-                        TagPatternFormat(list_tags=['RadialPosition'], list_format=['']),
+                        TagPatternFormat(
+                            list_tags=['RadialPosition'], list_format=['']),
                         tag_infos,
                         prefix_separator='', suffix_separator='',
                         )
@@ -228,7 +239,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     else:
                         if len(nm_radius) > 0:
                             gui_info_this = info_extract_frame(
-                                frame, {'nm_radius': nm_radius})
+                                frame, {'nm_radius': [nm_radius]})
                             gui_info_this['nm_radius'] = float(
                                 gui_info_this['nm_radius'][0])
                             attrib.update(gui_info_this)
@@ -249,7 +260,7 @@ def info_extract_frame(frame, info):
     frame : int
         frame number for multiframe dicom
     info : dict
-        frame-infos as vectors
+        'key': [ str, str, [pre, vect, suff], str, str...]
 
     Returns
     -------
@@ -262,9 +273,13 @@ def info_extract_frame(frame, info):
         for tag in item:
             if isinstance(tag, list):
                 if len(tag) == 3:
-                    out_dict[key].append(
-                        ''.join([tag[0], str(tag[1][frame]), tag[2]]))
-                    #TODO format for tag1....
+                    try:
+                        out_dict[key].append(
+                            ''.join([tag[0], str(tag[1][frame]), tag[2]]))
+                        #TODO format for tag1....
+                    except IndexError:
+                        out_dict[key].append(
+                            ''.join([tag[0], str(tag[1]), tag[2]]))
             else:
                 out_dict[key].append(tag)
 
@@ -320,7 +335,10 @@ def get_dcm_info_list(
         info = f'{prefix}{prefix_separator}{not_found_text}'
 
         for idx in tag_idx:
-            data_element = get_tag_data(pydict, tag_info=tag_infos[idx])
+            if tag_infos[idx].tag[1] == '':
+                data_element = get_special_tag_data(pydict, tag_info=tag_infos[idx])
+            else:
+                data_element = get_tag_data(pydict, tag_info=tag_infos[idx])
             if data_element is not None:
                 if suffix == '' and unit_default_suffix:
                     suffix = f'{tag_infos[idx].unit}'
@@ -335,6 +353,7 @@ def get_dcm_info_list(
                         val = val.decode('utf-8')
                     VM = data_element.VM
                 if VM > 1:
+                    nframes = int(pydict.get('NumberOfFrames', -1))
                     value_id = tag_infos[idx].value_id
                     if value_id == -3:
                         if not isinstance(data_element, list):
@@ -342,39 +361,51 @@ def get_dcm_info_list(
                         else:
                             VMs = [elem.VM for elem in data_element]
                             totVM = np.sum(np.array(VMs))
-                            if totVM != int(pydict.get('NumberOfFrames', -1)):
+                            if totVM != nframes:
                                 value_id = -1
                     if value_id == -2:  # per frame, check if possible
-                        if data_element.VM != int(pydict.get('NumberOfFrames', -1)):
+                        if data_element.VM != nframes:
                             value_id = -1
+                    multi_frame = False
                     if value_id > -1:  # specific id, check if possible
-                        if value_id > data_element.VM:
-                            value_id = -1
+                        if isinstance(val, list):
+                            val = [x[value_id] for x in val]
+                            multi_frame = True
+                        else:
+                            if value_id > data_element.VM:
+                                value_id = -1
                     multi_val = False
                     if value_id == -1:
-                        multi_val = True  # combine values to text
+                        if not isinstance(val, list):
+                            multi_val = True  # combine values to text
                         val_text = val
                     elif value_id == -2:
                         val_text = val
                     elif value_id == -3:
                         val_combined = []
-                        for elem in val:
-                            val_combined.extend(elem)
-                        val_text = val_combined
+                        try:
+                            for elem in val:
+                                val_combined.extend(elem)
+                            val_text = val_combined
+                        except TypeError:
+                            val_text = val
                     else:
-                        val_text = val[value_id]
+                        if multi_frame:
+                            val_text = val
+                        else:
+                            val_text = val[value_id]
                     if format_string != '':
-                        if isinstance(
-                                val[0], str) and format_string[-1] == 'f':
+                        if not isinstance(val[0], float) and format_string[-1] == 'f':
                             try:
-                                val = [float(x) for x in val]
+                                val = [float(str(x)) for x in val]
                                 val_text = [
                                     f'{x:{format_string}}' for x in val]
                             except ValueError:
-                                pass
+                                val_text = [f'{x}' for x in val]
+                            except TypeError:
+                                val_text = [f'{x}' for x in val]
                         else:
-                            val_text = [
-                                f'{x:{format_string}}' for x in val]
+                            val_text = [f'{x:{format_string}}' for x in val]
                     if multi_val:
                         info = (
                             f'{prefix}{prefix_separator}'
@@ -669,34 +700,71 @@ def get_tag_data(pd, tag_info=None):
         seq = tag_info.sequence
         gr = tag_info.tag[0]
         el = tag_info.tag[1]
+        nframes = int(pd.get('NumberOfFrames', -1))
+
         try:
             if seq[0] != '':
                 pd_sub = pd[seq[0]][0]
                 if len(seq) > 1:
-                    pd_sub = pd[seq[0]][0]
-                    pd_sub_final = pd[seq[0]]
-                    for i in range(1, len(seq)):
-                        pd_sub = pd_sub[seq[i]][0]
-                        pd_sub_final = pd_sub[seq[i]]
+                    if seq[0] == 'PerFrameFunctionalGroupsSequence' and nframes > 1:
+                        data_element = []
+                        for f in range(nframes):
+                            pd_sub = pd[seq[0]][f]
+                            for i in range(1, len(seq)):
+                                pd_sub = pd_sub[seq[i]][0]
+                            data_element.append(pd_sub[gr, el])
+                    else:
+                        pd_sub = pd[seq[0]][0]
+                        pd_sub_final = pd[seq[0]]
+                        for i in range(1, len(seq)):
+                            pd_sub_final = pd_sub[seq[i]]
+                            pd_sub = pd_sub[seq[i]][0]
                 else:
                     pd_sub_final = pd[seq[0]]
 
-                if tag_info.value_id == -3:  # combine data from all sequences
-                    if len(pd_sub_final.value) > 1:
-                        data_element = []
-                        for i in range(len(pd_sub_final.value)):
-                            sub = pd_sub_final[i]
-                            data_element.append(sub[gr, el])
+                if data_element is None:
+                    if tag_info.value_id == -3:  # combine data from all sequences
+                        if len(pd_sub_final.value) > 1:
+                            data_element = []
+                            for i in range(len(pd_sub_final.value)):
+                                sub = pd_sub_final[i]
+                                data_element.append(sub[gr, el])
+                        else:
+                            data_element = pd_sub[gr, el]
                     else:
                         data_element = pd_sub[gr, el]
-                else:
-                    data_element = pd_sub[gr, el]
             else:
                 data_element = pd[gr, el]
         except KeyError:
             pass
         except IndexError:
             pass
+
+    return data_element
+
+
+def get_special_tag_data(pd, tag_info=None):
+    """Get DICOM information for data not specified as tag. tag_info.tag = ['...', '']
+
+    Parameters
+    ----------
+    py : pydicom dict
+    tag_info : TagInfo
+
+    Returns
+    -------
+    data_element
+    """
+    data_element = None
+    if tag_info.attribute_name == 'FrameNumber':
+        frames = int(pd.get('NumberOfFrames', -1))
+        if frames > -1:
+            data_element = pydicom.DataElement(
+                0xffffffff, 'LO', list(np.arange(frames)))
+    elif tag_info.attribute_name == 'CountsAccumulated':
+        #TODO .... only when test DCM normally not pd.pixel_data here...
+        #only defined for NM
+        pass
 
     return data_element
 
@@ -793,11 +861,18 @@ def sort_imgs(img_infos, tag_pattern_sort, tag_infos):
                         frame_number=img_infos[i].frame_number,
                         tag_patterns=[tag_pattern_sort],
                         tag_infos=tag_infos)
-        infos.append(info[0])
+        if isinstance(info[0], dict):
+            infos.append(info[0]['dummy'])
+        else:
+            infos.append(info[0])
 
     df = {}
     for c, attr in enumerate(tag_pattern_sort.list_tags):
         col = [row[c] for row in infos]
+        try:
+            col = [float(row[c]) for row in infos]
+        except ValueError:
+            pass
         df[attr] = col
     df = pd.DataFrame(df)
     sorted_infos = df.sort_values(
@@ -888,8 +963,6 @@ def get_all_tags_name_number(pd, sequence_list=['']):
                 tags.append(data_element.tag)
         except IndexError:
             pass  # e.g. SQ with zero elements
-        #except KeyError:
-        #    pass
 
     return {'tags': tags, 'attribute_names': attribute_names}
 

@@ -15,10 +15,10 @@ import pandas as pd
 
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon, QScreen
-from PyQt5.QtCore import Qt, QEvent, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication, qApp, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QStatusBar, QSplitter, QGroupBox, QTabWidget,
+    QStackedWidget, QSplitter, QGroupBox, QTabWidget,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QButtonGroup,
     QRadioButton, QComboBox, QSlider, QMenu, QAction, QToolBar, QToolButton,
     QMessageBox, QInputDialog, QTreeWidget, QTreeWidgetItem,
@@ -110,6 +110,7 @@ class GuiVariables():
 
 class MainWindow(QMainWindow):
     """Class main window of imageQC."""
+
     screenChanged = pyqtSignal(QScreen, QScreen)
 
     def __init__(self, scX=1400, scY=700):
@@ -592,8 +593,7 @@ class MainWindow(QMainWindow):
             # update only active
             wid = self.tabResults.currentWidget()
             if isinstance(wid, ResultTableWidget) and update_table:
-                #if self.tabResults.currentIndex() == 0:
-                #print('ready to update table')
+
                 try:
                     self.wResTable.result_table.fill_table(
                         col_labels=self.results[self.current_test]['headers'],
@@ -604,7 +604,7 @@ class MainWindow(QMainWindow):
                         )
                 except (KeyError, TypeError):
                     self.wResTable.result_table.clear()
-                #else:
+
                 try:
                     self.wResTableSup.result_table.fill_table(
                         col_labels=self.results[self.current_test]['headers_sup'],
@@ -749,6 +749,7 @@ class MainWindow(QMainWindow):
             [round(self.vGUI.panel_height*0.5), round(self.vGUI.panel_height*0.5)])
 
     def moveEvent(self, event):
+        """If window moved on screen or to other monitor."""
         oldScreen = QtWidgets.QApplication.screenAt(event.oldPos())
         newScreen = QtWidgets.QApplication.screenAt(event.pos())
 
@@ -1830,8 +1831,8 @@ class ImageCanvas(GenericImageCanvas):
 
     def Sli(self):
         """Draw Slicethickness search lines."""
-        h_colors = ['k', 'g']
-        v_colors = ['b', 'r', 'm', 'c']
+        h_colors = ['b', 'lime']
+        v_colors = ['c', 'r', 'm', 'darkorange']
         search_margin = self.main.current_paramset.sli_search_width
         background_length = self.main.current_paramset.sli_background_width
         pix = self.main.imgs[self.main.vGUI.active_img_no].pix
@@ -2902,6 +2903,8 @@ class ResultPlotCanvas(uir.PlotCanvas):
                     markersize = curve['markersize']
                 else:
                     markersize = 6.
+                if 'style' not in curve:
+                    curve['style'] = '-'
                 if 'color' in curve:
                     self.ax.plot(curve['xvals'], curve['yvals'],
                                  curve['style'], label=curve['label'],
@@ -3116,52 +3119,66 @@ class ResultPlotCanvas(uir.PlotCanvas):
 
     def Sli(self):
         """Prepare plot for test Sli."""
-        if self.main.current_modality == 'CT':
+        if self.main.current_modality in ['CT', 'MR']:
             self.title = 'Profiles for slice thickness calculations'
             imgno = self.main.vGUI.active_img_no
             details_dict = self.main.results['Sli']['details_dict'][imgno]
             n_pix = len(details_dict['profiles'][0])
             xvals = [details_dict['dx'] * i for i in range(n_pix)]
-            if self.main.current_paramset.sli_type == 0:
-                styles = ['k', 'g', 'b', 'r']
-            elif self.main.current_paramset.sli_type == 1:
-                styles = ['k', 'g', 'b', 'r', 'm', 'c']
-            elif self.main.current_paramset.sli_type == 2:
-                styles = ['b', 'r']
 
-            if self.main.tabCT.sli_plot.currentIndex() == 0:  # plot all
-                l_idxs = list(np.arange(len(details_dict['profiles'])))
+            # ROI h_colors = ['b', 'lime']
+            # ROI v_colors = ['c', 'r', 'm', 'darkorange']
+            if self.main.current_modality == 'CT':
+                if self.main.current_paramset.sli_type == 0:
+                    colors = ['b', 'lime', 'c', 'r']
+                elif self.main.current_paramset.sli_type == 1:
+                    colors = ['b', 'lime', 'c', 'r', 'm', 'darkorange']
+                elif self.main.current_paramset.sli_type == 2:
+                    colors = ['c', 'r']
+                if self.main.tabCT.sli_plot.currentIndex() == 0:  # plot all
+                    l_idxs = list(np.arange(len(details_dict['profiles'])))
+                else:
+                    l_idxs = [self.main.tabCT.sli_plot.currentIndex() - 1]
             else:
-                l_idxs = [self.main.tabCT.sli_plot.currentIndex() - 1]
+                colors = ['b', 'lime']
+                if self.main.tabMR.sli_plot.currentIndex() == 0:  # plot both
+                    l_idxs = list(np.arange(len(details_dict['profiles'])))
+                else:
+                    l_idxs = [self.main.tabMR.sli_plot.currentIndex() - 1]
+
             for l_idx in l_idxs:
                 self.curves.append({'label': details_dict['labels'][l_idx],
                                     'xvals': xvals,
                                     'yvals': details_dict['profiles'][l_idx],
-                                    'style': styles[l_idx]})
+                                    'color': colors[l_idx]})
                 try:
                     self.curves.append({'label': details_dict['labels'][l_idx],
                                         'xvals': xvals,
                                         'yvals': details_dict[
                                             'envelope_profiles'][l_idx],
-                                        'style': f'--{styles[l_idx]}'})
+                                        'style': '--',
+                                        'color': colors[l_idx]})
                 except IndexError:
                     pass
                 self.curves.append({
                     'label': '_nolegend_',
                     'xvals': [min(xvals), max(xvals)],
                     'yvals': [details_dict['background'][l_idx]] * 2,
-                    'style': ':'+styles[l_idx]})
+                    'style': ':',
+                    'color': colors[l_idx]})
                 self.curves.append({
                     'label': '_nolegend_',
                     'xvals': [min(xvals), max(xvals)],
                     'yvals': [details_dict['peak'][l_idx]] * 2,
-                    'style': ':'+styles[l_idx]})
+                    'style': ':',
+                    'color': colors[l_idx]})
                 self.curves.append({
                     'label': '_nolegend_',
                     'xvals': [details_dict['start_x'][l_idx],
                               details_dict['end_x'][l_idx]],
                     'yvals': [details_dict['halfpeak'][l_idx]] * 2,
-                    'style': '--'+styles[l_idx]})
+                    'style': '--',
+                    'color': colors[l_idx]})
             self.xtitle = 'pos (mm)'
             self.ytitle = 'HU'
 
@@ -3469,7 +3486,8 @@ class ResultPlotCanvas(uir.PlotCanvas):
                          })
                     lbl = f'{edno}: ' if len(eds) > 1 else ''
                     txt_info.append(
-                        f'{lbl}$R^2$ = {ed["edge_r2"]:.4f}, angle = {ed["angle"]:.2f}{deg}'
+                        (f'{lbl}$R^2$ = {ed["edge_r2"]:.4f}, angle = '
+                         f'{ed["angle"]:.2f}{deg}')
                         )
 
                 at = matplotlib.offsetbox.AnchoredText(
@@ -3687,27 +3705,16 @@ class ResultImageNavigationToolbar(NavigationToolbar2QT):
         pass
 
 
-class StatusBar(QStatusBar):
-    """Tweeks to QStatusBar."""
+class StatusBar(uir.StatusBar):
+    """Tweeks to uir.StatusBar."""
 
     def __init__(self, parent):
-        super().__init__()
-        self.main = parent
-        self.setStyleSheet("QStatusBar{padding-left: 8px;}")
-        self.default_color = self.palette().window().color().name()
-        self.message = QLabel('')
-        self.message.setAlignment(Qt.AlignCenter)
-        self.addWidget(self.message, 1)
-        self.timer = QTimer()
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self.clearMessage)
+        super().__init__(parent)
         self.saved_warnings = []
 
     def showMessage(self, txt, timeout=0, warning=False, add_warnings=[]):
         """Set background color when message is shown."""
         if warning:
-            self.setStyleSheet("QStatusBar{background:#efb412;}")
-            timeout = 2000
             if len(add_warnings) == 0:
                 txt_ = f'{ctime()}: {txt}'
                 self.saved_warnings.append(txt_)
@@ -3716,18 +3723,5 @@ class StatusBar(QStatusBar):
                 self.saved_warnings.append(txt_)
                 self.saved_warnings.extend(add_warnings)
             self.main.actWarning.setEnabled(True)
-        else:
-            self.setStyleSheet("QStatusBar{background:#6e94c0;}")
-        self.message.setText(txt)
-        if timeout > 0:
-            self.timer.start(timeout)
-        else:
-            self.timer.start()
-        qApp.processEvents()
 
-    def clearMessage(self):
-        """Reset background and clear message."""
-        self.setStyleSheet(
-            "QStatusBar{background:" + self.default_color + ";}")
-        self.message.setText('')
-        qApp.processEvents()
+        super().showMessage(txt, timeout=timeout, warning=warning)

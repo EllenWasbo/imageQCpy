@@ -854,8 +854,8 @@ class TagPatternWidget(QWidget):
 
     def fill_list_tags(self, modality):
         """Find tags from tag_infos.yaml and fill list."""
-        self.listTags.clear()
         try:
+            self.listTags.clear()
             general_tags, included_tags = get_included_tags(
                 modality, self.parent.tag_infos)
             self.listTags.addItems(included_tags)
@@ -864,7 +864,7 @@ class TagPatternWidget(QWidget):
                     if included_tags[i] in general_tags:
                         self.listTags.item(i).setForeground(
                             QBrush(QColor(110, 148, 192)))
-        except AttributeError:
+        except (RuntimeError, AttributeError):
             pass
 
     def double_click_tag(self, item):

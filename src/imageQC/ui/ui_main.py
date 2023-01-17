@@ -750,19 +750,19 @@ class MainWindow(QMainWindow):
 
     def moveEvent(self, event):
         """If window moved on screen or to other monitor."""
-        oldScreen = QtWidgets.QApplication.screenAt(event.oldPos())
-        newScreen = QtWidgets.QApplication.screenAt(event.pos())
+        try:
+            oldScreen = QtWidgets.QApplication.screenAt(event.oldPos())
+            newScreen = QtWidgets.QApplication.screenAt(event.pos())
 
-        if not oldScreen == newScreen:
-            try:
+            if not oldScreen == newScreen:
                 if not oldScreen.geometry() == newScreen.geometry():
                     sz = newScreen.geometry()
                     self.vGUI.panel_width = round(0.48*sz.width())
                     self.vGUI.panel_height = round(0.86*sz.height())
                     self.resize_main()
                     self.reset_split_sizes()
-            except AttributeError:
-                pass
+        except AttributeError:
+            pass
         return super().moveEvent(event)
 
     def run_auto_wizard(self):

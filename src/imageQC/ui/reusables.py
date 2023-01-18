@@ -15,13 +15,14 @@ from PyQt5.QtGui import (
     QIcon, QFont, QBrush, QColor, QPalette, QStandardItemModel
     )
 from PyQt5.QtWidgets import (
+    QApplication, qApp,
     QWidget, QDialog, QDialogButtonBox,
     QVBoxLayout, QHBoxLayout, QFrame, QFormLayout,
     QToolBar, QAction, QComboBox, QRadioButton, QButtonGroup, QToolButton,
     QLabel, QPushButton, QListWidget, QLineEdit, QCheckBox, QTextEdit,
     QTreeWidget, QTreeWidgetItem, QTreeView,
     QMessageBox, QProgressDialog, QInputDialog,
-    QStatusBar, qApp
+    QStatusBar
     )
 import matplotlib
 import matplotlib.figure
@@ -139,6 +140,15 @@ class ImageQCDialog(QDialog):
         self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
         self.setWindowFlags(
             self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
+    def start_wait_cursor(self):
+        """Block mouse events by wait cursor."""
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        qApp.processEvents()
+
+    def stop_wait_cursor(self):
+        """Return to normal mouse cursor after wait cursor."""
+        QApplication.restoreOverrideCursor()
 
 
 class LabelItalic(QLabel):
@@ -262,16 +272,25 @@ class TextDisplay(ImageQCDialog):
                  read_only=True,
                  min_width=1000, min_height=1000):
         super().__init__()
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
         txtEdit = QTextEdit('', self)
         txtEdit.setPlainText(text)
         txtEdit.setReadOnly(read_only)
         txtEdit.createStandardContextMenu()
         txtEdit.setMinimumWidth(min_width)
         txtEdit.setMinimumHeight(min_height)
+        vLO.addWidget(txtEdit)
+        buttons = QDialogButtonBox.Close
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vLO.addWidget(self.buttonBox)
+
         self.setWindowTitle(title)
         self.setMinimumWidth(min_width)
         self.setMinimumHeight(min_height)
-        self.show()
+        #self.show()
 
 
 class ProgressModal(QProgressDialog):
@@ -974,7 +993,7 @@ class FormatDialog(ImageQCDialog):
         return return_string
 
 
-class TagPatternEditDialog(QDialog):
+class TagPatternEditDialog(ImageQCDialog):
     """Dialog for editing tag pattern for test DCM."""
 
     def __init__(
@@ -997,10 +1016,6 @@ class TagPatternEditDialog(QDialog):
             self.fname = ''
 
         self.setWindowTitle(title)
-        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         vLO = QVBoxLayout()
         self.setLayout(vLO)
@@ -1495,7 +1510,7 @@ class QuickTestOutputTreeView(QTreeView):
             self.parent.flag_edit(True)
 
 
-class QuickTestOutputSubDialog(QDialog):
+class QuickTestOutputSubDialog(ImageQCDialog):
     """Dialog to set QuickTestOutputSub."""
 
     def __init__(self, paramset, qt_output_sub=None, modality='CT',
@@ -1514,12 +1529,7 @@ class QuickTestOutputSubDialog(QDialog):
             testcode selected from start (if edit existing sub)
         """
         super().__init__()
-
         self.setWindowTitle('QuickTestOutput details')
-        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         if qt_output_sub is None:
             qt_output_sub = cfc.QuickTestOutputSub()
@@ -1697,7 +1707,17 @@ class QuickTestOutputSubDialog(QDialog):
                 cols.append(i)
         qtsub.columns = cols
         qtsub.calculation = self.cbox_calculation.currentText()
-        qtsub.per_group = self.chk_per_group.isChecked()
+        if qtsub.calculation == '=' and self.chk_per_group.isChecked():
+            qtsub.per_group = False
+            QMessageBox.warning(
+                self, 'Warning',
+                ('The "per group" setting require some calculation to '
+                 'extract one value from many. The calculation was set '
+                 'to "=" which indicate that all values should be printed '
+                 'as is. The "per group" setting was changed to "per image".')
+                )
+        else:
+            qtsub.per_group = self.chk_per_group.isChecked()
 
         if len(cols) == 0:
             qtsub = None
@@ -1824,6 +1844,7 @@ class DicomCritWidget(QWidget):
                 self.parent.current_template.dicom_crit_values.append(value)
                 self.update_data()
                 self.parent.flag_edit()
+                self.parent.get_sample_file_data()
 
     def edit(self):
         """Edit DICOM criterion."""

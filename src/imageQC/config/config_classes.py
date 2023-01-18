@@ -74,6 +74,12 @@ class TagPatternSort:
     list_tags: list = field(default_factory=list)  # list[str]
     list_sort: list = field(default_factory=list)  # list[bool]
 
+    def __post_init__(self):
+        """Add empty list_format if not defined."""
+        if len(self.list_tags) > len(self.list_sort):
+            diff = len(self.list_tags) - len(self.list_sort)
+            self.list_sort.extend([''] * diff)
+
     def add_tag(self, tag='', sort=True, index=-1):
         """Add element in each list at given index or append."""
         if index == -1:

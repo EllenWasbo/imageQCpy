@@ -134,6 +134,7 @@ def quicktest_output(input_main):
             else:
                 output_subs = [cfc.QuickTestOutputSub(columns=[])]  # default
 
+            res_pr_image = input_main.results[test]['pr_image']
             dm = input_main.current_paramset.output.decimal_mark
 
             # for each sub-output for current test
@@ -202,7 +203,7 @@ def quicktest_output(input_main):
                                 else:
                                     suffixes.append(f'group{g}')
 
-                    else:  # each image individually
+                    else:  # each image individually (or 3d res)
                         for r, row in enumerate(values):
                             if any(row):
                                 out_values = extract_values(
@@ -213,7 +214,8 @@ def quicktest_output(input_main):
                                 string_list.extend(
                                     val_2_str(out_values, decimal_mark=dm)
                                     )
-                                suffixes.append(image_names[r])
+                                if res_pr_image:
+                                    suffixes.append(image_names[r])
 
                     if include_header:
                         # output label or table header + image_name or group_name
@@ -221,16 +223,18 @@ def quicktest_output(input_main):
                             if sub.columns == []:
                                 headers_this = headers
                             else:
-                                headers_this = []
-                                for c, header in enumerate(headers):
-                                    if c in sub.columns:
-                                        headers_this.append(header)
+                                headers_this = [
+                                    header for c, header in enumerate(headers)
+                                    if c in sub.columns]
                         else:
                             headers_this = [sub.label]
                         all_headers_this = []
-                        for suffix in suffixes:
-                            for header in headers_this:
-                                all_headers_this.append(header + '_' + suffix)
+                        if suffixes != []:
+                            for suffix in suffixes:
+                                for header in headers_this:
+                                    all_headers_this.append(header + '_' + suffix)
+                        else:
+                            all_headers_this = headers_this
                         header_list.extend(all_headers_this)
 
     return (string_list, header_list)
@@ -862,6 +866,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 image_input = image2d
             res = calculate_NM_SNI(
                 image_input, roi_array, image_info.pix[0])
+            #details_dict['2dNPS'] = 
             values = res['values']
 
             res = Results(
@@ -1111,7 +1116,6 @@ def calculate_3d(matrix, marked_3d, input_main):
 
     def Uni(images_to_test):
         headers = HEADERS[modality][test_code]['alt0']
-        #headers_sup = HEADERS_SUP[modality][test_code]['altAll']
         if len(images_to_test) == 0:
             res = Results(headers=headers)
         else:
@@ -1121,9 +1125,17 @@ def calculate_3d(matrix, marked_3d, input_main):
                 image_input, images_to_test[0], input_main)
             res = calculate_NM_uniformity(
                 image_input, roi_array, img_infos[0].pix[0])
+            details_dict = {
+                'sum_image': image_input,
+                'matrix': res['matrix'],
+                'du_matrix': res['du_matrix']
+                }
             values = res['values']
 
-            res = Results(headers=headers, values=[values], errmsg=errmsg, pr_image=False)
+            res = Results(
+                headers=headers, values=[values],
+                details_dict=[details_dict],
+                errmsg=errmsg, pr_image=False)
 
         return res
 
@@ -1138,10 +1150,7 @@ def calculate_3d(matrix, marked_3d, input_main):
                 image_input, images_to_test[0], input_main)
             res = calculate_NM_SNI(
                 image_input, roi_array, img_infos.pix[0])
-            details_dict = {
-                'matrix': res['matrix'],
-                'du_matrix': res['du_matrix']
-                }
+            details_dict = {'sum_image': image_input}
             values = res['values']
 
             res = Results(headers=headers, values=[values],
@@ -2089,14 +2098,14 @@ def calculate_NM_uniformity(image2d, roi_array, pix):
                 sub = image[y-2:y+2, x]
                 max_val = np.max(sub)
                 min_val = np.min(sub)
-                du_cols[y, x] = 100. * (max_val - min_val) / (max_val + min_val)
+                du_cols[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
         du_rows = np.zeros(image.shape)
         for y in range(sz_y):
             for x in range(2, sz_x - 2):
                 sub = image[y, x-2:x+2]
                 max_val = np.max(sub)
                 min_val = np.min(sub)
-                du_rows[y, x] = 100. * (max_val - min_val) / (max_val + min_val)
+                du_rows[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
         du_matrix = np.maximum(du_cols, du_rows)
         return {'du_matrix': du_matrix, 'du': np.max(du_matrix)}
 

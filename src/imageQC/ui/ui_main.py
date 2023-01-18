@@ -105,7 +105,7 @@ class GuiVariables():
     annotations: bool = True
     annotations_line_thick: int = 3
     annotations_font_size: int = 14
-    hidden_rgt_top: bool = False  # True if upper right panel collapsed
+    #hidden_rgt_top: bool = False  # True if upper right panel collapsed DELETE?
 
 
 class MainWindow(QMainWindow):
@@ -274,9 +274,13 @@ class MainWindow(QMainWindow):
                 filter="DICOM files (*.dcm);;All files (*)")
             file_list = fnames[0]
         if len(file_list) > 0:
+            self.start_wait_cursor()
+            self.statusBar.showMessage('Reading images...')
             new_img_infos, ignored_files = dcm.read_dcm_info(
                 file_list, tag_infos=self.tag_infos,
                 tag_patterns_special=self.tag_patterns_special)
+            self.stop_wait_cursor()
+            self.statusBar.showMessage('Finished reading images', 2000)
             if len(ignored_files) > 0:
                 msg = QMessageBox()
                 msg.setIcon(QMessageBox.Information)
@@ -579,9 +583,12 @@ class MainWindow(QMainWindow):
 
     def refresh_results_display(self, update_table=True):
         """Update GUI for test results when results or selections change."""
+        #TODO delete - confusing behaviour
+        '''
         if self.vGUI.hidden_rgt_top is False:
             if self.current_test in self.results:
                 self.hide_rgt_top()  # maximize results displays first time
+        '''
 
         if self.current_test not in self.results:
             # clear all
@@ -741,6 +748,7 @@ class MainWindow(QMainWindow):
         self.splitRgtMidBtm.setSizes(
             [round(self.vGUI.panel_height*0.4), round(self.vGUI.panel_height*0.4)])
 
+    #TODO delete? confusing behaviour
     def hide_rgt_top(self):
         """Hide QSplitter right top to better display results."""
         self.splitRgtTopRest.setSizes(
@@ -1110,7 +1118,13 @@ class TreeFileList(QTreeWidget):
         -------
         marked_img_ids : list of int
         """
-        marked_img_ids = [i for i, im in enumerate(self.main.imgs) if im.marked]
+        if self.main.wQuickTest.gbQT.isChecked():
+            marked_img_ids = [
+                i for i, im in enumerate(self.main.imgs)
+                if self.main.current_test in im.marked_quicktest]
+        else:
+            marked_img_ids = [
+                i for i, im in enumerate(self.main.imgs) if im.marked]
         return marked_img_ids
 
     def update_file_list(self):
@@ -1211,6 +1225,18 @@ class TreeFileList(QTreeWidget):
     def set_marking(self, remove_mark=False, remove_all=False):
         """Set or remove mark for testing from selected images."""
         selrows = self.get_selected_imgs()
+        # warning if none marked with current test - avoid confusing behaviour
+        if self.main.wQuickTest.gbQT.isChecked() and remove_mark:
+            ids_marked = set(self.get_marked_imgs_current_test())
+            ids_selected = set(selrows)
+            if len(list(ids_marked.intersection(ids_selected))) == 0:
+                QMessageBox.warning(
+                    self, 'Warning',
+                    ('You are trying to remove marking of '
+                     f'current test {self.main.current_test}. '
+                     'None of the selected rows were marked '
+                     'for this test.')
+                    )
         for sel in selrows:
             if self.main.wQuickTest.gbQT.isChecked():
                 tests_this = self.main.imgs[sel].marked_quicktest
@@ -1227,7 +1253,6 @@ class TreeFileList(QTreeWidget):
                 self.main.imgs[sel].marked = False
             else:
                 self.main.imgs[sel].marked = True
-
         if self.main.summed_img is not None:
             self.main.reset_summed_img()
         self.update_file_list()
@@ -1395,7 +1420,7 @@ class GenericImageWidget(QWidget):
         if self.mouse_pressed and self.tool_profile.isChecked():
             if event.inaxes and len(event.inaxes.get_images()) > 0:
                 if self.canvas.last_clicked_pos != (-1, -1):
-                    plotstatus = self.canvas.profile_draw(
+                    _ = self.canvas.profile_draw(
                         round(event.xdata), round(event.ydata))
 
     def image_on_release(self, event, pix=None):
@@ -2633,7 +2658,7 @@ class SelectQuickTestWidget(SelectTemplateWidget):
             df.to_clipboard(index=False, excel=True, sep=None)
         else:
             df = pd.DataFrame([value_list])
-            df.to_clipboard(index=False, excel=True, sep=None)
+            df.to_clipboard(index=False, excel=True, sep=None, header=None)
         self.main.statusBar.showMessage('Values in clipboard', 2000)
 
 
@@ -3688,6 +3713,10 @@ class ResultImageCanvas(GenericImageCanvas):
             self.title = 'Curvature corrected image'
             if 'corrected_image' in details_dict:
                 self.current_image = details_dict['corrected_image']
+        elif type_img == 3:
+            self.title = 'Summed image'
+            if 'sum_image' in details_dict:
+                self.current_image = details_dict['sum_image']
 
 
 class ResultImageNavigationToolbar(NavigationToolbar2QT):

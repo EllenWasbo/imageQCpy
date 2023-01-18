@@ -30,7 +30,7 @@ from imageQC.scripts.mini_methods_format import (
 # imageQC block end
 
 
-class RenameDicomDialog(QDialog):
+class RenameDicomDialog(uir.ImageQCDialog):
     """GUI setup for the Rename Dicom dialog window."""
 
     def __init__(self, open_filepaths=[], initial_modality='CT', tag_infos=None):
@@ -44,10 +44,6 @@ class RenameDicomDialog(QDialog):
         self.valid_dict = {}  # dict for folders (first) + files (second step)
 
         self.setWindowTitle('Rename DICOM')
-        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         splitter = QSplitter(Qt.Vertical)
         vLO = QVBoxLayout()
@@ -131,8 +127,6 @@ class RenameDicomDialog(QDialog):
         btnClose = QPushButton('Close window')
         btnClose.clicked.connect(self.accept)
         hLOdlgBtns.addWidget(btnClose)
-
-        self.statusBar = uir.StatusBar(self)
 
         self.wTagPattern.update_from_yaml()
 
@@ -512,8 +506,7 @@ class RenameDicomDialog(QDialog):
         sorted_dcm_files = []
 
         tag_pattern = cfc.TagPatternFormat(
-            list_tags=['SeriesInstanceUID', 'SeriesDescription'],
-            list_format=['', ''])
+            list_tags=['SeriesInstanceUID', 'SeriesDescription'])
 
         proceed = True
         for i, file in enumerate(dcm_files):

@@ -184,9 +184,12 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                         )
                 if len(nm_radius) == 1:
                     nm_radius = nm_radius[0]
-                if '[' in nm_radius[0]:
-                    nm_radius = nm_radius[1:-1]
-                    nm_radius = nm_radius.split(',')
+                try:
+                    if '[' in nm_radius[0]:
+                        nm_radius = nm_radius[1:-1]
+                        nm_radius = nm_radius.split(',')
+                except IndexError:
+                    pass
 
             if GUI:
                 ww = pd.get('WindowWidth', -1)

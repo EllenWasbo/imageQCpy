@@ -287,6 +287,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
             f'Failed to read import path {p}')
 
     if proceed:
+        if parent_widget is not None:
+            parent_widget.start_wait_cursor()
         import_log.append(
             f'Found {len(files)} files in import path {p}')
         if ignore_since != -1:
@@ -304,7 +306,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
             for mod, temps in templates.items():
                 station_names[mod] = []
                 for temp in temps:
-                    if temp.active:
+                    if temp.active and temp.label != '':
                         station_names[mod].append(temp.station_name)
                     else:
                         station_names[mod].append(None)
@@ -327,10 +329,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
 
         # prepare auto delete
         delete_files = []  # filenames to auto delete
-        n_delete_crit = len(auto_common.auto_delete_criterion_attributenames)
         delete_pattern = cfc.TagPatternFormat(
-            list_tags=auto_common.auto_delete_criterion_attributenames,
-            list_format=['']*n_delete_crit)
+            list_tags=auto_common.auto_delete_criterion_attributenames)
 
         for f_id, file in enumerate(files):
             pd = {}
@@ -383,8 +383,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                                     attr_names = dicom_crit_attributenames[mod][idx]
                                     if len(attr_names) > 0:
                                         tag_pattern = cfc.TagPatternFormat(
-                                            list_tags=attr_names,
-                                            list_format=[''] * len(attr_names))
+                                            list_tags=attr_names)
                                         tag_values = dcm.get_dcm_info_list(
                                             pd, tag_pattern, tag_infos,
                                             prefix_separator='', suffix_separator='',
@@ -431,6 +430,9 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
 
             if parent_widget is None:
                 print_progress('Reading DICOM header of files:', f_id + 1, len(files))
+            else:
+                parent_widget.statusBar.showMessage(
+                    f'Reading DICOM header of file {f_id + 1} / {len(files)}')
 
         # ensure uniq new file names
         fullpaths = [
@@ -449,12 +451,14 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
 
         for f_id, file in enumerate(files):
             if file_renames[f_id] != '':
-                status, errmsg = move_rename_file(
-                    file,
-                    fullpaths[f_id] + '.dcm',
-                )
-                if status is False:
-                    import_log.append(errmsg)
+                if (Path(file_new_folder[f_id]) != file.parent
+                    or file_renames[f_id] != file.stem):
+                    status, errmsg = move_rename_file(
+                        file,
+                        fullpaths[f_id] + '.dcm',
+                    )
+                    if status is False:
+                        import_log.append(errmsg)
 
         if templates is not None:
             for mod, temps in templates.items():
@@ -569,14 +573,17 @@ def move_rename_file(filepath_orig, filepath_new):
 
 
 def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
-                 select_files=False, parent_widget=None):
+                 pre_selected_files=[], parent_widget=None):
     """Find new images, generate img_dict, sort by date/sortpattern."""
     log = []
     not_written = []
     log_pre = f'Template {modality}/{auto_template.label}:'
     if os.path.exists(auto_template.path_input):
-        p = Path(auto_template.path_input)
-        files = [x for x in p.glob('*') if x.is_file()]
+        if len(pre_selected_files) > 0:
+            files = pre_selected_files
+        else:
+            p = Path(auto_template.path_input)
+            files = [x for x in p.glob('*') if x.is_file()]
         if len(files) > 0:
             if parent_widget is None:
                 print(f'Reading {len(files)} new files for template ',

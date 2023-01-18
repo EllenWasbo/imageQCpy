@@ -225,8 +225,7 @@ class ConfigIdl2Py():
             )
         empty_ParamSet.MR.dcm_tagpattern = cfc.TagPatternFormat(
             label='default',
-            list_tags=['ImagingFrequency', 'ReceiveCoilName', 'TransmitCoilName'],
-            list_format=['', '', '']
+            list_tags=['ImagingFrequency', 'ReceiveCoilName', 'TransmitCoilName']
             )
         self.errmsg.append(
             '------------------------------------------------------------ '

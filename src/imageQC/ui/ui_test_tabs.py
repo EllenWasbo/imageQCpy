@@ -399,7 +399,14 @@ class TestTabCommon(QTabWidget):
         tests = []
         marked_this = self.main.treeFileList.get_marked_imgs_current_test()
         if len(marked_this) == 0:
-            tests = [[self.main.current_test]] * len(self.main.imgs)
+            if self.main.wQuickTest.gbQT.isChecked():
+                QMessageBox.warning(
+                    self, 'No image marked',
+                    ('QuickTests option is active, but no image is marked '
+                     f'for the current test {self.main.current_test}')
+                    )
+            else:
+                tests = [[self.main.current_test]] * len(self.main.imgs)
         else:
             for im in range(len(self.main.imgs)):
                 if im in marked_this:
@@ -409,8 +416,9 @@ class TestTabCommon(QTabWidget):
         self.main.current_quicktest.tests = tests
         calculate_qc(self.main)
 
-        if self.main.vGUI.active_img_no not in marked_this:
-            self.main.set_active_img(marked_this[0])
+        if len(marked_this) > 0:
+            if self.main.vGUI.active_img_no not in marked_this:
+                self.main.set_active_img(marked_this[0])
 
 
 class TestTabDummyForCopy(TestTabCommon):
@@ -1370,7 +1378,8 @@ class TestTabNM(TestTabCommon):
             [
                 'Differential uniformity map',
                 'Processed image (6.4mm pix, smoothed, corrected)',
-                'Curvature corrected image'
+                'Curvature corrected image',
+                'Summed image (if sum marked)'
              ])
         self.uni_result_image.currentIndexChanged.connect(
             self.main.wResImage.canvas.result_image_draw)
@@ -1476,7 +1485,7 @@ class TestTabNM(TestTabCommon):
 
         self.sni_result_image = QComboBox()
         self.sni_result_image.addItems(
-            ['2d NPS', 'Curvature corrected image'])
+            ['2d NPS', 'Curvature corrected image', 'Summed image (if sum marked)'])
         self.sni_result_image.currentIndexChanged.connect(
             self.main.wResPlot.plotcanvas.plot)
 
@@ -2111,93 +2120,95 @@ class TestTabVendor(QWidget):
         if len(VENDOR_FILE_OPTIONS[self.main.current_modality]) > 0:
             filetype = VENDOR_FILE_OPTIONS[
                 self.main.current_modality][self.selected]
-            res = {'status': False}
+            res = []
+            file_not_match = []
+            res_failed = []
 
             if filetype == 'Siemens CT Constancy/Daily Reports (.pdf)':
-                fname = QFileDialog.getOpenFileNames(
+                fnames = QFileDialog.getOpenFileNames(
                         self, 'Open Siemens CT QC report files',
                         filter="PDF files (*.pdf)")
-                if len(fname[0]) > 0:
-                    self.main.statusBar.showMessage(
-                        'Reading pdf file(s)... takes a few seconds')
+                if len(fnames[0]) > 0:
+                    self.main.statusBar.showMessage('Reading pdf file(s)...')
                     self.main.start_wait_cursor()
-                    #QApplication.setOverrideCursor(Qt.WaitCursor)
-                    #qApp.processEvents()
-                    for f in fname[0]:
-                        txt = rvr.get_pdf_txt(fname[0])
+                    for fno, f in enumerate(fnames[0]):
                         self.main.statusBar.showMessage(
-                            'Extracting data from pdf')
-                        res_this = rvr.read_Siemens_CT_QC(
-                            txt)
+                            (f'Reading pdf file {fno+1}/{len(fnames[0])}...'
+                             ' takes a few seconds'))
+                        txt = rvr.get_pdf_txt(f)
+                        res_this = rvr.read_Siemens_CT_QC(txt)
                         if res_this['status']:
-                            breakpoint()  # update res
+                            if len(res) > 0:
+                                if len(res_this['headers']) == len(res[0]['headers']):
+                                    res.append(res_this)
+                                else:
+                                    file_not_match.append(f)
+                            else:
+                                res.append(res_this)
+                        else:
+                            res_failed.append(f)
                     self.main.stop_wait_cursor()
-                    #QApplication.restoreOverrideCursor()
                     self.main.statusBar.showMessage('Finished', 1000)
 
             elif filetype == 'GE QAP (.txt)':
                 #TODO
-                pass
+                QMessageBox.warning(
+                    self, 'Not implemented yet', 'Sorry - not implemented yet')
             elif filetype == 'Siemens exported energy spectrum':
                 #TODO
-                pass
+                QMessageBox.warning(
+                    self, 'Not implemented yet', 'Sorry - not implemented yet')
             elif filetype == 'Siemens PET-CT DailyQC Reports (.pdf)':
-                fname = QFileDialog.getOpenFileName(
+                fnames = QFileDialog.getOpenFileNames(
                         self, 'Open Siemens PET-CT QC report files',
                         filter="PDF files (*.pdf)")
-                if len(fname[0]) > 0:
-                    self.main.statusBar.showMessage(
-                        'Reading pdf file... takes a few seconds')
+                if len(fnames[0]) > 0:
+                    self.main.statusBar.showMessage('Reading pdf file(s)...')
                     self.main.start_wait_cursor()
-                    #QApplication.setOverrideCursor(Qt.WaitCursor)
-                    #qApp.processEvents()
-                    txt = rvr.get_pdf_txt(fname[0])
-                    self.main.statusBar.showMessage(
-                        'Extracting data from pdf')
-                    res = rvr.read_Siemens_PET_dailyQC(txt)
-                    #QApplication.restoreOverrideCursor()
+                    for fno, f in enumerate(fnames[0]):
+                        self.main.statusBar.showMessage(
+                            (f'Reading pdf file {fno+1}/{len(fnames[0])}...'
+                             ' takes a few seconds'))
+                        txt = rvr.get_pdf_txt(f)
+                        res_this = rvr.read_Siemens_PET_dailyQC(txt)
+                        if res_this['status']:
+                            res.append(res_this)
+                        else:
+                            res_failed.append(f)
                     self.main.stop_wait_cursor()
                     self.main.statusBar.showMessage('Finished', 1000)
             elif filetype == 'Siemens PET-MR DailyQC Reports (.xml)':
                 #TODO
-                pass
+                QMessageBox.warning(
+                    self, 'Not implemented yet', 'Sorry - not implemented yet')
             elif filetype == 'Philips MR PIQT / SPT report (.pdf)':
                 #TODO
-                pass
+                QMessageBox.warning(
+                    self, 'Not implemented yet', 'Sorry - not implemented yet')
             elif filetype == 'Philips MR ACR report (.pdf)':
                 #TODO
-                pass
+                QMessageBox.warning(
+                    self, 'Not implemented yet', 'Sorry - not implemented yet')
 
-            if res['status']:
+            if len(res) > 0:
                 self.main.wResTable.result_table.fill_table(
-                    row_labels=res['headers'],
-                    col_labels=[Path(fname[0]).stem],
-                    values_cols=[res['values_txt']],
+                    row_labels=res[0]['headers'],
+                    values_cols=[res_this['values_txt'] for res_this in res],
                     linked_image_list=False)
-
-'''
-class SpinRatio(QDoubleSpinBox):
-    """QDoubleSpinbox for ratios (0-100)."""
-
-    def __init__(self, parent, decimals=1):
-        super().__init__()
-        self.setRange(0.1, 100.)
-        self.setDecimals(decimals)
-        self.setSingleStep(0.1)
-        if decimals == 2:
-            self.setSingleStep(0.01)
-        self.valueChanged.connect(self.parent.clear_results)
-
-
-class SpinDegrees(QDoubleSpinBox):
-    """QDoubleSpinbox for degrees (-359.9-359.9)."""
-
-    def __init__(self, parent):
-        super().__init__()
-        self.setRange(-359.9, 359.9)
-        self.setDecimals(1)
-        self.valueChanged.connect(self.parent.clear_results)
-'''
+                if len(file_not_match) > 0:
+                    fs = '\n'.join(file_not_match)
+                    QMessageBox.warning(
+                        self, 'Files not matched',
+                        ('Some files did not match the content of the '
+                         'first file:\n{fs}')
+                        )
+            if len(res_failed) > 0:
+                fs = '\n'.join(res_failed)
+                QMessageBox.warning(
+                    self, 'Files not recognized',
+                    ('Some files did not match the expected content for filetype '
+                     f'{filetype}:\n{fs}')
+                    )
 
 
 class BoolSelectTests(uir.BoolSelect):

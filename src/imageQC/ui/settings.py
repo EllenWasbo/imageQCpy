@@ -352,7 +352,7 @@ class SettingsDialog(uir.ImageQCDialog):
             import_folder = dlg.selectedFiles()[0]
             if import_folder == cff.get_config_folder():
                 QMessageBox.warning(
-                    self, 'Select aother folder',
+                    self, 'Select another folder',
                     'Cannot import from the current config folder.')
             else:
                 ok, path, tag_infos_import = cff.load_settings(
@@ -606,6 +606,7 @@ class StackWidget(QWidget):
                 ok, path, self.auto_templates = cff.load_settings(
                     fname='auto_templates')
             if self.fname == 'auto_templates':
+                ok, path, self.auto_common = cff.load_settings(fname='auto_common')
                 ok, path, self.paramsets = cff.load_settings(fname='paramsets')
                 ok, path, self.quicktest_templates = cff.load_settings(
                     fname='quicktest_templates')
@@ -1251,11 +1252,11 @@ class ModTempSelector(QWidget):
                 self, 'Empty list',
                 'No template to delete.')
         else:
+            qtext = ''
             if hasattr(self.parent, 'list_used_in'):
                 if self.parent.list_used_in.count() > 0:
                     qtext = ' and all links to automation templates'
-            else:
-                qtext = ''
+
             if confirmed is False:
                 res = QMessageBox.question(
                     self, 'Delete?', f'Delete selected template{qtext}?',
@@ -1828,25 +1829,26 @@ class DicomTagDialog(uir.ImageQCDialog):
     def attribute_selected(self):
         """Update attribute name."""
         sel = self.list_tags.selectedIndexes()
-        rowno = sel[0].row()
-        cur_text = self.sample_attribute_names[rowno]
+        if len(sel) > 0:
+            rowno = sel[0].row()
+            cur_text = self.sample_attribute_names[rowno]
 
-        if 'Sequence' in cur_text:
-            if self.sample_sequences[0] == '':
-                self.sample_sequences[0] = cur_text
+            if 'Sequence' in cur_text:
+                if self.sample_sequences[0] == '':
+                    self.sample_sequences[0] = cur_text
+                else:
+                    self.sample_sequences.append(cur_text)
+                self.set_sequences()
+                self.get_all_tags_in_file()
+                self.actLevelUp.setEnabled(True)
+                self.cbox_value_id.clear()
             else:
-                self.sample_sequences.append(cur_text)
-            self.set_sequences()
-            self.get_all_tags_in_file()
-            self.actLevelUp.setEnabled(True)
-            self.cbox_value_id.clear()
-        else:
-            idx = self.sample_attribute_names.index(cur_text)
-            self.txt_attribute_name.setText(cur_text)
-            tag = self.sample_tags[idx]
-            self.tagString.setText(f'{tag.group:04x},{tag.element:04x}')
-            self.set_sequences()
-            self.get_tag_data()
+                idx = self.sample_attribute_names.index(cur_text)
+                self.txt_attribute_name.setText(cur_text)
+                tag = self.sample_tags[idx]
+                self.tagString.setText(f'{tag.group:04x},{tag.element:04x}')
+                self.set_sequences()
+                self.get_tag_data()
 
     def str_to_tag(self, txt):
         """Convert string input to tag hex and back to string."""
@@ -2089,7 +2091,8 @@ class DicomTagsWidget(StackWidget):
         """
         if keep_selection:
             sel = self.table_tags.selectedIndexes()
-            set_selected_row = sel[0].row()
+            if len(sel) > 0:
+                set_selected_row = sel[0].row()
 
         if reset_sort_index:
             cff.taginfos_reset_sort_index(self.templates)
@@ -2391,22 +2394,23 @@ class DicomTagsWidget(StackWidget):
             self.marked = []
 
         sel = self.table_tags.selectedIndexes()
-        row = sel[0].row()
-        item = self.table_tags.currentItem()
-        if ignore:
-            if row not in self.marked_ignore:
-                self.marked_ignore.append(row)
-            if row in self.marked:
-                self.marked.remove(row)
-            item.setBackground(0, QBrush(
-                    QColor(203, 91, 76)))
-        else:
-            if row not in self.marked:
-                self.marked.append(row)
-            if row in self.marked_ignore:
-                self.marked_ignore.remove(row)
-            item.setBackground(0, QBrush(
-                    QColor(127, 153, 85)))
+        if len(sel) > 0:
+            row = sel[0].row()
+            item = self.table_tags.currentItem()
+            if ignore:
+                if row not in self.marked_ignore:
+                    self.marked_ignore.append(row)
+                if row in self.marked:
+                    self.marked.remove(row)
+                item.setBackground(0, QBrush(
+                        QColor(203, 91, 76)))
+            else:
+                if row not in self.marked:
+                    self.marked.append(row)
+                if row in self.marked_ignore:
+                    self.marked_ignore.remove(row)
+                item.setBackground(0, QBrush(
+                        QColor(127, 153, 85)))
 
 
 class TagPatternSpecialWidget(StackWidget):
@@ -2902,6 +2906,8 @@ class AutoDeleteDialog(uir.ImageQCDialog):
         tag_infos : list of TagInfo
         value : str
             Value of DICOM attribute (if edit). Default is ''
+        search_path : str, optional
+            path to sample file
         """
         super().__init__()
         self.setWindowTitle('Auto delete option')
@@ -2949,11 +2955,9 @@ class AutoDeleteDialog(uir.ImageQCDialog):
                 self.search_path,
                 filter="DICOM file (*.dcm);;All files (*)")
         if len(fname[0]) > 0:
-            tag_pattern_this = cfc.TagPatternFormat(
-                list_tags=[self.attribute])#, list_format=[''])
+            tag_pattern_this = cfc.TagPatternFormat(list_tags=[self.attribute])
             tags = dcm.get_tags(
                 fname[0], tag_patterns=[tag_pattern_this],
-                prefix_separator='', suffix_separator='',
                 tag_infos=self.tag_infos)
             value = tags[0][0]
         self.txt_value.setText(value)
@@ -3027,18 +3031,20 @@ class AutoCommonWidget(StackWidget):
         self.tb_auto_delete = QToolBar()
         self.tb_auto_delete.setOrientation(Qt.Vertical)
         self.btn_push_crit_delete = QPushButton('<<')
+        self.btn_push_crit_delete.setToolTip(
+            'Add tag from DICOM tag list to Auto delete list with criterium.')
         self.btn_push_crit_delete.clicked.connect(self.push_auto_delete)
-        self.act_pop_auto_delete = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
-            'Delete selected row', self)
-        self.act_pop_auto_delete.triggered.connect(self.pop_auto_delete)
+        self.tb_auto_delete.addWidget(self.btn_push_crit_delete)
         self.act_edit_auto_delete = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
             'Edit selected row', self)
         self.act_edit_auto_delete.triggered.connect(self.edit_auto_delete)
+        self.act_pop_auto_delete = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+            'Delete selected row', self)
+        self.act_pop_auto_delete.triggered.connect(self.pop_auto_delete)
         self.tb_auto_delete.addActions([
             self.act_edit_auto_delete, self.act_pop_auto_delete])
-        self.tb_auto_delete.addWidget(self.btn_push_crit_delete)
         hLO_auto_delete.addWidget(self.tb_auto_delete)
         vLO_left.addLayout(hLO_auto_delete)
         vLO_left.addSpacing(20)
@@ -3141,17 +3147,23 @@ class AutoCommonWidget(StackWidget):
     def push_auto_delete(self):
         """Push currently selected DICOM tag to list of auto delete options."""
         sel_indexes = self.wTagPattern.listTags.selectedIndexes()
-        rowno = sel_indexes[0].row()
-        tag = self.wTagPattern.listTags.item(rowno).text()
-        dlg = AutoDeleteDialog(
-            tag, tag_infos=self.tag_infos,
-            search_path=self.import_path.text())
-        res = dlg.exec()
-        if res:
-            value = dlg.get_value()
-            self.templates.auto_delete_criterion_attributenames.append(tag)
-            self.templates.auto_delete_criterion_values.append(value)
-            self.fill_auto_delete_list()
+        if len(sel_indexes) > 0:
+            rowno = sel_indexes[0].row()
+            tag = self.wTagPattern.listTags.item(rowno).text()
+            dlg = AutoDeleteDialog(
+                tag, tag_infos=self.tag_infos,
+                search_path=self.import_path.text())
+            res = dlg.exec()
+            if res:
+                value = dlg.get_value()
+                self.templates.auto_delete_criterion_attributenames.append(tag)
+                self.templates.auto_delete_criterion_values.append(value)
+                self.fill_auto_delete_list()
+                self.flag_edit(True)
+        else:
+            QMessageBox.warning(
+                self, 'Select a tag',
+                'Select a tag from the DICOM tag list to push to the Auto delete list.')
 
     def edit_auto_delete(self):
         """Edit selected auto delete option."""
@@ -3159,19 +3171,19 @@ class AutoCommonWidget(StackWidget):
         if len(sel_indexes) > 0:
             rowno = sel_indexes[0].row()
             dlg = AutoDeleteDialog(
-                self,
                 self.templates.auto_delete_criterion_attributenames[rowno],
                 value=self.templates.auto_delete_criterion_values[rowno],
                 tag_infos=self.tag_infos,
                 search_path=self.import_path.text())
             res = dlg.exec()
             if res:
-                value = res.get_value()
+                value = dlg.get_value()
                 self.templates.auto_delete_criterion_values[rowno] = value
                 self.fill_auto_delete_list()
+                self.flag_edit(True)
         else:
             QMessageBox.information(
-                self, 'No row selected', 'Select a row to delete.')
+                self, 'No row selected', 'Select a row to edit.')
 
     def pop_auto_delete(self):
         """Delete selected auto-delete option."""
@@ -3183,6 +3195,10 @@ class AutoCommonWidget(StackWidget):
             for i in enumerate(rows2delete):
                 self.templates.auto_delete_criterion_attributenames.pop(i)
                 self.templates.auto_delete_criterion_values.pop(i)
+            self.flag_edit(True)
+        else:
+            QMessageBox.information(
+                self, 'No row selected', 'Select a row to delete.')
 
     def info_log(self):
         """Show info about log."""
@@ -3229,6 +3245,7 @@ class AutoTemplateWidget(StackWidget):
                          mod_temp=True, grouped=True)
         self.fname = 'auto_templates'
         self.empty_template = cfc.AutoTemplate()
+        self.sample_filepath = ''
 
         self.txt_input_path = QLineEdit('')
         self.txt_output_path = QLineEdit('')
@@ -3300,8 +3317,8 @@ class AutoTemplateWidget(StackWidget):
         tb = QToolBar()
         act_get_statname = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
-            'Get station name and DICOM criteria values from sample file', tb)
-        act_get_statname.triggered.connect(self.get_station_name)
+            'Get station name and empty DICOM criteria values from sample file', tb)
+        act_get_statname.triggered.connect(self.set_sample_file)
         tb.addActions([act_get_statname])
         hLOstatname.addWidget(tb)
         hLOstatname.addStretch()
@@ -3377,6 +3394,7 @@ class AutoTemplateWidget(StackWidget):
         self.fill_list_sort_by()
         self.chk_archive.setChecked(self.current_template.archive)
         self.chk_deactivate.setChecked(not self.current_template.active)
+        self.sample_filepath = ''
         self.flag_edit(False)
 
     def get_current_template(self):
@@ -3420,25 +3438,14 @@ class AutoTemplateWidget(StackWidget):
                 asc_desc_txt = '(ASC)' if list_sort[i] is True else '(DESC)'
                 self.list_sort_by.addItem(' '.join([list_tags[i], asc_desc_txt]))
 
-    def get_station_name(self):
-        """Get station name (and dicom criteria values) from sample file."""
-        def_path = self.txt_input_path.text()
-        if hasattr(self, 'sample_filepath'):
-            if self.sample_filepath != '':
-                def_path = self.sample_filepath
-        fname = QFileDialog.getOpenFileName(
-                self, 'Get station name (+ dicom criteria values) from sample file',
-                def_path,
-                filter="DICOM file (*.dcm);;All files (*)")
-        if len(fname[0]) > 0:
-            self.sample_filepath = fname[0]
-            tag_pattern_this = cfc.TagPatternFormat(
-                list_tags=['StationName'])#, list_format=[''])
+    def get_sample_file_data(self):
+        """Update dicom criterions from sample file."""
+        if self.sample_filepath != '':
+            tag_pattern_this = cfc.TagPatternFormat(list_tags=['StationName'])
             for attr_name in self.current_template.dicom_crit_attributenames:
-                tag_pattern_this.list_tags.append(attr_name)
-                #tag_pattern_this.list_format.append('')
+                tag_pattern_this.add_tag(attr_name)
             tags = dcm.get_tags(
-                fname[0], tag_patterns=[tag_pattern_this],
+                self.sample_filepath, tag_patterns=[tag_pattern_this],
                 tag_infos=self.tag_infos)
             self.current_template.station_name = tags[0][0]
             self.txt_statname.setText(tags[0][0])
@@ -3446,6 +3453,22 @@ class AutoTemplateWidget(StackWidget):
                 for i in range(1, len(tags[0])):
                     self.current_template.dicom_crit_values[i-1] = tags[0][i]
                 self.tree_crit.update_data()
+
+    def set_sample_file(self):
+        """Set sample file."""
+        if self.sample_filepath != '':
+            def_path = self.sample_filepath
+        else:
+            def_path = self.txt_input_path.text()
+            if def_path == '':
+                def_path = self.auto_common.import_path
+        fname = QFileDialog.getOpenFileName(
+                self, 'Get station name (+ dicom criteria values) from sample file',
+                def_path,
+                filter="DICOM file (*.dcm);;All files (*)")
+        if len(fname[0]) > 0:
+            self.sample_filepath = fname[0]
+            self.get_sample_file_data()
 
     def view_output_file(self):
         """View output file as txt."""
@@ -3580,8 +3603,7 @@ class AutoVendorTemplateWidget(StackWidget):
         act_get_statname = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
             'Get station name from sample file', tb)
-        act_get_statname.triggered.connect(
-            self.get_station_name)
+        act_get_statname.triggered.connect(self.get_station_name)
         tb.addActions([act_get_statname])
         hLOstatname.addWidget(tb)
         hLOstatname.addWidget(uir.LabelItalic(

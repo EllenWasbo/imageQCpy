@@ -12,7 +12,7 @@ from pathlib import Path
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QToolBar,
+    QVBoxLayout, QHBoxLayout, QToolBar,
     QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox, QListWidget,
     QFileDialog, QMessageBox
     )
@@ -74,17 +74,13 @@ def reset_auto_template(auto_template=None, parent_widget=None):
             f'Found no Archive to reset for the template {auto_template.label}')
 
 
-class OpenAutomationDialog(QDialog):
+class OpenAutomationDialog(uir.ImageQCDialog):
     """GUI setup for the Automation dialog window."""
 
     def __init__(self, main):
         super().__init__()
 
         self.setWindowTitle('Initiate automated analysis')
-        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         self.main = main
 
@@ -203,6 +199,9 @@ class OpenAutomationDialog(QDialog):
         btn_run_selected.clicked.connect(self.run_selected)
         btn_run_selected_files.clicked.connect(self.run_selected_files)
 
+        self.statusBar = uir.StatusBar(self)
+        vLO.addWidget(self.statusBar)
+
         self.refresh_list()
 
     def locate_folder(self, widget):
@@ -255,11 +254,18 @@ class OpenAutomationDialog(QDialog):
             if self.chk_ignore_since.isChecked():
                 ignore_since = self.spin_ignore_since.value()
             log_import = automation.import_incoming(
-                self.templates, self.tag_infos, parent_widget=self,
+                self.auto_common, self.templates, self.tag_infos, parent_widget=self,
                 ignore_since=ignore_since)
+            self.stop_wait_cursor()
+            self.statusBar.showMessage('Finished reading images', 2000)
             if len(log_import) > 0:
-                QMessageBox.information(
-                    self, 'Information', '\n'.join(log_import))
+                dlg = uir.TextDisplay(
+                    self, '\n'.join(log_import),
+                    title='Information',
+                    min_width=1000, min_height=300)
+                res = dlg.exec()
+                if res:
+                    pass  # just to wait for user to close message
         else:
             QMessageBox.information(
                 self, 'Warning', 'Import path not defined or do not exist.')
@@ -381,6 +387,11 @@ class OpenAutomationDialog(QDialog):
             dlg = settings.SettingsDialog(
                 self.main, initial_view=view)
             dlg.exec()
+        else:
+            QMessageBox.warning(
+                self, 'No template selected',
+                'Please select a template to edit in the Settings mananger'
+                )
 
     def run_all(self):
         """Run all templates."""
@@ -475,5 +486,7 @@ class OpenAutomationDialog(QDialog):
             self.main.stop_wait_cursor()
 
             if len(log) > 0:
+                if isinstance(msg, list):
+                    msg = '\n'.join(msg)
                 QMessageBox.warning(
-                    self, 'Automation log', '\n'.join(msg))
+                    self, 'Automation log', msg)

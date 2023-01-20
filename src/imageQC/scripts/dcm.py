@@ -34,7 +34,7 @@ class DcmInfo():
     filepath: str = ''
     modality: str = 'CT'  # as mode in imageQC
     modalityDCM: str = 'CT'  # as modality read from DICOM
-    marked: bool = True
+    marked: bool = False
     marked_quicktest: list = field(default_factory=list)
     quicktest_image_name: str = ''  # for result export
     quicktest_series_name: str = ''  # for result export
@@ -203,7 +203,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 attrib['window_width'] = ww
                 attrib['window_center'] = wc
 
-            if frames <= 1:
+            if frames == -1:
                 if GUI:
                     zpos = pd.get('SliceLocation', None)
                     attrib['zpos'] = zpos
@@ -280,9 +280,10 @@ def info_extract_frame(frame, info):
                         out_dict[key].append(
                             ''.join([tag[0], str(tag[1][frame]), tag[2]]))
                         #TODO format for tag1....
-                    except IndexError:
+                    except (IndexError, TypeError):
                         out_dict[key].append(
                             ''.join([tag[0], str(tag[1]), tag[2]]))
+
             else:
                 out_dict[key].append(tag)
 
@@ -398,7 +399,11 @@ def get_dcm_info_list(
                         else:
                             val_text = val[value_id]
                     if format_string != '':
-                        if not isinstance(val[0], float) and format_string[-1] == 'f':
+                        if format_string != '':
+                            last_format = format_string[-1]
+                        else:
+                            last_format = ''
+                        if not isinstance(val[0], float) and last_format == 'f':
                             try:
                                 val = [float(str(x)) for x in val]
                                 val_text = [
@@ -603,8 +608,13 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None):
                     npout = pd.pixel_array * pd.get('RescaleSlope', 1.) \
                         + pd.get('RescaleIntercept', 0.)
                 else:
-                    npout = pd.pixel_array[frame_number, :, :] * pd.get('RescaleSlope', 1.) \
-                        + pd.get('RescaleIntercept', 0.)
+                    ndim = pd.pixel_array.ndim
+                    if ndim == 3:
+                        pixarr = pd.pixel_array[frame_number, :, :]
+
+                    if pixarr is not None:
+                        npout = pixarr * pd.get('RescaleSlope', 1.) \
+                            + pd.get('RescaleIntercept', 0.)
             except AttributeError:
                 npout = pixarr
 

@@ -117,7 +117,6 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.save_blocked = False
-
         if os.environ[ENV_USER_PREFS_PATH] == '':
             if os.environ[ENV_CONFIG_FOLDER] == '':
                 self.save_blocked = True
@@ -127,13 +126,14 @@ class MainWindow(QMainWindow):
 
         # minimum parameters as for scripts.automation.InputMain
         self.update_settings()  # sets self.tag_infos (and a lot more)
+        plt.rcParams.update({'font.size': self.user_prefs.font_size})
+
         self.current_modality = 'CT'
         self.current_test = QUICKTEST_OPTIONS['CT'][0]
         self.current_paramset = copy.deepcopy(
             self.paramsets[self.current_modality][0])
         self.current_quicktest = cfc.QuickTestTemplate()
-        self.imgs = []
-        self.results = {}
+        self.clear_all_images()
         self.current_group_indicators = []
         # string for each image if output set pr group with quicktest (paramset.output)
         self.automation_active = False
@@ -147,17 +147,15 @@ class MainWindow(QMainWindow):
         self.statusBar = StatusBar(self)
         self.setStatusBar(self.statusBar)
         self.statusBar.showMessage('Starting up', 1000)
-        self.active_img = None  # np.array pixeldata for active image
-        self.summed_img = None  # sum of marked images if activated
-        self.average_img = False  # true if summed_img should be averaged
-        self.current_roi = None
 
         self.setWindowTitle('Image QC v ' + VERSION)
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setGeometry(self.vGUI.panel_width*0.02,
-                         self.vGUI.panel_height*0.05,
-                         self.vGUI.panel_width*2+30,
-                         self.vGUI.panel_height+50)
+        self.setGeometry(
+            round(self.vGUI.panel_width*0.02),
+            round(self.vGUI.panel_height*0.05),
+            round(self.vGUI.panel_width*2+30),
+            round(self.vGUI.panel_height+50)
+            )
 
         self.treeFileList = TreeFileList(self)
         self.create_menu_toolBar()
@@ -239,6 +237,26 @@ class MainWindow(QMainWindow):
         self.reset_split_sizes()
         self.update_mode()
 
+    def clear_all_images(self):
+        """Set empty values at startup and when all images closed."""
+        self.imgs = []
+        self.results = {}
+        self.active_img = None  # np.array pixeldata for active image
+        self.summed_img = None  # sum of marked images if activated
+        self.average_img = False  # true if summed_img should be averaged
+        self.current_roi = None
+        try:  # if gui all set
+            self.wImageDisplay.tool_sum.setChecked(False)
+            self.wImageDisplay.tool_sum.setIcon(QIcon(
+                f'{os.environ[ENV_ICON_PATH]}sigma.png'))
+            self.treeFileList.update_file_list()
+            self.wImageDisplay.canvas.ax.cla()
+            self.wImageDisplay.canvas.ax.axis('off')
+            self.wImageDisplay.canvas.draw()
+            self.refresh_results_display()
+        except AttributeError:
+            pass
+
     def get_modality_index(self, modality_string):
         """Get index of given modality string.
 
@@ -294,10 +312,13 @@ class MainWindow(QMainWindow):
             if len(new_img_infos) > 0:
                 nImgBefore = len(self.imgs)
                 if self.chkAppend.isChecked():
-                    if self.chkAppend.isChecked() and nImgBefore > 0:
+                    #TODO delete? changed to default False when opening files
+                    '''
+                    if nImgBefore > 0:
                         if self.wQuickTest.gbQT.isChecked() is False:
                             for d in new_img_infos:
                                 d.marked = False
+                    '''
                     self.imgs = self.imgs + new_img_infos
                     self.update_results(n_added_imgs=len(new_img_infos))
                 else:
@@ -393,12 +414,6 @@ class MainWindow(QMainWindow):
 
             self.refresh_img_display()
             self.refresh_results_display(update_table=False)
-            '''
-            if self.current_test in ['Sli', 'Uni']:
-                self.wResPlot.plotcanvas.plot()
-            if self.current_test in ['Uni']:
-                self.wResImage.canvas.result_image_draw()
-            '''
 
     def update_summed_img(self, recalculate_sum=True):
         """Overwrite pixmap in memory with new summed image, refresh GUI."""
@@ -440,9 +455,12 @@ class MainWindow(QMainWindow):
             f'{os.environ[ENV_ICON_PATH]}sigma.png'))
         self.summed_img = None
         self.average_img = False
-        self.active_img, tags = dcm.get_img(
-            self.imgs[self.vGUI.active_img_no].filepath,
-            frame_number=self.imgs[self.vGUI.active_img_no].frame_number)
+        try:
+            self.active_img, tags = dcm.get_img(
+                self.imgs[self.vGUI.active_img_no].filepath,
+                frame_number=self.imgs[self.vGUI.active_img_no].frame_number)
+        except IndexError:
+            pass
 
     def mode_changed(self):
         """Modality selection changed by user input, initiate update gui."""
@@ -992,6 +1010,12 @@ class MainWindow(QMainWindow):
         self.actWarning.triggered.connect(self.display_previous_warnings)
         self.actWarning.setEnabled(False)
 
+        actClose = QAction('Close selected images', self)
+        actClose.setShortcut('Ctrl+W')
+        actClose.triggered.connect(self.treeFileList.close_selected)
+        actCloseAll = QAction('Close all images', self)
+        actCloseAll.setShortcut('Ctrl+Shift+W')
+        actCloseAll.triggered.connect(self.clear_all_images)
         actQuit = QAction('&Quit', self)
         actQuit.setShortcut('Ctrl+Q')
         actQuit.triggered.connect(self.exit_app)
@@ -1000,7 +1024,7 @@ class MainWindow(QMainWindow):
         mFile = QMenu('&File', self)
         mFile.addActions([actOpen, actOpenAdv, actReadHeader,
                           actOpenAuto, actWizardAuto,
-                          actRenameDICOM, actQuit])
+                          actRenameDICOM, actClose, actCloseAll, actQuit])
         mb.addMenu(mFile)
         mSett = QMenu('&Settings', self)
         mSett.addAction(actSettings)
@@ -1093,6 +1117,7 @@ class TreeFileList(QTreeWidget):
         self.setColumnWidth(0, round(0.8*self.main.vGUI.panel_width))
         self.setColumnWidth(1, 90)
         self.currentItemChanged.connect(self.main.update_active_img)
+        self.itemDoubleClicked.connect(self.dbl_click_item)
         self.installEventFilter(self)
         self.setRootIsDecorated(False)
 
@@ -1104,12 +1129,14 @@ class TreeFileList(QTreeWidget):
         sel_rows : list of int
         """
         sel_rows = []
+        last_selected = 0
         for sel in self.selectedIndexes():
             if sel.column() > -1:
                 sel_rows.append(sel.row())
         if len(sel_rows) > 0:
+            last_selected = sel_rows[-1]
             sel_rows = list(set(sel_rows))  # remove duplicates
-        return sel_rows
+        return (sel_rows, last_selected)
 
     def get_marked_imgs_current_test(self):
         """Get images (idx) marked for current test.
@@ -1125,6 +1152,8 @@ class TreeFileList(QTreeWidget):
         else:
             marked_img_ids = [
                 i for i, im in enumerate(self.main.imgs) if im.marked]
+            if len(marked_img_ids) == 0:
+                marked_img_ids = list(np.arange(len(self.main.imgs)))
         return marked_img_ids
 
     def update_file_list(self):
@@ -1187,29 +1216,49 @@ class TreeFileList(QTreeWidget):
                 lambda: self.set_marking(remove_mark=True))
             actRemoveAllMarks = QAction('Remove all marks')
             actRemoveAllMarks.triggered.connect(self.clear_marking)
-            actMarkImgNo = QAction('Mark imgNo .. to ..')
+            #actMarkImgNo = QAction('Select imgNo .. to ..')
             #actMarkImgNo.triggered.connect(self.mark_imgNo)
+            actSelectInverse = QAction('Select inverse')
+            actSelectInverse.triggered.connect(self.select_inverse)
             actCloseSel = QAction('Close selected')
             actCloseSel.triggered.connect(self.close_selected)
             ctxMenu.addActions(
                     [actMark, actRemoveMarkSel, actRemoveAllMarks,
-                     actMarkImgNo, actCloseSel])
+                     actSelectInverse, actCloseSel])
 
             ctxMenu.exec(event.globalPos())
 
         return False
 
+    def select_inverse(self):
+        """Select the inverse of the currently selected images."""
+        selrows, last_selected = self.get_selected_imgs()
+        self.blockSignals(True)
+        for i in range(len(self.main.imgs)):
+            if i in selrows:
+                self.topLevelItem(i).setSelected(False)
+            else:
+                self.topLevelItem(i).setSelected(True)
+        self.blockSignals(False)
+
     def close_selected(self):
         """Select inverse of the currently selected images."""
-        selrows = self.get_selected_imgs()
+        selrows, last_selected = self.get_selected_imgs()
         if len(selrows) > 0:
-            selrows.sort(reverse=True)
-            for row in selrows:
-                del self.main.imgs[row]
-            if self.main.summed_img is not None:
-                self.main.reset_summed_img()
-            self.update_file_list()
-            self.main.update_results(deleted_idxs=selrows)
+            if len(selrows) == len(self.main.imgs):
+                self.main.clear_all_images()
+            else:
+                selrows.sort(reverse=True)
+                for row in selrows:
+                    del self.main.imgs[row]
+                if self.main.summed_img is not None:
+                    self.main.reset_summed_img()
+                if last_selected < len(self.main.imgs):
+                    self.main.set_active_img(last_selected)
+                else:
+                    self.main.set_active_img(0)
+                self.update_file_list()
+                self.main.update_results(deleted_idxs=selrows)
 
     def clear_marking(self):
         """Remove all marks for testing from selected images."""
@@ -1224,7 +1273,8 @@ class TreeFileList(QTreeWidget):
 
     def set_marking(self, remove_mark=False, remove_all=False):
         """Set or remove mark for testing from selected images."""
-        selrows = self.get_selected_imgs()
+        selrows, last_selected = self.get_selected_imgs()
+
         # warning if none marked with current test - avoid confusing behaviour
         if self.main.wQuickTest.gbQT.isChecked() and remove_mark:
             ids_marked = set(self.get_marked_imgs_current_test())
@@ -1237,32 +1287,55 @@ class TreeFileList(QTreeWidget):
                      'None of the selected rows were marked '
                      'for this test.')
                     )
-        for sel in selrows:
-            if self.main.wQuickTest.gbQT.isChecked():
-                tests_this = self.main.imgs[sel].marked_quicktest
-                if remove_mark:
-                    if self.main.current_test in tests_this:
-                        self.main.imgs[sel].marked_quicktest.remove(
-                            self.main.current_test)
-                else:
-                    if self.main.current_test not in tests_this:
-                        self.main.imgs[sel].marked_quicktest.append(
-                            self.main.current_test)
-                self.main.wQuickTest.flag_edit(True)
-            if remove_mark:
-                self.main.imgs[sel].marked = False
+
+        proceed = True
+        test_codes = []
+        if self.main.wQuickTest.gbQT.isChecked():
+            #TODO popup this test or select from list
+            txt = 'remove mark from' if remove_mark else 'mark for testing'
+            dlg = uir.SelectTestcodeDialog(
+                label=f'Select tests to {txt}',
+                modality=self.main.current_modality,
+                current_test=self.main.current_test)
+            res = dlg.exec()
+            if res:
+                test_codes = dlg.get_checked_testcodes()
             else:
-                self.main.imgs[sel].marked = True
-        if self.main.summed_img is not None:
-            self.main.reset_summed_img()
-        self.update_file_list()
-        if remove_all:
-            self.main.results = {}
-        if remove_mark:
-            self.main.update_results(deleted_idxs=selrows)
-        else:
-            self.main.results = {}
-        self.main.refresh_results_display()
+                proceed = False
+
+        if proceed:
+            for sel in selrows:
+                if self.main.wQuickTest.gbQT.isChecked():
+                    tests_this = self.main.imgs[sel].marked_quicktest
+                    if remove_mark:
+                        for test in test_codes:
+                            if test in tests_this:
+                                self.main.imgs[sel].marked_quicktest.remove(test)
+                    else:
+                        for test in test_codes:
+                            if test not in tests_this:
+                                self.main.imgs[sel].marked_quicktest.append(test)
+                    self.main.wQuickTest.flag_edit(True)
+                if remove_mark:
+                    self.main.imgs[sel].marked = False
+                else:
+                    self.main.imgs[sel].marked = True
+
+            if self.main.summed_img is not None:
+                self.main.reset_summed_img()
+            self.update_file_list()
+            if remove_all:
+                self.main.results = {}
+            if remove_mark:
+                self.main.update_results(deleted_idxs=selrows)
+            else:
+                self.main.results = {}
+            self.main.set_active_img(last_selected)
+            self.main.refresh_results_display()
+
+    def dbl_click_item(self):
+        """If double mouseclick on item - mark item for testing."""
+        self.set_marking()
 
 
 class DicomHeaderWidget(QWidget):

@@ -266,6 +266,7 @@ class OpenAutomationDialog(uir.ImageQCDialog):
                 res = dlg.exec()
                 if res:
                     pass  # just to wait for user to close message
+                
         else:
             QMessageBox.information(
                 self, 'Warning', 'Import path not defined or do not exist.')
@@ -381,17 +382,11 @@ class OpenAutomationDialog(uir.ImageQCDialog):
         sel = self.list_templates.selectedIndexes()
         if len(sel) > 0:
             tempno = sel[0].row()
-            # DELETE? mod = self.templates_mod[tempno]
             if self.templates_is_vendor[tempno]:
                 view = 'Templates vendor files'
-            dlg = settings.SettingsDialog(
-                self.main, initial_view=view)
-            dlg.exec()
-        else:
-            QMessageBox.warning(
-                self, 'No template selected',
-                'Please select a template to edit in the Settings mananger'
-                )
+        dlg = settings.SettingsDialog(
+            self.main, initial_view=view)
+        dlg.exec()
 
     def run_all(self):
         """Run all templates."""
@@ -486,7 +481,7 @@ class OpenAutomationDialog(uir.ImageQCDialog):
             self.main.stop_wait_cursor()
 
             if len(log) > 0:
-                if isinstance(msg, list):
-                    msg = '\n'.join(msg)
+                if isinstance(log, list):
+                    log = '\n'.join(log)
                 QMessageBox.warning(
-                    self, 'Automation log', msg)
+                    self, 'Automation log', log)

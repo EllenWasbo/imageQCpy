@@ -355,7 +355,10 @@ def calculate_qc(input_main):
                             tag_patterns=[paramset.dcm_tagpattern, group_pattern],
                             tag_infos=tag_infos
                             )
-                        tag_lists[i] = tags[0]
+                        if isinstance(tags[0], dict):
+                            tag_lists[i] = tags[0]['dummy']  #TODO fix this behaviour.... check if other negatie effects
+                        else:
+                            tag_lists[i] = tags[0]
                         input_main.current_group_indicators[i] = '_'.join(tags[1])
                     else:
                         tags = dcm.get_tags(
@@ -364,7 +367,10 @@ def calculate_qc(input_main):
                             tag_patterns=[paramset.dcm_tagpattern, group_pattern],
                             tag_infos=tag_infos
                             )
-                        tag_lists[i] = tags[0]
+                        if isinstance(tags[0], dict):
+                            tag_lists[i] = tags[0]['dummy']  #TODO fix this behaviour.... check if other negatie effects
+                        else:
+                            tag_lists[i] = tags[0]
                         input_main.current_group_indicators[i] = '_'.join(tags[1])
                 else:
                     if read_image[i]:
@@ -662,9 +668,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     values[1] = slice_thickness
                     values[2] = values[1] - values[0]
                     values.append(100. * values[2] / values[0])
-                except TypeError:
-                    values.append(None)
-                    values.append(None)
+                except (TypeError, IndexError):
+                    values = [values[0], None, None, None]
                 res = Results(
                     headers=headers, values=values,
                     headers_sup=headers_sup, values_sup=values_sup,

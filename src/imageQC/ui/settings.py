@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from time import time, ctime
 from dataclasses import asdict, dataclass, field
 import copy
@@ -28,8 +29,7 @@ import pydicom
 
 # imageQC block start
 from imageQC.config.iQCconstants import (
-    QUICKTEST_OPTIONS, CONFIG_FNAMES, ENV_ICON_PATH,
-    ENV_USER_PREFS_PATH, LOG_FILENAME,
+    QUICKTEST_OPTIONS, CONFIG_FNAMES, ENV_ICON_PATH, LOG_FILENAME,
     VENDOR_FILE_OPTIONS
     )
 import imageQC.config.config_func as cff
@@ -787,12 +787,14 @@ class StackWidget(QWidget):
             reciever of the path text
         """
         if opensave:
-            fname = QFileDialog.getSaveFileName(
+            fname, _ = QFileDialog.getSaveFileName(
                 self, title, widget.text(), filter=filter_str)
+            with open(fname, "w") as f:
+                f.write('')
         else:
-            fname = QFileDialog.getOpenFileName(
+            fname, _ = QFileDialog.getOpenFileName(
                 self, title, widget.text(), filter=filter_str)
-        widget.setText(os.path.normpath(fname[0]))
+        widget.setText(os.path.normpath(fname))
         self.flag_edit()
 
     def get_data(self):
@@ -804,15 +806,7 @@ class StackWidget(QWidget):
 
     def add(self, label):
         """Add current_template or empty_template to templates."""
-        '''
-        if current is False:
-            try:
-                self.current_template = copy.deepcopy(
-                    self.empty_template)
-            except AttributeError:
-                print('Missing empty template')
-                print(self)
-        '''
+        self.get_data()  # if get_current_template exist
         self.current_template.label = label
         if self.grouped:
             if self.templates[self.current_modality][0].label == '':
@@ -1126,7 +1120,7 @@ class ModTempSelector(QWidget):
         """Add new template to list. Ask for new name and verify."""
         text, ok = QInputDialog.getText(
             self, 'New label',
-            'Name the new ' + self.parent.typestr)
+            'Name the new ' + self.parent.typestr + '                      ')
         text = valid_template_name(text)
         if ok and text != '':
             if text in self.parent.current_labels:
@@ -1167,7 +1161,7 @@ class ModTempSelector(QWidget):
 
                 text, ok = QInputDialog.getText(
                     self, 'New label',
-                    'Rename ' + self.parent.typestr,
+                    'Rename ' + self.parent.typestr + '                      ',
                     text=currentText)
                 text = valid_template_name(text)
                 if ok and text != '' and currentText != text:
@@ -1203,9 +1197,9 @@ class ModTempSelector(QWidget):
                 duplicate_id = self.parent.current_labels.index(currentText)
 
                 text, ok = QInputDialog.getText(
-                    self,
-                    'New label',
-                    'Name the new ' + self.parent.typestr)
+                    self, 'New label',
+                    'Name the new ' + self.parent.typestr + '                      ',
+                    text=f'{currentText}_')
                 text = valid_template_name(text)
                 if ok and text != '':
                     if text in self.parent.current_labels:
@@ -1282,11 +1276,6 @@ class ModTempSelector(QWidget):
                         auto_labels = [
                             self.parent.list_used_in.item(i).text() for i
                             in range(self.parent.list_used_in.count())]
-                        all_auto_labels = [
-                            temp.label for temp
-                            in self.parent.auto_templates[
-                                self.parent.current_modality]
-                            ]
                         for temp in self.parent.auto_templates[
                                 self.parent.current_modality]:
                             if temp.label in auto_labels:
@@ -3047,12 +3036,18 @@ class AutoCommonWidget(StackWidget):
             self.act_edit_auto_delete, self.act_pop_auto_delete])
         hLO_auto_delete.addWidget(self.tb_auto_delete)
         vLO_left.addLayout(hLO_auto_delete)
+        self.chk_auto_delete_empty_folders = QCheckBox(
+            'Auto delete empty subfolders in image pool after import')
+        self.chk_auto_delete_empty_folders.stateChanged.connect(
+            lambda: self.flag_edit(True))
+        vLO_left.addWidget(self.chk_auto_delete_empty_folders)
         vLO_left.addSpacing(20)
 
         vLO_left.addWidget(uir.LabelHeader(
             'Append or overwrite log file', 4))
         self.cbox_log = QComboBox()
         self.cbox_log.addItems(['overwrite', 'append'])
+        self.cbox_log.currentIndexChanged.connect(lambda: self.flag_edit(True))
         hLO_log = QHBoxLayout()
         vLO_left.addLayout(hLO_log)
         hLO_log.addWidget(self.cbox_log)
@@ -3072,7 +3067,9 @@ class AutoCommonWidget(StackWidget):
         vLO_left.addWidget(uir.LabelHeader(
             'Ignore (leave unsorted) if old images', 4))
         self.chk_ignore_since = QCheckBox('Yes, ignore if more than ')
+        self.chk_ignore_since.stateChanged.connect(lambda: self.flag_edit(True))
         self.ignore_since = QSpinBox()
+        self.ignore_since.valueChanged.connect(lambda: self.flag_edit(True))
         self.ignore_since.setRange(1, 100)
         hLO_ignore_since = QHBoxLayout()
         vLO_left.addLayout(hLO_ignore_since)
@@ -3120,6 +3117,9 @@ class AutoCommonWidget(StackWidget):
         self.wTagPattern.fill_list_tags('')
         self.wTagPattern.update_data()
         self.import_path.setText(self.templates.import_path)
+        self.chk_auto_delete_empty_folders.setChecked(
+            self.templates.auto_delete_empty_folders)
+        self.cbox_log.setCurrentIndex(['w', 'a'].index(self.templates.log_mode))
         self.ignore_since.setValue(self.templates.ignore_since)
         self.chk_ignore_since.setChecked(self.templates.ignore_since > 0)
         self.fill_auto_delete_list()
@@ -3127,10 +3127,16 @@ class AutoCommonWidget(StackWidget):
     def save_auto_common(self):
         """Get current settings and save to yaml file."""
         self.templates.import_path = self.import_path.text()
+        if self.cbox_log.currentText() == 'overwrite':
+            self.templates.log_mode = 'w'
+        else:
+            self.templates.log_mode = 'a'
         if self.chk_ignore_since.isChecked():
             self.templates.ignore_since = self.ignore_since.value()
         else:
             self.templates.ignore_since = 0
+        self.templates.auto_delete_empty_folders = (
+            self.chk_auto_delete_empty_folders.isChecked())
 
         self.save()
 
@@ -3202,22 +3208,29 @@ class AutoCommonWidget(StackWidget):
 
     def info_log(self):
         """Show info about log."""
+        _, path, _ = cff.load_user_prefs()
         text = [
             'A (local) log will be genereted during import from image pool and',
             'as automation templates are run. This log will be saved at the',
             'same location as the local user settings:',
-            f'{ENV_USER_PREFS_PATH}',
+            f'{path}',
             'The log may be rewritten each time import or automation is',
             'initiated or the log may append to the existing log.'
             ]
         dlg = uir.TextDisplay(
-            self, '\n'.join(text), title='About the automation log',
-            min_width=1000, min_height=300)
+            self, '\n'.join(text),
+            title='About the automation log',
+            min_width=500, min_height=300)
+        res = dlg.exec()
+        if res:
+            pass  # just to wait for user to close message
 
     def view_log(self):
         """Display log file contents."""
-        if os.path.exists(os.path.join(ENV_USER_PREFS_PATH, LOG_FILENAME)):
-            os.startfile(ENV_USER_PREFS_PATH)
+        _, path, _ = cff.load_user_prefs()
+        log_path = Path(path).parent / LOG_FILENAME
+        if log_path.exists:
+            os.startfile(str(log_path))
 
     def mark_import(self, ignore=False):
         """If import review mode: Mark AutoCommon for import or ignore."""
@@ -3252,7 +3265,9 @@ class AutoTemplateWidget(StackWidget):
         self.txt_statname = QLineEdit('')
         self.tree_crit = uir.DicomCritWidget(self)
         self.cbox_paramset = QComboBox()
+        self.cbox_paramset.currentIndexChanged.connect(lambda: self.flag_edit(True))
         self.cbox_quicktest = QComboBox()
+        self.cbox_quicktest.currentIndexChanged.connect(lambda: self.flag_edit(True))
         self.list_sort_by = QListWidget()
         self.chk_archive = QCheckBox(
             'Move files to folder "Archive" when finished analysing.')
@@ -3295,7 +3310,7 @@ class AutoTemplateWidget(StackWidget):
                              'Create an empty file', tb)
         actNewFile.triggered.connect(
             lambda: self.locate_file(
-                self.txt_output_path, title='Locate output file',
+                self.txt_output_path, title='Create empty output file',
                 filter_str="Text file (*.txt)", opensave=True))
         tb.addActions([actNewFile, act_output_view])
 
@@ -3400,7 +3415,31 @@ class AutoTemplateWidget(StackWidget):
     def get_current_template(self):
         """Get self.current_template where not dynamically set."""
         self.current_template.path_input = self.txt_input_path.text()
+        if self.current_template.path_input != '':
+            if not Path(self.current_template.path_input).exists():
+                proceed = uir.proceed_question(
+                    self, 'Input path do not exist. Proceed creating an empty folder?')
+                if proceed:
+                    try:
+                        Path(self.current_template.path_input).mkdir(parents=True)
+                    except (NotADirectoryError, FileNotFoundError) as ex:
+                        QMessageBox.warning(
+                            self, 'Error',
+                            f'Failed creating the folder {ex}.')
         self.current_template.path_output = self.txt_output_path.text()
+        if self.current_template.path_output != '':
+            if not Path(self.current_template.path_output).exists():
+                proceed = uir.proceed_question(
+                    self, 'Output path do not exist. Proceed creating an empty file?')
+                if proceed:
+                    try:
+                        with open(self.current_template.path_output, "w") as f:
+                            f.write('')
+                    except IOError as ex:
+                        QMessageBox.warning(
+                            self, 'Error',
+                            f'Failed creating the file {ex}.')
+
         self.current_template.station_name = self.txt_statname.text()
         self.current_template.paramset_label = self.cbox_paramset.currentText()
         self.current_template.quicktemp_label = self.cbox_quicktest.currentText()
@@ -3489,6 +3528,7 @@ class AutoTemplateWidget(StackWidget):
         if res:
             sort_pattern = dlg.get_pattern()
             self.current_template.sort_pattern = sort_pattern
+            self.flag_edit(True)
             self.fill_list_sort_by()
 
     def move_modality(self):

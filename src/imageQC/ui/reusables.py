@@ -495,6 +495,66 @@ class QuestionBox(QMessageBox):
             """)
 
 
+class ListWidgetCheckable(QListWidget):
+    """Checkable list widget."""
+
+    def __init__(self, texts=[], set_checked_ids=[]):
+        super().__init__()
+        self.texts = texts
+        self.addItems(self.texts)
+
+        for i in range(len(self.texts)):
+            item = self.item(i)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            if i in set_checked_ids:
+                item.setCheckState(Qt.Checked)
+            else:
+                item.setCheckState(Qt.Unchecked)
+
+    def get_checked_ids(self):
+        checked_ids = []
+        for i in range(self.count()):
+            if self.item(i).checkState() == Qt.Checked:
+                checked_ids.append(i)
+        return checked_ids
+
+    def get_checked_texts(self):
+        checked_texts = []
+        for i, txt in enumerate(self.texts):
+            if self.item(i).checkState() == Qt.Checked:
+                checked_texts.append(txt)
+        return checked_texts
+
+
+class SelectTestcodeDialog(ImageQCDialog):
+    """Dialog to select tests."""
+
+    def __init__(self, label='', modality='CT', current_test=''):
+        super().__init__()
+        self.setWindowTitle('Select tests')
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
+
+        vLO.addWidget(QLabel(label))
+        testcodes = QUICKTEST_OPTIONS[modality]
+        idx_current_test = testcodes.index(current_test)
+        self.list_widget = ListWidgetCheckable(
+            texts=testcodes,
+            set_checked_ids=[idx_current_test]
+            )
+        vLO.addWidget(self.list_widget)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vLO.addWidget(self.buttonBox)
+
+    def get_checked_testcodes(self):
+        """Get list of checked testcode ids."""
+        return self.list_widget.get_checked_texts()
+
+
 class TagPatternTree(QWidget):
     """Widget for tag pattern and toolbar used in TagPatternWidget."""
 
@@ -1613,19 +1673,7 @@ class QuickTestOutputSubDialog(ImageQCDialog):
                 alts = ALTERNATIVES[self.modality][testcode]
             except KeyError:
                 alts = ['-']
-            '''
-            TODO delete? new solution not fully tested
-            try:
-                altsup = HEADERS_SUP[self.modality][testcode]#['altSup']
-                if len(altsup) > 0:
-                    # add alternative sup not just sup if not supAll
-                    if alts[0] == '-':
-                        alts = ['Results table', self.suplement_txt]
-                    else:
-                        alts.append(self.suplement_txt)
-            except KeyError:
-                pass
-            '''
+
             self.cbox_alternatives.blockSignals(True)
             self.cbox_alternatives.clear()
             self.cbox_alternatives.addItems(alts)
@@ -1874,17 +1922,19 @@ class DicomCritWidget(QWidget):
         """Delete selected criterion."""
         sels = self.tableCrit.selectedIndexes()
         if len(sels) > 0:
-            if len(sels) == len(self.parent.current_template.dicom_crit_attributenames):
-                self.clear()
-            else:
-                delrows = [sel.row() for sel in sels]
-                delrows.sort(reverse=True)
-                row = 0
-                for row in delrows:
-                    self.parent.current_template.dicom_crit_attributenames.pop(row)
-                    self.parent.current_template.dicom_crit_values.pop(row)
-                self.update_data(set_selected=row)
-                self.parent.flag_edit()
+            sel_rows = [sel.row() for sel in sels]
+            if len(sel_rows) > 0:
+                sel_rows = list(set(sel_rows))  # remove duplicates
+                if len(sel_rows) == len(
+                        self.parent.current_template.dicom_crit_attributenames):
+                    self.clear()
+                else:
+                    sel_rows.sort(reverse=True)
+                    for row in sel_rows:
+                        self.parent.current_template.dicom_crit_attributenames.pop(row)
+                        self.parent.current_template.dicom_crit_values.pop(row)
+                    self.update_data()
+                    self.parent.flag_edit()
 
     def clear(self):
         """Clear all criteria."""
@@ -2197,7 +2247,7 @@ class PlotCanvas(FigureCanvasQTAgg):
             unit = ''
             if '(mm)' in xtitle:
                 unit = ' mm'
-            self.ax.set_title(f'Profile lengt:h {length:.1f} {unit}')
+            self.ax.set_title(f'Profile length: {length:.1f} {unit}')
 
         self.draw()
 

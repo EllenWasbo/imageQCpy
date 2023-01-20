@@ -441,6 +441,7 @@ class AutoCommon:
         str] = field(default_factory=lambda: ['Modality'])
     auto_delete_criterion_values: list[
         str] = field(default_factory=lambda: ['SR'])
+    auto_delete_empty_folders: bool = False
     filename_pattern: TagPatternFormat = field(
         default_factory=TagPatternFormat)
 

@@ -5,6 +5,7 @@ To create phantom test data with anonymized equipment.
 @author: ellen
 """
 import sys
+import re
 from pathlib import Path
 
 from PyQt5.QtWidgets import QWidget, QFileDialog, QApplication, QVBoxLayout, QPushButton
@@ -46,7 +47,7 @@ class filedialog(QWidget):
                     pd['PatientID'].value = 'id'
                     pd['PatientName'].value = 'NN'
                     pd['PatientBirthDate'].value = '19000101'
-                    
+
                     keys = ['InstitutionName',
                             'InstitutionAddress',
                             'ReferringPhysicianName',
@@ -68,6 +69,7 @@ class filedialog(QWidget):
                     except KeyError:
                         pass
                     new_filename += '_' + f"{pd['InstanceNumber'].value:03}"
+                    new_filename = re.sub(r'[^\.\w]', '_', new_filename)
                     new_filename += '.dcm'
 
                     new_path = Path(out_folder) / new_filename

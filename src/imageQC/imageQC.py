@@ -139,6 +139,8 @@ if __name__ == '__main__':
         myFont = QtGui.QFont()
         myFont.setPointSize(user_prefs.font_size)
         app.setFont(myFont)
+        font_metric = QtGui.QFontMetrics(myFont)
+        char_width = font_metric.averageCharWidth()
 
         if user_prefs.dark_mode:
             palette = QtGui.QPalette()
@@ -164,7 +166,7 @@ if __name__ == '__main__':
             dlg.show()
             splash.finish(dlg)
             dlg.exec()
-        w = ui_main.MainWindow(scX=sz.width(), scY=sz.height())
+        w = ui_main.MainWindow(scX=sz.width(), scY=sz.height(), char_width=char_width)
         w.show()
         splash.finish(w)
         app.exec()

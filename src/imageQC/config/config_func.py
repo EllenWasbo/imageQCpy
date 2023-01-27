@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from time import time, ctime
 import yaml
+import numpy as np
 from PyQt5.QtCore import QFile, QIODevice, QTextStream
 from dataclasses import asdict
 
@@ -17,9 +18,10 @@ from PyQt5.QtWidgets import QMessageBox, QFileDialog
 # imageQC block start
 from imageQC.config.iQCconstants import (
     USERNAME, APPDATA, TEMPDIR, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER,
-    CONFIG_FNAMES, USER_PREFS_FNAME
+    CONFIG_FNAMES, USER_PREFS_FNAME, QUICKTEST_OPTIONS
     )
 import imageQC.config.config_classes as cfc
+from imageQC.scripts.mini_methods import get_included_tags
 # imageQC block end
 
 
@@ -696,56 +698,118 @@ def import_settings(import_main):
     return any_same_name
 
 
-def get_paramsets_used_in_auto_templates(auto_templates):
-    """For each paramset find which auto_templates using this.
+def get_taginfos_used_in_templates(object_with_templates):
+
+    status = True
+    log = []
+
+    fname = 'tag_infos'
+    if hasattr(object_with_templates, fname):
+        tag_infos = getattr(object_with_templates, fname)
+    else:
+        ok, path, templates = load_settings(fname=fname)
+
+    modalities = [*QUICKTEST_OPTIONS]
+    defined_attributes = {}
+    for mod in modalities:
+        general_tags, included_tags = get_included_tags(
+            mod, object_with_templates.tag_infos)
+        defined_attributes[mod] = general_tags + included_tags
+
+    found_attributes = {mod: [] for mod in modalities}
+    fnames = ['tag_patterns_special', 'tag_patterns_format',
+              'tag_patterns_sort', 'rename_patterns', 'paramsets',
+              'auto_templates']
+    for fname in fnames:
+        if hasattr(object_with_templates, fname):
+            templates = getattr(object_with_templates, fname)
+        else:
+            ok, path, templates = load_settings(fname=fname)
+        for mod in templates:
+            for template in templates[mod]:
+                if 'patterns' in fname:
+                    found_attributes[mod].extend(template.list_tags)
+                if fname == 'rename_patterns':
+                    found_attributes[mod].extend(template.list_tags2)
+                if fname == 'paramsets':
+                    found_attributes[mod].extend(
+                        template.dcm_tagpattern.list_tags)
+                    found_attributes[mod].extend(template.output.group_by)
+                if fname == 'auto_templates':
+                    found_attributes[mod].extend(template.dicom_crit_attributenames)
+                    found_attributes[mod].extend(template.sort_pattern.list_tags)
+
+        fname = 'auto_common'
+        if hasattr(object_with_templates, fname):
+            templates = getattr(object_with_templates, fname)
+        else:
+            ok, path, template = load_settings(fname=fname)
+        found_attributes['CT'].extend(template.auto_delete_criterion_attributenames)
+        found_attributes['CT'].extend(template.filename_pattern.list_tags)
+
+    for mod, found_attr in found_attributes.items():
+        missing = []
+        for attr in found_attr:
+            if attr not in defined_attributes[mod]:
+                missing.append(attr)
+        if len(missing) > 0:
+            log.append(f'{mod}: missing definition of DICOM tags named {missing}')
+            status = False
+
+    return (status, log, found_attributes)
+
+
+def get_ref_label_used_in_auto_templates(auto_templates, ref_attr='paramset_label'):
+    """For each paramset or quicktest template find which auto_templates using this.
 
     Parameters
     ----------
     auto_templates : dict
         key = modalitystring
         value = AutoTemplate
+    ref_fname : str
+        'paramset_label' or 'quicktemp_label'
 
     Returns
     -------
-    paramsets_in_auto : dict
+    templates_in_auto : dict
         key = modalitystring
-        value = [paramset.label, [auto_template.label, ...]]
+        value = [[.label, auto_template.label],...]
 
     """
-    paramsets_in_auto = {}
-    for mod in auto_templates:
-        auto_param = []
-        for temp in auto_templates[mod]:
-            auto_param.append([temp.label, temp.paramset_label])
-        paramsets_in_auto[mod] = [auto_param]
-
-    return paramsets_in_auto
-
-
-def get_quicktest_used_in_auto_templates(auto_templates):
-    """For each paramset find which auto_templates using this.
-
-    Parameters
-    ----------
-    auto_templates : dict
-        key = modalitystring
-        value = AutoTemplate
-
-    Returns
-    -------
-    quicktest_templates_in_auto : dict
-        key = modalitystring
-        value = [[quicktest.label, auto_template.label],...]
-
-    """
-    quicktest_templates_in_auto = {}
+    templates_in_auto = {}
     for mod in auto_templates:
         qt_param = []
         for temp in auto_templates[mod]:
-            qt_param.append([temp.label, temp.quicktemp_label])
-        quicktest_templates_in_auto[mod] = [qt_param]
+            qt_param.append([temp.label, getattr(temp, ref_attr)])
+        templates_in_auto[mod] = qt_param
 
-    return quicktest_templates_in_auto
+    return templates_in_auto
+
+
+def verify_auto_templates(main):
+    """Verify all paramsets and quicktest templates in auto_templates are defined."""
+    status = True
+    log = []
+    if hasattr(main, 'auto_templates'):
+        for fname in ['paramsets', 'quicktest_templates']:
+            ref_attr = 'paramset_label' if fname == 'paramset' else 'quicktemp_label'
+            temp_in_auto = get_ref_label_used_in_auto_templates(
+                main.auto_templates, ref_attr=ref_attr)
+            if hasattr(main, fname):
+                mod_dict = getattr(main, fname)
+                for mod, templist in mod_dict:
+                    all_labels = [t.label for t in templist]
+                    missing = []
+                    temp_labels, _ = np.array(temp_in_auto[mod]).T.tolist()
+                    for label in temp_labels:
+                        if label not in all_labels:
+                            missing.append(label)
+                    if len(missing) > 0:
+                        log.append(f'{mod}: missing definition of {fname} {missing}')
+                        status = False
+
+    return (status, log)
 
 
 def taginfos_reset_sort_index(tag_infos):
@@ -765,7 +829,7 @@ def tag_infos_difference(tag_infos_import, tag_infos):
     tag_infos_new = []
     for tag in tag_infos_import:
         if tag.attribute_name not in old_attr:
-            tag_infos_new.append(tag)  # TODO chech if already with other name?
+            tag_infos_new.append(tag)
     return tag_infos_new
 
 
@@ -867,8 +931,8 @@ def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):
                     # list all automation templates where paramset used
                     ok, path, auto_templates = load_settings(
                         fname='auto_templates')
-                    param_auto = get_paramsets_used_in_auto_templates(
-                        auto_templates)
+                    param_auto = get_ref_label_used_in_auto_templates(
+                        auto_templates, ref_attr='paramset_label')
 
                 if name == '':
                     log.append(f'{fname} with changed attribute_names:')
@@ -939,6 +1003,61 @@ def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):
             status = False
 
     return (status, log)
+
+
+def verify_tag_infos(main):
+    """Find all tags used and if all these are defined in main.tag_infos."""
+    status = True
+    log = []
+
+    modalities = [*QUICKTEST_OPTIONS]
+    defined_attributes = {}
+    for mod in modalities:
+        general_tags, included_tags = get_included_tags(mod, main.tag_infos)
+        defined_attributes[mod] = general_tags + included_tags
+
+    found_attributes = {mod: [] for mod in modalities}
+    fnames = ['tag_patterns_special', 'tag_patterns_format',
+              'tag_patterns_sort', 'rename_patterns', 'paramsets',
+              'auto_templates']
+    for fname in fnames:
+        if hasattr(main, fname):
+            templates = getattr(main, fname)
+        else:
+            ok, path, templates = load_settings(fname=fname)
+        for mod in templates:
+            for template in templates[mod]:
+                if 'patterns' in fname:
+                    found_attributes[mod].extend(template.list_tags)
+                if fname == 'rename_patterns':
+                    found_attributes[mod].extend(template.list_tags2)
+                if fname == 'paramsets':
+                    found_attributes[mod].extend(
+                        template.dcm_tagpattern.list_tags)
+                    found_attributes[mod].extend(template.output.group_by)
+                if fname == 'auto_templates':
+                    found_attributes[mod].extend(template.dicom_crit_attributenames)
+                    found_attributes[mod].extend(template.sort_pattern.list_tags)
+
+        fname = 'auto_common'
+        if hasattr(main, fname):
+            templates = getattr(main, fname)
+        else:
+            ok, path, template = load_settings(fname=fname)
+        found_attributes['CT'].extend(template.auto_delete_criterion_attributenames)
+        found_attributes['CT'].extend(template.filename_pattern.list_tags)
+
+    for mod, found_attr in found_attributes.items():
+        missing = []
+        for attr in found_attr:
+            if attr not in defined_attributes[mod]:
+                missing.append(attr)
+        if len(missing) > 0:
+            log.append(f'{mod}: missing definition of DICOM tags named {missing}')
+            status = False
+
+    return (status, log)
+
 
 
 def get_icon_path(user_pref_dark_mode):

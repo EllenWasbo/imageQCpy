@@ -257,7 +257,7 @@ def get_width_center_at_threshold(
     above = np.where(profile > threshold)
     below = np.where(profile < threshold)
 
-    if len(above[0]) > 2 and len(below[0]) > 2:
+    if len(above[0]) > 1 and len(below[0]) > 1:
         if above[0][0] >= 1 or force_above:
             center_indexes = above[0]
         else:

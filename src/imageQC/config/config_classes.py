@@ -57,6 +57,7 @@ class TagInfo:
     limited2mod: list = field(default_factory=lambda: [''])
     # modality (imageQC) where this tag is valid, '' = valid for all
     unit: str = ''
+    factor: float = 1.0  # multiply by factor (igored if 1.0)
     protected: bool = False  # avoid deleting this tag
 
 
@@ -257,11 +258,10 @@ class ParamSetCT(ParamSetCommon):
     sli_search_width: int = 10
     sli_average_width: int = 1
     sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom
-    #sli_signal_low_density: bool = False
-    # False = wire/ramp higher density than background
     rin_median_filter_w: int = 0  # in pix on image
     rin_smooth_filter_w: float = 1.  # in mm on radial profile
-    rin_range: list[float] = field(default_factory=lambda: [5., 65.])
+    rin_range_start: float = 5.
+    rin_range_stop: float = 65.
     # mm from center
     rin_subtract_trend: bool = True
     # True = subtract trend, False = subtract mean
@@ -320,15 +320,23 @@ class ParamSetNM(ParamSetCommon):
     sni_eye_filter_f: float = 1.3
     sni_eye_filter_c: float = 28.
     sni_eye_filter_r: float = 65.  # in mm
-    mtf_type: int = 1
-    mtf_roi_size: list[float] = field(default_factory=lambda: [20., 20.])
-    mtf_plot: int = 4
+    mtf_type: int = 1  #  [Point, line (default), Two lines, Four edges, Circular edge]
+    mtf_roi_size_x: float = 50.
+    mtf_roi_size_y: float = 50.
+    mtf_plot: int = 4  # xyprofiles, line, sorted, LSF, MTF (default)
+    mtf_gaussian: bool = True  # True= (gaussian/exp) fit, False = discrete FFT
+    mtf_cut_lsf: bool = True
+    mtf_cut_lsf_w: int = 3
+    mtf_auto_center: bool = False
+    mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     bar_roi_size: float = 50.
-    bar_widths: list[float] = field(
-        default_factory=lambda: [6.4, 4.8, 4.0, 3.2])
-    spe_avg: int = 25
+    bar_width_1: float = 6.4
+    bar_width_2: float = 4.8
+    bar_width_3: float = 4.0
+    bar_width_4: float = 3.2
+    spe_avg: int = 200
     spe_height: float = 100.
-    spe_filter_w: int = 15
+    spe_filter_w: int = 0
 
 
 @dataclass
@@ -377,7 +385,18 @@ class ParamSetMR(ParamSetCommon):
     sli_dist_lower: float = -2.5
     sli_dist_upper: float = 2.5
     sli_optimize_center: bool = True
-
+    mtf_type: int = 1  # exponential=0, gaussian=1, None(discrete)=2
+    mtf_roi_size_x: int = 20.
+    mtf_roi_size_y: int = 50.
+    mtf_plot: int = 3
+    mtf_gaussian: bool = True  # True= (gaussian/exp) fit, False = discrete FFT
+    mtf_cut_lsf: bool = True
+    mtf_cut_lsf_w: int = 3
+    mtf_offset_xy: list[float] = field(default_factory=lambda: [0., 0.])
+    mtf_offset_mm: bool = False  # False = pix, True = mm
+    mtf_auto_center: bool = False
+    mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
+    mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
 
 @dataclass
 class ParamSet:
@@ -405,6 +424,15 @@ class QuickTestTemplate:
     # if name is '' then use img number
     group_names: list = field(default_factory=list)
     # if name is '' series <seriesnumber> as in dicom
+
+    def __post_init__(self):
+        """Add empty image and group_names if not defined."""
+        diff = len(self.tests) - len(self.image_names)
+        if diff > 0:
+            self.image_names.extend([''] * diff)
+        diff = len(self.tests) - len(self.group_names)
+        if diff > 0:
+            self.group_names.extend([''] * diff)
 
     def add_index(self, test_list=[], image_name='', group_name='', index=-1):
         """Add element in each list at given index or append."""
@@ -434,7 +462,8 @@ class AutoCommon:
 
     import_path: str = ''
     log_mode: str = 'w'
-    auto_continue: bool = False  # ignored if without GUI
+    auto_continue: bool = True  # ignored if without GUI
+    display_images: bool = True  # ignored if without GUI
     last_import_date: str = ''  # yyyymmdd
     ignore_since: int = 0  # ignore importing images older than X days
     auto_delete_criterion_attributenames: list[

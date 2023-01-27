@@ -11,11 +11,13 @@ import numpy as np
 import scipy as sp
 import skimage
 
+from PyQt5.QtWidgets import qApp
+
 # imageQC block start
 import imageQC.scripts.dcm as dcm
 from imageQC.scripts.calculate_roi import get_rois
 from imageQC.scripts.mini_methods import get_min_max_pos_2d
-from imageQC.scripts.mini_methods_format import val_2_str
+import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
 from imageQC.config.iQCconstants import HEADERS, HEADERS_SUP
@@ -73,6 +75,13 @@ def extract_values(values, columns=[], calculation='='):
             selected_values = vals
             allvals = vals
 
+        for i, val in enumerate(allvals):
+            try:
+                val = float(val)
+                allvals[i] = val
+            except ValueError:
+                pass
+
         is_string = [isinstance(val, str) for val in allvals]
 
         if calculation == '=' or any(is_string):
@@ -120,9 +129,6 @@ def quicktest_output(input_main):
                 for i in range(n_imgs):
                     if set_names[i] != '':
                         image_names[i] = set_names[i]
-
-        #TODO if output_temp.transpose_table:
-        #TODO if output_temp.include_filename:
 
         include_header = True  # always included when automation if empty output file
         if input_main.automation_active is False:
@@ -187,7 +193,7 @@ def quicktest_output(input_main):
                                 calculation=sub.calculation
                                 )
                             string_list.extend(
-                                val_2_str(out_values, decimal_mark=dm)
+                                mmf.val_2_str(out_values, decimal_mark=dm)
                                 )
                             if len(out_values) > 1:
                                 suffixes.append(image_names_this)
@@ -212,7 +218,7 @@ def quicktest_output(input_main):
                                     calculation=sub.calculation
                                     )
                                 string_list.extend(
-                                    val_2_str(out_values, decimal_mark=dm)
+                                    mmf.val_2_str(out_values, decimal_mark=dm)
                                     )
                                 if res_pr_image:
                                     suffixes.append(image_names[r])
@@ -240,7 +246,36 @@ def quicktest_output(input_main):
     return (string_list, header_list)
 
 
-def calculate_qc(input_main):
+def convert_taglists_to_numbers(taglists):
+    """Try convert to number.
+
+    Parameters
+    ----------
+    taglists : list of lists
+        extracted dicom parameters
+
+    Returns
+    -------
+    taglists : list of lists
+        DESCRIPTION.
+
+    """
+    for r, row in enumerate(taglists):
+        for c, val in enumerate(row):
+            new_val = val
+            try:
+                new_val = float(val)
+            except ValueError:
+                try:
+                    new_val = int(val)
+                except ValueError:
+                    pass
+            taglists[r][c] = new_val
+
+    return taglists
+
+
+def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
     """Calculate tests according to current info in main.
 
     Parameters
@@ -255,6 +290,10 @@ def calculate_qc(input_main):
             could also be list of list if different results pr image (MTF point)
             or pr different results when pr_image=False
                 e.g. MTF point [{x_data}, {y_data}]
+    auto_widget : OpenAutomationDialog, optional
+        if not None - draw image on OpenAutomationDialog canvas when test finished
+    auto_template_label : str, optional
+        AutoTemplate.label if automation - to display if auto_widget
     """
     current_test_before = input_main.current_test
     delta_xya = [0, 0, 0.0]  # only for GUI version
@@ -273,6 +312,8 @@ def calculate_qc(input_main):
             input_main.vGUI.delta_a]
 
     paramset = input_main.current_paramset
+    if auto_widget is not None:
+        auto_widget.wImageDisplay.canvas.main.current_paramset = paramset
     img_infos = input_main.imgs
     tag_infos = input_main.tag_infos
     quicktest = input_main.current_quicktest
@@ -293,12 +334,17 @@ def calculate_qc(input_main):
         if len(flattened_marked) > 0:
             read_tags = [False] * n_img
             read_image = [False] * n_img
+            NM_count = [False] * n_img
             for i in range(n_img):
                 if len(marked[i]) > 0:
                     if 'DCM' in marked[i]:
                         read_tags[i] = True
                     if marked[i].count('DCM') != len(marked[i]):
                         read_image[i] = True  # not only DCM
+                    if input_main.current_modality == 'NM' and 'DCM' in marked[i]:
+                        if 'CountsAccumulated' in paramset.dcm_tagpattern.list_tags:
+                            read_image[i] = True
+                            NM_count[i] = True
 
             # remove old results
             existing_tests = [*input_main.results]
@@ -347,13 +393,15 @@ def calculate_qc(input_main):
                         f'{pre_msg} Reading image data {i} of {n_img}')
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
+                image = None
                 if read_tags[i]:
                     if read_image[i]:
                         image, tags = dcm.get_img(
                             img_infos[i].filepath,
                             frame_number=img_infos[i].frame_number,
                             tag_patterns=[paramset.dcm_tagpattern, group_pattern],
-                            tag_infos=tag_infos
+                            tag_infos=tag_infos, NM_count=NM_count[i],
+                            get_window_level=any(auto_template_label)
                             )
                         if isinstance(tags[0], dict):
                             tag_lists[i] = tags[0]['dummy']  #TODO fix this behaviour.... check if other negatie effects
@@ -378,9 +426,14 @@ def calculate_qc(input_main):
                             img_infos[i].filepath,
                             frame_number=img_infos[i].frame_number,
                             tag_patterns=[group_pattern],
-                            tag_infos=tag_infos
+                            tag_infos=tag_infos,
+                            get_window_level=any(auto_template_label)
                             )
                         input_main.current_group_indicators[i] = '_'.join(tags[0])
+                if auto_widget is not None and image is not None:
+                    auto_widget.wImageDisplay.canvas.main.active_img = image
+                    auto_widget.wImageDisplay.canvas.img_draw(auto=True,
+                                                              window_level=tags[-1])
 
                 for test in marked[i]:
                     input_main.current_test = test
@@ -404,6 +457,17 @@ def calculate_qc(input_main):
                                 if errmsg is not None:
                                     errmsgs.append(f'{test} get ROI slice{i}:')
                                     errmsgs.append(errmsg)
+                            if auto_widget is not None:
+                                auto_widget.wImageDisplay.canvas.main.current_test = (
+                                    test)
+                                auto_widget.wImageDisplay.canvas.main.current_roi = (
+                                    prev_roi[test])
+                                auto_widget.wImageDisplay.canvas.roi_draw()
+                                auto_widget.main.statusBar.showMessage((
+                                    f'Executing template {auto_template_label} '
+                                    f'img {i+1}/{n_img}'
+                                    ))
+                                qApp.processEvents()
 
                             result = calculate_2d(
                                 image, prev_roi[test], img_infos[i],
@@ -467,6 +531,13 @@ def calculate_qc(input_main):
 
             # For test DCM
             if any(read_tags):
+                ignore_cols = []
+                for idx, val in enumerate(paramset.dcm_tagpattern.list_format):
+                    if len(val) > 2:
+                        if val[2] == '0':
+                            ignore_cols.append(idx)
+                tag_lists = mmf.convert_lists_to_numbers(
+                    tag_lists, ignore_columns=ignore_cols)
                 input_main.results['DCM'] = {
                     'headers': paramset.dcm_tagpattern.list_tags,
                     'values': tag_lists,
@@ -714,7 +785,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     headers_sup=headers_sup, values_sup=values_sup,
                     details_dict=details, alternative=alt)
 
-        elif modality == 'Xray':
+        elif modality in ['Xray', 'MR']:
             alt = paramset.mtf_type
             headers = HEADERS[modality][test_code]['alt0']
             if image2d is None:
@@ -739,6 +810,18 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 res = Results(
                     headers=headers, values=values,
                     details_dict=details, alternative=alt, errmsg=errmsg)
+
+        elif modality == 'NM':
+            alt = paramset.mtf_type
+            headers = HEADERS[modality][test_code]['alt' + str(alt)]
+            headers_sup = HEADERS_SUP[modality][test_code]['alt' + str(alt)]
+            #if image2d is None:
+            res = Results(headers=headers, headers_sup=headers_sup)
+            #else:
+            #    rows = np.max(roi_array[0], axis=1)
+            #    cols = np.max(roi_array[0], axis=0)
+            #    sub = image2d[rows][:, cols]
+            #    breakpoint()
 
         return res
 
@@ -881,6 +964,60 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
         return res
 
+    def Spe():
+        headers = HEADERS[modality][test_code]['alt0']
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            rows = np.max(roi_array, axis=1)
+            cols = np.max(roi_array, axis=0)
+            sub = image2d[rows][:, cols]
+            profile = np.mean(sub, axis=1)
+            if paramset.spe_filter_w > 0:
+                profile = sp.ndimage.gaussian_filter(
+                    profile, sigma=paramset.spe_filter_w)
+            profile_pos = np.arange(profile.size) * image_info.pix[0]
+            mean_profile = np.mean(profile)
+            diff_profile = 100. * (profile - mean_profile) / mean_profile
+            details_dict = {'profile': profile, 'profile_pos': profile_pos,
+                            'mean_profile': mean_profile, 'diff_profile': diff_profile}
+            values = [np.min(diff_profile), np.max(diff_profile)]
+
+            res = Results(
+                headers=headers, values=values,
+                details_dict=details_dict)
+
+        return res
+
+    def Bar():
+        headers = HEADERS[modality][test_code]['alt0']
+        # ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',
+        #    'FWHM1', 'FWHM2', 'FWHM3', 'FWHM4']
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            if len(roi_array) == 4:
+                values = []
+                for roi_this in roi_array:
+                    arr = np.ma.masked_array(image2d, mask=np.invert(roi_this))
+                    avg_val = np.mean(arr)
+                    var_val = np.var(arr)
+                    values.append(np.sqrt(2*(var_val - avg_val)) / avg_val)  # MTF
+
+                const = 4./np.pi * np.sqrt(np.log(2))
+                bar_widths = np.array([paramset.bar_width_1, paramset.bar_width_2,
+                                       paramset.bar_width_3, paramset.bar_width_4])
+                fwhms = const * np.multiply(
+                    bar_widths,
+                    np.sqrt(np.log(1/np.array(values)))
+                    )
+                values.extend(list(fwhms))
+                res = Results(headers=headers, values=values)
+            else:
+                res = Results(headers=headers)
+                #TODO errmsg what could go wrong?
+        return res
+
     def PIU():
         headers = HEADERS[modality][test_code]['alt0']
         # ['min', 'max', 'PIU'],
@@ -933,7 +1070,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         else:
             mask_outer = round(paramset.geo_mask_outer / image_info.pix[0])
             actual_size = paramset.geo_actual_size
-            rotate =[0, 45]
+            rotate = [0, 45]
             widths = []
             for r in rotate:
                 if r > 0:
@@ -1076,7 +1213,9 @@ def calculate_3d(matrix, marked_3d, input_main):
         idxs_first_imgs = []
         headers = HEADERS[modality][test_code]['alt0']
         if len(images_to_test) <= 1:
-            res = Results(headers=headers)
+            res = Results(
+                headers=headers,
+                errmsg='At least to images required. SNR based on subtraction image.')
         else:
             n_pairs = len(images_to_test)//2
             for i in range(n_pairs):
@@ -1472,7 +1611,6 @@ def calculate_MTF_point(matrix, img_info, paramset):
             as returned by mmcalc.get_MTF_gauss
             + values [MTF 50%, 10%, 2%]
     """
-    values = []
     details = []
     for ax in [1, 0]:
         details_dict = {}
@@ -1566,7 +1704,6 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
     # linear fit x, y
     fit_xy = []
     for values in [center_x, center_y]:
-        #try:
         res = sp.stats.linregress(values, zpos)
         fit_xy.append(zpos * res.slope + res.intercept)
     #TODO if valid so far... else proceed False
@@ -1746,7 +1883,7 @@ def calculate_MTF_edge(matrix, pix, paramset):
             y_fit = slope * x_fit + intercept
             angle = np.abs((180/np.pi) * np.arctan(
                 (x_fit[1]-x_fit[0])/(y_fit[1]-y_fit[0])
-                ))  # TODO *pix(0)/pix(1) if pix not isotropic
+                ))
 
             # sort pixels by position normal to edge
             dist_map = get_distance_map_edge(
@@ -2226,7 +2363,7 @@ def calculate_NM_SNI(image2d, roi_array, pix):
 
     return SNI_values
 
-    
+
 '''
 function get_rNPS, NPS_2d, ROIsz, pix, dists, sorting, smoothWidth, sampFreq
   

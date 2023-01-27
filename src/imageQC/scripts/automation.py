@@ -17,7 +17,7 @@ import pydicom
 # imageQC block start
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
-from imageQC.scripts.input_main_no_gui import InputMain
+from imageQC.scripts.input_main_auto import InputMain
 from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
 import imageQC.scripts.read_vendor_QC_reports as read_vendor_QC_reports
 import imageQC.scripts.dcm as dcm
@@ -582,8 +582,37 @@ def move_rename_file(filepath_orig, filepath_new):
 
 
 def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
-                 pre_selected_files=[], parent_widget=None):
-    """Find new images, generate img_dict, sort by date/sortpattern."""
+                 pre_selected_files=[], parent_widget=None):#, input_main_this=None):
+    """Find new images, generate img_dict, sort by date/sortpattern.
+
+    Parameters
+    ----------
+    auto_template : AutoTemplate
+        as defined in config_classes.py
+    modality : str
+        modality as defined in imageQC
+    paramsets : dict
+        collection of available paramsets from .yaml
+        keys = modalities
+        values = list of ParamSetXX defined in config_classes.py
+    qt_templates : dict
+        collection of available quicktest templates from .yaml
+        keys = modalities
+        values = list of QuickTestTemplate defined in config_classes.py
+    tag_infos : list
+        list of TagInfo as defined in config_classes.py
+    pre_selected_files : list of str, optional
+        list of filepaths to analyse, not search for new. The default is [].
+    parent_widget : widget, optional
+        Widget to recieve messages. The default is None i.e. print messages to console.
+
+    Returns
+    -------
+    log : TYPE
+        DESCRIPTION.
+    not_written : TYPE
+        DESCRIPTION.
+    """
     log = []
     not_written = []
     log_pre = f'Template {modality}/{auto_template.label}:'
@@ -660,10 +689,12 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                         input_main_this.results = {}
                         input_main_this.current_group_indicators = []
 
-                        calculate_qc(input_main_this)
+                        calculate_qc(input_main_this, auto_widget=parent_widget,
+                                     auto_template_label=auto_template.label)
                         value_list, header_list = quicktest_output(input_main_this)
                         header_list = ['Date'] + header_list
                         value_list = [date_str] + value_list
+
                         status, print_array = append_auto_res(
                             auto_template, header_list, value_list,
                             to_file=write_ok
@@ -677,7 +708,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                         '\rFinished analysing template                              ',
                         '                                                           ')
                     log.append(
-                        'Finished analysing template ({nd} sessions)'
+                        f'Finished analysing template ({nd} sessions)'
                         )
     else:
         if os.path.exists(auto_template.path_input) is False:

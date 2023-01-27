@@ -10,7 +10,7 @@ from pathlib import Path
 
 import imageQC.scripts.dcm as dcm
 import imageQC.config.config_classes as cfc
-from imageQC.scripts.input_main_no_gui import InputMain
+from imageQC.scripts.input_main_auto import InputMain
 import imageQC.scripts.calculate_roi as calculate_roi
 import imageQC.scripts.calculate_qc as calculate_qc
 import imageQC.resources
@@ -49,12 +49,8 @@ def test_CTn():
         current_modality='CT',
         current_test='CTn',
         current_paramset=cfc.ParamSetCT(),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=[['CTn']],
-            image_names=[''],
-            group_names=['']
-            ),
-        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['CTn']]),
+        tag_infos=tag_infos,
         automation_active=False
         )
 
@@ -75,12 +71,8 @@ def test_CT_Sli_axial():
         current_modality='CT',
         current_test='Sli',
         current_paramset=cfc.ParamSetCT(),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=[['Sli']],
-            image_names=[''],
-            group_names=[''],
-            ),
-        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Sli']]),
+        tag_infos=tag_infos,
         automation_active=False,
         )
 
@@ -100,12 +92,8 @@ def test_CT_Dim():
         current_modality='CT',
         current_test='Dim',
         current_paramset=cfc.ParamSetCT(),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=[['Dim']],
-            image_names=[''],
-            group_names=['']
-            ),
-        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Dim']]),
+        tag_infos=tag_infos,
         automation_active=False
         )
 
@@ -127,12 +115,8 @@ def test_CT_Sli_helical():
         current_modality='CT',
         current_test='Sli',
         current_paramset=cfc.ParamSetCT(sli_type=1),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=[['Sli']],
-            image_names=[''],
-            group_names=[''],
-            ),
-        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Sli']]),
+        tag_infos=tag_infos,
         automation_active=False,
         )
 
@@ -157,12 +141,8 @@ def test_CT_MTF_bead():
             mtf_roi_size=3.,
             mtf_auto_center=True
             ),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=[['MTF']],
-            image_names=[''],
-            group_names=['']
-            ),
-        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]),
+        tag_infos=tag_infos,
         automation_active=False
         )
 
@@ -186,12 +166,8 @@ def test_CT_Teflon_MTF_circular_edge():
             mtf_auto_center=True,
             mtf_offset_xy=[-105, 175],
             ),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=[['MTF']],
-            image_names=[''],
-            group_names=[''],
-            ),
-        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]),
+        tag_infos=tag_infos,
         automation_active=False,
         )
 
@@ -214,11 +190,7 @@ def test_CT_Acrylic_MTF_circular_edge():
         current_paramset=cfc.ParamSetCT(
             mtf_offset_xy=[-115, -175],
             ),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=[['MTF'], ['MTF'], ['MTF']],
-            image_names=[['']] * 3,
-            group_names=[['']] * 3,
-            ),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['MTF'], ['MTF'], ['MTF']]),
         tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False,
         )
@@ -243,11 +215,7 @@ def test_CT_Polystyrene_MTF_circular_edge():
         current_paramset=cfc.ParamSetCT(
             mtf_offset_xy=[105, -175],
             ),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=[['MTF'], ['MTF'], ['MTF']],
-            image_names=[['']] * 3,
-            group_names=[['']] * 3,
-            ),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['MTF'], ['MTF'], ['MTF']]),
         tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
         automation_active=False,
         )
@@ -270,12 +238,8 @@ def test_Xray_MTF_autocenter():
         current_modality='Xray',
         current_test='MTF',
         current_paramset=cfc.ParamSetXray(mtf_auto_center=True, mtf_auto_center_type=0),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=[['MTF']],
-            image_names=[''],
-            group_names=['']
-            ),
-        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]),
+        tag_infos=tag_infos,
         automation_active=False
         )
 
@@ -292,7 +256,6 @@ def test_Xray_MTF_autocenter():
 
 def test_NM_uniformity():
 
-    #tag_infos = read_tag_infos_from_yaml()
     file_path = path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist.dcm'
     img_infos, ignored_files = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=tag_infos)
@@ -304,8 +267,6 @@ def test_NM_uniformity():
     res = calculate_qc.get_corrections_point_source(
             image, image_dict, roi_array[0],
             fit_x=True, fit_y=True, lock_z=-1.)
-    #values = calculate_qc.calculate_NM_uniformity(
-    #    res['corrected_image'], roi_array, image_dict.pix[0])
 
     assert res['distance'] > 0
 
@@ -318,10 +279,8 @@ def test_NM_uniformity_sum():
         current_paramset=cfc.ParamSetNM(uni_sum_first=True, uni_ufov_ratio=0.9),
         current_quicktest=cfc.QuickTestTemplate(
             tests=[['']] + [['Uni']]*65 + [['']] + [['Uni']]*65,
-            image_names=[''] * 132,
-            group_names=[''] * 132
             ),
-        tag_infos=tag_infos,  # read_tag_infos_from_yaml(),
+        tag_infos=tag_infos,
         automation_active=False
         )
 
@@ -332,10 +291,33 @@ def test_NM_uniformity_sum():
 
     calculate_qc.calculate_qc(input_main)
 
-    print(input_main.results['Uni']['values'])
     assert round(input_main.results['Uni']['values'][0][0]) == 6
 
 '''
+def test_NM_MTF_2_linesources():
+
+    input_main = InputMain(
+        current_modality='NM',
+        current_test='MTF',
+        current_paramset=cfc.ParamSetNM(mtf_type=2, mtf_auto_center=True),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = path_tests / 'test_inputs' / 'NM' / 'linesource_planar.dcm'
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    breakpoint()
+
+    print(input_main.results['MTF']['values'])
+    assert round(input_main.results['Uni']['values'][0][0]) == 6
+
+
+
 def test_NM_SNI():
 
     tag_infos = read_tag_infos_from_yaml()
@@ -366,11 +348,7 @@ def test_MR_SNR():
         current_modality='MR',
         current_test='SNR',
         current_paramset=cfc.ParamSetMR(),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=tests,
-            image_names=[''] * 11,
-            group_names=[''] * 11
-            ),
+        current_quicktest=cfc.QuickTestTemplate(tests=tests),
         tag_infos=tag_infos,
         automation_active=False
         )
@@ -395,11 +373,7 @@ def test_MR_Geo():
         current_modality='MR',
         current_test='Geo',
         current_paramset=cfc.ParamSetMR(),
-        current_quicktest=cfc.QuickTestTemplate(
-            tests=tests,
-            image_names=[''] * 11,
-            group_names=[''] * 11
-            ),
+        current_quicktest=cfc.QuickTestTemplate(tests=tests),
         tag_infos=tag_infos,
         automation_active=False
         )

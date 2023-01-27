@@ -5,6 +5,7 @@ value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: true
 ---
 sort_index: 1
@@ -14,6 +15,7 @@ value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: true
 ---
 sort_index: 2
@@ -23,6 +25,7 @@ value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 3
@@ -32,6 +35,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [NM, SPECT, PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 4
@@ -41,357 +45,397 @@ value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 5
-attribute_name: FrameAcquisitionDateTime
-tag: ['0x18', '0x9074']
+attribute_name: ActualFrameDuration
+tag: ['0x18', '0x1242']
 value_id: -1
-sequence: [PerFrameFunctionalGroupsSequence, FrameContentSequence]
-limited2mod: ['']
-unit: ''
+sequence: ['']
+limited2mod: [NM, SPECT, PET]
+unit: msec
+factor: 1.0
 protected: false
 ---
 sort_index: 6
 attribute_name: ActualFrameDuration
 tag: ['0x18', '0x1242']
 value_id: -1
-sequence: ['']
+sequence: [PhaseInformationSequence]
 limited2mod: [NM, SPECT, PET]
 unit: msec
+factor: 1.0
 protected: false
 ---
 sort_index: 7
-attribute_name: ActualFrameDuration
+attribute_name: ActualFrameDurationMinutes
+tag: ['0x18', '0x1242']
+value_id: -1
+sequence: ['']
+limited2mod: [NM, SPECT, PET]
+unit: min
+factor: 1.6667e-05
+protected: false
+---
+sort_index: 8
+attribute_name: ActualFrameDurationMinutes
 tag: ['0x18', '0x1242']
 value_id: -1
 sequence: [PhaseInformationSequence]
 limited2mod: [NM, SPECT, PET]
-unit: msec
+unit: min
+factor: 1.6667e-05
 protected: false
 ---
-sort_index: 8
+sort_index: 9
 attribute_name: AngularStep
 tag: ['0x18', '0x1144']
 value_id: -1
 sequence: [RotationInformationSequence]
 limited2mod: [NM, SPECT]
 unit: deg
+factor: 1.0
 protected: false
 ---
-sort_index: 9
+sort_index: 10
 attribute_name: AngularViewVector
 tag: ['0x54', '0x90']
 value_id: -2
 sequence: ['']
 limited2mod: [NM, SPECT]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 10
+sort_index: 11
 attribute_name: AttenuationCorrectionMethod
 tag: ['0x54', '0x1101']
 value_id: -1
 sequence: ['']
 limited2mod: [SPECT, PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 11
+sort_index: 12
 attribute_name: BodyPartExamined
 tag: ['0x18', '0x15']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
-protected: false
----
-sort_index: 12
-attribute_name: CollimatorType
-tag: ['0x18', '0x1181']
-value_id: -1
-sequence: ['']
-limited2mod: [NM, SPECT, PET]
-unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 13
 attribute_name: CollimatorType
 tag: ['0x18', '0x1181']
 value_id: -1
-sequence: [DetectorInformationSequence]
+sequence: ['']
 limited2mod: [NM, SPECT, PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 14
+attribute_name: CollimatorType
+tag: ['0x18', '0x1181']
+value_id: -1
+sequence: [DetectorInformationSequence]
+limited2mod: [NM, SPECT, PET]
+unit: ''
+factor: 1.0
+protected: false
+---
+sort_index: 15
 attribute_name: Columns
 tag: ['0x28', '0x11']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
-protected: false
----
-sort_index: 15
-attribute_name: ConvolutionKernel
-tag: ['0x18', '0x1210']
-value_id: -1
-sequence: ['']
-limited2mod: [CT, SPECT, PET]
-unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 16
 attribute_name: ConvolutionKernel
 tag: ['0x18', '0x1210']
 value_id: -1
-sequence: [SharedFunctionalGroupsSequence, CTReconstructionSequence]
-limited2mod: [CT]
+sequence: ['']
+limited2mod: [CT, SPECT, PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 17
 attribute_name: ConvolutionKernel
 tag: ['0x18', '0x1210']
 value_id: -1
-sequence: [PerFrameFunctionalGroupsSequence, CTReconstructionSequence]
+sequence: [SharedFunctionalGroupsSequence, CTReconstructionSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 18
+attribute_name: ConvolutionKernel
+tag: ['0x18', '0x1210']
+value_id: -1
+sequence: [PerFrameFunctionalGroupsSequence, CTReconstructionSequence]
+limited2mod: [CT]
+unit: ''
+factor: 1.0
+protected: false
+---
+sort_index: 19
 attribute_name: CountsAccumulated
 tag: ['0x18', '0x70']
 value_id: -1
 sequence: ['']
 limited2mod: [NM]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 19
+sort_index: 20
 attribute_name: CountsAccumulated
 tag: [image_sum, '']
 value_id: -1
 sequence: ['']
 limited2mod: [NM]
 unit: ''
+factor: 1.0
 protected: true
 ---
-sort_index: 20
+sort_index: 21
 attribute_name: CTDIvol
 tag: ['0x18', '0x9345']
 value_id: -1
 sequence: ['']
 limited2mod: [CT]
 unit: mGy
-protected: false
----
-sort_index: 21
-attribute_name: CTDIvol
-tag: ['0x18', '0x9345']
-value_id: -1
-sequence: [SharedFunctionalGroupsSequence, CTExposureSequence]
-limited2mod: [CT]
-unit: mGy
+factor: 1.0
 protected: false
 ---
 sort_index: 22
 attribute_name: CTDIvol
 tag: ['0x18', '0x9345']
 value_id: -1
-sequence: [PerFrameFunctionalGroupsSequence, CTExposureSequence]
+sequence: [SharedFunctionalGroupsSequence, CTExposureSequence]
 limited2mod: [CT]
 unit: mGy
+factor: 1.0
 protected: false
 ---
 sort_index: 23
-attribute_name: DAP
-tag: ['0x18', '0x115e']
+attribute_name: CTDIvol
+tag: ['0x18', '0x9345']
 value_id: -1
-sequence: ['']
-limited2mod: [CT, Xray]
-unit: dGycm2
+sequence: [PerFrameFunctionalGroupsSequence, CTExposureSequence]
+limited2mod: [CT]
+unit: mGy
+factor: 1.0
 protected: false
 ---
 sort_index: 24
 attribute_name: DAP
 tag: ['0x18', '0x115e']
 value_id: -1
-sequence: [PerFrameFunctionalGroupsSequence, CTExposureSequence]
-limited2mod: [CT]
+sequence: ['']
+limited2mod: [CT, Xray]
 unit: dGycm2
+factor: 1.0
 protected: false
 ---
 sort_index: 25
 attribute_name: DAP
 tag: ['0x18', '0x115e']
 value_id: -1
-sequence: [SharedFunctionalGroupsSequence, CTExposureSequence]
+sequence: [PerFrameFunctionalGroupsSequence, CTExposureSequence]
 limited2mod: [CT]
 unit: dGycm2
+factor: 1.0
 protected: false
 ---
 sort_index: 26
+attribute_name: DAP
+tag: ['0x18', '0x115e']
+value_id: -1
+sequence: [SharedFunctionalGroupsSequence, CTExposureSequence]
+limited2mod: [CT]
+unit: dGycm2
+factor: 1.0
+protected: false
+---
+sort_index: 27
 attribute_name: DAP
 tag: ['0x18', '0x9473']
 value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: dGycm2
-protected: false
----
-sort_index: 27
-attribute_name: DataCollectionDiameter
-tag: ['0x18', '0x90']
-value_id: -1
-sequence: ['']
-limited2mod: [CT, PET]
-unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 28
 attribute_name: DataCollectionDiameter
 tag: ['0x18', '0x90']
 value_id: -1
-sequence: [CTAdditionalXRaySourceSequence]
-limited2mod: [CT]
+sequence: ['']
+limited2mod: [CT, PET]
 unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 29
 attribute_name: DataCollectionDiameter
 tag: ['0x18', '0x90']
 value_id: -1
-sequence: [SharedFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
+sequence: [CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 30
 attribute_name: DataCollectionDiameter
 tag: ['0x18', '0x90']
 value_id: -1
-sequence: [SharedFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
+sequence: [SharedFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 31
 attribute_name: DataCollectionDiameter
 tag: ['0x18', '0x90']
 value_id: -1
-sequence: [PerFrameFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
+sequence: [SharedFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 32
 attribute_name: DataCollectionDiameter
 tag: ['0x18', '0x90']
 value_id: -1
-sequence: [PerFrameFunctionalGroupsSequence, PETFrameAcquisitionSequence]
-limited2mod: [PET]
+sequence: [PerFrameFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
+limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 33
 attribute_name: DataCollectionDiameter
 tag: ['0x18', '0x90']
 value_id: -1
-sequence: [SharedFunctionalGroupsSequence, PETFrameAcquisitionSequence]
+sequence: [PerFrameFunctionalGroupsSequence, PETFrameAcquisitionSequence]
 limited2mod: [PET]
 unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 34
+attribute_name: DataCollectionDiameter
+tag: ['0x18', '0x90']
+value_id: -1
+sequence: [SharedFunctionalGroupsSequence, PETFrameAcquisitionSequence]
+limited2mod: [PET]
+unit: mm
+factor: 1.0
+protected: false
+---
+sort_index: 35
 attribute_name: DetectorID
 tag: ['0x18', '0x700a']
 value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 35
+sort_index: 36
 attribute_name: DetectorVector
 tag: ['0x54', '0x20']
 value_id: -2
 sequence: ['']
 limited2mod: [NM, SPECT]
 unit: ''
-protected: false
----
-sort_index: 36
-attribute_name: DeviceSerialNumber
-tag: ['0x18', '0x1000']
-value_id: -1
-sequence: ['']
-limited2mod: ['']
-unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 37
 attribute_name: DeviceSerialNumber
 tag: ['0x18', '0x1000']
 value_id: -1
-sequence: [DeviceSequence]
+sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 38
 attribute_name: DeviceSerialNumber
 tag: ['0x18', '0x1000']
 value_id: -1
-sequence: [ContributingEquipmentSequence]
+sequence: [DeviceSequence]
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 39
+attribute_name: DeviceSerialNumber
+tag: ['0x18', '0x1000']
+value_id: -1
+sequence: [ContributingEquipmentSequence]
+limited2mod: ['']
+unit: ''
+factor: 1.0
+protected: false
+---
+sort_index: 40
 attribute_name: EchoTime
 tag: ['0x18', '0x81']
 value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: msec
+factor: 1.0
 protected: false
 ---
-sort_index: 40
+sort_index: 41
 attribute_name: EchoTime
 tag: ['0x18', '0x9082']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, MREchoSequence]
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 41
+sort_index: 42
 attribute_name: EnergyWindowName
 tag: ['0x54', '0x18']
 value_id: -1
 sequence: [EnergyWindowInformationSequence]
 limited2mod: [NM]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 42
+sort_index: 43
 attribute_name: EXIphysical
 tag: ['0x25', '0x1036']
 value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: ''
-protected: false
----
-sort_index: 43
-attribute_name: Exposure
-tag: ['0x18', '0x1152']
-value_id: -1
-sequence: ['']
-limited2mod: [CT, Xray]
-unit: mAs
+factor: 1.0
 protected: false
 ---
 sort_index: 44
@@ -401,6 +445,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 45
@@ -410,6 +455,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 46
@@ -419,186 +465,207 @@ value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 47
-attribute_name: ExposureInuAs
-tag: ['0x18', '0x1153']
+attribute_name: ExposureModulationType
+tag: ['0x18', '0x9323']
 value_id: -1
 sequence: ['']
-limited2mod: [CT, Xray]
-unit: uAs
+limited2mod: [CT]
+unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 48
 attribute_name: ExposureModulationType
 tag: ['0x18', '0x9323']
 value_id: -1
-sequence: ['']
+sequence: [SharedFunctionalGroupsSequence, CTExposureSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 49
 attribute_name: ExposureModulationType
 tag: ['0x18', '0x9323']
 value_id: -1
-sequence: [SharedFunctionalGroupsSequence, CTExposureSequence]
-limited2mod: [CT]
-unit: ''
-protected: false
----
-sort_index: 50
-attribute_name: ExposureModulationType
-tag: ['0x18', '0x9323']
-value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTExposureSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 51
+sort_index: 50
 attribute_name: ExposureTime
 tag: ['0x18', '0x1150']
 value_id: -1
 sequence: ['']
 limited2mod: [CT, Xray]
 unit: msec
+factor: 1.0
+protected: false
+---
+sort_index: 51
+attribute_name: FilterMaterial
+tag: ['0x18', '0x7050']
+value_id: -1
+sequence: ['']
+limited2mod: [CT, Xray]
+unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 52
 attribute_name: FilterMaterial
 tag: ['0x18', '0x7050']
 value_id: -1
-sequence: ['']
-limited2mod: [CT, Xray]
+sequence: [CTAdditionalXRaySourceSequence]
+limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 53
 attribute_name: FilterMaterial
 tag: ['0x18', '0x7050']
 value_id: -1
-sequence: [CTAdditionalXRaySourceSequence]
+sequence: [SharedFunctionalGroupsSequence, CTXRayDetailsSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 54
 attribute_name: FilterMaterial
 tag: ['0x18', '0x7050']
 value_id: -1
-sequence: [SharedFunctionalGroupsSequence, CTXRayDetailsSequence]
-limited2mod: [CT]
-unit: ''
-protected: false
----
-sort_index: 55
-attribute_name: FilterMaterial
-tag: ['0x18', '0x7050']
-value_id: -1
 sequence: [SharedFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 56
+sort_index: 55
 attribute_name: FilterThicknessMinimum
 tag: ['0x18', '0x7052']
 value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: mm
+factor: 1.0
+protected: false
+---
+sort_index: 56
+attribute_name: FilterType
+tag: ['0x18', '0x1160']
+value_id: -1
+sequence: ['']
+limited2mod: [CT, Xray]
+unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 57
 attribute_name: FilterType
 tag: ['0x18', '0x1160']
 value_id: -1
-sequence: ['']
-limited2mod: [CT, Xray]
+sequence: [CTAdditionalXRaySourceSequence]
+limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 58
 attribute_name: FilterType
 tag: ['0x18', '0x1160']
 value_id: -1
-sequence: [CTAdditionalXRaySourceSequence]
+sequence: [SharedFunctionalGroupsSequence, CTXRayDetailsSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 59
 attribute_name: FilterType
 tag: ['0x18', '0x1160']
 value_id: -1
-sequence: [SharedFunctionalGroupsSequence, CTXRayDetailsSequence]
+sequence: [SharedFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 60
 attribute_name: FilterType
 tag: ['0x18', '0x1160']
 value_id: -1
-sequence: [SharedFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
+sequence: [PerFrameFunctionalGroupsSequence, CTXRayDetailsSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 61
 attribute_name: FilterType
 tag: ['0x18', '0x1160']
 value_id: -1
-sequence: [PerFrameFunctionalGroupsSequence, CTXRayDetailsSequence]
-limited2mod: [CT]
-unit: ''
-protected: false
----
-sort_index: 62
-attribute_name: FilterType
-tag: ['0x18', '0x1160']
-value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 63
+sort_index: 62
 attribute_name: FlipAngle
 tag: ['0x18', '0x1314']
 value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: deg
+factor: 1.0
 protected: false
 ---
-sort_index: 64
+sort_index: 63
 attribute_name: FlipAngle
 tag: ['0x18', '0x1314']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, MRTimingAndRelatedParametersSequence]
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 65
+sort_index: 64
 attribute_name: FocalSpots
 tag: ['0x18', '0x1190']
 value_id: -1
 sequence: ['']
 limited2mod: [CT, Xray]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 66
+sort_index: 65
 attribute_name: FocalSpots
 tag: ['0x18', '0x1190']
 value_id: -1
 sequence: [CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
+protected: false
+---
+sort_index: 66
+attribute_name: FrameAcquisitionDateTime
+tag: ['0x18', '0x9074']
+value_id: -1
+sequence: [PerFrameFunctionalGroupsSequence, FrameContentSequence]
+limited2mod: ['']
+unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 67
@@ -608,6 +675,7 @@ value_id: -2
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: true
 ---
 sort_index: 68
@@ -617,6 +685,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 69
@@ -626,6 +695,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 70
@@ -635,6 +705,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [CT, SPECT, PET, MR]
 unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 71
@@ -644,6 +715,7 @@ value_id: -1
 sequence: [SharedFunctionalGroupsSequence, PlanePositionSequence]
 limited2mod: [CT, SPECT, PET, MR]
 unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 72
@@ -653,6 +725,7 @@ value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, PlanePositionSequence]
 limited2mod: [CT, SPECT, PET, MR]
 unit: mm
+factor: 1.0
 protected: false
 ---
 sort_index: 73
@@ -662,6 +735,7 @@ value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 74
@@ -671,6 +745,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: MHz
+factor: 1.0
 protected: false
 ---
 sort_index: 75
@@ -680,6 +755,7 @@ value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 76
@@ -689,6 +765,7 @@ value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 77
@@ -698,6 +775,7 @@ value_id: -1
 sequence: [ContributingEquipmentSequence]
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 78
@@ -707,6 +785,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 79
@@ -716,6 +795,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 80
@@ -725,6 +805,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 81
@@ -734,6 +815,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [CT, Xray]
 unit: kV
+factor: 1.0
 protected: false
 ---
 sort_index: 82
@@ -743,6 +825,7 @@ value_id: -1
 sequence: [CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: kV
+factor: 1.0
 protected: false
 ---
 sort_index: 83
@@ -752,6 +835,7 @@ value_id: -1
 sequence: [SharedFunctionalGroupsSequence, CTXRayDetailsSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 84
@@ -761,6 +845,7 @@ value_id: -1
 sequence: [SharedFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 85
@@ -770,6 +855,7 @@ value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTXRayDetailsSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 86
@@ -779,6 +865,7 @@ value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 87
@@ -788,6 +875,7 @@ value_id: -1
 sequence: [SharedFunctionalGroupsSequence, FrameAcquisitionSequence]
 limited2mod: [Xray]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 88
@@ -797,6 +885,7 @@ value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, FrameAcquisitionSequence]
 limited2mod: [Xray]
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 89
@@ -806,6 +895,7 @@ value_id: -1
 sequence: ['']
 limited2mod: [CT, Xray]
 unit: mA
+factor: 1.0
 protected: false
 ---
 sort_index: 90
@@ -815,6 +905,7 @@ value_id: -1
 sequence: [CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: mA
+factor: 1.0
 protected: false
 ---
 sort_index: 91
@@ -824,6 +915,7 @@ value_id: -1
 sequence: [SharedFunctionalGroupsSequence, CTExposureSequence]
 limited2mod: [CT]
 unit: mA
+factor: 1.0
 protected: false
 ---
 sort_index: 92
@@ -833,6 +925,7 @@ value_id: -1
 sequence: [SharedFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: mA
+factor: 1.0
 protected: false
 ---
 sort_index: 93
@@ -842,6 +935,7 @@ value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTExposureSequence]
 limited2mod: [CT]
 unit: mA
+factor: 1.0
 protected: false
 ---
 sort_index: 94
@@ -851,6 +945,7 @@ value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
 limited2mod: [CT]
 unit: mA
+factor: 1.0
 protected: false
 ---
 sort_index: 95
@@ -860,6 +955,7 @@ value_id: -1
 sequence: [SharedFunctionalGroupsSequence, FrameAcquisitionSequence]
 limited2mod: [Xray]
 unit: mA
+factor: 1.0
 protected: false
 ---
 sort_index: 96
@@ -869,6 +965,7 @@ value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, FrameAcquisitionSequence]
 limited2mod: [Xray]
 unit: mA
+factor: 1.0
 protected: false
 ---
 sort_index: 97
@@ -878,6 +975,7 @@ value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 98
@@ -887,6 +985,7 @@ value_id: -1
 sequence: [DeviceSequence]
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 99
@@ -896,6 +995,7 @@ value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 100
@@ -905,6 +1005,7 @@ value_id: -1
 sequence: [DeviceSequence]
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 101
@@ -914,733 +1015,915 @@ value_id: -1
 sequence: [ContributingEquipmentSequence]
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
 sort_index: 102
+attribute_name: mAs
+tag: ['0x18', '0x9332']
+value_id: -1
+sequence: ['']
+limited2mod: [CT, Xray]
+unit: mAs
+factor: 1.0
+protected: false
+---
+sort_index: 103
+attribute_name: mAs
+tag: ['0x18', '0x9332']
+value_id: -1
+sequence: [CTAdditionalXRaySourceSequence]
+limited2mod: [CT]
+unit: mAs
+factor: 1.0
+protected: false
+---
+sort_index: 104
+attribute_name: mAs
+tag: ['0x18', '0x9332']
+value_id: -1
+sequence: [SharedFunctionalGroupsSequence, CTExposureSequence]
+limited2mod: [CT]
+unit: mAs
+factor: 1.0
+protected: false
+---
+sort_index: 105
+attribute_name: mAs
+tag: ['0x18', '0x9332']
+value_id: -1
+sequence: [SharedFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
+limited2mod: [CT]
+unit: mAs
+factor: 1.0
+protected: false
+---
+sort_index: 106
+attribute_name: mAs
+tag: ['0x18', '0x9332']
+value_id: -1
+sequence: [PerFrameFunctionalGroupsSequence, CTExposureSequence]
+limited2mod: [CT]
+unit: mAs
+factor: 1.0
+protected: false
+---
+sort_index: 107
+attribute_name: mAs
+tag: ['0x18', '0x9332']
+value_id: -1
+sequence: [PerFrameFunctionalGroupsSequence, CTAdditionalXRaySourceSequence]
+limited2mod: [CT]
+unit: mAs
+factor: 1.0
+protected: false
+---
+sort_index: 108
+attribute_name: mAs
+tag: ['0x18', '0x9332']
+value_id: -1
+sequence: [SharedFunctionalGroupsSequence, FrameAcquisitionSequence]
+limited2mod: [Xray]
+unit: mAs
+factor: 1.0
+protected: false
+---
+sort_index: 109
+attribute_name: mAs
+tag: ['0x18', '0x9332']
+value_id: -1
+sequence: [PerFrameFunctionalGroupsSequence, FrameAcquisitionSequence]
+limited2mod: [Xray]
+unit: mAs
+factor: 1.0
+protected: false
+---
+sort_index: 110
+attribute_name: mAs
+tag: ['0x18', '0x1153']
+value_id: -1
+sequence: ['']
+limited2mod: [CT, Xray]
+unit: mAs
+factor: 0.001
+protected: false
+---
+sort_index: 111
+attribute_name: mAs
+tag: ['0x18', '0x1152']
+value_id: -1
+sequence: ['']
+limited2mod: [CT, Xray]
+unit: mAs
+factor: 1.0
+protected: false
+---
+sort_index: 112
 attribute_name: Modality
 tag: ['0x8', '0x60']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: true
 ---
-sort_index: 103
+sort_index: 113
 attribute_name: MRAcquisitionType
 tag: ['0x18', '0x23']
 value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 104
+sort_index: 114
 attribute_name: MRAcquisitionType
 tag: ['0x18', '0x23']
 value_id: -1
 sequence: [MRPulseSequence]
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 105
+sort_index: 115
 attribute_name: NumberOfAverages
 tag: ['0x18', '0x83']
 value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 106
+sort_index: 116
 attribute_name: NumberOfAverages
 tag: ['0x18', '0x83']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, MRAveragesSequence]
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 107
+sort_index: 117
 attribute_name: NumberOfAverages
 tag: ['0x18', '0x83']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, MRAveragesSequence]
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 108
+sort_index: 118
 attribute_name: NumberOfEnergyWindows
 tag: ['0x54', '0x11']
 value_id: -1
 sequence: ['']
 limited2mod: [NM, SPECT, PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 109
+sort_index: 119
 attribute_name: NumberOfFrames
 tag: ['0x28', '0x8']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 110
+sort_index: 120
 attribute_name: PatientID
 tag: ['0x10', '0x20']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 111
+sort_index: 121
 attribute_name: PatientName
 tag: ['0x10', '0x10']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 112
+sort_index: 122
 attribute_name: PixelSpacing
 tag: ['0x28', '0x30']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 113
+sort_index: 123
 attribute_name: PixelSpacing
 tag: ['0x28', '0x30']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, PixelMeasuresSequence]
 limited2mod: ['']
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 114
+sort_index: 124
 attribute_name: PixelSpacing
 tag: ['0x28', '0x30']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, PixelMeasuresSequence]
 limited2mod: ['']
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 115
+sort_index: 125
 attribute_name: PixelSpacing
 tag: ['0x18', '0x1164']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 116
+sort_index: 126
 attribute_name: PresentationIntentType
 tag: ['0x8', '0x68']
 value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 117
+sort_index: 127
 attribute_name: ProtocolName
 tag: ['0x18', '0x1030']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 118
+sort_index: 128
 attribute_name: RadialPosition
 tag: ['0x18', '0x1142']
 value_id: -3
 sequence: [DetectorInformationSequence]
 limited2mod: [NM, SPECT]
 unit: mm
+factor: 1.0
 protected: true
 ---
-sort_index: 119
+sort_index: 129
 attribute_name: RadialPosition
 tag: ['0x18', '0x1142']
 value_id: -1
 sequence: [RotationInformationSequence]
 limited2mod: [NM, SPECT]
 unit: mm
+factor: 1.0
 protected: true
 ---
-sort_index: 120
+sort_index: 130
 attribute_name: RadionuclideTotalDose
 tag: ['0x18', '0x1074']
 value_id: -1
 sequence: [RadiopharmaceuticalInformationSequence]
 limited2mod: [NM, SPECT, PET]
 unit: MBq
+factor: 1.0
 protected: false
 ---
-sort_index: 121
+sort_index: 131
 attribute_name: Radiopharmaceutical
 tag: ['0x18', '0x31']
 value_id: -1
 sequence: [RadiopharmaceuticalInformationSequence]
 limited2mod: [NM, SPECT, PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 122
+sort_index: 132
 attribute_name: RadiopharmaceuticalStartTime
 tag: ['0x18', '0x1072']
 value_id: -1
 sequence: [RadiopharmaceuticalInformationSequence]
 limited2mod: [NM, SPECT, PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 123
+sort_index: 133
 attribute_name: ReceiveCoilName
 tag: ['0x18', '0x1250']
 value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 124
+sort_index: 134
 attribute_name: ReceiveCoilName
 tag: ['0x18', '0x1250']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, MRReceiveCoilSequence]
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 125
+sort_index: 135
 attribute_name: ReceiveCoilName
 tag: ['0x18', '0x1250']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, MRReceiveCoilSequence]
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 126
+sort_index: 136
 attribute_name: ReconstructionDiameter
 tag: ['0x18', '0x1100']
 value_id: -1
 sequence: ['']
 limited2mod: [CT, SPECT, PET, MR]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 127
+sort_index: 137
 attribute_name: ReconstructionDiameter
 tag: ['0x18', '0x1100']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, CTReconstructionSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 128
+sort_index: 138
 attribute_name: ReconstructionDiameter
 tag: ['0x18', '0x1100']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTReconstructionSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 129
+sort_index: 139
 attribute_name: ReconstructionDiameter
 tag: ['0x18', '0x1100']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, PETReconstructionSequence]
 limited2mod: [PET]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 130
+sort_index: 140
 attribute_name: ReconstructionDiameter
 tag: ['0x18', '0x1100']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, PETReconstructionSequence]
 limited2mod: [PET]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 131
+sort_index: 141
 attribute_name: ReconstructionMethod
 tag: ['0x54', '0x1103']
 value_id: -1
 sequence: ['']
 limited2mod: [PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 132
+sort_index: 142
 attribute_name: RepetitionTime
 tag: ['0x18', '0x80']
 value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: msec
+factor: 1.0
 protected: false
 ---
-sort_index: 133
+sort_index: 143
 attribute_name: RepetitionTime
 tag: ['0x18', '0x80']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, MRTimingAndRelatedParametersSequence]
 limited2mod: [MR]
 unit: msec
+factor: 1.0
 protected: false
 ---
-sort_index: 134
+sort_index: 144
 attribute_name: RepetitionTime
 tag: ['0x18', '0x80']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, MRTimingAndRelatedParametersSequence]
 limited2mod: [MR]
 unit: msec
+factor: 1.0
 protected: false
 ---
-sort_index: 135
+sort_index: 145
 attribute_name: Rows
 tag: ['0x28', '0x10']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 136
+sort_index: 146
 attribute_name: ScanningSequence
 tag: ['0x18', '0x20']
 value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 137
+sort_index: 147
 attribute_name: ScatterCorrectionMethod
 tag: ['0x54', '0x1105']
 value_id: -1
 sequence: ['']
 limited2mod: [PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 138
+sort_index: 148
 attribute_name: ScatterFractionFactor
 tag: ['0x54', '0x1323']
 value_id: -1
 sequence: ['']
 limited2mod: [PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 139
+sort_index: 149
 attribute_name: ScatterFractionFactor
 tag: ['0x54', '0x1323']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, PETFrameCorrectionFactorsSequence]
 limited2mod: [PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 140
+sort_index: 150
 attribute_name: ScatterFractionFactor
 tag: ['0x54', '0x1323']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, PETFrameCorrectionFactorsSequence]
 limited2mod: [PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 141
+sort_index: 151
 attribute_name: Sensitivity
 tag: ['0x18', '0x6000']
 value_id: -1
 sequence: ['']
 limited2mod: [Xray]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 142
+sort_index: 152
 attribute_name: SequenceVariant
 tag: ['0x18', '0x21']
 value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 143
+sort_index: 153
 attribute_name: SeriesDate
 tag: ['0x8', '0x21']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 144
+sort_index: 154
 attribute_name: SeriesDescription
 tag: ['0x8', '0x103e']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: true
 ---
-sort_index: 145
+sort_index: 155
 attribute_name: SeriesInstanceUID
 tag: ['0x20', '0xe']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: true
 ---
-sort_index: 146
+sort_index: 156
 attribute_name: SeriesNumber
 tag: ['0x20', '0x11']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: true
 ---
-sort_index: 147
+sort_index: 157
 attribute_name: SeriesTime
 tag: ['0x8', '0x31']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 148
+sort_index: 158
 attribute_name: SID
 tag: ['0x18', '0x1110']
 value_id: -1
 sequence: ['']
 limited2mod: [CT, Xray]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 149
+sort_index: 159
 attribute_name: SingleCollimationWidth
 tag: ['0x18', '0x9306']
 value_id: -1
 sequence: ['']
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 150
+sort_index: 160
 attribute_name: SingleCollimationWidth
 tag: ['0x18', '0x9306']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 151
+sort_index: 161
 attribute_name: SingleCollimationWidth
 tag: ['0x18', '0x9306']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 152
+sort_index: 162
 attribute_name: SliceLocation
 tag: ['0x20', '0x1041']
 value_id: -1
 sequence: ['']
 limited2mod: [CT, SPECT, PET, MR]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 153
+sort_index: 163
 attribute_name: SliceLocation
 tag: ['0x20', '0x32']
 value_id: 2
 sequence: [PerFrameFunctionalGroupsSequence, PlanePositionSequence]
 limited2mod: [CT, SPECT, PET, MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 154
+sort_index: 164
 attribute_name: SliceThickness
 tag: ['0x18', '0x50']
 value_id: -1
 sequence: ['']
 limited2mod: [CT, SPECT, PET, MR]
 unit: mm
+factor: 1.0
 protected: true
 ---
-sort_index: 155
+sort_index: 165
 attribute_name: SliceThickness
 tag: ['0x18', '0x50']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, PixelMeasuresSequence]
 limited2mod: [CT, SPECT, PET, MR]
 unit: mm
+factor: 1.0
 protected: true
 ---
-sort_index: 156
+sort_index: 166
 attribute_name: SliceThickness
 tag: ['0x18', '0x50']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, PixelMeasuresSequence]
 limited2mod: [CT, SPECT, PET, MR]
 unit: mm
+factor: 1.0
 protected: true
 ---
-sort_index: 157
+sort_index: 167
 attribute_name: SoftwareVersions
 tag: ['0x18', '0x1020']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 158
+sort_index: 168
 attribute_name: SoftwareVersions
 tag: ['0x18', '0x1020']
 value_id: -1
 sequence: [ContributingEquipmentSequence]
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 159
+sort_index: 169
 attribute_name: SpacingBetweenSlices
 tag: ['0x18', '0x88']
 value_id: -1
 sequence: ['']
 limited2mod: [CT, MR]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 160
+sort_index: 170
 attribute_name: SpacingBetweenSlices
 tag: ['0x18', '0x88']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, PixelMeasuresSequence]
 limited2mod: [CT, MR]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 161
+sort_index: 171
 attribute_name: SpacingBetweenSlices
 tag: ['0x18', '0x88']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, PixelMeasuresSequence]
 limited2mod: [CT, MR]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 162
+sort_index: 172
 attribute_name: SpiralPitchFactor
 tag: ['0x18', '0x9311']
 value_id: -1
 sequence: ['']
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 163
+sort_index: 173
 attribute_name: SpiralPitchFactor
 tag: ['0x18', '0x9311']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, CTTableDynamicsSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 164
+sort_index: 174
 attribute_name: SpiralPitchFactor
 tag: ['0x18', '0x9311']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTTableDynamicsSequence]
 limited2mod: [CT]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 165
+sort_index: 175
 attribute_name: StationName
 tag: ['0x8', '0x1010']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: true
 ---
-sort_index: 166
+sort_index: 176
 attribute_name: StationName
 tag: ['0x8', '0x1010']
 value_id: -1
 sequence: [ContributingEquipmentSequence]
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: true
 ---
-sort_index: 167
+sort_index: 177
 attribute_name: StudyDate
 tag: ['0x8', '0x20']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 168
+sort_index: 178
 attribute_name: StudyDescription
 tag: ['0x8', '0x1030']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 169
+sort_index: 179
 attribute_name: StudyInstanceUID
 tag: ['0x20', '0xd']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 170
+sort_index: 180
 attribute_name: StudyTime
 tag: ['0x8', '0x30']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 171
+sort_index: 181
 attribute_name: TotalCollimationWidth
 tag: ['0x18', '0x9307']
 value_id: -1
 sequence: ['']
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 172
+sort_index: 182
 attribute_name: TotalCollimationWidth
 tag: ['0x18', '0x9307']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 173
+sort_index: 183
 attribute_name: TotalCollimationWidth
 tag: ['0x18', '0x9307']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
 limited2mod: [CT]
 unit: mm
+factor: 1.0
 protected: false
 ---
-sort_index: 174
+sort_index: 184
 attribute_name: TransmitCoilName
 tag: ['0x18', '0x1251']
 value_id: -1
 sequence: ['']
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 175
+sort_index: 185
 attribute_name: TransmitCoilName
 tag: ['0x18', '0x1251']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, MRTransmitCoilSequence]
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 176
+sort_index: 186
 attribute_name: TransmitCoilName
 tag: ['0x18', '0x1251']
 value_id: -1
 sequence: [SharedFunctionalGroupsSequence, MRTransmitCoilSequence]
 limited2mod: [MR]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 177
+sort_index: 187
 attribute_name: Units
 tag: ['0x54', '0x1001']
 value_id: -1
 sequence: ['']
 limited2mod: [PET]
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 178
+sort_index: 188
 attribute_name: WindowCenter
 tag: ['0x28', '0x1050']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 179
+sort_index: 189
 attribute_name: WindowCenter
 tag: ['0x28', '0x1050']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, FrameVOILUTSequence]
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 180
+sort_index: 190
 attribute_name: WindowWidth
 tag: ['0x28', '0x1051']
 value_id: -1
 sequence: ['']
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 181
+sort_index: 191
 attribute_name: WindowWidth
 tag: ['0x28', '0x1051']
 value_id: -1
 sequence: [PerFrameFunctionalGroupsSequence, FrameVOILUTSequence]
 limited2mod: ['']
 unit: ''
+factor: 1.0
 protected: false
 ---
-sort_index: 182
+sort_index: 192
 attribute_name: ZoomFactor
 tag: ['0x28', '0x31']
 value_id: -1
 sequence: [DetectorInformationSequence]
 limited2mod: [NM, SPECT]
 unit: ''
+factor: 1.0
 protected: false

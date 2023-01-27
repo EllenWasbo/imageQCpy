@@ -616,8 +616,12 @@ class StackWidget(QWidget):
                 self.wModTemp.cbox_modality.setCurrentText(
                     self.current_modality)
                 if 'patterns' in self.fname:
+                    avoid_special_tags = (
+                        True if self.fname == 'rename_patterns' else False)
                     try:
-                        self.wTagPattern.fill_list_tags(self.current_modality)
+                        self.wTagPattern.fill_list_tags(
+                            self.current_modality,
+                            avoid_special_tags=avoid_special_tags)
                     except AttributeError:
                         pass  # ignore if editable == False
 
@@ -638,8 +642,11 @@ class StackWidget(QWidget):
         self.current_modality = self.wModTemp.cbox_modality.currentText()
 
         if 'patterns' in self.fname:
+            avoid_special_tags = (
+                True if self.fname == 'rename_patterns' else False)
             try:
-                self.wTagPattern.fill_list_tags(self.current_modality)
+                self.wTagPattern.fill_list_tags(
+                    self.current_modality, avoid_special_tags=avoid_special_tags)
             except AttributeError:
                 pass  # ignore if editable = False
         elif self.fname == 'paramsets':
@@ -688,12 +695,14 @@ class StackWidget(QWidget):
         else:
             self.update_current_template(selected_id=tempno)
 
+        self.wModTemp.list_temps.blockSignals(True)
         self.wModTemp.list_temps.clear()
         if self.import_review_mode:
             self.refresh_templist_icons()
         else:
             self.wModTemp.list_temps.addItems(self.current_labels)
         self.wModTemp.list_temps.setCurrentRow(tempno)
+        self.wModTemp.list_temps.blockSignals(False)
 
         if 'auto' in self.fname and 'temp' in self.fname:
             if self.current_modality in self.templates:
@@ -734,6 +743,8 @@ class StackWidget(QWidget):
                 msg='Save changes before changing template?')
             if res.exec():
                 self.wModTemp.save(label=self.current_template.label)
+            else:
+                self.flag_edit(False)
 
         tempno = self.wModTemp.list_temps.currentIndex().row()
         self.update_current_template(selected_id=tempno)
@@ -860,43 +871,30 @@ class StackWidget(QWidget):
         more = None
         more_fname = ''
         log = []
-        if self.fname in ['paramset', 'quicktest_templates']:
+        if self.fname in ['paramsets', 'quicktest_templates']:
             ok, path, auto_templates = cff.load_settings(
                 fname='auto_templates')
             more_fname = 'auto_templates'
             mod = self.current_modality
             if path != '':
-                if self.fname == 'paramset':
-                    param_auto = cff.get_paramsets_used_in_auto_templates(
-                        auto_templates)
-                    log = [('Paramset label used in auto_templates. '
-                            + 'Label updated.')]
-                    param_labels, auto_labels = np.array(
-                        param_auto[mod]).T.tolist()
-                    if oldlabel in param_labels:
-                        for i, pa in enumerate(param_labels):
-                            if pa == oldlabel:
-                                auto_templates[
-                                    mod][i].paramset_label == newlabel
-                                log.append(auto_labels[i])
-                if self.fname == 'quicktest_templates':
-                    qt_auto = cff.get_quicktest_used_in_auto_templates(
-                        auto_templates)
-                    log = [('QuickTest label used in auto_templates. '
-                            + 'Label updated.')]
-                    qt_labels, auto_labels = np.array(
-                        qt_auto[mod]).T.tolist()
-                    if oldlabel in qt_labels:
-                        for i, qa in enumerate(qt_labels):
-                            if qa == oldlabel:
-                                auto_templates[
-                                    mod][i].quicktemp_label == newlabel
-                                log.append(auto_labels[i])
-                if len(log) > 1:
+                ref_attr = ('paramset_label' if self.fname == 'paramsets'
+                            else 'quicktemp_label')
+                temp_auto = cff.get_ref_label_used_in_auto_templates(
+                    auto_templates, ref_attr=ref_attr)
+                auto_labels, temp_labels = np.array(temp_auto[mod]).T.tolist()
+                changed = False
+                if oldlabel in temp_labels:
+                    for i, temp in enumerate(temp_labels):
+                        if temp == oldlabel:
+                            setattr(auto_templates[mod][i], ref_attr, newlabel)
+                            changed = True
+                            log.append(temp_labels[i])
+
+                if changed:
+                    log = [(f'{self.fname[:-1]} {oldlabel} used in auto_templates. '
+                            'Label updated.')]
                     save_more = True
                     more = auto_templates
-                else:
-                    log = ['Label not found used in auto_templates.']
         self.save(save_more=save_more, more=more,
                   more_fname=more_fname, log=log)
         self.refresh_templist(selected_label=newlabel)
@@ -1024,9 +1022,8 @@ class ModTempSelector(QWidget):
         self.vLO.addWidget(uir.LabelItalic(self.parent.typestr.title()+'s'))
         hLOlist = QHBoxLayout()
         self.vLO.addLayout(hLOlist)
-        self.list_temps = QListWidget()
-        self.list_temps.itemClicked.connect(
-            self.parent.update_clicked_template)
+        self.list_temps = uir.ListWidget()
+        self.list_temps.currentItemChanged.connect(self.parent.update_clicked_template)
         hLOlist.addWidget(self.list_temps)
 
         if import_review_mode:
@@ -1099,7 +1096,7 @@ class ModTempSelector(QWidget):
                      self.actDown, self.actDel])
 
     def keyPressEvent(self, event):
-        """Accept Delete key to delete templates."""
+        """Accept Delete and arrow up/down key on list templates."""
         if event.key() == Qt.Key_Delete:
             self.delete()
         else:
@@ -1114,7 +1111,7 @@ class ModTempSelector(QWidget):
             self.parent.current_template.label = lbl
             self.parent.update_data()
         except AttributeError:
-            print('Missing empty template')
+            print('Missing empty template (method clear in ModTempSelector)')
 
     def add(self):
         """Add new template to list. Ask for new name and verify."""
@@ -1618,6 +1615,8 @@ class DicomTagDialog(uir.ImageQCDialog):
         self.cbox_value_id.currentIndexChanged.connect(self.update_value)
         self.lbl_tag_content = QLabel()
         self.btngr_modality = QButtonGroup(exclusive=False)
+        self.txt_factor = QLineEdit(str(tag_input.factor))
+        self.txt_factor.editingFinished.connect(self.validate_factor)
         self.txt_unit = QLineEdit(tag_input.unit)
 
         self.sample_attribute_names = []
@@ -1682,6 +1681,7 @@ class DicomTagDialog(uir.ImageQCDialog):
                 self.cbox_value_id.addItem(f'{tag_input.value_id}')
         fLO.addRow(QLabel('Tag in sequence(s): '), self.list_sequences)
         self.list_sequences.setMaximumHeight(200)
+        fLO.addRow(QLabel('Multiply by: '), self.txt_factor)
         fLO.addRow(QLabel('Unit: '), self.txt_unit)
         if tag_input.sequence[0] != '':
             for txt in tag_input.sequence:
@@ -1859,6 +1859,14 @@ class DicomTagDialog(uir.ImageQCDialog):
         else:
             self.tagString.setText(self.str_to_tag(txt))
 
+    def validate_factor(self):
+        """Make sure factor is a float."""
+        try:
+            txt = self.txt_factor.text().replace(',', '.')  # accept , as decimal mark
+            self.txt_factor.setText(str(float(txt)))
+        except ValueError:
+            self.txt_factor.setText('1.0')
+
     def get_tag_info(self):
         """Fill TagInfo with current values and return.
 
@@ -1870,11 +1878,13 @@ class DicomTagDialog(uir.ImageQCDialog):
         tag_group = hex(int('0x' + tag_str[0:4], 16))
         tag_elem = hex(int('0x' + tag_str[5:9], 16))
 
+        self.validate_factor()  # probably overkill
         new_tag_info = cfc.TagInfo(
             sort_index=self.tag_input.sort_index,
             attribute_name=self.txt_attribute_name.text(),
             tag=[tag_group, tag_elem],
-            unit=self.txt_unit.text()
+            unit=self.txt_unit.text(),
+            factor=float(self.txt_factor.text())
             )
         # get sequence from list as sample empty if input sequence (edit)
         if self.list_sequences.count() > 0:
@@ -1933,7 +1943,12 @@ class DicomTagsWidget(StackWidget):
         duplicated attribute names.<br>
         When reading an attribute with variants, the first variant
         (by sort index) will be searched first, if not found,
-        the next variant will be searched.'''
+        the next variant will be searched.<br>
+        Some tags are protected as other parts of imageQC rely on them.
+        Some of these are special tags, not reading a tag, but using other
+        DICOM information.<br>
+        The special tags are not available in all tag patterns.
+        (Image sum for CountsAccumulated only available for test DCM).'''
         super().__init__(settingsDialog, header, subtxt)
         self.fname = 'tag_infos'
 
@@ -1943,19 +1958,23 @@ class DicomTagsWidget(StackWidget):
         self.table_tags = QTreeWidget()
         self.table_tags.setColumnCount(4)
         self.table_tags.setHeaderLabels(
-            ['Tag name', 'Tag number', 'Value id', 'unit',
-             'Specific modalities', 'in sequence(s)', 'Sort index'])
-        self.table_tags.setColumnWidth(0, 400)
-        self.table_tags.setColumnWidth(1, 150)
-        self.table_tags.setColumnWidth(2, 120)
-        self.table_tags.setColumnWidth(3, 150)
-        self.table_tags.setColumnWidth(4, 200)
-        self.table_tags.setColumnWidth(5, 400)
-        self.table_tags.setColumnWidth(6, 120)
+            ['Tag name', 'Tag number', 'Value id', 'Factor', 'unit',
+             'Specific modalities', 'in sequence(s)', 'Sort index', 'Protected'])
+        ch_w = self.settingsDialog.main.vGUI.char_width
+        self.table_tags.setColumnWidth(0, 35*ch_w)
+        self.table_tags.setColumnWidth(1, 14*ch_w)
+        self.table_tags.setColumnWidth(2, 12*ch_w)
+        self.table_tags.setColumnWidth(3, 14*ch_w)
+        self.table_tags.setColumnWidth(4, 12*ch_w)
+        self.table_tags.setColumnWidth(5, 20*ch_w)
+        self.table_tags.setColumnWidth(6, 45*ch_w)
+        self.table_tags.setColumnWidth(7, 14*ch_w)
+        self.table_tags.setColumnWidth(8, 12*ch_w)
+        self.sort_col_id = 7
         self.table_tags.setSizeAdjustPolicy(
             QAbstractScrollArea.AdjustToContents)
         self.table_tags.setSortingEnabled(True)
-        self.table_tags.sortByColumn(6, Qt.AscendingOrder)
+        self.table_tags.sortByColumn(self.sort_col_id, Qt.AscendingOrder)
         self.table_tags.setRootIsDecorated(False)
         self.table_tags.header().sectionClicked.connect(self.sort_header)
 
@@ -1979,7 +1998,7 @@ class DicomTagsWidget(StackWidget):
             cb.clicked.connect(self.mode_changed)
             self.btngr_modality_filter.button(idx).setChecked(True)
         gb_modality.setLayout(lo)
-        gb_modality.setFixedWidth(1200)
+        gb_modality.setFixedWidth(1300)
 
         hLO_modality.addWidget(chk_all_modalities)
         hLO_modality.addWidget(gb_modality)
@@ -2062,7 +2081,7 @@ class DicomTagsWidget(StackWidget):
         self.indexes = []
         for row in range(self.table_tags.topLevelItemCount()):
             item = self.table_tags.topLevelItem(row)
-            self.indexes.append(int(item.text(6)))
+            self.indexes.append(int(item.text(self.sort_col_id)))
 
     def update_data(self, set_selected_row=0,
                     keep_selection=False,
@@ -2106,10 +2125,12 @@ class DicomTagsWidget(StackWidget):
                     self.templates[tempid].attribute_name,
                     '-',
                     '-',
+                    '-',
                     self.templates[tempid].unit,
                     ', '.join(self.templates[tempid].limited2mod),
                     ', '.join(self.templates[tempid].sequence),
-                    f'{self.templates[tempid].sort_index:03}'
+                    f'{self.templates[tempid].sort_index:03}',
+                    '-'
                     ]
                 if self.templates[tempid].tag[1] == '':
                     row_strings[1] = self.templates[tempid].tag[0]
@@ -2120,8 +2141,14 @@ class DicomTagsWidget(StackWidget):
                 if self.templates[tempid].value_id != -1:
                     if self.templates[tempid].value_id == -2:
                         row_strings[2] = 'per frame'
+                    elif self.templates[tempid].value_id == -3:
+                        row_strings[2] = 'join'
                     else:
                         row_strings[2] = f'{self.templates[tempid].value_id}'
+                if self.templates[tempid].factor != 1.0:
+                    row_strings[3] = f'{self.templates[tempid].factor}'
+                if self.templates[tempid].protected:
+                    row_strings[8] = 'P'
                 item = QTreeWidgetItem(row_strings)
                 self.table_tags.addTopLevelItem(item)
 
@@ -2152,6 +2179,39 @@ class DicomTagsWidget(StackWidget):
 
         self.update_data()
 
+    def get_idx_same_name(self, name='', mod=False):
+        """Get tag indexes of same attribute_name as name.
+
+        Parameters
+        ----------
+        name : str
+            attribute name to test
+        mod : bool, optional
+            list for modalities and general. The default is False.
+
+        Returns
+        -------
+        idx_same_name : list of int or dict of lists of int
+            indexes of taglist having same attribute name
+            if mod=True {'CT': [], 'Xray': []...}
+        """
+        if mod:
+            idx_same_name = {mod: [] for mod in QUICKTEST_OPTIONS}
+        else:
+            idx_same_name = []
+        for idx, temp in enumerate(self.templates):
+            if temp.attribute_name == name:
+                if mod:
+                    if temp.limited2mod == ['']:
+                        for m in idx_same_name:
+                            idx_same_name[m].append(idx)
+                    else:
+                        for m in temp.limited2mod:
+                            idx_same_name[m].append(idx)
+                else:
+                    idx_same_name.append(idx)
+        return idx_same_name
+
     def update_tag_info(self, tag_info, edit=False, index=-1):
         """Verify that a new tag can be added to the templates.
 
@@ -2169,10 +2229,7 @@ class DicomTagsWidget(StackWidget):
             old_name = self.templates[index].attribute_name
             new_name = tag_info.attribute_name
             if old_name != new_name:
-                idx_same_name = []
-                for idx, temp in enumerate(self.templates):
-                    if temp.attribute_name == old_temp.attribute_name:
-                        idx_same_name.append(idx)
+                idx_same_name = self.get_idx_same_name(name=old_temp.attribute_name)
                 if len(idx_same_name) > 1:
                     res = uir.QuestionBox(
                         parent=self, title='Change name of all subelements',
@@ -2188,6 +2245,7 @@ class DicomTagsWidget(StackWidget):
                                 self.templates[idx].attribute_name = (
                                     tag_info.attribute_name)
                         self.edited_names.append([old_name, new_name])
+                    # else some left with old name and tag references kept
                 else:
                     self.edited_names.append([old_name, new_name])
 
@@ -2293,17 +2351,23 @@ class DicomTagsWidget(StackWidget):
                 parent=self, title='Delete?',
                 msg=f'Delete tag {self.templates[idx].attribute_name}')
             if res.exec():
-                status, log = cff.attribute_names_used_in(
-                    name=self.templates[idx].attribute_name,
-                    limited2mod=self.templates[idx].limited2mod)
-                if status is False:
-                    msg = QMessageBox(self)
-                    msg.setWindowTitle('Tag in use')
-                    msg.setText('The selected tag is in use and can not be deleted.')
-                    msg.setIcon(QMessageBox.Warning)
-                    msg.setDetailedText('\n'.join(log))
-                    msg.exec()
-                else:
+                idx_same_name = self.get_idx_same_name(
+                    name=self.templates[idx].attribute_name, mod=True)
+                n_idx_same_mod = [len(idxs) for m, idxs in idx_same_name.items()]
+                proceed = True
+                if 1 in n_idx_same_mod:
+                    self.tag_infos = self.templates
+                    status, log, found_attributes = cff.get_taginfos_used_in_templates(
+                        self)
+                    for m, attr in found_attributes.items():
+                        if len(idx_same_name[m]) == 1:
+                            if self.templates[idx].attribute_name in attr:
+                                proceed = False
+                    if proceed is False:
+                        QMessageBox.warning(
+                            self, 'Tag in use',
+                            'The selected tag is in use. Tag info can not be deleted.')
+                if proceed:
                     self.templates.pop(idx)
                     self.flag_edit()
                     self.update_data(set_selected_row=selrow, reset_sort_index=True)
@@ -2627,8 +2691,23 @@ class ParametersOutputWidget(QWidget):
         self.tb.addActions([actAdd, actEdit, actDel])
 
     def edit_group_by(self):
-        #TODO
-        pass
+        """Edit parameters to group images by."""
+        dlg = uir.TagPatternEditDialog(
+            initial_pattern=cfc.TagPatternFormat(
+                list_tags=self.parent.current_template.output.group_by),
+            modality=self.parent.current_modality,
+            title='Group images by same DICOM header information (format ignored)',
+            typestr='format',
+            accept_text='Use',
+            reject_text='Cancel',
+            save_blocked=self.parent.save_blocked)
+        res = dlg.exec()
+        if res:
+            pattern = dlg.get_pattern()
+            self.parent.current_template.output.group_by = pattern.list_tags
+            self.parent.flag_edit(True)
+            self.list_group_by.clear()
+            self.list_group_by.addItems(pattern.list_tags)
 
 
 class ParamSetsWidget(StackWidget):
@@ -3114,7 +3193,7 @@ class AutoCommonWidget(StackWidget):
     def update_data(self):
         """Fill GUI with current data."""
         self.current_template = self.templates.filename_pattern
-        self.wTagPattern.fill_list_tags('')
+        self.wTagPattern.fill_list_tags('', avoid_special_tags=True)
         self.wTagPattern.update_data()
         self.import_path.setText(self.templates.import_path)
         self.chk_auto_delete_empty_folders.setChecked(
@@ -3260,6 +3339,17 @@ class AutoTemplateWidget(StackWidget):
         self.empty_template = cfc.AutoTemplate()
         self.sample_filepath = ''
 
+        self.wModTemp.vLO.addWidget(
+            QLabel('Automation templates with same input path:'))
+        self.list_same_input = QListWidget()
+        self.list_same_input.setFixedHeight(80)
+        self.wModTemp.vLO.addWidget(self.list_same_input)
+        self.wModTemp.vLO.addWidget(
+            QLabel('Automation templates with same output path:'))
+        self.list_same_output = QListWidget()
+        self.list_same_output.setFixedHeight(80)
+        self.wModTemp.vLO.addWidget(self.list_same_output)
+
         self.txt_input_path = QLineEdit('')
         self.txt_output_path = QLineEdit('')
         self.txt_statname = QLineEdit('')
@@ -3402,15 +3492,44 @@ class AutoTemplateWidget(StackWidget):
         self.txt_output_path.setText(self.current_template.path_output)
         self.txt_statname.setText(self.current_template.station_name)
         self.tree_crit.update_data()
-        self.cbox_paramset.setCurrentText(
-            self.current_template.paramset_label)
-        self.cbox_quicktest.setCurrentText(
-            self.current_template.quicktemp_label)
+        self.cbox_paramset.setCurrentText(self.current_template.paramset_label)
+        if self.cbox_paramset.currentText() != self.current_template.paramset_label:
+            QMessageBox.warning(
+                self, 'Warning',
+                (f'Paramset {self.current_template.paramset_label} set for this '
+                 'template, but not defined in paramsets.yaml.'))
+            self.cbox_paramset.setCurrentText('')
+        self.cbox_quicktest.setCurrentText(self.current_template.quicktemp_label)
+        if self.cbox_quicktest.currentText() != self.current_template.quicktemp_label:
+            QMessageBox.warning(
+                self, 'Warning',
+                (f'Paramset {self.current_template.quicktemp_label} set for this '
+                 'template, but not defined in quicktest_templates.yaml.'))
+            self.cbox_quicktest.setCurrentText('')
         self.fill_list_sort_by()
         self.chk_archive.setChecked(self.current_template.archive)
         self.chk_deactivate.setChecked(not self.current_template.active)
         self.sample_filepath = ''
         self.flag_edit(False)
+
+        # update used_in
+        self.list_same_input.clear()
+        self.list_same_output.clear()
+        if self.current_template.label != '':
+            auto_labels = [
+                temp.label for temp in self.templates[self.current_modality]
+                if temp.path_input == self.current_template.path_input
+                ]
+            if len(auto_labels) > 1:
+                auto_labels.remove(self.current_template.label)
+                self.list_same_input.addItems(auto_labels)
+            auto_labels = [
+                temp.label for temp in self.templates[self.current_modality]
+                if temp.path_output == self.current_template.path_output
+                ]
+            if len(auto_labels) > 1:
+                auto_labels.remove(self.current_template.label)
+                self.list_same_output.addItems(auto_labels)
 
     def get_current_template(self):
         """Get self.current_template where not dynamically set."""

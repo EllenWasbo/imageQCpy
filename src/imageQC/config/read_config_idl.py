@@ -29,7 +29,7 @@ idl_py_attr = [
     ['SeriesNumber', 'SERIESNMB'],
     ['InstanceNumber', 'IMGNO'],
     ['ExposureTime', 'EXPTIME'],
-    ['Exposure', 'MAS'],
+    ['mAs', 'MAS'],
     ['ExposureModulationType', 'EXMODTYPE'],
     ['ExposureControlMode', 'EXMODTYPE'],
     ['SID', 'SDD'],
@@ -210,12 +210,12 @@ class ConfigIdl2Py():
         empty_ParamSet = cfc.ParamSet()
         empty_ParamSet.CT.dcm_tagpattern = cfc.TagPatternFormat(
             label='default',
-            list_tags=['KVP', 'Exposure', 'CTDIvol', 'SoftwareVersions'],
+            list_tags=['KVP', 'mAs', 'CTDIvol', 'SoftwareVersions'],
             list_format=['|:.0f|', '|:.1f|', '|:.2f|', '']
             )
         empty_ParamSet.Xray.dcm_tagpattern = cfc.TagPatternFormat(
             label='default',
-            list_tags=['KVP', 'Exposure', 'ExposureIndex', 'DAP', 'SID', 'DetectorID'],
+            list_tags=['KVP', 'mAs', 'ExposureIndex', 'DAP', 'SID', 'DetectorID'],
             list_format=['|:.1f|', '|:.2f|', '|:.1f|', '|:.3f|', '|:.1f|', '']
             )
         empty_ParamSet.NM.dcm_tagpattern = cfc.TagPatternFormat(
@@ -356,7 +356,9 @@ class ConfigIdl2Py():
             if 'RINGSMOOTH' in param_names:
                 paramset.CT.rin_smooth_filter_w = cp.RINGSMOOTH[0]
             if 'RINGSTOP' in param_names:
-                paramset.CT.rin_range = list(cp.RINGSTOP[0])
+                rin_range = list(cp.RINGSTOP[0])
+                paramset.CT.rin_range_start = float(rin_range[0])
+                paramset.CT.rin_range_stop = float(rin_range[1])
             if 'RINGARTTREND' in param_names:
                 paramset.CT.rin_subtract_trend = bool(cp.RINGARTTREND[0])
             if 'NPSROISZ' in param_names:
@@ -448,13 +450,19 @@ class ConfigIdl2Py():
             if 'MTFTYPENM' in param_names:
                 paramset.NM.mtf_type = cp.MTFTYPENM[0]
             if 'MTFROISZNM' in param_names:
-                paramset.NM.mtf_roi_size = list(cp.MTFROISZNM[0])
+                sz = list(cp.MTFROISZNM[0])
+                paramset.NM.mtf_roi_size_x = float(sz[0])
+                paramset.NM.mtf_roi_size_y = float(sz[1])
             if 'PLOTMTFNM' in param_names:
                 paramset.NM.mtf_plot = cp.PLOTMTFNM[0]
             if 'BARROISZ' in param_names:
                 paramset.NM.bar_roi_size = cp.BARROISZ[0]
             if 'BARWIDTHS' in param_names:
-                paramset.NM.bar_widths = list(cp.BARWIDTHS[0])
+                w = list(cp.BARWIDTHS[0])
+                paramset.NM.bar_width_1 = float(w[0])
+                paramset.NM.bar_width_2 = float(w[1])
+                paramset.NM.bar_width_3 = float(w[2])
+                paramset.NM.bar_width_4 = float(w[3])
             if 'SCANSPEEDAVG' in param_names:
                 paramset.NM.spe_avg = cp.SCANSPEEDAVG[0]
             if 'SCANSPEEDHEIGHT' in param_names:
@@ -576,7 +584,10 @@ class ConfigIdl2Py():
                 tempsThis = []
                 for tmp, tmpv in temps.items():
                     if tmpv[0].dtype != 'int16':
-                        tempThis = self.convert_multiMark2py(m, tmpv[0])
+                        if len(tmpv[0].shape) == 2:
+                            tempThis = self.convert_multiMark2py(m, tmpv[0])
+                        else:  # len(shape) == 1, only one image for testing
+                            tempThis = self.convert_multiMark2py(m, [tmpv[0]])
                         tempThis.label = tmp
                         tempsThis.append(tempThis)
                 qt[mod_py(m)] = tempsThis
@@ -668,14 +679,13 @@ class ConfigIdl2Py():
 
             list_out = test_names.copy()
             for old_name in test_names:
-                # try:
                 if old_name in old_test_strings:
                     id_test = old_test_strings.index(old_name)
                     list_out = list(map(lambda x: x.replace(
                         old_name, test_strings[id_test]), list_out))
                 else:
                     failed = True
-                    # TODO warning - failed to convert test type (eg 'POS')
+                    print(f'Failed to convert test type {old_name}')
 
         if failed:
             list_out = ['']

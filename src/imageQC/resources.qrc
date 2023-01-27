@@ -2,7 +2,6 @@
 <RCC version="1.0">
 	<qresource prefix="config_defaults">
 		<file alias="tag_infos.yaml">config_defaults\tag_infos.yaml</file>
-		<file alias="dcmTags_idl_py.csv">config_defaults\dcmTags_idl_py.csv</file>
 		<file alias="tag_patterns_test_dcm.yaml">config_defaults\tag_patterns_test_dcm.yaml</file>
 		<file alias="CTnumberSensitometry.yaml">config_defaults\CTnumberSensitometry.yaml</file>
 	</qresource>

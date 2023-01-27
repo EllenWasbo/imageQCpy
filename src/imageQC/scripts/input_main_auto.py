@@ -7,6 +7,7 @@ InputMain used when no GUI or pytest to replace MainWindow.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
+import numpy as np
 
 # imageQC block start
 import imageQC.config.config_classes as cfc
@@ -29,6 +30,8 @@ class InputMain:
     current_group_indicators: list = field(default_factory=list)
     # string for each image if output set pr group with quicktest (paramset.output)
     automation_active: bool = True
+    active_img: np.ndarray = field(default_factory=lambda: np.zeros((2, 2)))
+    current_roi: list = field(default_factory=list)
 
     def display_errmsg(self, errmsg):
         """Display error messages on console."""

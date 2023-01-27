@@ -1,10 +1,10 @@
 CT:
 - label: default
-  list_tags: [KVP, Exposure, CTDIvol, SoftwareVersions]
+  list_tags: [KVP, mAs, CTDIvol, SoftwareVersions]
   list_format: ['|:.0f|', '|:.1f|', '|:.2f|', '']
 Xray:
 - label: default
-  list_tags: [KVP, Exposure, ExposureIndex, DAP, SID,
+  list_tags: [KVP, mAs, ExposureIndex, DAP, SID,
     DetectorID]
   list_format: ['|:.1f|', '|:.2f|', '|:.1f|', '|:.3f|', '|:.1f|', '']
 NM:

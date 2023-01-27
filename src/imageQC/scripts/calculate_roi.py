@@ -9,6 +9,10 @@ Calculation processes for the different tests.
 import numpy as np
 from scipy import ndimage
 from skimage import feature
+from skimage.transform import hough_line, hough_line_peaks
+from skimage.transform import probabilistic_hough_line
+from skimage.feature import canny
+
 
 # imageQC block start
 import imageQC.scripts.mini_methods_calculate as mmcalc
@@ -158,7 +162,7 @@ def get_rois(image, image_number, input_main):
                     roi_this = get_roi_circle(
                         img_shape, off_center_xy, roi_size_in_pix)
 
-        elif input_main.current_modality == 'Xray':
+        elif input_main.current_modality in ['Xray', 'MR']:
             dx = delta_xya[0]  # center of ROI
             dy = delta_xya[1]
             roi_sz_xy = [
@@ -208,9 +212,67 @@ def get_rois(image, image_number, input_main):
                         dy += paramset.mtf_offset_xy[1]
                 roi_this = get_roi_rectangle(
                     img_shape,
-                    roi_width=paramset.mtf_roi_size_x / image_dict.pix[0],
-                    roi_height=paramset.mtf_roi_size_y / image_dict.pix[0],
+                    roi_width=roi_sz_xy[0], roi_height=roi_sz_xy[1],
                     offcenter_xy=[dx, dy]
+                    )
+
+        elif input_main.current_modality == 'NM':
+            dx = delta_xya[0]  # center of ROI
+            dy = delta_xya[1]
+            roi_sz_xy = [
+                paramset.mtf_roi_size_x / image_dict.pix[0],
+                paramset.mtf_roi_size_y / image_dict.pix[1]
+                ]
+            if paramset.mtf_auto_center:
+                if paramset.mtf_type in [0, 1, 4]:
+                    filt_img = ndimage.gaussian_filter(image, sigma=5)
+                    yxmax = get_max_pos_yx(filt_img)
+                    offcenter_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
+
+                elif paramset.mtf_type == 2:  # perpendicular line sources
+                    res = find_lines(image)
+                    if len(res[0]) == 2 and len(res[1]) == 2:
+                        roi_this = []
+                        for i in [0, 1]:
+                            height_idx = i % 2
+                            width_idx = 1 if height_idx == 0 else 0
+                            roi_this.append(get_roi_rectangle(
+                                img_shape,
+                                roi_width=roi_sz_xy[width_idx],
+                                roi_height=roi_sz_xy[height_idx],
+                                offcenter_xy=res[i]
+                                )
+                            )
+                    pass
+
+                elif paramset.mtf_type == 3:  # four edges
+                    rect_dict = find_rectangle_object(image)
+                    if rect_dict['centers_of_edges_xy'] is not None:
+                        centers_of_edges_xy = rect_dict['centers_of_edges_xy']
+                        cent = [image.shape[1] // 2, image.shape[0] // 2]
+                        off_xy = [
+                            [xy[0] - cent[0], xy[1] - cent[1]]
+                            for xy in centers_of_edges_xy]
+
+                        roi_this = []
+                        for i in range(len(off_xy)):
+                            height_idx = i % 2
+                            width_idx = 1 if height_idx == 0 else 0
+                            roi_this.append(get_roi_rectangle(
+                                img_shape,
+                                roi_width=roi_sz_xy[width_idx],
+                                roi_height=roi_sz_xy[height_idx],
+                                offcenter_xy=off_xy[i]
+                                )
+                            )
+            else:
+                offcenter_xy = [dx, dy]
+
+            if roi_this is None and paramset.mtf_type != 3:
+                roi_this = get_roi_rectangle(
+                    img_shape,
+                    roi_width=roi_sz_xy[0], roi_height=roi_sz_xy[1],
+                    offcenter_xy=offcenter_xy
                     )
 
         return (roi_this, errmsg)
@@ -271,6 +333,15 @@ def get_rois(image, image_number, input_main):
             ufov_ratio=paramset.uni_ufov_ratio,
             cfov_ratio=paramset.uni_cfov_ratio
             )
+
+    def Spe():
+        roi_height_in_pix = 10. * paramset.spe_height / image_dict.pix[0]
+        return get_roi_rectangle(
+            img_shape, roi_width=paramset.spe_avg, roi_height=roi_height_in_pix,
+            offcenter_xy=delta_xya[0:2])
+
+    def Bar():
+        return get_roi_NM_bar(image, image_dict, paramset)
 
     def SNI():
         return get_roi_SNI(image, image_dict, paramset)
@@ -740,6 +811,52 @@ def get_roi_SNI(image, image_dict, test_params):
     return (roi_array, errmsg)
 
 
+def get_roi_NM_bar(image, image_dict, test_params):
+    """Generate circular rois for NM bar phantom tests.
+
+    Circular ROI in each quadrant sorted by variance to get widest to narrowest bars.
+
+    Parameters
+    ----------
+    image : nparr
+    image_dict : dict
+        as minimum defined in scripts/dcm.py - read_dcm_info
+    test_params : ParamSetNM
+        for given modality as defined in config/config_classes.py
+
+    Returns
+    -------
+    roi_array : ndarray
+        list of 4 2d arrays with type bool. Default is None
+    errmsg : list of str. Default is []
+    """
+    roi_array = None
+
+    vec_y = np.sum(image, axis=1)
+    nozero = np.nonzero(vec_y)
+    n_nozero = nozero[0].size
+    dd = n_nozero // 4
+    radius = test_params.bar_roi_size / image_dict.pix[0]
+
+    x_fac = [-1, 1, -1, 1]  # (left, right) * 2
+    y_fac = [-1, -1, 1, 1]  # upper, upper, lower, lower
+    variance = []
+    roi_temp = []
+    for i in range(4):
+        center_xy = (x_fac[i]*dd, y_fac[i]*dd)
+        roi_this = get_roi_circle(image_dict.shape, center_xy, radius)
+        arr = np.ma.masked_array(image, mask=np.invert(roi_this))
+        variance.append(np.var(arr))
+        roi_temp.append(roi_this)
+
+    order_var = np.flip(np.argsort(np.array(variance)))
+    roi_array = []
+    for i in range(4):
+        roi_array.append(roi_temp[order_var[i]])
+
+    return roi_array
+
+
 def get_roi_circle_MR(image, image_dict, test_params, test_code, delta_xy):
     """Generate circular roi for MR tests.
 
@@ -997,6 +1114,14 @@ def find_rectangle_object(image):
         feature.corner_fast(image_binary, 10),
         min_distance=10
         )
+    if corn.shape[1] != 2:  # try negative high signal
+        image_binary = np.zeros(image.shape)
+        image_binary[image < threshold] = 1.
+        corn = feature.corner_peaks(
+            feature.corner_fast(image_binary, 10),
+            min_distance=10
+            )
+
     #TODO adjust min_distance? exclude_borders also uses this value if not set
     if corn.shape[1] == 2:
         ys = np.array([c[0] for c in corn])
@@ -1030,4 +1155,86 @@ def find_rectangle_object(image):
     #TODO find edges also if full rectangle not imaged
 
     return {'centers_of_edges_xy': centers_of_edges_xy,
-            'corners_xy' : corners_xy}
+            'corners_xy': corners_xy}
+
+
+def find_lines(image):
+    """Detect 2 perpendicular lines in image and return center position of these.
+
+    Parameters
+    ----------
+    image : np.array
+
+    Returns
+    -------
+    dict:
+        centers_of_lines_xy : list of list
+            for each line [center_x, center_y]
+    """
+    image_1s = np.zeros(image.shape)
+    image_1s[image > 0.5*np.max(image)] = 1
+    center_line_ydir_xy = []
+    center_line_xdir_xy = []
+    for direction in [1, 0]:
+        centers = []
+        group_nos = []
+        gno = -1
+        for i in range(image.shape[direction]):
+            profile = image_1s[i, :] if direction == 1 else image_1s[:, i]
+            if any(profile):
+                _, center = mmcalc.get_width_center_at_threshold(profile, 0.5,
+                                                                 get_widest=True)
+                centers.append(center)
+                group_nos.append(None)
+                if center is not None:
+                    if i > 0:
+                        if group_nos[-2] is not None:
+                            group_nos[-1] = group_nos[-2]
+                        else:
+                            gno += 1
+                            group_nos[-1] = gno
+                    else:
+                        gno += 1
+                        group_nos[-1] = gno
+            else:
+                centers.append(None)
+                group_nos.append(None)
+
+        centers = np.array(centers)
+        group_nos = np.array(group_nos)
+        if 1 in group_nos and 2 not in group_nos:  # two lines
+            len_groups = [np.count_nonzero(group_nos == group) for group in [0, 1]]
+            center_groups = [np.mean(centers[group_nos == group]) for group in [0, 1]]
+            longest_group_id = len_groups.index(max(len_groups))
+            shortest_group_id = len_groups.index(min(len_groups))
+            if direction == 1:  # found center in xdir, short = ydir line
+                center_line_xdir_xy.append(center_groups[longest_group_id])
+                center_line_ydir_xy.append(center_groups[shortest_group_id])
+            else:
+                center_line_ydir_xy.append(center_groups[longest_group_id])
+                center_line_xdir_xy.append(center_groups[shortest_group_id])
+        elif 0 in group_nos and 1 not in group_nos:  # overlapping coordinates
+            profile_orig = centers[group_nos == 0]
+            profile = profile_orig - np.min(profile_orig)
+            _, center = mmcalc.get_width_center_at_threshold(
+                profile, 0.5*np.max(profile), get_widest=True)
+            perp_center = profile_orig[round(center)]
+            long_center = np.median(profile_orig[profile < 0.2 * np.max(profile)])
+            if direction == 1:  # found center in x, center top for ydir line
+                center_line_ydir_xy.append(perp_center)
+                center_line_xdir_xy.append(long_center)
+            else:
+                center_line_xdir_xy.append(perp_center)
+                center_line_ydir_xy.append(long_center)
+        else:
+            if 0 in group_nos:  # any found
+                profile = centers[group_nos == 0]
+                center_line_xdir_xy.append(np.median(profile))
+                center_line_ydir_xy.append(np.median(profile))
+
+    center_line_xdir_xy[0] = center_line_xdir_xy[0] - image.shape[0] // 2
+    center_line_ydir_xy[0] = center_line_ydir_xy[0] - image.shape[0] // 2
+    center_line_xdir_xy[1] = center_line_xdir_xy[1] - image.shape[1] // 2
+    center_line_ydir_xy[1] = center_line_ydir_xy[1] - image.shape[1] // 2
+
+    return [center_line_xdir_xy, center_line_ydir_xy]

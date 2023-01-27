@@ -24,7 +24,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.7alpha'
+VERSION = '3.0.8alpha'
 '''if os.path.exists(cfg_path):
     config = configparser.ConfigParser()
     try:
@@ -52,7 +52,7 @@ QUICKTEST_OPTIONS = {
     'NM': ['DCM', 'ROI', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
     'SPECT': ['DCM', 'ROI', 'MTF', 'Con'],
     'PET': ['DCM', 'ROI', 'Hom', 'Cro'],
-    'MR': ['DCM', 'ROI', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli']}
+    'MR': ['DCM', 'ROI', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF']}
 """dict: with lists defining modalities and their corresponding
 list of tests with QuickTest as option."""
 
@@ -67,6 +67,10 @@ ALTERNATIVES = {
         'Hom': ['Avg and stdev for each ROI',
                 'Avg for each ROI + difference from avg of all',
                 'Avg for each ROI + % difference from avg of all']
+        },
+    'NM': {
+        'MTF': ['Point', 'One line source', 'Two perpendicular line sources',
+                'Four edges', 'Circular edge']
         }
     }
 """dict: with lists defining the alternative methods/table displays
@@ -139,7 +143,17 @@ HEADERS = {
         'Bar': {
             'alt0': ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',
                      'FWHM1', 'FWHM2', 'FWHM3', 'FWHM4']
-            }
+            },
+        'Spe': {
+            'alt0': ['Min diff from average (%)', 'Max diff from average (%)']
+            },
+        'MTF': {
+            'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt1': ['FWHM', 'FWTM'],
+            'alt2': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt3': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt4': ['FWHM', 'FWTM']
+            },
         },
     'SPECT': {
         'ROI': {'alt0': roi_headers},
@@ -196,6 +210,13 @@ HEADERS_SUP = {
         'SNI': {
             'altAll': ['FitX (mm from center)', 'FitY (mm from center)',
                        'Fit distance (mm)']
+            },
+        'MTF': {
+            'alt0': ['MTFx 50%', 'MTFx 10%', 'MTFy 50%', 'MTFy 10%'],
+            'alt1': ['MTF 50%', 'MTF 10%', 'MTF 2%'],
+            'alt2': ['MTFx 50%', 'MTFx 10%', 'MTFy 50%', 'MTFy 10%'],
+            'alt3': ['MTFx 50%', 'MTFx 10%', 'MTFy 50%', 'MTFy 10%'],
+            'alt4': ['MTF 50%', 'MTF 10%', 'MTF 2%']
             },
         },
     'SPECT': {},

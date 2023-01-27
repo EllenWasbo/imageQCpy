@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from PyQt5 import QtWidgets
-from PyQt5.QtGui import QIcon, QScreen
+from PyQt5.QtGui import QIcon, QScreen, QKeyEvent
 from PyQt5.QtCore import Qt, QEvent, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication, qApp, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
     QRadioButton, QComboBox, QSlider, QMenu, QAction, QToolBar, QToolButton,
     QMessageBox, QInputDialog, QTreeWidget, QTreeWidgetItem,
     QTableWidget, QTableWidgetItem, QAbstractItemView,
-    QFileDialog, QScrollArea, QAbstractScrollArea,
+    QFileDialog, QScrollArea, QAbstractScrollArea
     )
 import matplotlib
 import matplotlib.figure
@@ -32,6 +32,7 @@ from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg, NavigationToo
 
 # imageQC block start
 from imageQC.ui.ui_dialogs import EditAnnotationsDialog
+import imageQC.ui.ui_image_canvas as ui_image_canvas
 import imageQC.ui.ui_test_tabs as ui_test_tabs
 import imageQC.ui.rename_dicom as rename_dicom
 import imageQC.ui.automation_wizard as automation_wizard
@@ -47,41 +48,9 @@ from imageQC.config.iQCconstants import (
 import imageQC.config.config_classes as cfc
 import imageQC.scripts.dcm as dcm
 from imageQC.scripts.calculate_roi import get_rois
-from imageQC.scripts.mini_methods_format import val_2_str
-from imageQC.scripts.mini_methods import get_min_max_pos_2d
+import imageQC.scripts.mini_methods_format as mmf
 from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
 # imageQC block end
-
-
-def get_rotated_crosshair(szx, szy, delta_xya):
-    """Get xydata for rotated crosshair.
-
-    Parameters
-    ----------
-    szx : int
-        image size x direction
-    szy : int
-        image size y direction
-    delta_xya : tuple
-        dx, dy, dangle - center offset relative to center in image
-
-    Returns
-    -------
-    x1, x2, y1, y2 : int
-        xydata for 2Dlines
-    """
-    tan_a = np.tan(np.deg2rad(delta_xya[2]))
-    dy1 = tan_a*(szx*0.5 + delta_xya[0])
-    dy2 = tan_a*(szx*0.5 - delta_xya[0])
-    dx1 = tan_a*(szy*0.5 - delta_xya[1])
-    dx2 = tan_a*(szy*0.5 + delta_xya[1])
-
-    x1 = szx*0.5+delta_xya[0]-dx1
-    x2 = szx*0.5+delta_xya[0]+dx2
-    y1 = szy*0.5+delta_xya[1]-dy1
-    y2 = szy*0.5+delta_xya[1]+dy2
-
-    return (x1, x2, y1, y2)
 
 
 @dataclass
@@ -102,10 +71,10 @@ class GuiVariables():
 
     panel_width: int = 1400
     panel_height: int = 700
+    char_width: int = 7
     annotations: bool = True
     annotations_line_thick: int = 3
     annotations_font_size: int = 14
-    #hidden_rgt_top: bool = False  # True if upper right panel collapsed DELETE?
 
 
 class MainWindow(QMainWindow):
@@ -113,7 +82,7 @@ class MainWindow(QMainWindow):
 
     screenChanged = pyqtSignal(QScreen, QScreen)
 
-    def __init__(self, scX=1400, scY=700):
+    def __init__(self, scX=1400, scY=700, char_width=7):
         super().__init__()
 
         self.save_blocked = False
@@ -142,6 +111,7 @@ class MainWindow(QMainWindow):
         self.vGUI = GuiVariables()
         self.vGUI.panel_width = round(0.48*scX)
         self.vGUI.panel_height = round(0.86*scY)
+        self.vGUI.char_width = char_width
         self.vGUI.annotations_line_thick = self.user_prefs.annotations_line_thick
         self.vGUI.annotations_font_size = self.user_prefs.annotations_font_size
         self.statusBar = StatusBar(self)
@@ -237,6 +207,14 @@ class MainWindow(QMainWindow):
         self.reset_split_sizes()
         self.update_mode()
 
+        # verify templates
+        status_ti, log_ti, _ = cff.get_taginfos_used_in_templates(self)
+        status_au, log_au = cff.verify_auto_templates(self)
+        if status_ti is False or status_au is False:
+            self.statusBar.showMessage(
+                'Issues with templates...', 5000, warning=True,
+                add_warnings=log_ti + log_au)
+
     def clear_all_images(self):
         """Set empty values at startup and when all images closed."""
         self.imgs = []
@@ -312,13 +290,6 @@ class MainWindow(QMainWindow):
             if len(new_img_infos) > 0:
                 nImgBefore = len(self.imgs)
                 if self.chkAppend.isChecked():
-                    #TODO delete? changed to default False when opening files
-                    '''
-                    if nImgBefore > 0:
-                        if self.wQuickTest.gbQT.isChecked() is False:
-                            for d in new_img_infos:
-                                d.marked = False
-                    '''
                     self.imgs = self.imgs + new_img_infos
                     self.update_results(n_added_imgs=len(new_img_infos))
                 else:
@@ -371,13 +342,6 @@ class MainWindow(QMainWindow):
         dlg = open_automation.OpenAutomationDialog(self)
         dlg.exec()
 
-    def flag_edit(self, flag=True):
-        """Reset results if exist.
-
-        Used by TestTable when checkmarks changes.
-        """
-        pass
-
     def set_active_img(self, imgno):
         """Set active image programmatically.
 
@@ -414,6 +378,7 @@ class MainWindow(QMainWindow):
 
             self.refresh_img_display()
             self.refresh_results_display(update_table=False)
+            self.refresh_selected_table_row()
 
     def update_summed_img(self, recalculate_sum=True):
         """Overwrite pixmap in memory with new summed image, refresh GUI."""
@@ -601,13 +566,6 @@ class MainWindow(QMainWindow):
 
     def refresh_results_display(self, update_table=True):
         """Update GUI for test results when results or selections change."""
-        #TODO delete - confusing behaviour
-        '''
-        if self.vGUI.hidden_rgt_top is False:
-            if self.current_test in self.results:
-                self.hide_rgt_top()  # maximize results displays first time
-        '''
-
         if self.current_test not in self.results:
             # clear all
             self.wResTable.result_table.clear()
@@ -661,6 +619,19 @@ class MainWindow(QMainWindow):
                 self.imgs[self.vGUI.active_img_no].info_list_modality)
         else:
             self.wImageDisplay.canvas.img_is_missing()
+
+    def refresh_selected_table_row(self):
+        """Set selected results table row to the same as image selected file."""
+        if self.current_test in self.results:
+            if self.results[self.current_test]['pr_image']:
+                wid = self.tabResults.currentWidget()
+                if isinstance(wid, ResultTableWidget):
+                    self.wResTable.result_table.blockSignals(True)
+                    self.wResTableSup.result_table.blockSignals(True)
+                    self.wResTable.result_table.selectRow(self.vGUI.active_img_no)
+                    self.wResTableSup.result_table.selectRow(self.vGUI.active_img_no)
+                    self.wResTable.result_table.blockSignals(False)
+                    self.wResTableSup.result_table.blockSignals(False)
 
     def sort_imgs(self):
         """Resort images by dicom info."""
@@ -766,14 +737,6 @@ class MainWindow(QMainWindow):
         self.splitRgtMidBtm.setSizes(
             [round(self.vGUI.panel_height*0.4), round(self.vGUI.panel_height*0.4)])
 
-    #TODO delete? confusing behaviour
-    def hide_rgt_top(self):
-        """Hide QSplitter right top to better display results."""
-        self.splitRgtTopRest.setSizes(
-            [round(self.vGUI.panel_height*0.), round(self.vGUI.panel_height*1.)])
-        self.splitRgtMidBtm.setSizes(
-            [round(self.vGUI.panel_height*0.5), round(self.vGUI.panel_height*0.5)])
-
     def moveEvent(self, event):
         """If window moved on screen or to other monitor."""
         try:
@@ -839,18 +802,14 @@ class MainWindow(QMainWindow):
         if self.user_prefs.dark_mode:
             plt.style.use('dark_background')
         status, path, self.paramsets = cff.load_settings(fname='paramsets')
-        status, path, self.quicktests = cff.load_settings(
+        status, path, self.quicktest_templates = cff.load_settings(
             fname='quicktest_templates')
         status, path, self.tag_infos = cff.load_settings(fname='tag_infos')
         status, path, self.tag_patterns_special = cff.load_settings(
             fname='tag_patterns_special')
 
-        #TODO verify settings against
-        #   silent update to newest version attributes
-        #   deleted files with links? e.g. ParamSet to automation
-
         try:  # avoid error before gui ready
-            self.wQuickTest.modality_dict = self.quicktests
+            self.wQuickTest.modality_dict = self.quicktest_templates
             self.wQuickTest.fill_template_list()
             self.wParamset.modality_dict = self.paramsets
             self.wParamset.fill_template_list()
@@ -858,7 +817,7 @@ class MainWindow(QMainWindow):
             pass
 
     def display_errmsg(self, errmsg):
-        """Display error messages in statusbar or as popup if long."""
+        """Display error ees in statusbar or as popup if long."""
         if errmsg is not None:
             if isinstance(errmsg, str):
                 self.statusBar.showMessage(errmsg, 2000, warning=True)
@@ -1291,7 +1250,6 @@ class TreeFileList(QTreeWidget):
         proceed = True
         test_codes = []
         if self.main.wQuickTest.gbQT.isChecked():
-            #TODO popup this test or select from list
             txt = 'remove mark from' if remove_mark else 'mark for testing'
             dlg = uir.SelectTestcodeDialog(
                 label=f'Select tests to {txt}',
@@ -1423,25 +1381,35 @@ class DicomHeaderWidget(QWidget):
                         )
                     tag_lists.append(tags[0])
 
+                ignore_cols = []
+                for idx, val in enumerate(pattern.list_format):
+                    if len(val) > 2:
+                        if val[2] == '0':
+                            ignore_cols.append(idx)
+
+                tag_lists = mmf.convert_lists_to_numbers(
+                    tag_lists, ignore_columns=ignore_cols)
+
                 df = {}
                 for c, attr in enumerate(pattern.list_tags):
                     col = [row[c] for row in tag_lists]
                     df[attr] = col
                 df = pd.DataFrame(df)
 
+                deci_mark = self.main.current_paramset.output.decimal_mark
                 if output_type == 'csv':
                     fname = QFileDialog.getSaveFileName(
                         self, 'Save data as',
                         filter="CSV file (*.csv)")
                     if fname[0] != '':
-                        deci_mark = self.main.current_paramset.output.decimal_mark
                         sep = ',' if deci_mark == '.' else ';'
                         try:
-                            df.to_csv(fname[0], sep=sep, decimal=deci_mark, index=False)
+                            df.to_csv(fname[0], sep=sep,
+                                      decimal=deci_mark, index=False)
                         except IOError as e:
                             QMessageBox.warning(self.main, 'Failed saving', e)
                 elif output_type == 'clipboard':
-                    df.to_clipboard(excel=True, index=False)
+                    df.to_clipboard(excel=True, decimal=deci_mark, index=False)
                     QMessageBox.information(self.main, 'Data in clipboard',
                                             'Data copied to clipboard.')
 
@@ -1544,74 +1512,6 @@ class GenericImageWidget(QWidget):
         dlg.exec()
 
 
-class GenericImageCanvas(FigureCanvasQTAgg):
-    """Canvas for display of image."""
-
-    def __init__(self, parent, main):
-        self.main = main
-        self.parent = parent
-        self.fig = matplotlib.figure.Figure(dpi=150)
-        self.fig.subplots_adjust(0., 0., 1., 1.)
-        FigureCanvasQTAgg.__init__(self, self.fig)
-        self.setParent = parent
-        self.ax = self.fig.add_subplot(111)
-        self.last_clicked_pos = (-1, -1)
-        self.profile_length = 20  # assume click drag > length in pix = draw profile
-        self.current_image = None
-
-        # default display
-        self.img = self.ax.imshow(np.zeros((2, 2)))
-        self.ax.cla()
-        self.ax.axis('off')
-
-    def profile_draw(self, x2, y2, pix=None):
-        """Draw line for profile.
-
-        Parameters
-        ----------
-        x2 : float
-            endpoint x coordinate
-        y2 : float
-            endpoint y coordinate
-        pix : float, optional
-            pixelsize. The default is None.
-
-        Returns
-        -------
-        plotstatus : bool
-            True if plot was possible
-        """
-        self.profile_remove()
-        plotstatus = False
-        if self.last_clicked_pos != (-1, -1):
-            x1 = self.last_clicked_pos[0]
-            y1 = self.last_clicked_pos[1]
-            length = np.sqrt((x2-x1)**2 + (y2-y1)**2)
-            if length > self.profile_length:
-                self.ax.add_artist(matplotlib.lines.Line2D(
-                    [x1, x2], [y1, y2],
-                    color='red', linewidth=self.main.vGUI.annotations_line_thick,
-                    gid='profile'))
-                self.draw()
-                plotstatus = True
-        return plotstatus
-
-    def profile_remove(self):
-        """Clear profile line."""
-        if hasattr(self.ax, 'lines'):
-            for line in self.ax.lines:
-                if line.get_gid() == 'profile':
-                    line.remove()
-                    break
-
-    def draw(self):
-        """Avoid super().draw when figure collapsed by sliders."""
-        try:
-            super().draw()
-        except ValueError:
-            pass
-
-
 class GenericImageToolbarPosVal(QToolBar):
     """Toolbar for showing cursor position and value."""
 
@@ -1650,7 +1550,7 @@ class ImageDisplayWidget(GenericImageWidget):
     """Image display widget."""
 
     def __init__(self, parent):
-        super().__init__(parent, ImageCanvas(self, parent))
+        super().__init__(parent, ui_image_canvas.ImageCanvas(self, parent))
         self.main = parent
 
         tbimg = ImageNavigationToolbar(self.canvas, self.main)
@@ -1745,319 +1645,6 @@ class ImageDisplayWidget(GenericImageWidget):
         """Pop up dialog window with plot of profile."""
         pix = self.main.imgs[self.main.vGUI.active_img_no].pix[0]
         super().plot_profile(x2, y2, pix=pix)
-
-
-class ImageCanvas(GenericImageCanvas):
-    """Canvas for drawing the active DICOM image."""
-
-    def __init__(self, parent, main):
-        super().__init__(parent, main)
-
-    def img_is_missing(self):
-        """Show message when pixel_data is missing."""
-        self.ax.cla()
-        self.img = self.ax.imshow(np.zeros((100, 100)))
-        self.ax.axis('off')
-        at = matplotlib.offsetbox.AnchoredText(
-            'Pixel data not found',
-            prop=dict(size=14, color='gray'),
-            frameon=False, loc='center')
-        self.ax.add_artist(at)
-        self.draw()
-
-    def img_draw(self):
-        """Refresh image."""
-        self.ax.cla()
-
-        nparr = self.main.active_img
-        WLmin, WLmax = self.main.windowLevelWidget.get_min_max(
-            self.main.active_img)
-        annotate = self.main.vGUI.annotations
-
-        if len(np.shape(nparr)) == 2:
-            self.img = self.ax.imshow(
-                nparr, cmap='gray', vmin=WLmin, vmax=WLmax)
-        elif len(np.shape(nparr)) == 3:
-            # rgb to grayscale NTSC formula
-            nparr = (0.299 * nparr[:, :, 0]
-                     + 0.587 * nparr[:, :, 1]
-                     + 0.114 * nparr[:, :, 2])
-            self.img = self.ax.imshow(nparr, cmap='gray')
-            annotate = False
-        self.ax.axis('off')
-        if annotate:
-            # central crosshair
-            szy, szx = np.shape(nparr)
-            if self.main.vGUI.delta_a == 0:
-                self.ax.axhline(
-                    y=szy*0.5 + self.main.vGUI.delta_y,
-                    color='red', linewidth=1., linestyle='--')
-                self.ax.axvline(
-                    x=szx*0.5 + self.main.vGUI.delta_x,
-                    color='red', linewidth=1., linestyle='--')
-            else:
-                x1, x2, y1, y2 = get_rotated_crosshair(
-                    szx, szy,
-                    (self.main.vGUI.delta_x,
-                     self.main.vGUI.delta_y,
-                     self.main.vGUI.delta_a)
-                    )
-                # NB keep these two lines as first and second in ax.lines
-                self.ax.add_artist(matplotlib.lines.Line2D(
-                    [0, szx], [y1, y2],
-                    color='red', linewidth=1., linestyle='--',
-                    gid='axis1'))
-                self.ax.add_artist(matplotlib.lines.Line2D(
-                    [x1, x2], [szy, 0],
-                    color='red', linewidth=1., linestyle='--',
-                    gid='axis2'))
-            # DICOM annotations
-            if self.parent.tool_sum.isChecked():
-                annot_text = (
-                    ['Average image', ''] if self.main.average_img
-                    else ['Summed image', '']
-                    )
-            else:
-                annot_text = self.main.imgs[
-                    self.main.vGUI.active_img_no].annotation_list
-            at = matplotlib.offsetbox.AnchoredText(
-                '\n'.join(annot_text),
-                prop=dict(size=self.main.vGUI.annotations_font_size, color='red'),
-                frameon=False, loc='upper left')
-            self.ax.add_artist(at)
-            self.roi_draw()
-        else:
-            self.draw()
-        self.current_image = nparr
-
-    def roi_draw(self):
-        """Update ROI countours on image."""
-        if hasattr(self, 'contours'):
-            for contour in self.contours:
-                for coll in contour.collections:
-                    try:
-                        coll.remove()
-                    except ValueError:
-                        pass
-        if hasattr(self, 'scatters'):
-            for s in self.scatters:
-                try:
-                    s.remove()
-                except ValueError:
-                    pass
-        if hasattr(self.ax, 'lines'):
-            n_lines = len(self.ax.lines)
-            if n_lines > 2:
-                for i in range(n_lines - 2):
-                    self.ax.lines[-1].remove()
-
-        self.ax.texts.clear()
-
-        if self.main.current_roi is not None:
-            self.linewidth = self.main.vGUI.annotations_line_thick
-            self.fontsize = self.main.vGUI.annotations_font_size
-
-            class_method = getattr(self, self.main.current_test, None)
-            if class_method is not None:
-                class_method()
-            else:
-                self.add_contours_to_all_rois()
-        self.draw()
-
-    def add_contours_to_all_rois(self, colors=None, reset_contours=True,
-                                 roi_indexes=None):
-        """Draw all ROIs in self.main.current_roi (list) with specific colors.
-
-        Parameters
-        ----------
-        colors : list of str, optional
-            Default is None = all red
-        reset_contours : bool, optional
-            Default is True
-        roi_indexes : list of int, optional
-            roi indexes to draw. Default is None = all
-        """
-        this_roi = self.main.current_roi
-        if not isinstance(self.main.current_roi, list):
-            this_roi = [self.main.current_roi]
-
-        if reset_contours:
-            self.contours = []
-        if colors is None:
-            colors = ['red' for i in range(len(this_roi))]
-        if roi_indexes is None:
-            roi_indexes = list(np.arange(len(this_roi)))
-
-        for i in roi_indexes:
-            mask = np.where(this_roi[i], 0, 1)
-            contour = self.ax.contour(
-                mask, levels=[0.9],
-                colors=colors[i], alpha=0.5, linewidths=self.linewidth)
-            self.contours.append(contour)
-
-    def Hom(self):
-        """Draw Hom ROI."""
-        colors = ['red', 'blue', 'green', 'yellow', 'cyan']
-        self.add_contours_to_all_rois(colors=colors)
-
-    def CTn(self):
-        """Draw CTn ROI."""
-        self.contours = []
-        ctn_table = self.main.current_paramset.ctn_table
-        for i in range(len(ctn_table.materials)):
-            mask = np.where(self.main.current_roi[i], 0, 1)
-            contour = self.ax.contour(
-                mask, levels=[0.9],
-                colors='red', alpha=0.5, linewidths=self.linewidth)
-            self.contours.append(contour)
-            mask_pos = np.where(mask == 0)
-            xpos = np.mean(mask_pos[1])
-            ypos = np.mean(mask_pos[0])
-            if np.isfinite(xpos) and np.isfinite(ypos):
-                self.ax.text(xpos, ypos, ctn_table.materials[i],
-                             fontsize=self.fontsize, color='red')
-
-        if len(self.main.current_roi) == 2 * len(ctn_table.materials):
-            # draw search rois
-            nroi = len(ctn_table.materials)
-            for i in range(nroi, 2 * nroi):
-                mask = np.where(self.main.current_roi[i], 0, 1)
-                contour = self.ax.contour(
-                    mask, levels=[0.9],
-                    colors='blue', alpha=0.5, linewidths=self.linewidth)
-                self.contours.append(contour)
-
-    def Sli(self):
-        """Draw Slicethickness search lines."""
-        h_colors = ['b', 'lime']
-        v_colors = ['c', 'r', 'm', 'darkorange']
-        search_margin = self.main.current_paramset.sli_search_width
-        background_length = self.main.current_paramset.sli_background_width
-        pix = self.main.imgs[self.main.vGUI.active_img_no].pix
-        background_length = background_length / pix[0]
-        for l_idx, line in enumerate(self.main.current_roi['h_lines']):
-            y1, x1, y2, x2 = line
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x1, x2], [y1, y2],
-                color=h_colors[l_idx], linewidth=self.linewidth,
-                linestyle='dotted',
-                ))
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x1, x2], [y1 - search_margin, y2 - search_margin],
-                color=h_colors[l_idx], linewidth=0.5*self.linewidth,
-                ))
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x1, x2], [y1 + search_margin, y2 + search_margin],
-                color=h_colors[l_idx], linewidth=0.5*self.linewidth,
-                ))
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x1 + background_length, x1 + background_length],
-                [y1 - search_margin, y1 + search_margin],
-                color=h_colors[l_idx], linewidth=0.5*self.linewidth
-                ))
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x2 - background_length, x2 - background_length],
-                [y2 - search_margin, y2 + search_margin],
-                color=h_colors[l_idx], linewidth=0.5*self.linewidth
-                ))
-        for l_idx, line in enumerate(self.main.current_roi['v_lines']):
-            y1, x1, y2, x2 = line
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x1, x2], [y1, y2],
-                color=v_colors[l_idx], linewidth=self.linewidth,
-                linestyle='dotted',
-                ))
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x1 - search_margin, x2 - search_margin], [y1, y2],
-                color=v_colors[l_idx], linewidth=0.5*self.linewidth
-                ))
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x1 + search_margin, x2 + search_margin], [y1, y2],
-                color=v_colors[l_idx], linewidth=0.5*self.linewidth
-                 ))
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x1 - search_margin, x1 + search_margin],
-                [y1 + background_length, y1 + background_length],
-                color=v_colors[l_idx], linewidth=0.5*self.linewidth
-                ))
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x2 - search_margin, x2 + search_margin],
-                [y2 - background_length, y2 - background_length],
-                color=v_colors[l_idx], linewidth=0.5*self.linewidth
-                ))
-
-    def MTF(self):
-        """Draw MTF ROI."""
-        if (
-                self.main.current_modality == 'CT'
-                and self.main.current_paramset.mtf_type == 0):
-            # bead show background rim
-            self.add_contours_to_all_rois(roi_indexes=[1])
-        else:
-            self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
-
-    def Uni(self):
-        """Draw NM uniformity ROI."""
-        self.add_contours_to_all_rois(colors=['red', 'blue'])
-
-    def Dim(self):
-        """Draw search ROI for rods and resulting centerpositions if any."""
-        self.add_contours_to_all_rois(roi_indexes=[0, 1, 2, 3])
-        if 'Dim' in self.main.results:
-            if 'details_dict' in self.main.results['Dim']:
-                details_dict = self.main.results['Dim'][
-                    'details_dict'][self.main.vGUI.active_img_no]
-                if 'centers_x' in details_dict:
-                    xs = details_dict['centers_x']
-                    ys = details_dict['centers_y']
-                    for i in range(4):
-                        self.ax.add_artist(matplotlib.lines.Line2D(
-                            [xs[i-1], xs[i]], [ys[i-1], ys[i]],
-                            color='r', linewidth=self.linewidth,
-                            linestyle='dotted',
-                            ))
-
-    def SNI(self):
-        """Draw NM uniformity ROI."""
-        self.add_contours_to_all_rois(
-            colors=['red', 'blue'], roi_indexes=[1, 2])  # 2 large
-        self.add_contours_to_all_rois(
-            colors=['green', 'cyan'], reset_contours=False,
-            roi_indexes=[3, 4])  # 2 first small, else only label
-
-        for i in range(6):
-            mask = np.where(self.main.current_roi[i+3], 0, 1)
-            color = 'yellow'
-            mask_pos = np.where(mask == 0)
-            xpos = np.mean(mask_pos[1])
-            ypos = np.mean(mask_pos[0])
-            if np.isfinite(xpos) and np.isfinite(ypos):
-                self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
-                             f'S{i}',
-                             fontsize=self.fontsize, color=color)
-
-    def PIU(self):
-        """Draw MR PIU ROI."""
-        self.add_contours_to_all_rois()
-        # display min, max pos
-        self.scatters = []
-        min_idx, max_idx = get_min_max_pos_2d(
-            self.main.active_img, self.main.current_roi)
-        scatter = self.ax.scatter(min_idx[1], min_idx[0], s=40,
-                                  c='blue', marker='D')
-        self.scatters.append(scatter)
-        self.ax.text(min_idx[1], min_idx[0]+10,
-                     'min', fontsize=self.fontsize, color='blue')
-        scatter = self.ax.scatter(max_idx[1], max_idx[0], s=40,
-                                  c='fuchsia', marker='D')
-        self.scatters.append(scatter)
-        self.ax.text(max_idx[1], max_idx[0]+10,
-                     'max', fontsize=self.fontsize, color='fuchsia')
-
-    def Gho(self):
-        """Draw MR Ghosting ROI."""
-        colors = ['red', 'blue', 'green', 'yellow', 'cyan']
-        self.add_contours_to_all_rois(colors=colors)
 
 
 class ImageNavigationToolbar(NavigationToolbar2QT):
@@ -2164,30 +1751,27 @@ class CenterWidget(QGroupBox):
         css = f"""QSpinBox {{
                 border: 1px solid gray;
                 border-radius: 3px;
-                max-height: 30px;
+                max-height: 20px;
+                padding-top: 24px;
+                padding-bottom: 24px;
                 }}
             QSpinBox::up-button  {{
-                subcontrol-origin: margin;
+                subcontrol-origin: padding;
                 subcontrol-position: center top;
                 width: 30px;
-                height: 30px;
-                right: 3px;
-                bottom: 2px;
+                bottom: 5px;
                 image: url({urlUp});
                 }}
             QSpinBox::down-button  {{
-                subcontrol-origin: ;margin
+                subcontrol-origin: padding;
                 subcontrol-position: center bottom;
                 width: 30px;
-                height: 30px;
-                right: 3px;
-                bottom: 2px;
+                top: 5px;
                 image: url({urlDown});
                 }}"""
         self.valDeltaY.setStyleSheet(css)
 
         tb = QToolBar()
-        # tb.setOrientation(Qt.Vertical)
         actSearch = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}search.png'),
             'Search geometric center of mass by threshold', self)
@@ -2212,6 +1796,7 @@ class CenterWidget(QGroupBox):
         LOdelta2.addWidget(QLabel('da'))
         LOdelta2.addWidget(self.valDeltaA)
         LOdelta2.addWidget(self.chkDeltaUse)
+        LOdelta2.addStretch()
 
         boxCenterV = QVBoxLayout()
         boxCenterV.addLayout(LOdelta)
@@ -2226,7 +1811,7 @@ class CenterWidget(QGroupBox):
             self.valDeltaX.setValue(
                 self.main.vGUI.last_clicked_pos[0] - 0.5 * szActx)
             self.valDeltaY.setValue(
-                self.main.vGUI.last_clicked_pos[1] - 0.5 * szActy)
+                - (self.main.vGUI.last_clicked_pos[1] - 0.5 * szActy))
             self.update_delta(validate_pos=False)
 
     def set_center_threshold(self):
@@ -2253,18 +1838,18 @@ class CenterWidget(QGroupBox):
     def update_delta(self, validate_pos=True):
         """Update delta x,y,a - make sure valid values."""
         self.main.vGUI.delta_x = self.valDeltaX.value()
-        self.main.vGUI.delta_y = self.valDeltaY.value()
+        self.main.vGUI.delta_y = - self.valDeltaY.value()
         self.main.vGUI.delta_a = self.valDeltaA.value()
 
         if self.main.vGUI.annotations and self.main.active_img is not None:
             szy, szx = np.shape(self.main.active_img)
-            if self.valDeltaA.value() == 0:
+            if self.main.vGUI.delta_a == 0:
                 self.main.wImageDisplay.canvas.ax.lines[0].set_ydata(
-                    y=szy * 0.5 + self.valDeltaY.value())
+                    y=szy * 0.5 + self.main.vGUI.delta_y)
                 self.main.wImageDisplay.canvas.ax.lines[1].set_xdata(
-                    x=szx * 0.5 + self.valDeltaX.value())
+                    x=szx * 0.5 + self.main.vGUI.delta_x)
             else:
-                x1, x2, y1, y2 = get_rotated_crosshair(
+                x1, x2, y1, y2 = ui_image_canvas.get_rotated_crosshair(
                     szx, szy,
                     (self.main.vGUI.delta_x, self.main.vGUI.delta_y,
                      self.main.vGUI.delta_a))
@@ -2614,7 +2199,7 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         super().__init__(parent)
 
         self.fname = 'quicktest_templates'
-        self.modality_dict = self.main.quicktests
+        self.modality_dict = self.main.quicktest_templates
         self.current_template = self.main.current_quicktest
 
         self.gbQT = QGroupBox('QuickTest')
@@ -2728,9 +2313,13 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         if self.main.current_paramset.output.include_header:
             header_list = ['Date'] + header_list
             df = pd.DataFrame([value_list], columns=header_list)
+            if self.main.current_paramset.output.transpose_table:
+                df.transpose()
             df.to_clipboard(index=False, excel=True, sep=None)
         else:
             df = pd.DataFrame([value_list])
+            if self.main.current_paramset.output.transpose_table:
+                df.transpose()
             df.to_clipboard(index=False, excel=True, sep=None, header=None)
         self.main.statusBar.showMessage('Values in clipboard', 2000)
 
@@ -2821,7 +2410,7 @@ class ResultTableWidget(QWidget):
         if self.tb_copy.tool_decimal.isChecked():
             decimal_mark = ','
         values = [
-            val_2_str(
+            mmf.val_2_str(
                 col,
                 decimal_mark=decimal_mark)
             for col in self.result_table.values]
@@ -2862,6 +2451,15 @@ class ResultTable(QTableWidget):
         self.values = [[]]  # always as columns, converted if input is rows
         self.row_labels = []
         self.col_labels = []
+        self.installEventFilter(self)
+
+    def eventFilter(self, source, event):
+        """Handle arrow up/down events."""
+        if isinstance(event, QKeyEvent):
+            if event.type() == QEvent.KeyRelease:
+                if event.key() in [Qt.Key_Up, Qt.Key_Down]:
+                    self.cell_selected()
+        return False
 
     def cell_selected(self):
         """Set new active image when current cell changed."""
@@ -2928,8 +2526,12 @@ class ResultTable(QTableWidget):
                 for c in range(n_cols):
                     values_cols.append([row[c] for row in values_rows])
         if values_cols != [[]]:
+            decimal_mark = '.'
+            if self.parent.tb_copy.tool_decimal.isChecked():
+                decimal_mark = ','
             for c in range(len(values_cols)):
-                this_col = val_2_str(values_cols[c])
+                this_col = mmf.val_2_str(values_cols[c],
+                                         decimal_mark=decimal_mark)
                 for r in range(len(this_col)):
                     twi = QTableWidgetItem(this_col[r])
                     twi.setTextAlignment(4)
@@ -3690,12 +3292,35 @@ class ResultPlotCanvas(uir.PlotCanvas):
                     frameon=False, loc='upper left')
                 self.ax.add_artist(at)
 
+    def Spe(self):
+        """Prepare plot for test Spe."""
+        self.title = 'Scan speed profile'
+        self.xtitle = 'Position (mm)'
+        self.ytitle = 'Difference from mean %'
+        imgno = self.main.vGUI.active_img_no
+        details_dict = self.main.results['Spe']['details_dict'][imgno]
+        xvals = details_dict['profile_pos']
+        self.curves.append(
+            {'label': 'profile', 'xvals': xvals,
+             'yvals': details_dict['diff_profile'], 'style': '-b'})
+        tolmax = {'label': 'tolerance max',
+                  'xvals': [min(xvals), max(xvals)],
+                  'yvals': [5, 5],
+                  'style': '--k'}
+        tolmin = tolmax.copy()
+        tolmin['yvals'] = [-5, -5]
+        tolmin['label'] = 'tolerance min'
+        self.curves.append(tolmin)
+        self.curves.append(tolmax)
+
+        self.default_range_y = self.test_values_outside_yrange([-7, 7])
+
 
 class ResultImageWidget(GenericImageWidget):
     """Results image widget."""
 
     def __init__(self, main):
-        canvas = ResultImageCanvas(self, main)
+        canvas = ui_image_canvas.ResultImageCanvas(self, main)
         super().__init__(main, canvas)
         self.main = main
         tb = ResultImageNavigationToolbar(self.canvas, self)
@@ -3717,79 +3342,6 @@ class ResultImageWidget(GenericImageWidget):
         hlo.addLayout(vlo_mid)
         hlo.addWidget(tbm)
         self.setLayout(hlo)
-
-
-class ResultImageCanvas(GenericImageCanvas):
-    """Canvas for display of results as image."""
-
-    def __init__(self, parent, main):
-        super().__init__(parent, main)
-
-    def result_image_draw(self):
-        """Refresh result image."""
-        self.ax.cla()
-        self.current_image = None
-        self.cmap = 'gray'
-        self.min_val = None
-        self.max_val = None
-        self.title = ''
-
-        if self.main.current_test in self.main.results:
-            if self.main.results[self.main.current_test] is not None:
-                class_method = getattr(self, self.main.current_test, None)
-                if class_method is not None:
-                    class_method()
-
-        if self.current_image is not None:
-            if self.min_val is None:
-                self.min_val = np.min(self.current_image)
-            if self.max_val is None:
-                self.max_val = np.max(self.current_image)
-            self.img = self.ax.imshow(
-                self.current_image,
-                cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
-            self.ax.set_title(self.title)
-        else:
-            self.img = self.ax.imshow(np.zeros((100, 100)))
-            at = matplotlib.offsetbox.AnchoredText(
-                'No result to display',
-                prop=dict(size=14, color='gray'),
-                frameon=False, loc='center')
-            self.ax.add_artist(at)
-        self.ax.axis('off')
-        self.draw()
-
-    def Uni(self):
-        """Prepare result image for test Uni."""
-        if self.main.current_paramset.uni_sum_first:
-            try:
-                details_dict = self.main.results['Uni']['details_dict'][0]
-            except KeyError:
-                details_dict = {}
-        else:
-            try:
-                details_dict = self.main.results['Uni']['details_dict'][
-                    self.main.vGUI.active_img_no]
-            except KeyError:
-                details_dict = {}
-        self.cmap = 'viridis'
-        type_img = self.main.tabNM.uni_result_image.currentIndex()
-        if type_img == 0:
-            self.title = 'Differential uniformity map in UFOV (max in x/y direction)'
-            if 'du_matrix' in details_dict:
-                self.current_image = details_dict['du_matrix']
-        elif type_img == 1:
-            self.title = 'Processed image minimum 6.4 mm pr pix'
-            if 'matrix' in details_dict:
-                self.current_image = details_dict['matrix']
-        elif type_img == 2:
-            self.title = 'Curvature corrected image'
-            if 'corrected_image' in details_dict:
-                self.current_image = details_dict['corrected_image']
-        elif type_img == 3:
-            self.title = 'Summed image'
-            if 'sum_image' in details_dict:
-                self.current_image = details_dict['sum_image']
 
 
 class ResultImageNavigationToolbar(NavigationToolbar2QT):

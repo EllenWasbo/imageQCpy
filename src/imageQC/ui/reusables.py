@@ -131,6 +131,25 @@ def add_to_modality_dict(
     return status
 
 
+class UnderConstruction(QWidget):
+    """Under construction widget to display for tests not finished."""
+
+    def __init__(self, txt=''):
+        super().__init__()
+        hLO = QHBoxLayout()
+        self.setLayout(hLO)
+        tb = QToolBar()
+        actWarn = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}warning.png'), '', self)
+        tb.addActions([actWarn])
+        hLO.addWidget(tb)
+        if txt == '':
+            txt = ('Sorry - Test is under construction. Do not trust the results. '
+                   'Run test might cause crash or breakpoint.')
+        hLO.addWidget(LabelItalic(txt))
+        hLO.addStretch()
+
+
 class ImageQCDialog(QDialog):
     """Dialog for reuse with imageQC icon and flags."""
 
@@ -158,6 +177,16 @@ class LabelItalic(QLabel):
         html_txt = f"""<html><head/><body>
         <p><i>{txt}</i></p>
         </body></html>"""
+        super().__init__(html_txt)
+
+class LabelMultiline(QLabel):
+    """Label as multiline."""
+
+    def __init__(self, txts = []):
+        txt = ''
+        for t in txts:
+            txt = txt + f'<p>{t}</p>'
+        html_txt = f"""<html><head/><body>{txt}</body></html>"""
         super().__init__(html_txt)
 
 
@@ -211,6 +240,7 @@ class InfoTool(QToolBar):
         dlg.infotext = QLabel(f"""<html><head/><body>
                 {self.html_body_text}
                 </body></html>""")
+        dlg.infotext.setOpenExternalLinks(True)
 
         vLO = QVBoxLayout()
         vLO.addWidget(dlg.infotext)
@@ -444,6 +474,7 @@ class ToolBarTableExport(QToolBar):
         else:
             self.parameters_output.decimal_mark = ','
         self.update_checked(icon_only=True)
+        self.parent.main.refresh_results_display()
         if self.flag_edit:
             self.parent.flag_edit(True)
 
@@ -494,6 +525,15 @@ class QuestionBox(QMessageBox):
                 }}
             """)
 
+
+class ListWidget(QListWidget):
+
+    def __init__(self):
+        super().__init__()
+
+    def keyPressedEvent(self, event):
+        print(event.key())
+        breakpoint()
 
 class ListWidgetCheckable(QListWidget):
     """Checkable list widget."""
@@ -669,7 +709,7 @@ class TagPatternTree(QWidget):
                     self.parentabove.current_template.list_tags2.append(
                         self.parent.listTags.item(row).text())
                     self.parentabove.current_template.list_format2.append('')
-        self.update_data(set_selected=len(rows)+1)
+        self.update_data(set_selected=-1)
         self.parentabove.flag_edit()
 
     def sort(self):
@@ -808,7 +848,7 @@ class TagPatternTree(QWidget):
                     self.parentabove.current_template.list_format.pop(row)
                 else:
                     self.parentabove.current_template.list_format2.pop(row)
-            self.update_data(set_selected=row)
+            self.update_data(set_selected=-1)
             self.parentabove.flag_edit()
 
     def update_data(self, set_selected=0):
@@ -845,6 +885,8 @@ class TagPatternTree(QWidget):
                         pass  # ignore if editable = False
                 self.tablePattern.addTopLevelItem(item)
 
+            if set_selected == -1:
+                set_selected = self.tablePattern.topLevelItemCount() - 1
             self.tablePattern.setCurrentItem(
                 self.tablePattern.topLevelItem(set_selected))
 
@@ -931,12 +973,12 @@ class TagPatternWidget(QWidget):
             else:
                 hLO.addWidget(self.wPattern2)
 
-    def fill_list_tags(self, modality):
+    def fill_list_tags(self, modality, avoid_special_tags=False):
         """Find tags from tag_infos.yaml and fill list."""
         try:
             self.listTags.clear()
             general_tags, included_tags = get_included_tags(
-                modality, self.parent.tag_infos)
+                modality, self.parent.tag_infos, avoid_special_tags=avoid_special_tags)
             self.listTags.addItems(included_tags)
             if self.lock_on_general is False:
                 for i in range(self.listTags.count()):
@@ -1054,7 +1096,7 @@ class FormatDialog(ImageQCDialog):
 
 
 class TagPatternEditDialog(ImageQCDialog):
-    """Dialog for editing tag pattern for test DCM."""
+    """Dialog for editing tag pattern."""
 
     def __init__(
             self, initial_pattern=None, modality='CT',
@@ -1339,7 +1381,7 @@ class QuickTestTreeView(QTreeView):
             item.setEditable(False)
             item.setCheckable(True)
         self.model.endInsertRows()
-        self.parent.nimgs.setText(f'{self.model.rowCount()}')
+        self.parent.lbl_nimgs.setText(f'{self.model.rowCount()}')
 
     def delete_row(self):
         """Delete selected row."""
@@ -1364,7 +1406,7 @@ class QuickTestTreeView(QTreeView):
                 temp.group_names.pop(rowno)
                 self.parent.current_template = copy.deepcopy(temp)
                 self.update_data(set_selected=rowno-1)
-            self.parent.nimgs.setText(f'{self.model.rowCount()}')
+            self.parent.lbl_nimgs.setText(f'{self.model.rowCount()}')
 
     def get_data(self):
         """Read current settings as edited by user.
@@ -1797,7 +1839,9 @@ class DicomCritAddDialog(QDialog):
         hLO_tags.addWidget(QLabel('Attribute name: '))
         hLO_tags.addWidget(self.cbox_tags)
         general_tags, included_tags = get_included_tags(
-            self.parent.parent.current_modality, self.parent.parent.tag_infos)
+            self.parent.parent.current_modality,
+            self.parent.parent.tag_infos,
+            avoid_special_tags=True)
         self.cbox_tags.addItems(included_tags)
         if attr_name != '':
             self.cbox_tags.setCurrentText(attr_name)

@@ -69,6 +69,45 @@ def get_format_strings(format_string):
     return (prefix, format_part, suffix)
 
 
+def format_val(val, format_string):
+    """Format a value or list of values using a format string."""
+    val_text = val
+    if format_string != '':
+        if '|' in format_string:
+            prefix, format_string, suffix = get_format_strings(format_string)
+        if isinstance(val, list):
+            last_format = format_string[-1]
+            if not isinstance(val[0], float) and last_format == 'f':
+                try:
+                    val = [float(str(x)) for x in val]
+                    val_text = [
+                        f'{x:{format_string}}' for x in val]
+                except ValueError:
+                    val_text = [f'{x}' for x in val]
+                except TypeError:
+                    val_text = [f'{x}' for x in val]
+            else:
+                val_text = [f'{x:{format_string}}' for x in val]
+        else:
+            if isinstance(val, str) and format_string[-1] == 'f':
+                try:
+                    val = float(val)
+                    val_text = f'{val:{format_string}}'
+                except ValueError:
+                    pass
+            elif isinstance(val, str) and format_string[0] == '0':
+                n_first = int(format_string)
+                val_text = f'{val[:n_first]}'
+            else:
+                try:
+                    val_text = f'{val:{format_string}}'
+                except TypeError:
+                    val_text = '-'
+                    pass
+
+    return val_text
+
+
 def valid_path(input_string, folder=False):
     """Replace non-valid characters for filenames.
 
@@ -162,6 +201,36 @@ def get_dynamic_formatstring(val):
         format_string = decimals + type_string
 
     return format_string
+
+
+def convert_lists_to_numbers(taglists, ignore_columns=[]):
+    """Try convert to number.
+
+    Parameters
+    ----------
+    taglists : list of lists
+        extracted dicom parameters
+    ignore_columns : list of ints
+        columns to ignore (not convert to number = messes with zero-padding)
+
+    Returns
+    -------
+    taglists : list of lists
+    """
+    for r, row in enumerate(taglists):
+        for c, val in enumerate(row):
+            if c not in ignore_columns:
+                new_val = val
+                try:
+                    new_val = int(val)
+                except ValueError:
+                    try:
+                        new_val = float(val)
+                    except ValueError:
+                        pass
+                taglists[r][c] = new_val
+
+    return taglists
 
 
 def val_2_str(val_list, decimal_mark='.'):

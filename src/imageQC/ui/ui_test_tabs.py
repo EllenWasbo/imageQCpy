@@ -388,6 +388,127 @@ class TestTabCommon(QTabWidget):
 
         self.tabROI.setLayout(vLO)
 
+    def create_tab_MTF(self):
+        """GUI of tab MTF used for both Xray and MR."""
+        self.tabMTF = QWidget()
+
+        self.mtf_type = QComboBox()
+        self.mtf_type.addItems(['Exponential fit', 'Gaussian fit', 'No LSF fit'])
+        self.mtf_type.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_type'))
+
+        self.mtf_roi_size_x = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.mtf_roi_size_x.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_roi_size_x'))
+        self.mtf_roi_size_y = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.mtf_roi_size_y.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_roi_size_y'))
+
+        self.mtf_auto_center = QGroupBox('Auto detect edge(s)')
+        self.mtf_auto_center.setCheckable(True)
+        self.mtf_auto_center.setFont(uir.FontItalic())
+        self.mtf_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
+
+        self.mtf_auto_center_type = QComboBox()
+        self.mtf_auto_center_type.addItems(
+            ['all detected edges', 'edge closest to image center'])
+        self.mtf_auto_center_type.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_auto_center_type'))
+
+        self.mtf_sampling_frequency = QDoubleSpinBox(
+            decimals=3, minimum=0.001, singleStep=0.001)
+        self.mtf_sampling_frequency.valueChanged.connect(
+                    lambda: self.param_changed_from_gui(
+                        attribute='mtf_sampling_frequency'))
+
+        self.mtf_cut_lsf = QCheckBox('')
+        self.mtf_cut_lsf.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_cut_lsf'))
+        self.mtf_cut_lsf_w = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.mtf_cut_lsf_w.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_cut_lsf_w'))
+
+        self.mtf_plot = QComboBox()
+        self.mtf_plot.addItems(['Edge position',
+                                'Sorted pixel values', 'LSF', 'MTF'])
+        self.mtf_plot.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_plot',
+                                                update_roi=False,
+                                                clear_results=False))
+
+        self.mtf_gaussian = BoolSelectTests(
+            self, attribute='mtf_gaussian',
+            text_true='Analytical', text_false='Discrete',
+            update_roi=False, clear_results=False, update_plot=False)
+
+        self.mtf_offset_xy = QLabel('0, 0')
+        self.mtf_offset_mm = BoolSelectTests(
+            self, attribute='mtf_offset_mm',
+            text_true='mm', text_false='pix')
+        tb_mtf_offset = QToolBar()
+        self.btn_mtf_offset = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}selectArrow.png'),
+            '''Left mouse click in image to set offset position, then fetch
+            the position by clicking this button''', self)
+        self.btn_mtf_offset_reset = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}reset.png'),
+            '''Reset offset''', self)
+        tb_mtf_offset.addActions(
+            [self.btn_mtf_offset, self.btn_mtf_offset_reset])
+        self.btn_mtf_offset.triggered.connect(
+            lambda: self.set_offset(attribute='mtf_offset_xy'))
+        self.btn_mtf_offset_reset.triggered.connect(
+            lambda: self.set_offset(attribute='mtf_offset_xy', reset=True))
+        tb_mtf_offset.addWidget(self.mtf_offset_xy)
+        tb_mtf_offset.addWidget(self.mtf_offset_mm)
+
+        vLO = QVBoxLayout()
+        hLO = QHBoxLayout()
+        hLO_size = QHBoxLayout()
+        hLO_size.addWidget(QLabel('ROI width/height (mm)'))
+        hLO_size.addWidget(self.mtf_roi_size_x)
+        hLO_size.addWidget(QLabel('/'))
+        hLO_size.addWidget(self.mtf_roi_size_y)
+
+        vLO1 = QVBoxLayout()
+        vLO1.addLayout(hLO_size)
+        f1 = QFormLayout()
+        f1.addRow(QLabel('MTF method'), self.mtf_type)
+        f1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
+                  self.mtf_sampling_frequency)
+        vLO1.addLayout(f1)
+        hLO_offset = QHBoxLayout()
+        hLO_offset.addWidget(QLabel('Set extra offset'))
+        hLO_offset.addWidget(tb_mtf_offset)
+        vLO1.addLayout(hLO_offset)
+        hLO.addLayout(vLO1)
+
+        hLO.addWidget(uir.VLine())
+        vLO2 = QVBoxLayout()
+        vLO2.addWidget(self.mtf_auto_center)
+        hLO_gb_auto = QHBoxLayout()
+        hLO_gb_auto.addWidget(QLabel('Use'))
+        hLO_gb_auto.addWidget(self.mtf_auto_center_type)
+        self.mtf_auto_center.setLayout(hLO_gb_auto)
+        f2 = QFormLayout()
+        f2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
+        f2.addRow(QLabel('    Cut at halfmax + (#FWHM)'), self.mtf_cut_lsf_w)
+        vLO2.addLayout(f2)
+        f3 = QFormLayout()
+        f3.addRow(QLabel('Table results from'), self.mtf_gaussian)
+        f3.addRow(QLabel('Plot'), self.mtf_plot)
+        vLO2.addLayout(f3)
+        hLO.addLayout(vLO2)
+
+        vLO.addLayout(hLO)
+
+        self.btnRunMTF = QPushButton('Calculate MTF')
+        self.btnRunMTF.clicked.connect(self.run_current)
+        vLO.addWidget(self.btnRunMTF)
+
+        self.tabMTF.setLayout(vLO)
+
     def run_tests(self):
         """Run all tests in current quicktest template."""
         self.main.wQuickTest.get_current_template()
@@ -501,11 +622,15 @@ class TestTabCT(TestTabCommon):
         """Display parameters according to current_paramset of main."""
         super().update_displayed_params()
         paramset = self.main.current_paramset
+
         self.hom_roi_size.setValue(paramset.hom_roi_size)
         self.hom_roi_distance.setValue(paramset.hom_roi_distance)
         self.hom_roi_rotation.setValue(paramset.hom_roi_rotation)
+
         self.noi_roi_size.setValue(paramset.noi_roi_size)
+
         self.huw_roi_size.setValue(paramset.huw_roi_size)
+
         self.mtf_type.setCurrentIndex(paramset.mtf_type)
         self.mtf_roi_size.setValue(paramset.mtf_roi_size)
         self.mtf_background_width.setValue(paramset.mtf_background_width)
@@ -520,10 +645,12 @@ class TestTabCT(TestTabCommon):
         self.mtf_offset_xy.setText(
             f'{paramset.mtf_offset_xy[0]}, {paramset.mtf_offset_xy[1]}')
         self.mtf_sampling_frequency.setValue(paramset.mtf_sampling_frequency)
+
         self.ctn_roi_size.setValue(paramset.ctn_roi_size)
         self.ctn_search_size.setValue(paramset.ctn_search_size)
         self.ctn_search.setChecked(paramset.ctn_search)
         self.ctn_table_widget.table.update_table()
+
         self.sli_ramp_distance.setValue(paramset.sli_ramp_distance)
         self.sli_ramp_length.setValue(paramset.sli_ramp_length)
         self.sli_background_width.setValue(paramset.sli_background_width)
@@ -852,6 +979,7 @@ class TestTabCT(TestTabCommon):
         tb_mtf_offset.addWidget(self.mtf_offset_mm)
 
         vLO = QVBoxLayout()
+        vLO.addWidget(uir.UnderConstruction(txt='Method wire not finished yet.'))
         hLO = QHBoxLayout()
         vLO1 = QVBoxLayout()
         f1 = QFormLayout()
@@ -940,7 +1068,9 @@ class TestTabXray(TestTabCommon):
         self.hom_roi_rotation.setValue(paramset.hom_roi_rotation)
         self.hom_roi_distance.setValue(paramset.hom_roi_distance)
         self.hom_tab_alt.button(paramset.hom_tab_alt).setChecked(True)
+
         self.noi_percent.setValue(paramset.noi_percent)
+
         self.mtf_type.setCurrentIndex(paramset.mtf_type)
         self.mtf_roi_size_x.setValue(paramset.mtf_roi_size_x)
         self.mtf_roi_size_y.setValue(paramset.mtf_roi_size_y)
@@ -953,12 +1083,15 @@ class TestTabXray(TestTabCommon):
             f'{paramset.mtf_offset_xy[0]}, {paramset.mtf_offset_xy[1]}')
         self.mtf_auto_center.setChecked(paramset.mtf_auto_center)
         self.mtf_sampling_frequency.setValue(paramset.mtf_sampling_frequency)
+
         self.nps_roi_size.setValue(paramset.nps_roi_size)
         self.nps_sub_size.setValue(paramset.nps_sub_size)
         npix_tot = ((self.nps_roi_size.value() * 2 - 1)
                     * self.nps_sub_size.value()) ** 2
         self.nps_npix.setText(f'{npix_tot}')
+
         self.stp_roi_size.setValue(paramset.stp_roi_size)
+
         self.var_roi_size.setValue(paramset.var_roi_size)
 
         self.update_enabled()
@@ -1045,131 +1178,11 @@ class TestTabXray(TestTabCommon):
 
         self.tabNoi.setLayout(vLO)
 
-    def create_tab_MTF(self):
-        """GUI of tab MTF."""
-        self.tabMTF = QWidget()
-
-        self.mtf_type = QComboBox()
-        self.mtf_type.addItems(['Exponential fit', 'Gaussian fit', 'No LSF fit'])
-        self.mtf_type.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_type'))
-
-        self.mtf_roi_size_x = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
-        self.mtf_roi_size_x.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_roi_size_x'))
-        self.mtf_roi_size_y = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
-        self.mtf_roi_size_y.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_roi_size_y'))
-
-        self.mtf_auto_center = QGroupBox('Auto detect edge(s)')
-        self.mtf_auto_center.setCheckable(True)
-        self.mtf_auto_center.setFont(uir.FontItalic())
-        self.mtf_auto_center.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
-
-        self.mtf_auto_center_type = QComboBox()
-        self.mtf_auto_center_type.addItems(
-            ['all detected edges', 'edge closest to image center'])
-        self.mtf_auto_center_type.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_auto_center_type'))
-
-        self.mtf_sampling_frequency = QDoubleSpinBox(
-            decimals=3, minimum=0.001, singleStep=0.001)
-        self.mtf_sampling_frequency.valueChanged.connect(
-                    lambda: self.param_changed_from_gui(
-                        attribute='mtf_sampling_frequency'))
-
-        self.mtf_cut_lsf = QCheckBox('')
-        self.mtf_cut_lsf.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_cut_lsf'))
-        self.mtf_cut_lsf_w = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
-        self.mtf_cut_lsf_w.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_cut_lsf_w'))
-
-        self.mtf_plot = QComboBox()
-        self.mtf_plot.addItems(['Edge position',
-                                'Sorted pixel values', 'LSF', 'MTF'])
-        self.mtf_plot.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_plot',
-                                                update_roi=False,
-                                                clear_results=False))
-
-        self.mtf_gaussian = BoolSelectTests(
-            self, attribute='mtf_gaussian',
-            text_true='Analytical', text_false='Discrete',
-            update_roi=False, clear_results=False, update_plot=False)
-
-        self.mtf_offset_xy = QLabel('0, 0')
-        self.mtf_offset_mm = BoolSelectTests(
-            self, attribute='mtf_offset_mm',
-            text_true='mm', text_false='pix')
-        tb_mtf_offset = QToolBar()
-        self.btn_mtf_offset = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}selectArrow.png'),
-            '''Left mouse click in image to set offset position, then fetch
-            the position by clicking this button''', self)
-        self.btn_mtf_offset_reset = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}reset.png'),
-            '''Reset offset''', self)
-        tb_mtf_offset.addActions(
-            [self.btn_mtf_offset, self.btn_mtf_offset_reset])
-        self.btn_mtf_offset.triggered.connect(
-            lambda: self.set_offset(attribute='mtf_offset_xy'))
-        self.btn_mtf_offset_reset.triggered.connect(
-            lambda: self.set_offset(attribute='mtf_offset_xy', reset=True))
-        tb_mtf_offset.addWidget(self.mtf_offset_xy)
-        tb_mtf_offset.addWidget(self.mtf_offset_mm)
-
-        vLO = QVBoxLayout()
-        hLO = QHBoxLayout()
-        hLO_size = QHBoxLayout()
-        hLO_size.addWidget(QLabel('ROI width/height (mm)'))
-        hLO_size.addWidget(self.mtf_roi_size_x)
-        hLO_size.addWidget(QLabel('/'))
-        hLO_size.addWidget(self.mtf_roi_size_y)
-
-        vLO1 = QVBoxLayout()
-        vLO1.addLayout(hLO_size)
-        f1 = QFormLayout()
-        f1.addRow(QLabel('MTF method'), self.mtf_type)
-        f1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
-                  self.mtf_sampling_frequency)
-        vLO1.addLayout(f1)
-        hLO_offset = QHBoxLayout()
-        hLO_offset.addWidget(QLabel('Set extra offset'))
-        hLO_offset.addWidget(tb_mtf_offset)
-        vLO1.addLayout(hLO_offset)
-        hLO.addLayout(vLO1)
-
-        hLO.addWidget(uir.VLine())
-        vLO2 = QVBoxLayout()
-        vLO2.addWidget(self.mtf_auto_center)
-        hLO_gb_auto = QHBoxLayout()
-        hLO_gb_auto.addWidget(QLabel('Use'))
-        hLO_gb_auto.addWidget(self.mtf_auto_center_type)
-        self.mtf_auto_center.setLayout(hLO_gb_auto)
-        f2 = QFormLayout()
-        f2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
-        f2.addRow(QLabel('    Cut at halfmax + (#FWHM)'), self.mtf_cut_lsf_w)
-        vLO2.addLayout(f2)
-        f3 = QFormLayout()
-        f3.addRow(QLabel('Table results from'), self.mtf_gaussian)
-        f3.addRow(QLabel('Plot'), self.mtf_plot)
-        vLO2.addLayout(f3)
-        hLO.addLayout(vLO2)
-
-        vLO.addLayout(hLO)
-
-        self.btnRunMTF = QPushButton('Calculate MTF')
-        self.btnRunMTF.clicked.connect(self.run_current)
-        vLO.addWidget(self.btnRunMTF)
-
-        self.tabMTF.setLayout(vLO)
-
     def create_tab_NPS(self):
         """GUI of tab NPS."""
         self.tabNPS = QWidget()
         vLO = QVBoxLayout()
+        vLO.addWidget(uir.UnderConstruction())
         hLO = QHBoxLayout()
         f = QFormLayout()
 
@@ -1235,6 +1248,7 @@ class TestTabXray(TestTabCommon):
         """GUI of tab Variance."""
         self.tabVar = QWidget()
         vLO = QVBoxLayout()
+        vLO.addWidget(uir.UnderConstruction())
 
         self.var_roi_size = QDoubleSpinBox(decimals=1, minimum=1., singleStep=0.1)
         self.var_roi_size.valueChanged.connect(
@@ -1310,23 +1324,30 @@ class TestTabNM(TestTabCommon):
         self.sni_eye_filter_f.setValue(paramset.sni_eye_filter_f)
         self.sni_eye_filter_c.setValue(paramset.sni_eye_filter_c)
         self.sni_eye_filter_r.setValue(paramset.sni_eye_filter_r)
-        '''
-        self.mtf_type.setCurrentIndex(paramset.mtf_type)
-        self.mtf_gaussian.setChecked(paramset.mtf_gaussian)
-        '''
-        # all parameters....
-        '''
 
-        mtf_type: int = 1
-        mtf_roi_size: list[float] = field(default_factory=lambda: [20., 20.])
-        mtf_plot: int = 4
-        bar_roi_size: float = 50.
-        bar_widths: list[float] = field(
-            default_factory=lambda: [6.4, 4.8, 4.0, 3.2])
-        spe_avg: int = 25
-        spe_height: float = 100.
-        spe_filter_w: int = 15
-        '''
+        self.bar_width_1.setValue(paramset.bar_width_1)
+        self.bar_width_2.setValue(paramset.bar_width_2)
+        self.bar_width_3.setValue(paramset.bar_width_3)
+        self.bar_width_4.setValue(paramset.bar_width_4)
+        self.bar_roi_size.setValue(paramset.bar_roi_size)
+
+        self.spe_avg.setValue(paramset.spe_avg)
+        self.spe_height.setValue(paramset.spe_height)
+        self.spe_filter_w.setValue(paramset.spe_filter_w)
+
+        self.mtf_type.setCurrentIndex(paramset.mtf_type)
+        self.mtf_roi_size_x.setValue(paramset.mtf_roi_size_x)
+        self.mtf_roi_size_y.setValue(paramset.mtf_roi_size_y)
+        self.mtf_plot.setCurrentIndex(paramset.mtf_plot)
+        self.mtf_gaussian.setChecked(paramset.mtf_gaussian)
+        self.mtf_cut_lsf.setChecked(paramset.mtf_cut_lsf)
+        self.mtf_cut_lsf_w.setValue(paramset.mtf_cut_lsf_w)
+        if paramset.mtf_type == 2:
+            self.mtf_auto_center.setChecked(True)
+        else:
+            self.mtf_auto_center.setChecked(paramset.mtf_auto_center)
+        self.mtf_sampling_frequency.setValue(paramset.mtf_sampling_frequency)
+
         self.update_enabled()
         self.flag_ignore_signals = False
 
@@ -1490,6 +1511,7 @@ class TestTabNM(TestTabCommon):
             self.main.wResPlot.plotcanvas.plot)
 
         vLO = QVBoxLayout()
+        vLO.addWidget(uir.UnderConstruction())
         vLO.addWidget(QLabel(
             'SNI = Structured Noise Index (J Nucl Med 2014; 55:169-174)'))
         hLO = QHBoxLayout()
@@ -1551,8 +1573,89 @@ class TestTabNM(TestTabCommon):
         """GUI of tab MTF."""
         self.tabMTF = QWidget()
         vLO = QVBoxLayout()
+        vLO.addWidget(uir.UnderConstruction())
 
-        #...
+        self.mtf_type = QComboBox()
+        # point, line (default), edge,circular edge
+        self.mtf_type.addItems(ALTERNATIVES['NM']['MTF'])
+        self.mtf_type.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_type'))
+
+        self.mtf_roi_size_x = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.mtf_roi_size_x.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_roi_size_x'))
+        self.mtf_roi_size_y = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.mtf_roi_size_y.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_roi_size_y'))
+
+        self.mtf_auto_center = QCheckBox('Auto center ROI on object signal')
+        self.mtf_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
+
+        self.mtf_sampling_frequency = QDoubleSpinBox(
+            decimals=3, minimum=0.001, singleStep=0.001)
+        self.mtf_sampling_frequency.valueChanged.connect(
+                    lambda: self.param_changed_from_gui(
+                        attribute='mtf_sampling_frequency'))
+
+        self.mtf_cut_lsf = QCheckBox('')
+        self.mtf_cut_lsf.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_cut_lsf'))
+        self.mtf_cut_lsf_w = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.mtf_cut_lsf_w.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_cut_lsf_w'))
+
+        self.mtf_plot = QComboBox()
+        self.mtf_plot.addItems(['Centered xy profiles', 'Line/Edge fit',
+                                'Sorted pixel values', 'LSF', 'MTF'])
+        self.mtf_plot.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_plot',
+                                                update_roi=False,
+                                                clear_results=False))
+
+        self.mtf_gaussian = BoolSelectTests(
+            self, attribute='mtf_gaussian',
+            text_true='Analytical', text_false='Discrete',
+            update_roi=False, clear_results=False, update_plot=False)
+
+        vLO = QVBoxLayout()
+        vLO.addWidget(uir.UnderConstruction())
+        hLO = QHBoxLayout()
+        hLO_size = QHBoxLayout()
+        hLO_size.addWidget(QLabel('ROI width/height (mm)'))
+        hLO_size.addWidget(self.mtf_roi_size_x)
+        hLO_size.addWidget(QLabel('/'))
+        hLO_size.addWidget(self.mtf_roi_size_y)
+
+        vLO1 = QVBoxLayout()
+        vLO1.addLayout(hLO_size)
+        f1 = QFormLayout()
+        f1.addRow(QLabel('MTF method'), self.mtf_type)
+        f1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
+                  self.mtf_sampling_frequency)
+        vLO1.addLayout(f1)
+        vLO1.addStretch()
+        hLO.addLayout(vLO1)
+
+        hLO.addWidget(uir.VLine())
+        vLO2 = QVBoxLayout()
+        vLO2.addWidget(self.mtf_auto_center)
+        vLO2.addSpacing(50)
+        f2 = QFormLayout()
+        f2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
+        f2.addRow(QLabel('    Cut at halfmax + (#FWHM)'), self.mtf_cut_lsf_w)
+        vLO2.addLayout(f2)
+        f3 = QFormLayout()
+        f3.addRow(QLabel('Table results from'), self.mtf_gaussian)
+        f3.addRow(QLabel('Plot'), self.mtf_plot)
+        vLO2.addLayout(f3)
+        hLO.addLayout(vLO2)
+
+        vLO.addLayout(hLO)
+
+        self.btnRunMTF = QPushButton('Calculate MTF')
+        self.btnRunMTF.clicked.connect(self.run_current)
+        vLO.addWidget(self.btnRunMTF)
 
         self.tabMTF.setLayout(vLO)
 
@@ -1561,7 +1664,51 @@ class TestTabNM(TestTabCommon):
         self.tabSpe = QWidget()
         vLO = QVBoxLayout()
 
-        #...
+        hLO_top = QHBoxLayout()
+        hLO_top.addWidget(uir.LabelItalic(
+            'Control uniform signal in longitudinal direction during planar whole body'
+            ' scan (stable speed).'))
+        info_txt = '''
+        Find the average longitudinal profile to evaluate uniformity in planar
+        whole body scans.<br>
+        <br>
+        Test descriptions:<br>
+        - IAEA Human Health Series No.6:<a href="https://www.iaea.org/publications/8119/quality-assurance-for-spect-systems">
+        Quality Assurance for SPECT Systems (2009)</a>, chapter 3.2.2 Test of scan speed<br>
+        - <a href="https://richtlijnendatabase.nl/gerelateerde_documenten/f/17299/Whole%20Body%20Gamma%20Camera.pdf">
+        Richtlijnendatabase - Whole Body Gamma Camera</a> - Test: Whole body uniformity
+        '''
+        hLO_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+        vLO.addLayout(hLO_top)
+
+        hLO = QHBoxLayout()
+        f = QFormLayout()
+
+        self.spe_avg = QDoubleSpinBox(
+            decimals=0, minimum=1, maximum=1000, singleStep=1)
+        self.spe_avg.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='spe_avg'))
+        self.spe_height = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=200, singleStep=1)
+        self.spe_height.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='spe_height'))
+        self.spe_filter_w = QDoubleSpinBox(
+            decimals=0, minimum=0, maximum=50, singleStep=1)
+        self.spe_filter_w.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='spe_filter_w'))
+
+        f.addRow(QLabel('ROI width for averaging profile (pix)'), self.spe_avg)
+        f.addRow(QLabel('ROI height = profile length (cm)'), self.spe_height)
+        f.addRow(QLabel('Gaussian filter sigma (pix)'),
+                 self.spe_filter_w)
+        hLO.addLayout(f)
+        hLO.addStretch()
+        vLO.addLayout(hLO)
+
+        self.btnRunSpe = QPushButton('Calculate scan speed profile')
+        self.btnRunSpe.setToolTip('Run test')
+        self.btnRunSpe.clicked.connect(self.run_current)
+        vLO.addWidget(self.btnRunSpe)
 
         self.tabSpe.setLayout(vLO)
 
@@ -1570,7 +1717,70 @@ class TestTabNM(TestTabCommon):
         self.tabBar = QWidget()
         vLO = QVBoxLayout()
 
-        #...
+        hLO_top = QHBoxLayout()
+        hLO_top.addWidget(uir.LabelItalic(
+            'Retrieve MTF and FWHM from quadrant bar phantom'))
+        info_txt = '''
+        Based on Hander et al. Med Phys 24 (2) 1997;327-334<br>
+        <br>
+        MTF (f=1/(2*barwidth)) = SQRT(2 * ROvariance - ROImean) / ROImean<br>
+        FWHM = barwidth * 4/pi * SQRT(LN(2)) * SQRT(LN(1/MTF))<br>
+        <br>
+        ROIs sorted by variance to automatically find widest and narrowest bars.
+        '''
+        hLO_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+        vLO.addLayout(hLO_top)
+
+        self.bar_width_1 = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=10, singleStep=0.1)
+        self.bar_width_1.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='bar_width_1'))
+        self.bar_width_2 = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=10, singleStep=0.1)
+        self.bar_width_2.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='bar_width_2'))
+        self.bar_width_3 = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=10, singleStep=0.1)
+        self.bar_width_3.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='bar_width_3'))
+        self.bar_width_4 = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=10, singleStep=0.1)
+        self.bar_width_4.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='bar_width_4'))
+
+        self.bar_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
+        self.bar_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='bar_roi_size'))
+
+        hlo_gb_outer = QHBoxLayout()
+        gb_bar = QGroupBox('Bar widths (mm) (1 = widest, 4 = narrowest)')
+        hlo_gb = QHBoxLayout()
+        hlo_gb.addWidget(QLabel('1:'))
+        hlo_gb.addWidget(self.bar_width_1)
+        hlo_gb.addSpacing(50)
+        hlo_gb.addWidget(QLabel('2:'))
+        hlo_gb.addWidget(self.bar_width_2)
+        hlo_gb.addSpacing(50)
+        hlo_gb.addWidget(QLabel('3:'))
+        hlo_gb.addWidget(self.bar_width_3)
+        hlo_gb.addSpacing(50)
+        hlo_gb.addWidget(QLabel('4:'))
+        hlo_gb.addWidget(self.bar_width_4)
+        gb_bar.setLayout(hlo_gb)
+        hlo_gb_outer.addWidget(gb_bar)
+        hlo_gb_outer.addStretch()
+        vLO.addLayout(hlo_gb_outer)
+        hLO_roi = QHBoxLayout()
+        hLO_roi.addWidget(QLabel('ROI size (mm)'))
+        hLO_roi.addWidget(self.bar_roi_size)
+        hLO_roi.addStretch()
+        vLO.addLayout(hLO_roi)
+
+        self.btnRunBar = QPushButton('Calculate MTF/FWHM from bar image')
+        self.btnRunBar.setToolTip('Run test')
+        self.btnRunBar.clicked.connect(self.run_current)
+        vLO.addWidget(self.btnRunBar)
 
         self.tabBar.setLayout(vLO)
 
@@ -1612,6 +1822,7 @@ class TestTabSPECT(TestTabCommon):
         """GUI of tab MTF."""
         self.tabMTF = QWidget()
         vLO = QVBoxLayout()
+        vLO.addWidget(uir.UnderConstruction())
 
         #...
 
@@ -1621,6 +1832,7 @@ class TestTabSPECT(TestTabCommon):
         """GUI of tab Contrast."""
         self.tabCon = QWidget()
         vLO = QVBoxLayout()
+        vLO.addWidget(uir.UnderConstruction())
 
         #...
 
@@ -1696,6 +1908,7 @@ class TestTabPET(TestTabCommon):
         """GUI of tab Cross Calibration."""
         self.tabCro = QWidget()
         vLO = QVBoxLayout()
+        vLO.addWidget(uir.UnderConstruction())
 
         #...
 
@@ -1714,12 +1927,14 @@ class TestTabMR(TestTabCommon):
         self.create_tab_Geo()
         self.create_tab_Sli()
         self.create_tab_ROI()
+        self.create_tab_MTF()
 
         self.addTab(self.tabSNR, "SNR")
         self.addTab(self.tabPIU, "PIU")
         self.addTab(self.tabGho, "Ghosting")
         self.addTab(self.tabGeo, "Geometric Distortion")
         self.addTab(self.tabSli, "Slice thickness")
+        self.addTab(self.tabMTF, "MTF")
 
     def update_displayed_params(self):
         """Display parameters according to current_paramset of main."""
@@ -1728,22 +1943,39 @@ class TestTabMR(TestTabCommon):
 
         self.snr_roi_percent.setValue(paramset.snr_roi_percent)
         self.snr_roi_cut_top.setValue(paramset.snr_roi_cut_top)
+
         self.piu_roi_percent.setValue(paramset.piu_roi_percent)
         self.piu_roi_cut_top.setValue(paramset.piu_roi_cut_top)
+
         self.gho_roi_central.setValue(paramset.gho_roi_central)
         self.gho_roi_w.setValue(paramset.gho_roi_w)
         self.gho_roi_h.setValue(paramset.gho_roi_h)
         self.gho_roi_dist.setValue(paramset.gho_roi_dist)
         self.gho_roi_cut_top.setValue(paramset.gho_roi_cut_top)
         self.gho_optimize_center.setChecked(paramset.gho_optimize_center)
+
         self.geo_actual_size.setValue(paramset.geo_actual_size)
         self.geo_mask_outer.setValue(paramset.geo_mask_outer)
+
         # self.sli_tan_a.setValue(paramset.sli_tan_a)
         self.sli_ramp_length.setValue(paramset.sli_ramp_length)
         self.sli_search_width.setValue(paramset.sli_search_width)
         self.sli_dist_lower.setValue(paramset.sli_dist_lower)
         self.sli_dist_upper.setValue(paramset.sli_dist_upper)
         self.sli_optimize_center.setChecked(paramset.sli_optimize_center)
+
+        self.mtf_type.setCurrentIndex(paramset.mtf_type)
+        self.mtf_roi_size_x.setValue(paramset.mtf_roi_size_x)
+        self.mtf_roi_size_y.setValue(paramset.mtf_roi_size_y)
+        self.mtf_plot.setCurrentIndex(paramset.mtf_plot)
+        self.mtf_gaussian.setChecked(paramset.mtf_gaussian)
+        self.mtf_offset_mm.setChecked(paramset.mtf_offset_mm)
+        self.mtf_cut_lsf.setChecked(paramset.mtf_cut_lsf)
+        self.mtf_cut_lsf_w.setValue(paramset.mtf_cut_lsf_w)
+        self.mtf_offset_xy.setText(
+            f'{paramset.mtf_offset_xy[0]}, {paramset.mtf_offset_xy[1]}')
+        self.mtf_auto_center.setChecked(paramset.mtf_auto_center)
+        self.mtf_sampling_frequency.setValue(paramset.mtf_sampling_frequency)
 
         self.update_enabled()
         self.flag_ignore_signals = False

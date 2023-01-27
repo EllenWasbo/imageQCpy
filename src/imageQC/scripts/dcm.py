@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import QMessageBox, QDialog, QTextEdit
 
 # imageQC block start
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS, ENV_ICON_PATH
-from imageQC.scripts.mini_methods_format import get_format_strings
+import imageQC.scripts.mini_methods_format as mmf
 from imageQC.config.config_classes import TagPatternFormat
 # imageQC block end
 
@@ -152,6 +152,9 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     # TODO? not assume same
                 except ValueError:
                     pass
+            if mod == 'NM':  # test if slicethickness - then SPECT
+                if attrib['slice_thickness'] != -1.:
+                    attrib['modality'] = 'SPECT'
 
             attrib['pix'] = [0, 0]
             if isinstance(pix, list):
@@ -322,6 +325,20 @@ def get_dcm_info_list(
     info_list = []
     attribute_names = [obj.attribute_name for obj in tag_infos]
 
+    def multiply_tagvalue(val, tag_info):
+        multiplied_val = val
+        if tag_info.factor != 1:
+            try:
+                if isinstance(val, list):
+                    val = list(tag_info.factor * np.array(val, dtype=float))
+                else:
+                    multiplied_val = tag_info.factor * float(val)
+            except ValueError:
+                print((f'Tag {tag_info.attribute_name}: Failed multiplying '
+                       f'{data_element.value} by factor {tag_info.factor}'
+                       ))
+        return multiplied_val
+
     for idx_pattern in range(len(tag_pattern.list_tags)):
 
         attribute_name = tag_pattern.list_tags[idx_pattern]
@@ -330,7 +347,7 @@ def get_dcm_info_list(
             if item == attribute_name]
 
         if hasattr(tag_pattern, 'list_format'):
-            prefix, format_string, suffix = get_format_strings(
+            prefix, format_string, suffix = mmf.get_format_strings(
                 tag_pattern.list_format[idx_pattern])
         else:
             prefix, format_string, suffix = ('', '', '')
@@ -347,14 +364,16 @@ def get_dcm_info_list(
                 if suffix == '' and unit_default_suffix:
                     suffix = f'{tag_infos[idx].unit}'
                 if isinstance(data_element, list):
-                    val = []
-                    for elem in data_element:
-                        val.append(elem.value)
+                    val = [elem.value for elem in data_element]
+                    if tag_infos[idx].factor != 1.:
+                        val = multiply_tagvalue(val, tag_infos[idx])
                     VM = 2  # > 1
                 else:
                     val = data_element.value
                     if isinstance(val, bytes):
                         val = val.decode('utf-8')
+                    if tag_infos[idx].factor != 1.:
+                        val = multiply_tagvalue(val, tag_infos[idx])
                     VM = data_element.VM
                 if VM > 1:
                     nframes = int(pydict.get('NumberOfFrames', -1))
@@ -398,22 +417,10 @@ def get_dcm_info_list(
                             val_text = val
                         else:
                             val_text = val[value_id]
+
                     if format_string != '':
-                        if format_string != '':
-                            last_format = format_string[-1]
-                        else:
-                            last_format = ''
-                        if not isinstance(val[0], float) and last_format == 'f':
-                            try:
-                                val = [float(str(x)) for x in val]
-                                val_text = [
-                                    f'{x:{format_string}}' for x in val]
-                            except ValueError:
-                                val_text = [f'{x}' for x in val]
-                            except TypeError:
-                                val_text = [f'{x}' for x in val]
-                        else:
-                            val_text = [f'{x:{format_string}}' for x in val]
+                        val_text = mmf.format_val(val, format_string)
+
                     if multi_val:
                         info = (
                             f'{prefix}{prefix_separator}'
@@ -427,23 +434,7 @@ def get_dcm_info_list(
                             f'{suffix_separator}{suffix}'
                             ]
                 else:
-                    val_text = val
-                    if format_string != '':
-                        if isinstance(val, str) and format_string[-1] == 'f':
-                            try:
-                                val = float(val)
-                                val_text = f'{val:{format_string}}'
-                            except ValueError:
-                                pass
-                        elif isinstance(val, str) and format_string[0] == '0':
-                            n_first = int(format_string)
-                            val_text = f'{val[:n_first]}'
-                        else:
-                            try:
-                                val_text = f'{val:{format_string}}'
-                            except TypeError:
-                                val_text = '-'
-                                pass
+                    val_text = mmf.format_val(val, format_string)
                     info = (
                         f'{prefix}{prefix_separator}'
                         f'{val_text}{suffix_separator}{suffix}'
@@ -560,7 +551,8 @@ def get_modality(modalityStr):
             'key': qtOptKey}
 
 
-def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None):
+def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count=False,
+            get_window_level=False):
     """Read pixmap from filepath int numpy array prepeared for display.
 
     Parameters
@@ -574,6 +566,11 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None):
         Optionally also read selected tags. Default is []
     tag_infos: list of TagInfo, optional
         Used together with tag_pattern. Default is None
+    NM_count : bool, optional
+        True if CountsAccumulated should be performed (if needed). Default is False
+    get_window_level : bool, optional
+        True if adding window min,max as list to tag_strings.
+        Used in OpenAutomationDialog. Default is False
 
     Returns
     -------
@@ -581,6 +578,7 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None):
         pixelvalues
     tag_strings : list of list of str
         for each tag_pattern list dicom (formatted) values
+        (+ windowlevel [min, max] if get_window_level = True
     """
     npout = None
     tag_strings = []
@@ -631,6 +629,34 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None):
         if len(tag_patterns) > 0 and tag_infos is not None:
             tag_strings = read_tag_patterns(
                 pd, tag_patterns, tag_infos, frame_number=frame_number)
+            if NM_count:
+                for pidx, pattern in enumerate(tag_patterns):
+                    if 'CountsAccumulated' in pattern.list_tags:
+                        idx = pattern.list_tags.index('CountsAccumulated')
+                        if isinstance(tag_strings[pidx], dict):
+                            this_list = tag_strings[pidx]['dummy']
+                        else:
+                            this_list = tag_strings[pidx]
+                        if this_list[idx] in ['', '-']:
+                            new_val = np.sum(pixarr)
+                            if hasattr(pattern, 'list_format'):
+                                new_val = mmf.format_val(
+                                    new_val, pattern.list_format[idx])
+                            if isinstance(tag_strings[pidx], dict):
+                                tag_strings[pidx]['dummy'][idx] = new_val
+                            else:
+                                tag_strings[pidx][idx] = new_val
+
+        if get_window_level:
+            ww = pd.get('WindowWidth', -1)
+            wc = pd.get('WindowCenter', -1)
+            # seen issue with window width and window center
+            # listed as two identical values
+            if str(type(ww)) == "<class 'pydicom.multival.MultiValue'>":
+                ww = int(ww[0])
+                if str(type(wc)) == "<class 'pydicom.multival.MultiValue'>":
+                    wc = int(wc[0])
+            tag_strings.append([wc - ww / 2, wc + ww / 2])
 
     return (npout, tag_strings)
 
@@ -696,8 +722,6 @@ def read_tag_patterns(pd, tag_patterns, tag_infos, frame_number=-1):
 
 def get_tag_data(pd, tag_info=None):
     """Read content of specific Dicom tag from file pydicom dictionary.
-
-    Only first occurence of sequence
 
     Parameters
     ----------
@@ -775,8 +799,7 @@ def get_special_tag_data(pd, tag_info=None):
             data_element = pydicom.DataElement(
                 0xffffffff, 'LO', list(np.arange(frames)))
     elif tag_info.attribute_name == 'CountsAccumulated':
-        #TODO .... only when test DCM normally not pd.pixel_data here...
-        #only defined for NM
+        # in get_img, correct if None
         pass
 
     return data_element

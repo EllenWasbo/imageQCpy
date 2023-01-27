@@ -35,13 +35,15 @@ def get_all_matches(input_list, value, wildcards=False):
     return index_list
 
 
-def get_included_tags(modality, tag_infos):
+def get_included_tags(modality, tag_infos, avoid_special_tags=False):
     """Get tags from tag_infos general + modality specific.
 
     Parameters
     ----------
     modality : str
     tag_infos : TagInfos
+    avoid_special_tags : bool, optional
+        Flag to avoid tags with .tag[1] == ''. Default is False.
 
     Returns
     -------
@@ -56,6 +58,9 @@ def get_included_tags(modality, tag_infos):
         include = bool(
             set([modality, '']).intersection(
                 tag_infos[tagid].limited2mod))
+        if include and avoid_special_tags:
+            if tag_infos[tagid].tag[1] == '':
+                include = False
         if include:
             attr_name = tag_infos[tagid].attribute_name
             if attr_name not in included_tags:

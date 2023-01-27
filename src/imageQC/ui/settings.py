@@ -1960,7 +1960,10 @@ class DicomTagsWidget(StackWidget):
         self.table_tags.setHeaderLabels(
             ['Tag name', 'Tag number', 'Value id', 'Factor', 'unit',
              'Specific modalities', 'in sequence(s)', 'Sort index', 'Protected'])
-        ch_w = self.settingsDialog.main.vGUI.char_width
+        try:
+            ch_w = self.settingsDialog.main.vGUI.char_width
+        except AttributeError:
+            ch_w = 12
         self.table_tags.setColumnWidth(0, 35*ch_w)
         self.table_tags.setColumnWidth(1, 14*ch_w)
         self.table_tags.setColumnWidth(2, 12*ch_w)

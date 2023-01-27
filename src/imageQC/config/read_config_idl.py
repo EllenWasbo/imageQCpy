@@ -727,13 +727,16 @@ class ConfigIdl2Py():
                                 outputsThisTest = []
                                 for key, v in outputs.items():
                                     if int(v[0].ALT[0]) == -1:
-                                        dict_tags = self.as_dict(v[0].TAGS[0])
-                                        dict_formats = self.as_dict(v[0].TAGFORMATS[0])
-                                        tag_pattern = self.convert_tag_pattern(
-                                            dict_tags, dict_formats)
-                                        tag_pattern.label = tmp
-                                        self.dcm_additionals[mod_py(m)].append(
-                                            tag_pattern)
+                                        try:
+                                            dict_tags = self.as_dict(v[0].TAGS[0])
+                                            dict_formats = self.as_dict(v[0].TAGFORMATS[0])
+                                            tag_pattern = self.convert_tag_pattern(
+                                                dict_tags, dict_formats)
+                                            tag_pattern.label = tmp
+                                            self.dcm_additionals[mod_py(m)].append(
+                                                tag_pattern)
+                                        except (KeyError, AttributeError):
+                                            pass
                                     else:
                                         if v[0].COLUMNS[0].size == 1:
                                             col = [int(v[0].COLUMNS[0])]
@@ -993,6 +996,10 @@ class ConfigIdl2Py():
             else:
                 try:
                     idx = idl_attr.index(idl_tag_name)
+                    if idl_attr.count(idl_tag_name) == 2:
+                        # EXMODTYPE
+                        if modality == 'XRAY':
+                            idx = idx + 1
                     sort_tags.append(py_attr[idx])
                 except ValueError:
                     try:

@@ -307,16 +307,18 @@ class OpenAutomationDialog(uir.ImageQCDialog):
         Returns
         -------
         n_files : int
+        error_ex : errormessage
         """
         n_files = 0
+        error_ex = None
         try:
             for path in os.listdir(folder_path):
                 if os.path.isfile(os.path.join(folder_path, path)):
                     n_files += 1
-        except FileNotFoundError:
+        except (FileNotFoundError, OSError) as error_ex:
             n_files = -1
 
-        return n_files
+        return (n_files, error_ex)
 
     def get_template_list(self, count=False):
         """Get list of templates (modality - (vendor file) - label).
@@ -333,15 +335,19 @@ class OpenAutomationDialog(uir.ImageQCDialog):
         """
         template_list = []
         modalities = [*QUICKTEST_OPTIONS]
+        errormsgs = []
         for mod in modalities:
             arr = []
             for temp in self.templates[mod]:
                 if temp.label != '':
                     arr.append(mod + ' - ' + temp.label)
                     if count:
-                        n_files = self.count_files(temp.path_input)
+                        n_files, err = self.count_files(temp.path_input)
                         if n_files > 0:
                             arr[-1] = arr[-1] + '(' + str(n_files) + ')'
+                        else:
+                            if err is not None:
+                                errormsgs.append(f'{err}')
             if len(arr) > 0:
                 self.templates_mod.extend([mod] * len(arr))
                 self.templates_is_vendor.extend([False] * len(arr))
@@ -362,6 +368,16 @@ class OpenAutomationDialog(uir.ImageQCDialog):
                 self.templates_id.extend(
                     [i for i, temp in enumerate(self.templates_vendor[mod])])
                 template_list.extend(arr)
+
+        if len(errormsgs) > 0:
+            ico = QMessageBox.Warning
+            tit = 'Issues when searching for files'
+            txt = 'Something went wrong while searching for files. See details.'
+            msg = QMessageBox()
+            msg.setText(txt)
+            msg.setWindowTitle(tit)
+            msg.setIcon(ico)
+            msg.setDetailedText('\n'.join(errormsgs))
 
         return template_list
 

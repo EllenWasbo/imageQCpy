@@ -286,7 +286,7 @@ def val_2_str(val_list, decimal_mark='.'):
                 format_string = get_dynamic_formatstring(val)
                 str_this = f'{val:{format_string}}'
                 if decimal_mark != '.':
-                    str_this.replace('.', ',')
+                    str_this = str_this.replace('.', ',')
                 string_list.append(str_this)
             else:
                 string_list.append(str(val))

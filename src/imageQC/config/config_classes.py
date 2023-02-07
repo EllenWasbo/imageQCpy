@@ -29,7 +29,12 @@ class LastModified:
     tag_patterns_format: list = field(default_factory=list)
     tag_patterns_sort: list = field(default_factory=list)
     rename_patterns: list = field(default_factory=list)
-    paramsets: list = field(default_factory=list)
+    paramsets_CT: list = field(default_factory=list)
+    paramsets_Xray: list = field(default_factory=list)
+    paramsets_NM: list = field(default_factory=list)
+    paramsets_SPECT: list = field(default_factory=list)
+    paramsets_PET: list = field(default_factory=list)
+    paramsets_MR: list = field(default_factory=list)
     quicktest_templates: list = field(default_factory=list)
     auto_common: list = field(default_factory=list)
     auto_templates: list = field(default_factory=list)
@@ -258,13 +263,11 @@ class ParamSetCT(ParamSetCommon):
     sli_search_width: int = 10
     sli_average_width: int = 1
     sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom
-    rin_median_filter_w: int = 0  # in pix on image
-    rin_smooth_filter_w: float = 1.  # in mm on radial profile
-    rin_range_start: float = 5.
-    rin_range_stop: float = 65.
-    # mm from center
-    rin_subtract_trend: bool = True
-    # True = subtract trend, False = subtract mean
+    rin_sigma_image: float = 0.  # sigma for gaussfilter of image
+    rin_sigma_profile: float = 0.  # sigma for gaussfilter of radial profile
+    rin_range_start: float = 5.  # mm from center
+    rin_range_stop: float = 65.  # mm from center
+    rin_subtract_trend: bool = True  # True = subtract trend, False = subtract mean
     nps_roi_size: int = 50
     nps_roi_dist: float = 50.
     nps_n_sub: int = 20
@@ -288,7 +291,7 @@ class ParamSetXray(ParamSetCommon):
     mtf_plot: int = 3
     mtf_gaussian: bool = True  # True= (gaussian/exp) fit, False = discrete FFT
     mtf_cut_lsf: bool = True
-    mtf_cut_lsf_w: int = 3
+    mtf_cut_lsf_w: float = 3.
     mtf_offset_xy: list[float] = field(default_factory=lambda: [0., 0.])
     mtf_offset_mm: bool = False  # False = pix, True = mm
     mtf_auto_center: bool = False
@@ -307,20 +310,22 @@ class ParamSetNM(ParamSetCommon):
     uni_ufov_ratio: float = 0.95
     uni_cfov_ratio: float = 0.75
     uni_correct: bool = False
-    uni_correct_pos_x: int = 0
-    uni_correct_pos_y: int = 0
-    uni_correct_radius: float = -1.
+    uni_correct_pos_x: bool = False
+    uni_correct_pos_y: bool = False
+    uni_lock_radius: bool = False
+    uni_radius: float = 330.
     uni_sum_first: bool = False
     sni_area_ratio: float = 0.9
     sni_correct: bool = False
-    sni_correct_pos_x: int = 0
-    sni_correct_pos_y: int = 0
-    sni_correct_radius: float = -1.
+    sni_correct_pos_x: bool = False
+    sni_correct_pos_y: bool = False
+    sni_lock_radius: bool = False
+    sni_radius: float = 330.
     sni_sum_first: bool = False
     sni_eye_filter_f: float = 1.3
     sni_eye_filter_c: float = 28.
     sni_eye_filter_r: float = 65.  # in mm
-    mtf_type: int = 1  #  [Point, line (default), Two lines, Four edges, Circular edge]
+    mtf_type: int = 1  # [Point, line (default), Two lines, Four edges, Circular edge]
     mtf_roi_size_x: float = 50.
     mtf_roi_size_y: float = 50.
     mtf_plot: int = 4  # xyprofiles, line, sorted, LSF, MTF (default)
@@ -345,6 +350,7 @@ class ParamSetSPECT(ParamSetCommon):
 
     mtf_type: int = 1
     mtf_roi_size: float = 30.
+    mtf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
     mtf_plot: int = 4
     mtf_3d: bool = True
     con_roi_size: float = 20.
@@ -391,12 +397,13 @@ class ParamSetMR(ParamSetCommon):
     mtf_plot: int = 3
     mtf_gaussian: bool = True  # True= (gaussian/exp) fit, False = discrete FFT
     mtf_cut_lsf: bool = True
-    mtf_cut_lsf_w: int = 3
+    mtf_cut_lsf_w: float = 3.
     mtf_offset_xy: list[float] = field(default_factory=lambda: [0., 0.])
     mtf_offset_mm: bool = False  # False = pix, True = mm
     mtf_auto_center: bool = False
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
+
 
 @dataclass
 class ParamSet:
@@ -428,32 +435,36 @@ class QuickTestTemplate:
     def __post_init__(self):
         """Add empty image and group_names if not defined."""
         diff = len(self.tests) - len(self.image_names)
-        if diff > 0:
+        if diff > 0 and len(self.image_names) > 0:
             self.image_names.extend([''] * diff)
         diff = len(self.tests) - len(self.group_names)
-        if diff > 0:
+        if diff > 0 and len(self.group_names) > 0:
             self.group_names.extend([''] * diff)
 
     def add_index(self, test_list=[], image_name='', group_name='', index=-1):
         """Add element in each list at given index or append."""
         if index == -1:
             self.tests.append(test_list)
-            self.image_names.append(image_name)
-            self.group_names.append(group_name)
+            if len(self.image_names) > 0:
+                self.image_names.append(image_name)
+            if len(self.group_names) > 0:
+                self.group_names.append(group_name)
         else:
             self.tests.insert(index, test_list)
-            self.image_names.insert(index, image_name)
-            self.group_names.insert(index, group_name)
+            if len(self.image_names) > 0:
+                self.image_names.insert(index, image_name)
+            if len(self.group_names) > 0:
+                self.group_names.insert(index, group_name)
 
-    '''in use?
     def remove_indexes(self, ids2remove=[]):
         """Remove element(s) in each list at given index(es)."""
         ids2remove.sort(reverse=True)
         for id_rem in ids2remove:
             self.tests.remove(id_rem)
-            self.image_names.remove(id_rem)
-            self.group_names.remove(id_rem)
-    '''
+            if len(self.image_names) > 0:
+                self.image_names.remove(id_rem)
+            if len(self.group_names) > 0:
+                self.group_names.remove(id_rem)
 
 
 @dataclass
@@ -504,4 +515,5 @@ class AutoVendorTemplate:
     station_name: str = ''
     archive: bool = False
     file_type: str = ''
+    file_suffix: str = ''  # starting with . e.g. '.pdf'
     active: bool = True

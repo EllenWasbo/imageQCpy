@@ -5,8 +5,14 @@ Collection of small functions used in ImageQC.
 
 @author: Ellen Wasbo
 """
-import numpy as np
 from fnmatch import fnmatch
+from pathlib import Path
+from PyQt5.QtWidgets import QMessageBox
+
+# imageQC block start
+from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
+from imageQC.ui import messageboxes
+# imageQC block end
 
 
 def get_all_matches(input_list, value, wildcards=False):
@@ -72,25 +78,48 @@ def get_included_tags(modality, tag_infos, avoid_special_tags=False):
     return (general_tags, included_tags)
 
 
-def get_min_max_pos_2d(image, roi_array):
-    """Get position of first min and max value in image.
+def create_empty_file(filepath, parent_widget, proceed_info_txt='', proceed=False):
+    """Ask to create empty file if not existing path."""
+    if not Path(filepath).exists():
+        if proceed is False:
+            proceed = messageboxes.proceed_question(
+                parent_widget, f'{proceed_info_txt} Proceed creating an empty file?')
+        if proceed:
+            try:
+                with open(filepath, "w") as f:
+                    f.write('')
+            except IOError as ex:
+                QMessageBox.warning(
+                    parent_widget, 'Error',
+                    f'Failed creating the file {ex}.')
+
+
+def create_empty_folder(folderpath, parent_widget, proceed_info_txt=''):
+    """Ask to create empty folder if not existing path."""
+    if not Path(folderpath).exists():
+        proceed = messageboxes.proceed_question(
+            parent_widget, f'{proceed_info_txt} Proceed creating an empty folder?')
+        if proceed:
+            try:
+                Path(folderpath).mkdir(parents=True)
+            except (NotADirectoryError, FileNotFoundError) as ex:
+                QMessageBox.warning(
+                    parent_widget, 'Error',
+                    f'Failed creating the folder {ex}.')
+
+
+def get_modality_index(modality_string):
+    """Get index of given modality string.
 
     Parameters
     ----------
-    image : np.array
-    roi_array : np.array
-        dtype bool
+    modality_string : str
+        modality as defined in imageQC (CT, Xray...)
 
     Returns
     -------
-    list
-        min_idx, max_idx
+    int
+        index of given modality
     """
-    arr = np.ma.masked_array(image, mask=np.invert(roi_array))
-    min_idx = np.where(arr == np.min(arr))
-    max_idx = np.where(arr == np.max(arr))
-
-    return [
-        [min_idx[0][0], min_idx[1][0]],
-        [max_idx[0][0], max_idx[1][0]]
-        ]
+    mods = [*QUICKTEST_OPTIONS]
+    return mods.index(modality_string)

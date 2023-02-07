@@ -36,10 +36,13 @@ def empty_template_dict(quicktest_options, dummy=None):
     empty_dict = {}
     for key, val in quicktest_options.items():
         if len(val) > 0:
+            #TODO delete?
+            '''
             if isinstance(dummy, cfc.ParamSet):
                 empty_dict[key] = [getattr(dummy, key)]
             else:
-                empty_dict[key] = [dummy]
+            '''
+            empty_dict[key] = [dummy]
 
     return empty_dict
 

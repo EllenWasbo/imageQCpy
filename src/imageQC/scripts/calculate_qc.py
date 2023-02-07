@@ -16,7 +16,6 @@ from PyQt5.QtWidgets import qApp
 # imageQC block start
 import imageQC.scripts.dcm as dcm
 from imageQC.scripts.calculate_roi import get_rois
-from imageQC.scripts.mini_methods import get_min_max_pos_2d
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
@@ -61,7 +60,7 @@ def extract_values(values, columns=[], calculation='='):
     """
     new_values = []
     if columns == []:
-        columns = list(np.arange(len(values)))
+        columns = list(range(len(values)))
     if len(values) > 0:
         selected_values = []
         allvals = []
@@ -120,15 +119,19 @@ def quicktest_output(input_main):
     header_list = []
     n_imgs = len(input_main.imgs)
     image_names = [f'img{i}' for i in range(n_imgs)]
-    group_names = input_main.current_quicktest.group_names
+    if len(input_main.current_quicktest.group_names) == 0:
+        group_names = ['' for i in range(n_imgs)]
+    else:
+        group_names = input_main.current_quicktest.group_names
     if input_main.results != {}:
         # image_names to headers?
         if input_main.current_paramset.output.include_header:
-            set_names = input_main.current_quicktest.image_names
-            if any(set_names):
-                for i in range(n_imgs):
-                    if set_names[i] != '':
-                        image_names[i] = set_names[i]
+            if len(input_main.current_quicktest.image_names) > 0:
+                set_names = input_main.current_quicktest.image_names
+                if any(set_names):
+                    for i in range(n_imgs):
+                        if set_names[i] != '':
+                            image_names[i] = set_names[i]
 
         include_header = True  # always included when automation if empty output file
         if input_main.automation_active is False:
@@ -153,7 +156,6 @@ def quicktest_output(input_main):
                 else:
                     values = input_main.results[test]['values']
                     headers = input_main.results[test]['headers']
-
                 if values is not None:
                     suffixes = []  # _imgno/name or _groupno/name
                     if sub.per_group:
@@ -163,7 +165,9 @@ def quicktest_output(input_main):
                         actual_group_names = []
                         actual_image_names = []
                         for r, row in enumerate(values):
-                            if any(row):
+                            if row != []:
+                                if row is None:
+                                    row = [None] * len(headers)
                                 actual_values.append(row)
                                 actual_group_ids.append(
                                     input_main.current_group_indicators[r])
@@ -211,6 +215,8 @@ def quicktest_output(input_main):
 
                     else:  # each image individually (or 3d res)
                         for r, row in enumerate(values):
+                            if row is None:
+                                row = [None] * len(headers)
                             if any(row):
                                 out_values = extract_values(
                                     row,
@@ -275,7 +281,7 @@ def convert_taglists_to_numbers(taglists):
     return taglists
 
 
-def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
+def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
     """Calculate tests according to current info in main.
 
     Parameters
@@ -290,10 +296,10 @@ def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
             could also be list of list if different results pr image (MTF point)
             or pr different results when pr_image=False
                 e.g. MTF point [{x_data}, {y_data}]
-    auto_widget : OpenAutomationDialog, optional
+    wid_auto : OpenAutomationDialog, optional
         if not None - draw image on OpenAutomationDialog canvas when test finished
     auto_template_label : str, optional
-        AutoTemplate.label if automation - to display if auto_widget
+        AutoTemplate.label if automation - to display if wid_auto
     """
     current_test_before = input_main.current_test
     delta_xya = [0, 0, 0.0]  # only for GUI version
@@ -302,18 +308,18 @@ def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
     errmsgs = []
     if 'MainWindow' in str(type(input_main)):
         if input_main.automation_active:
-            pre_msg = input_main.statusBar.text()
+            pre_msg = input_main.status_bar.text()
         else:
             input_main.start_wait_cursor()
-            input_main.statusBar.showMessage('Calculating...')
+            input_main.status_bar.showMessage('Calculating...')
         delta_xya = [
-            input_main.vGUI.delta_x,
-            input_main.vGUI.delta_y,
-            input_main.vGUI.delta_a]
+            input_main.gui.delta_x,
+            input_main.gui.delta_y,
+            input_main.gui.delta_a]
 
     paramset = input_main.current_paramset
-    if auto_widget is not None:
-        auto_widget.wImageDisplay.canvas.main.current_paramset = paramset
+    if wid_auto is not None:
+        wid_auto.wid_image_display.canvas.main.current_paramset = paramset
     img_infos = input_main.imgs
     tag_infos = input_main.tag_infos
     quicktest = input_main.current_quicktest
@@ -389,7 +395,7 @@ def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
             prev_roi = {}
             for i in range(n_img):
                 if 'MainWindow' in str(type(input_main)):
-                    input_main.statusBar.showMessage(
+                    input_main.status_bar.showMessage(
                         f'{pre_msg} Reading image data {i} of {n_img}')
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
@@ -430,10 +436,10 @@ def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
                             get_window_level=any(auto_template_label)
                             )
                         input_main.current_group_indicators[i] = '_'.join(tags[0])
-                if auto_widget is not None and image is not None:
-                    auto_widget.wImageDisplay.canvas.main.active_img = image
-                    auto_widget.wImageDisplay.canvas.img_draw(auto=True,
-                                                              window_level=tags[-1])
+                if wid_auto is not None and image is not None:
+                    wid_auto.wid_image_display.canvas.main.active_img = image
+                    wid_auto.wid_image_display.canvas.img_draw(
+                        auto=True, window_level=tags[-1])
 
                 for test in marked[i]:
                     input_main.current_test = test
@@ -457,13 +463,13 @@ def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
                                 if errmsg is not None:
                                     errmsgs.append(f'{test} get ROI slice{i}:')
                                     errmsgs.append(errmsg)
-                            if auto_widget is not None:
-                                auto_widget.wImageDisplay.canvas.main.current_test = (
+                            if wid_auto is not None:
+                                wid_auto.wid_image_display.canvas.main.current_test = (
                                     test)
-                                auto_widget.wImageDisplay.canvas.main.current_roi = (
+                                wid_auto.wid_image_display.canvas.main.current_roi = (
                                     prev_roi[test])
-                                auto_widget.wImageDisplay.canvas.roi_draw()
-                                auto_widget.main.statusBar.showMessage((
+                                wid_auto.wid_image_display.canvas.roi_draw()
+                                wid_auto.main.status_bar.showMessage((
                                     f'Executing template {auto_template_label} '
                                     f'img {i+1}/{n_img}'
                                     ))
@@ -504,13 +510,20 @@ def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
             if modality == 'CT':
                 if 'Noi' in flattened_marked:
                     input_main.results['Noi']['pr_image'] = False
-                    noise = [
-                        row[1] for row in input_main.results['Noi']['values']]
-                    avg_noise = sum(noise)/len(noise)
-                    for row in input_main.results['Noi']['values']:
-                        # diff from avg (%)
-                        row[2] = 100.0 * (row[1] - avg_noise) / avg_noise
-                        row[3] = avg_noise
+                    try:
+                        noise = [
+                            row[1] for row in input_main.results['Noi']['values']]
+                        avg_noise = sum(noise)/len(noise)
+                        for row in input_main.results['Noi']['values']:
+                            # diff from avg (%)
+                            row[2] = 100.0 * (row[1] - avg_noise) / avg_noise
+                            row[3] = avg_noise
+                    except IndexError:
+                        # average and diff from avg ignored if not all tested
+                        for row in input_main.results['Noi']['values']:
+                            if row:
+                                row[2] = 'NA'
+                                row[3] = 'NA'
                 if 'Dim' in flattened_marked:
                     if 'MainWindow' in str(type(input_main)):
                         input_main.update_roi()
@@ -518,6 +531,7 @@ def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
             if any(marked_3d):
                 results_dict = calculate_3d(
                     matrix, marked_3d, input_main)
+
                 for test in results_dict:
                     if results_dict[test].errmsg is not None:
                         if len(results_dict[test].errmsg) > 0:
@@ -545,7 +559,6 @@ def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
                     'alternative': 0,
                     'pr_image': True
                     }
-
     msgs = []
     if len(errmsgs) > 0:
         # flatten errmsgs and remove None and '' from errmsgs
@@ -560,7 +573,7 @@ def calculate_qc(input_main, auto_widget=None, auto_template_label=''):
     else:
         if 'MainWindow' in str(type(input_main)):
             if input_main.automation_active is False:
-                input_main.statusBar.showMessage('Finished', 1000)
+                input_main.status_bar.showMessage('Finished', 1000)
 
     if 'MainWindow' in str(type(input_main)):
         if input_main.automation_active is False:
@@ -825,6 +838,74 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
         return res
 
+    def Rin():
+        headers = HEADERS[modality][test_code]['alt0']
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            details_dict = {}
+            if paramset.rin_sigma_image > 0:
+                image_filt = sp.ndimage.gaussian_filter(
+                    image2d, sigma=paramset.rin_sigma_image / image_info.pix[0])
+            else:
+                image_filt = image2d
+            arr = np.ma.masked_array(image_filt, mask=np.invert(roi_array[1]))
+            arr2 = np.ma.masked_array(arr, mask=roi_array[0])
+            details_dict['processed_image'] = arr2
+            # sort pixel values from center
+            dist_map = get_distance_map_point(image_filt.shape)
+            dists_flat = dist_map.flatten()
+            sort_idxs = np.argsort(dists_flat)
+            dists = dists_flat[sort_idxs]
+            dists = image_info.pix[0] * dists
+            values_flat = image_filt.flatten()[sort_idxs]
+
+            # ignore dists > stop radius
+            rin_range_start = max(4*image_info.pix[0], paramset.rin_range_start)
+            dists_cut_temp = dists[dists < paramset.rin_range_stop]
+            dists_cut = dists_cut_temp[dists_cut_temp > paramset.rin_range_start]
+            values_temp = values_flat[dists < paramset.rin_range_stop]
+            values = values_temp[dists_cut_temp > paramset.rin_range_start]
+            # average over same distances
+            dists = []
+            profile = []
+            uniq_dists = np.sort(list(set(dists_cut)))
+            for dist in uniq_dists:
+                dists.append(dist)
+                profile.append(np.mean(values[dists_cut == dist]))
+
+            # reduce noise using small window width ~0.1*pix before rebin to 0.1pix
+            diff_x = np.diff(dists)
+            sigma_n = 0.1 * image_info.pix[0] // np.median(diff_x)  # TODO *.5?
+            if sigma_n > 0:
+                profile = sp.ndimage.gaussian_filter(profile, sigma=sigma_n)
+            # rebin to 1/10th pix size
+            radial_profile_x, radial_profile = mmcalc.resample(
+                input_y=profile, input_x=dists, step=.1 * image_info.pix[0],
+                first_step=rin_range_start)
+
+            details_dict['radial_profile_x'] = radial_profile_x
+            details_dict['radial_profile'] = radial_profile
+            if paramset.rin_sigma_profile > 0:
+                radial_profile = sp.ndimage.gaussian_filter(
+                    radial_profile, sigma=paramset.rin_sigma_profile)
+                details_dict['radial_profile_smoothed'] = radial_profile
+
+            if paramset.rin_subtract_trend:
+                res = sp.stats.linregress(radial_profile_x, radial_profile)
+                yfit = radial_profile_x * res.slope + res.intercept
+                details_dict['radial_profile_trend'] = yfit
+                radial_profile = np.subtract(radial_profile, yfit)
+            else:  # subtract mean
+                mean_profile = np.mean(radial_profile)
+                details_dict['mean_profile'] = mean_profile
+                radial_profile = radial_profile - mean_profile
+
+            values = [np.min(radial_profile), np.max(radial_profile)]
+            res = Results(headers=headers, values=values, details_dict=details_dict)
+
+        return res
+
     def Dim():
         headers = HEADERS[modality][test_code]['alt0']
         headers_sup = HEADERS_SUP[modality][test_code]['alt0']
@@ -908,11 +989,12 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             details_dict = {}
             values_sup = [None] * 3
             if paramset.uni_correct:
+                lock_z = paramset.uni_radius if paramset.uni_lock_radius else -1.
                 res = get_corrections_point_source(
                     image2d, image_info, roi_array[0],
                     fit_x=paramset.uni_correct_pos_x,
                     fit_y=paramset.uni_correct_pos_y,
-                    lock_z=paramset.uni_correct_radius
+                    lock_z=lock_z
                     )
                 image_input = res['corrected_image']
                 values_sup = [res['dx'], res['dy'], res['distance']]
@@ -941,11 +1023,12 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             details_dict = {}
             values_sup = [None] * 3
             if paramset.sni_correct:
+                lock_z = paramset.sni_radius if paramset.sni_lock_radius else -1.
                 res = get_corrections_point_source(
                     image2d, image_info, roi_array[0],
                     fit_x=paramset.sni_correct_pos_x,
                     fit_y=paramset.sni_correct_pos_y,
-                    lock_z=paramset.sni_correct_radius
+                    lock_z=lock_z
                     )
                 image_input = res['corrected_image']
                 values_sup = [res['dx'], res['dy'], res['distance']]
@@ -1032,7 +1115,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             piu = 100.*(1-(max_val-min_val)/(max_val+min_val))
             values = [min_val, max_val, piu]
 
-            min_idx, max_idx = get_min_max_pos_2d(image2d, roi_array)
+            min_idx, max_idx = mmcalc.get_min_max_pos_2d(image2d, roi_array)
             values_sup = [min_idx[1], min_idx[0],
                           max_idx[1], max_idx[0]]
 
@@ -1196,7 +1279,6 @@ def calculate_3d(matrix, marked_3d, input_main):
                     values = None
                     values_sup = None
                 details_dict['matrix'] = sub
-
                 res = Results(headers=headers, values=[values],
                               headers_sup=headers_sup, values_sup=[values_sup],
                               details_dict=[details_dict],
@@ -2022,7 +2104,7 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
                 else:
                     errtxt = ', '.join([errtxt, str(slino)])
     if errtxt != '':
-        errmsg = f'Could not find center of object for slice {errtxt}'
+        errmsg = f'Could not find center of object for image {errtxt}'
     if len(center_xy) > 0:
         center_x = [vals[0] for vals in center_xy]
         center_y = [vals[1] for vals in center_xy]

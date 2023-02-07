@@ -228,10 +228,14 @@ class ConfigIdl2Py():
             list_tags=['ImagingFrequency', 'ReceiveCoilName', 'TransmitCoilName']
             )
         self.errmsg.append(
-            '------------------------------------------------------------ '
+            '----------------<br>'
             'Parametersets in IDL version included parameters for all modalities. '
             'The relavant parameters for each modality are now saved as '
-            'separate modality specific templates.')
+            'separate modality specific templates.<br>'
+            '----------------<br>'
+            'Changes to filtering of CT test on ring artifacts. Please reestablish '
+            'tolerance values.'
+            )
 
         for i in range(1, len(c)):
             paramset = copy.deepcopy(empty_ParamSet)
@@ -351,10 +355,6 @@ class ConfigIdl2Py():
                 paramset.CT.sli_average_width = cp.RAMPAVG[0]
             if 'RAMPTYPE' in param_names:
                 paramset.CT.sli_type = cp.RAMPTYPE[0]
-            if 'RINGMEDIAN' in param_names:
-                paramset.CT.rin_median_filter_w = cp.RINGMEDIAN[0]
-            if 'RINGSMOOTH' in param_names:
-                paramset.CT.rin_smooth_filter_w = cp.RINGSMOOTH[0]
             if 'RINGSTOP' in param_names:
                 rin_range = list(cp.RINGSTOP[0])
                 paramset.CT.rin_range_start = float(rin_range[0])
@@ -425,7 +425,9 @@ class ConfigIdl2Py():
             if 'UNIFCORR' in param_names:
                 paramset.NM.uni_correct = bool(cp.UNIFCORR[0])
             if 'UNIFCORRRAD' in param_names:
-                paramset.NM.uni_correct_radius = cp.UNIFCORRRAD[0]
+                paramset.NM.uni_radius = float(cp.UNIFCORRRAD[0])
+                if paramset.NM.uni_radius > 0:
+                    paramset.NM.uni_lock_radius = True
             if 'UNIFCORRPOS' in param_names:
                 uni_correct_pos = list(cp.UNIFCORRPOS[0])
                 paramset.NM.uni_correct_pos_x = not bool(uni_correct_pos[0])
@@ -435,7 +437,9 @@ class ConfigIdl2Py():
             if 'SNICORR' in param_names:
                 paramset.NM.sni_correct = bool(cp.SNICORR[0])
             if 'SNIFCORRRAD' in param_names:
-                paramset.NM.sni_correct_radius = cp.SNIFCORRRAD[0]
+                paramset.NM.sni_radius = float(cp.SNIFCORRRAD[0])
+                if paramset.NM.sni_radius > 0:
+                    paramset.NM.sni_lock_radius = True
             if 'SNIFCORRPOS' in param_names:
                 sni_correct_pos = list(cp.SNICORRPOS[0])
                 paramset.NM.sni_correct_pos_x = not bool(sni_correct_pos[0])

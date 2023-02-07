@@ -43,6 +43,7 @@
 		<file alias="layout_resetimg.png">icons\layout_resetimg.png</file>
 		<file alias="minmax.png">icons\minmax.png</file>
 		<file alias="minus.png">icons\minus.png</file>
+		<file alias="move_to.png">icons\move_to.png</file>
 		<file alias="moveBottom.png">icons\moveBottom.png</file>
 		<file alias="moveDown.png">icons\moveDown.png</file>
 		<file alias="moveTop.png">icons\moveTop.png</file>
@@ -113,6 +114,7 @@
 		<file alias="layout_resetimg.png">icons\darkmode\layout_resetimg.png</file>
 		<file alias="minmax.png">icons\darkmode\minmax.png</file>
 		<file alias="minus.png">icons\darkmode\minus.png</file>
+		<file alias="move_to.png">icons\darkmode\move_to.png</file>
 		<file alias="moveBottom.png">icons\darkmode\moveBottom.png</file>
 		<file alias="moveDown.png">icons\darkmode\moveDown.png</file>
 		<file alias="moveTop.png">icons\darkmode\moveTop.png</file>

@@ -10,12 +10,83 @@ import datetime
 import xml.etree.ElementTree as ET
 
 import pdfplumber
+
+# imageQC block start
+from imageQC.scripts.mini_methods_calculate import get_width_center_at_threshold
+# imageQC block end
+
 try:  # only needed with pyinstaller, importerror if run from spyder
     from charset_normalizer import md__mypyc
 except ImportError:
     pass
 
 #TODO - fnmatch is case insensitive on Windows. Adding option for .lower for handeling other os
+
+
+def read_vendor_template(template, filepath):
+    """Read vendor files based on AutoVendorTemplate information.
+
+    Parameters
+    ----------
+    template : AutoVendorTemplate
+        from config.config_classes
+    filepath : str
+        filepath to read
+    """
+    if template.file_type == 'Siemens CT Constancy/Daily Reports (.pdf)':
+        txt = get_pdf_txt(filepath)
+        results = read_Siemens_CT_QC(txt)
+    elif template.file_type == 'Siemens exported energy spectrum (.txt)':
+        results = read_energy_spectrum_Siemens_gamma_camera(filepath)
+    elif template.file_type == 'Siemens PET-CT DailyQC Reports (.pdf)':
+        txt = get_pdf_txt(filepath)
+        results = read_Siemens_PET_dailyQC(txt)
+    else:
+        results = None
+
+    return results
+
+
+def read_energy_spectrum_Siemens_gamma_camera(filepath):
+    """Read energy spectrum copy to clipboard .txt from Analyser."""
+    lines = []
+    with open(filepath, 'r') as file:
+        lines = file.readlines()
+    curve_energy = []
+    curve_counts = []
+    status = False
+    errmsg = None
+    headers = None
+    values = None
+    details = None
+    for line in lines:
+        line = line.replace(',', '.')
+        vals = line.split()
+        if len(vals) not in [2, 3]:
+            errmsg = 'File not in expected format: Tabular separated, 2 or 3 columns'
+            break
+        else:
+            if len(vals) == 3:
+                vals = vals[1:]
+            curve_energy.append(float(vals[0]))
+            curve_counts.append(float(vals[1]))
+
+    if len(curve_counts) > 1:
+        status = True
+        headers = ['Max (counts)', 'keV at max', 'FWHM', 'Energy resolution (%)']
+        max_counts = max(curve_counts)
+        idx_max = curve_counts.index(max_counts)
+        width, _ = get_width_center_at_threshold(curve_counts, 0.5*max_counts)
+        fwhm = width * (curve_energy[1] - curve_energy[0])
+        keV_at_max = curve_energy[idx_max]
+        values = [max_counts, keV_at_max, fwhm, 100.*fwhm/keV_at_max]
+        details = {'curve_counts': curve_counts, 'curve_energy': curve_energy}
+
+    data = {'status': status, 'errmsg': errmsg,
+            'values': values, 'headers': headers,
+            'details': details
+            }
+    return data
 
 
 def read_Siemens_PET_dailyQC(txt):
@@ -31,10 +102,10 @@ def read_Siemens_PET_dailyQC(txt):
     data : dict
         'status': bool
         'errmsg': list of str
-        'values_txt': list of str,
+        'values': list of str,
         'headers': list of str}
     """
-    result_txt = []
+    values = []
     headers = []
     errmsg = []
     status = False
@@ -87,40 +158,40 @@ def read_Siemens_PET_dailyQC(txt):
                 timealign = 'X'
 
         # calibration factor
-        calib_factor = '-1'
+        calib_factor = None
         search_txt = 'Calibrati'
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno].split(' ')
-            calib_factor = split_txt[-1]
+            calib_factor = float(split_txt[-1])
 
         # Block Noise 3 [crystal] 0 [crystal] 0 Blocks
-        n_blocks_noise = '-1'
+        n_blocks_noise = None
         search_txt = 'Block Noi'
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno-1].split(' ')
-            n_blocks_noise = split_txt[0]
+            n_blocks_noise = int(split_txt[0])
 
         # Block Efficiency 120 [%] 80 [%] 0 Blocks
-        n_blocks_efficiency = '-1'
+        n_blocks_efficiency = None
         search_txt = 'Block Eff'
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno-1].split(' ')
-            n_blocks_efficiency = split_txt[0]
+            n_blocks_efficiency = int(split_txt[0])
 
         # Randoms 115 [%] 85 [%] 103.8 [%] Passed
-        measured_randoms = '-1'
+        measured_randoms = None
         search_txt = 'Randoms'
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno-1].split(' ')
             split_txt = [x for x in split_txt if x != '']
-            measured_randoms = split_txt[-3]
+            measured_randoms = float(split_txt[-3])
 
         # Scanner Efficiency
-        scanner_efficiency = '-1'
+        scanner_efficiency = None
         search_txt = 'Scanner E'
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
@@ -130,34 +201,34 @@ def read_Siemens_PET_dailyQC(txt):
                 scanner_efficiency = split_txt[-2]
             else:  # assume VG60A or similiar
                 split_txt = [x for x in split_txt if x != '']
-                scanner_efficiency = split_txt[-3]
+                scanner_efficiency = float(split_txt[-3])
 
         # Scatter Ratio 35.2 [%] 28.8 [%] 30.7 [%] Passed
-        scatter_ratio = '-1'
+        scatter_ratio = None
         search_txt = 'Scatter R'
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno].split(' ')
             split_txt = [x for x in split_txt if x != '']
-            scatter_ratio = split_txt[-3]
+            scatter_ratio = float(split_txt[-3])
 
         # ECF
-        ECF = '-1'
+        ECF = None
         search_txt = 'Scanner e'
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno].split(' ')
             split_txt = [x for x in split_txt if x != '']
-            ECF = split_txt[-1]
+            ECF = float(split_txt[-1])
 
         # Image Plane Efficiency
-        n_img_efficiency = '-1'
+        n_img_efficiency = None
         search_txt = 'Image Pla'
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno].split(' ')
             split_txt = [x for x in split_txt if x != '']
-            n_img_efficiency = split_txt[2]
+            n_img_efficiency = int(split_txt[2])
 
         # Block Timing
         '''
@@ -205,15 +276,15 @@ def read_Siemens_PET_dailyQC(txt):
         '''
 
         # Phantom position
-        phantom_pos_x = '-1'
-        phantom_pos_y = '-1'
+        phantom_pos_x = None
+        phantom_pos_y = None
         search_txt = 'Axis Valu'  # older versions
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno+1].split(' ')
-            phantom_pos_x = split_txt[-1]
+            phantom_pos_x = float(split_txt[-1])
             split_txt = txt[rowno+2].split(' ')
-            phantom_pos_y = split_txt[-1]
+            phantom_pos_y = float(split_txt[-1])
         else:
             search_txt = 'Phantom P'
             if search_txt in short_txt:
@@ -223,18 +294,18 @@ def read_Siemens_PET_dailyQC(txt):
                 if len(indexes) == 4:
                     split_txt = txt[indexes[1]+1].split(' ')
                     split_txt = [x for x in split_txt if x != '']
-                    phantom_pos_x = split_txt[4]
+                    phantom_pos_x = float(split_txt[4])
                     split_txt = txt[indexes[2]+1].split(' ')
                     split_txt = [x for x in split_txt if x != '']
-                    phantom_pos_y = split_txt[4]
+                    phantom_pos_y = float(split_txt[4])
 
-        result_txt = [date, ics_name, partial, full, timealign,
-                      calib_factor, measured_randoms,
-                      scanner_efficiency, scatter_ratio,
-                      ECF,
-                      n_blocks_noise, n_blocks_efficiency,
-                      n_img_efficiency,
-                      phantom_pos_x, phantom_pos_y]
+        values = [date, ics_name, partial, full, timealign,
+                  calib_factor, measured_randoms,
+                  scanner_efficiency, scatter_ratio,
+                  ECF,
+                  n_blocks_noise, n_blocks_efficiency,
+                  n_img_efficiency,
+                  phantom_pos_x, phantom_pos_y]
         headers = ['Date', 'ICSname', 'Partial', 'Full', 'TimeAlignment',
                    'Calibration Factor', 'Measured randoms %',
                    'Scanner Efficiency [cps/Bq/cc]', ' Scatter Ratio %',
@@ -248,7 +319,7 @@ def read_Siemens_PET_dailyQC(txt):
         status = True
 
     data = {'status': status, 'errmsg': errmsg,
-            'values_txt': result_txt, 'headers': headers}
+            'values': values, 'headers': headers}
     return data
 
 
@@ -265,11 +336,11 @@ def read_Siemens_PET_dailyQC_xml(root):
     data : dict
         'status': bool
         'errmsg': list of str
-        'values_txt': list of str,
+        'values': list of str,
         'headers': list of str}
 
     """
-    result_txt = []
+    values = []
     headers = []
     errmsg = []
     status = False
@@ -287,26 +358,26 @@ def read_Siemens_PET_dailyQC_xml(root):
                 date = def_err_text
                 errmsg = def_err_msg
             try:
-                calib_factor = root.find('cPhantomParameters').find(
-                    'eCalibrationFactor').text
+                calib_factor = float(root.find('cPhantomParameters').find(
+                    'eCalibrationFactor').text)
             except AttributeError:
                 calib_factor = def_err_text
                 errmsg = def_err_msg
             try:
-                measured_randoms = details.find('cMeasureRandoms').find(
-                    'cBlkValue').find('aValue').text
+                measured_randoms = float(details.find('cMeasureRandoms').find(
+                    'cBlkValue').find('aValue').text)
             except AttributeError:
                 measured_randoms = def_err_text
                 errmsg = def_err_msg
             try:
-                scanner_efficiency = details.find('dScannerEfficiency').find(
-                    'cBlkValue').find('aValue').text
+                scanner_efficiency = float(details.find('dScannerEfficiency').find(
+                    'cBlkValue').find('aValue').text)
             except AttributeError:
                 scanner_efficiency = def_err_text
                 errmsg = def_err_msg
             try:
-                scatter_ratio = details.find('eScatterRatio').find(
-                    'cBlkValue').find('aValue').text
+                scatter_ratio = float(details.find('eScatterRatio').find(
+                    'cBlkValue').find('aValue').text)
             except AttributeError:
                 scatter_ratio = def_err_text
                 errmsg = def_err_msg
@@ -335,11 +406,11 @@ def read_Siemens_PET_dailyQC_xml(root):
                 n_img_efficiency = def_err_text
                 errmsg = def_err_msg
 
-            result_txt = [date, calib_factor, measured_randoms,
-                          scanner_efficiency, scatter_ratio,
-                          ECF,
-                          n_blocks_noise, n_blocks_efficiency,
-                          n_img_efficiency]
+            values = [date, calib_factor, measured_randoms,
+                      scanner_efficiency, scatter_ratio,
+                      ECF,
+                      n_blocks_noise, n_blocks_efficiency,
+                      n_img_efficiency]
             headers = ['Date', 'Calibration Factor', 'Measured randoms %',
                        'Scanner Efficiency [cps/Bq/cc]', ' Scatter Ratio %',
                        'ECF [Bq*s/ECAT counts]',
@@ -359,7 +430,7 @@ def read_Siemens_PET_dailyQC_xml(root):
                   'Missing root tag SystemQualityReport.')
 
     data = {'status': status, 'errmsg': errmsg,
-            'values_txt': result_txt, 'headers': headers}
+            'values': values, 'headers': headers}
     return data
 
 
@@ -481,7 +552,7 @@ def get_Siemens_CT_QC_type_language(txt, file_type='standard'):
 # Probably not relevant at the time of this program to finish.
 #End of life model.
 def read_Siemens_CT_QC_Symbia(txt):
-    result_txt = []
+    values = []
     errmsg = []
     status = False
     headers = []
@@ -510,7 +581,7 @@ def read_Siemens_CT_QC_Symbia(txt):
                    'MTF50 H41s', 'MTF10 H41s',
                    'MTF50 U90s', 'MTF10 U90s']
 
-        result_txt = [date, tester_name, product_name, serial_number,
+        values = [date, tester_name, product_name, serial_number,
                       serial_tube,
                       HUwater_110kV_min, HUwater_110kV_max,
                       HUwater_130kV_min, HUwater_130kV_max,
@@ -523,7 +594,7 @@ def read_Siemens_CT_QC_Symbia(txt):
                       ]
 
     data = {'status': status, 'errmsg': errmsg,
-            'values_txt': result_txt, 'headers': headers}
+            'values': values, 'headers': headers}
     return data
 '''
 
@@ -547,10 +618,10 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
     data : dict
         'status': bool
         'errmsg': list of str
-        'values_txt': list of str,
+        'values': list of str,
         'headers': list of str}
     """
-    result_txt = info
+    values = info
     status = True
 
     # slice thickness
@@ -586,11 +657,11 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                                 slice_res.append(float(split_txt[1]))
 
                 if slice_head_min == '':
-                    slice_head_min = f'{min(slice_res)}'
-                    slice_head_max = f'{max(slice_res)}'
+                    slice_head_min = min(slice_res)
+                    slice_head_max = max(slice_res)
                 else:
-                    slice_body_min = f'{min(slice_res)}'
-                    slice_body_max = f'{max(slice_res)}'
+                    slice_body_min = min(slice_res)
+                    slice_body_max = max(slice_res)
 
     # homogeneity / water HUwater
     '''6 tests
@@ -653,18 +724,16 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                 res_HU_diff = [float(val) for val in res_HU_diff]
 
                 if HUwater_head_min == '':
-                    HUwater_head_min = f'{min(res_HU_val)}'
-                    HUwater_head_max = f'{max(res_HU_val)}'
-                    diff_head_max = f'{max(map(abs, res_HU_diff))}'
+                    HUwater_head_min = min(res_HU_val)
+                    HUwater_head_max = max(res_HU_val)
+                    diff_head_max = max(map(abs, res_HU_diff))
                 else:
-                    HUwater_body_min = f'{min(res_HU_val)}'
-                    HUwater_body_max = f'{max(res_HU_val)}'
-                    diff_body_max = f'{max(map(abs, res_HU_diff))}'
+                    HUwater_body_min = min(res_HU_val)
+                    HUwater_body_max = max(res_HU_val)
+                    diff_body_max = max(map(abs, res_HU_diff))
 
     # noise
-    '''7 tests
-    extract test 6 (body full coll, 130 kV)
-    + test 7 (head full coll, 130 kV)'''
+    # 7 tests: extract test 6 (body full coll, 130 kV) + test 7 (head full coll, 130 kV)
     noise_head_max = ''
     noise_body_max = ''
 
@@ -697,13 +766,12 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                                 noise_res.append(float(split_txt[1]))
 
                 if noise_head_max == '':
-                    noise_head_max = f'{max(noise_res)}'
+                    noise_head_max = max(noise_res)
                 else:
-                    noise_body_max = f'{max(noise_res)}'
+                    noise_body_max = max(noise_res)
 
     # MTF
-    '''5 tests
-    extract test 1-3 (130 kV body B41, head H31, U90)'''
+    # 5 tests: extract test 1-3 (130 kV body B41, head H31, U90)'''
     MTF50_body_smooth = ''
     MTF10_body_smooth = ''
     MTF50_head_smooth = ''
@@ -745,14 +813,14 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                                 mtf10_res.append(float(split_txt[4]))
 
                 if row == actual_test_rows[0]:
-                    MTF50_body_smooth = f'{sum(mtf50_res)/len(mtf50_res):.2f}'
-                    MTF10_body_smooth = f'{sum(mtf10_res)/len(mtf10_res):.2f}'
+                    MTF50_body_smooth = sum(mtf50_res)/len(mtf50_res)
+                    MTF10_body_smooth = sum(mtf10_res)/len(mtf10_res)
                 elif row == actual_test_rows[1]:
-                    MTF50_head_smooth = f'{sum(mtf50_res)/len(mtf50_res):.2f}'
-                    MTF10_head_smooth = f'{sum(mtf10_res)/len(mtf10_res):.2f}'
+                    MTF50_head_smooth = sum(mtf50_res)/len(mtf50_res)
+                    MTF10_head_smooth = sum(mtf10_res)/len(mtf10_res)
                 else:
-                    MTF50_UHR = f'{sum(mtf50_res)/len(mtf50_res):.2f}'
-                    MTF10_UHR = f'{sum(mtf10_res)/len(mtf10_res):.2f}'
+                    MTF50_UHR = sum(mtf50_res)/len(mtf50_res)
+                    MTF10_UHR = sum(mtf10_res)/len(mtf10_res)
 
     headers = ['Date', 'Tester name', 'Product Name', 'Serial Number',
                'Tube ID',
@@ -766,7 +834,7 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                'MTF50 H smooth', 'MTF10 H smooth',
                'MTF50 UHR', 'MTF10 UHR']
 
-    result_txt.extend([
+    values.extend([
         HUwater_head_min, HUwater_head_max,
         HUwater_body_min, HUwater_body_max,
         diff_head_max, diff_body_max,
@@ -779,7 +847,7 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
         ])
 
     data = {'status': status, 'errmsg': errmsg,
-            'values_txt': result_txt, 'headers': headers}
+            'values': values, 'headers': headers}
     return data
 
 
@@ -796,11 +864,472 @@ def read_Siemens_CT_QC(txt):
     data : dict
         'status': bool
         'errmsg': list of str
-        'values_txt': list of str,
+        'values': list of str,
         'headers': list of str}
     """
     data = {'status': False, 'errmsg': 'Reader for Symbia not implemented',
-            'values_txt': [], 'headers': []}
+            'values': [], 'headers': []}
+
+    def get_slice_thickness_SiemensCT(txt, match_str,
+                                      rownos_description, search_strings):
+        """Read slice thickness parameters.
+
+        Parameters
+        ----------
+        txt : list of str
+            pdf content
+        match_str : str
+            string to find position of test in txt
+        rownos_description : list of int
+            all positions in txt where description (new test starts)
+        search_strings : dict
+            search strings for given language
+
+        Returns
+        -------
+        list
+            slice results
+        """
+        slice_head_min = ''
+        slice_head_max = ''
+        slice_body_min = ''
+        slice_body_max = ''
+        slice_dblA_min = ''
+        slice_dblA_max = ''
+        slice_dblB_min = ''
+        slice_dblB_max = ''
+
+        rownos = [
+            index for index in range(len(txt))
+            if fnmatch(txt[index], match_str)]
+        if len(rownos) == 2:
+            try:
+                next_test = list(filter(
+                    lambda i: i > rownos[-1], rownos_description))[1]
+            except IndexError:
+                next_test = -1
+
+            for test_str in [
+                    search_strings['test_typical_head'],
+                    search_strings['test_typical_body']]:
+
+                max_test = next_test if next_test > -1 else len(txt)
+                test_rows = [row for row
+                             in range(rownos[-1], max_test)
+                             if fnmatch(txt[row], test_str + '*')]
+
+                if len(test_rows) > 0:
+                    for test_row in test_rows:  # body twice if dual tube
+                        started = False
+                        slice_res = []
+                        slice_res_B = []
+
+                        for i in range(test_row + 1, len(txt)):
+                            if i in test_rows:
+                                break  # next test
+                            else:
+                                if started is False:
+                                    if fnmatch(txt[i],
+                                               search_strings['slicewidth'] + '*'):
+                                        started = True
+                                else:
+                                    if i in rownos_description:
+                                        break  # next test
+                                    else:
+                                        if fnmatch(txt[i],
+                                                   search_strings['slice'] + '*'):
+                                            if fnmatch(txt[i],
+                                                       search_strings[
+                                                           'slicewidth'] + '*'):
+                                                break  # next test
+                                            else:
+                                                split_txt = txt[i].split()
+                                                if len(split_txt) >= 3:
+                                                    slice_res.append(
+                                                        float(split_txt[2]))
+                                                if len(split_txt) == 6:
+                                                    # dual tube
+                                                    slice_res_B.append(
+                                                        float(split_txt[4]))
+                                                elif len(split_txt) == 8:
+                                                    # dual tube
+                                                    slice_res_B.append(
+                                                        float(split_txt[5]))
+
+                        if test_str == search_strings['test_typical_head']:
+                            slice_head_min = min(slice_res)
+                            slice_head_max = max(slice_res)
+                        else:
+                            if len(slice_res_B) == 0:
+                                slice_body_min = min(slice_res)
+                                slice_body_max = max(slice_res)
+                            else:
+                                slice_dblA_min = min(slice_res)
+                                slice_dblA_max = max(slice_res)
+                                slice_dblB_min = min(slice_res_B)
+                                slice_dblB_max = max(slice_res_B)
+
+        return [slice_head_min, slice_head_max, slice_body_min, slice_body_max,
+                slice_dblA_min, slice_dblA_max, slice_dblB_min, slice_dblB_max]
+
+
+    def get_homog_water_SiemensCT(txt, match_str,
+                                  rownos_description, search_strings):
+        """Read homogeneity and HU i water parameters from Siemens CT report.
+
+        Parameters
+        ----------
+        txt : list of str
+            pdf content
+        match_str : str
+            string to find position of test in txt
+        rownos_description : list of int
+            all positions in txt where description (new test starts)
+        search_strings : dict
+            search strings for given language
+
+        Returns
+        -------
+        list
+            homog water results
+        """
+        HUwater_head_min = ''
+        HUwater_head_max = ''
+        diff_head_max = ''
+        HUwater_body_min = ''
+        HUwater_body_max = ''
+        diff_body_max = ''
+        HUwater_dblA_min = ''
+        HUwater_dblA_max = ''
+        HUwater_dblB_min = ''
+        HUwater_dblB_max = ''
+        diff_dblA_max = ''
+        diff_dblB_max = ''
+
+        rownos = [
+            index for index in range(len(txt))
+            if fnmatch(txt[index], match_str)]
+        if len(rownos) == 2:
+            try:
+                next_test = list(filter(
+                    lambda i: i > rownos[-1], rownos_description))[1]
+            except IndexError:
+                next_test = -1
+
+            for test_str in [
+                    search_strings['test_typical_head'],
+                    search_strings['test_typical_body']]:
+
+                max_test = next_test if next_test > -1 else len(txt)
+                test_rows = [row for row
+                             in range(rownos[-1], max_test)
+                             if fnmatch(txt[row], test_str + '*')]
+
+                if len(test_rows) > 0:
+                    for test_row in test_rows:  # body twice if dual tube
+                        res_HU_val = []
+                        res_HU_diff = []
+                        res_HU_val_B = []
+                        res_HU_diff_B = []
+                        read_HU = False
+                        read_diff = False
+                        read_diff_B = False
+
+                        for i in range(test_row + 1, len(txt)):
+                            if i in test_rows:
+                                break  # next test
+                            else:
+                                if not any(
+                                        [read_HU, read_diff, read_diff_B]):
+                                    if fnmatch(txt[i],
+                                               search_strings['slicewidth'] + '*'):
+                                        read_HU = True
+                                else:
+                                    if read_diff and len(res_HU_diff) > 0:
+                                        if fnmatch(txt[i],
+                                                   '*'+search_strings[
+                                                       'results']+'*'):
+                                            read_diff = False
+                                            if len(test_rows) > 1:
+                                                if test_row == test_rows[-1]:
+                                                    read_diff_B = True
+                                            else:
+                                                break
+
+                                    if len(res_HU_val) > 0 and read_diff_B is False:
+                                        if fnmatch(txt[i],
+                                                   '*'+search_strings[
+                                                       'results']+'*'):
+                                            read_HU = False
+                                            read_diff = True
+
+                                    if fnmatch(txt[i],
+                                               search_strings['slice']+'*'):
+                                        split_txt = txt[i].split()
+                                        if read_HU:
+                                            if len(split_txt) >= 3:
+                                                res_HU_val.append(
+                                                    float(split_txt[2]))
+                                            if len(split_txt) == 6:
+                                                # dual tube
+                                                res_HU_val_B.append(
+                                                    float(split_txt[4]))
+                                            elif len(split_txt) == 8:
+                                                # dual tube
+                                                res_HU_val_B.append(
+                                                    float(split_txt[5]))
+
+                                        if read_diff:
+                                            if len(split_txt) == 12:
+                                                res_HU_diff.extend(
+                                                    [split_txt[4], split_txt[6],
+                                                     split_txt[8], split_txt[10]])
+                                            elif len(split_txt) == 17:
+                                                res_HU_diff.extend(
+                                                    [split_txt[5], split_txt[8],
+                                                     split_txt[11], split_txt[14]])
+                                        if read_diff_B:
+                                            if len(split_txt) == 12:
+                                                res_HU_diff_B.extend(
+                                                    [split_txt[4], split_txt[6],
+                                                     split_txt[8], split_txt[10]])
+                                            elif len(split_txt) == 17:
+                                                res_HU_diff_B.extend(
+                                                    [split_txt[5], split_txt[8],
+                                                     split_txt[11], split_txt[14]])
+                                            if len(res_HU_diff_B) == len(res_HU_diff):
+                                                break
+
+                        res_HU_diff = [
+                            float(val) for val in res_HU_diff]
+                        res_HU_diff_B = [
+                            float(val) for val in res_HU_diff_B]
+
+                        if test_str == search_strings['test_typical_head']:
+                            HUwater_head_min = min(res_HU_val)
+                            HUwater_head_max = max(res_HU_val)
+                            diff_head_max = max(map(abs, res_HU_diff))
+                        else:
+                            if len(res_HU_val_B) == 0:
+                                HUwater_body_min = min(res_HU_val)
+                                HUwater_body_max = max(res_HU_val)
+                                diff_body_max = max(map(abs, res_HU_diff))
+                            else:
+                                HUwater_dblA_min = min(res_HU_val)
+                                HUwater_dblA_max = max(res_HU_val)
+                                HUwater_dblB_min = min(res_HU_val_B)
+                                HUwater_dblB_max = max(res_HU_val_B)
+                                diff_dblA_max = max(map(abs, res_HU_diff))
+                                diff_dblB_max = max(map(abs, res_HU_diff_B))
+
+        return [HUwater_head_min, HUwater_head_max,
+                HUwater_body_min, HUwater_body_max,
+                diff_head_max, diff_body_max,
+                HUwater_dblA_min, HUwater_dblA_max,
+                HUwater_dblB_min, HUwater_dblB_max,
+                diff_dblA_max, diff_dblB_max]
+
+
+    def get_noise_SiemensCT(txt, match_str,
+                            rownos_description, search_strings):
+        """Read noise parameters from Siemens CT report.
+
+        Parameters
+        ----------
+        txt : list of str
+            pdf content
+        match_str : str
+            string to find position of test in txt
+        rownos_description : list of int
+            all positions in txt where description (new test starts)
+        search_strings : dict
+            search strings for given language
+
+        Returns
+        -------
+        list
+            noise results
+        """
+        noise_head_max = ''
+        noise_body_max = ''
+        noise_dblA_max = ''
+        noise_dblB_max = ''
+
+        rownos = [
+            index for index in range(len(txt))
+            if fnmatch(txt[index], match_str)]
+        if len(rownos) == 2:
+            try:
+                next_test = list(filter(
+                    lambda i: i > rownos[-1], rownos_description))[1]
+            except IndexError:
+                next_test = -1
+
+            for test_str in [
+                    search_strings['test_typical_head'],
+                    search_strings['test_typical_body']]:
+
+                max_test = next_test if next_test > -1 else len(txt)
+                test_rows = [row for row
+                             in range(rownos[-1], max_test)
+                             if fnmatch(txt[row], test_str + '*')]
+
+                if len(test_rows) > 0:
+                    for test_row in test_rows:  # body twice if dual tube
+                        started = False
+                        noise_res = []
+                        noise_res_B = []
+
+                        for i in range(test_row, len(txt)):
+                            if started is False:
+                                if fnmatch(txt[i],
+                                           search_strings['slicewidth']+'*'):
+                                    started = True
+                            else:
+                                if fnmatch(txt[i], search_strings['slice']+'*'):
+
+                                    if fnmatch(txt[i],
+                                               search_strings['slicewidth']+'*'):
+                                        break  # next test
+                                    else:
+                                        split_txt = txt[i].split()
+                                        if len(split_txt) >= 3:
+                                            noise_res.append(float(split_txt[2]))
+                                        if len(split_txt) == 6:
+                                            # dual tube
+                                            noise_res_B.append(float(split_txt[4]))
+                                        elif len(split_txt) == 8:
+                                            # dual tube
+                                            noise_res_B.append(float(split_txt[5]))
+
+                        if test_str == search_strings['test_typical_head']:
+                            noise_head_max = max(noise_res)
+                        else:
+                            if len(noise_res_B) == 0:
+                                noise_body_max = max(noise_res)
+                            else:
+                                noise_dblA_max = max(noise_res)
+                                noise_dblB_max = max(noise_res_B)
+
+        return [noise_head_max, noise_body_max,
+                noise_dblA_max, noise_dblB_max]
+
+
+    def get_MTF_SiemensCT(txt, match_str,
+                          rownos_description, search_strings):
+        """Read MTF parameters from Siemens CT report.
+
+        Parameters
+        ----------
+        txt : list of str
+            pdf content
+        match_str : str
+            string to find position of test in txt
+        rownos_description : list of int
+            all positions in txt where description (new test starts)
+        search_strings : dict
+            search strings for given language
+
+        Returns
+        -------
+        list
+            MTF results
+        """
+        MTF50_body_smooth = None
+        MTF10_body_smooth = None
+        MTF50_head_smooth = None
+        MTF10_head_smooth = None
+        MTF50_head_sharp = None
+        MTF10_head_sharp = None
+        MTF50_UHR = None
+        MTF10_UHR = None
+        MTF50_dblA_smooth = None
+        MTF10_dblA_smooth = None
+        MTF50_dblB_smooth = None
+        MTF10_dblB_smooth = None
+
+        rownos = [
+            index for index in range(len(txt))
+            if fnmatch(txt[index], match_str)]
+        if len(rownos) == 2:
+            try:
+                next_test = list(filter(
+                    lambda i: i > rownos[-1], rownos_description))[1]
+            except IndexError:
+                next_test = -1
+
+            for test_str in [
+                    search_strings['test_typical_head'],
+                    search_strings['test_typical_body'],
+                    search_strings['test_sharpest_mode'],
+                    ]:
+
+                max_test = next_test if next_test > -1 else len(txt)
+                test_rows = [row for row
+                             in range(rownos[-1], max_test)
+                             if fnmatch(txt[row], test_str + '*')]
+
+                if len(test_rows) > 0:
+                    for test_row in test_rows:
+                        # body twice if dual tube
+                        # + twice sharpest (without/with UHR)
+                        started = False
+                        mtf50_res = []
+                        mtf10_res = []
+
+                        for i in range(test_row, len(txt)):
+                            if started is False:
+                                if fnmatch(
+                                        txt[i],
+                                        search_strings['slicewidth'] + '*'):
+                                    started = True
+                            else:
+                                if fnmatch(
+                                        txt[i],
+                                        search_strings['slicewidth'] + '*'):
+                                    break  # next test has started
+                                elif fnmatch(
+                                        txt[i],
+                                        search_strings['slice'] + '*'):
+                                    split_txt = txt[i].split()
+                                    if len(split_txt) == 6:
+                                        mtf50_res.append(float(split_txt[2]))
+                                        mtf10_res.append(float(split_txt[4]))
+                                    elif len(split_txt) == 8:  # old style
+                                        mtf50_res.append(float(split_txt[2]))
+                                        mtf10_res.append(float(split_txt[5]))
+
+                        if test_str == search_strings['test_typical_head']:
+                            MTF50_head_smooth = sum(mtf50_res)/len(mtf50_res)
+                            MTF10_head_smooth = sum(mtf10_res)/len(mtf10_res)
+                        elif test_str == search_strings[
+                                'test_typical_body']:
+                            if MTF50_body_smooth == None:
+                                MTF50_body_smooth = sum(mtf50_res)/len(mtf50_res)
+                                MTF10_body_smooth = sum(mtf10_res)/len(mtf10_res)
+                            else:
+                                # dual tube results combined
+                                # first half is tube A
+                                v = int(len(mtf50_res)/2)
+                                MTF50_dblA_smooth = sum(mtf50_res[0:v])/v
+                                MTF50_dblB_smooth = sum(mtf50_res[v:])/v
+                                MTF10_dblA_smooth = sum(mtf10_res[0:v])/v
+                                MTF10_dblB_smooth = sum(mtf10_res[v:])/v
+                        else:
+                            # without and with UHR, without first
+                            if MTF50_head_sharp == None:
+                                MTF50_head_sharp = sum(mtf50_res)/len(mtf50_res)
+                                MTF10_head_sharp = sum(mtf10_res)/len(mtf10_res)
+                            else:
+                                MTF50_UHR = sum(mtf50_res)/len(mtf50_res)
+                                MTF10_UHR = sum(mtf10_res)/len(mtf10_res)
+
+        return [MTF50_body_smooth, MTF10_body_smooth,
+                MTF50_head_smooth, MTF10_head_smooth,
+                MTF50_head_sharp, MTF10_head_sharp,
+                MTF50_UHR, MTF10_UHR,
+                MTF50_dblA_smooth, MTF10_dblA_smooth,
+                MTF50_dblB_smooth, MTF10_dblB_smooth]
 
     file_type = 'standard'
     for txt_line in txt[0:2]:
@@ -814,7 +1343,7 @@ def read_Siemens_CT_QC(txt):
         # data = read_Siemens_CT_QC_Symbia(txt)
         data['errmsg'] = 'Reader for Symbia not implemented'
     else:
-        result_txt = []
+        values = []
         errmsg = []
         status = False
         headers = []
@@ -958,19 +1487,19 @@ def read_Siemens_CT_QC(txt):
                        'MTF50 dblA smooth', 'MTF10 dblA smooth',
                        'MTF50 dblB smooth', 'MTF10 dblB smooth']
 
-            result_txt = [date, tester_name, product_name, serial_number,
+            values = [date, tester_name, product_name, serial_number,
                           serial_tube_A, serial_tube_B]
-            result_txt.extend(homog_water_res[0:6])
-            result_txt.extend(noise_res[0:2])
-            result_txt.extend(slice_res[0:4])
-            result_txt.extend(MTF_res[0:8])
-            result_txt.extend(homog_water_res[6:])
-            result_txt.extend(noise_res[2:])
-            result_txt.extend(slice_res[4:])
-            result_txt.extend(MTF_res[8:])
+            values.extend(homog_water_res[0:6])
+            values.extend(noise_res[0:2])
+            values.extend(slice_res[0:4])
+            values.extend(MTF_res[0:8])
+            values.extend(homog_water_res[6:])
+            values.extend(noise_res[2:])
+            values.extend(slice_res[4:])
+            values.extend(MTF_res[8:])
 
             data = {'status': status, 'errmsg': errmsg,
-                    'values_txt': result_txt, 'headers': headers}
+                    'values': values, 'headers': headers}
 
     if txt[0] == 'System Quality Report':
         # TODO - what is this, when to use it? date is changed, but not data...
@@ -994,488 +1523,16 @@ def read_Siemens_CT_QC(txt):
     return data
 
 
-def get_slice_thickness_SiemensCT(txt, match_str,
-                                  rownos_description, search_strings):
-    """Read slice thickness parameters.
-
-    Parameters
-    ----------
-    txt : list of str
-        pdf content
-    match_str : str
-        string to find position of test in txt
-    rownos_description : list of int
-        all positions in txt where description (new test starts)
-    search_strings : dict
-        search strings for given language
-
-    Returns
-    -------
-    list
-        slice results
-    """
-    slice_head_min = ''
-    slice_head_max = ''
-    slice_body_min = ''
-    slice_body_max = ''
-    slice_dblA_min = ''
-    slice_dblA_max = ''
-    slice_dblB_min = ''
-    slice_dblB_max = ''
-
-    rownos = [
-        index for index in range(len(txt))
-        if fnmatch(txt[index], match_str)]
-    if len(rownos) == 2:
-        try:
-            next_test = list(filter(
-                lambda i: i > rownos[-1], rownos_description))[1]
-        except IndexError:
-            next_test = -1
-
-        for test_str in [
-                search_strings['test_typical_head'],
-                search_strings['test_typical_body']]:
-
-            max_test = next_test if next_test > -1 else len(txt)
-            test_rows = [row for row
-                         in range(rownos[-1], max_test)
-                         if fnmatch(txt[row], test_str + '*')]
-
-            if len(test_rows) > 0:
-                for test_row in test_rows:  # body twice if dual tube
-                    started = False
-                    slice_res = []
-                    slice_res_B = []
-
-                    for i in range(test_row + 1, len(txt)):
-                        if i in test_rows:
-                            break  # next test
-                        else:
-                            if started is False:
-                                if fnmatch(txt[i],
-                                           search_strings['slicewidth'] + '*'):
-                                    started = True
-                            else:
-                                if i in rownos_description:
-                                    break  # next test
-                                else:
-                                    if fnmatch(txt[i],
-                                               search_strings['slice'] + '*'):
-                                        if fnmatch(txt[i],
-                                                   search_strings[
-                                                       'slicewidth'] + '*'):
-                                            break  # next test
-                                        else:
-                                            split_txt = txt[i].split()
-                                            if len(split_txt) >= 3:
-                                                slice_res.append(
-                                                    float(split_txt[2]))
-                                            if len(split_txt) == 6:
-                                                # dual tube
-                                                slice_res_B.append(
-                                                    float(split_txt[4]))
-                                            elif len(split_txt) == 8:
-                                                # dual tube
-                                                slice_res_B.append(
-                                                    float(split_txt[5]))
-
-                    if test_str == search_strings['test_typical_head']:
-                        slice_head_min = f'{min(slice_res)}'
-                        slice_head_max = f'{max(slice_res)}'
-                    else:
-                        if len(slice_res_B) == 0:
-                            slice_body_min = f'{min(slice_res)}'
-                            slice_body_max = f'{max(slice_res)}'
-                        else:
-                            slice_dblA_min = f'{min(slice_res)}'
-                            slice_dblA_max = f'{max(slice_res)}'
-                            slice_dblB_min = f'{min(slice_res_B)}'
-                            slice_dblB_max = f'{max(slice_res_B)}'
-
-    return [slice_head_min, slice_head_max, slice_body_min, slice_body_max,
-            slice_dblA_min, slice_dblA_max, slice_dblB_min, slice_dblB_max]
-
-
-def get_homog_water_SiemensCT(txt, match_str,
-                              rownos_description, search_strings):
-    """Read homogeneity and HU i water parameters from Siemens CT report.
-
-    Parameters
-    ----------
-    txt : list of str
-        pdf content
-    match_str : str
-        string to find position of test in txt
-    rownos_description : list of int
-        all positions in txt where description (new test starts)
-    search_strings : dict
-        search strings for given language
-
-    Returns
-    -------
-    list
-        homog water results
-    """
-    HUwater_head_min = ''
-    HUwater_head_max = ''
-    diff_head_max = ''
-    HUwater_body_min = ''
-    HUwater_body_max = ''
-    diff_body_max = ''
-    HUwater_dblA_min = ''
-    HUwater_dblA_max = ''
-    HUwater_dblB_min = ''
-    HUwater_dblB_max = ''
-    diff_dblA_max = ''
-    diff_dblB_max = ''
-
-    rownos = [
-        index for index in range(len(txt))
-        if fnmatch(txt[index], match_str)]
-    if len(rownos) == 2:
-        try:
-            next_test = list(filter(
-                lambda i: i > rownos[-1], rownos_description))[1]
-        except IndexError:
-            next_test = -1
-
-        for test_str in [
-                search_strings['test_typical_head'],
-                search_strings['test_typical_body']]:
-
-            max_test = next_test if next_test > -1 else len(txt)
-            test_rows = [row for row
-                         in range(rownos[-1], max_test)
-                         if fnmatch(txt[row], test_str + '*')]
-
-            if len(test_rows) > 0:
-                for test_row in test_rows:  # body twice if dual tube
-                    res_HU_val = []
-                    res_HU_diff = []
-                    res_HU_val_B = []
-                    res_HU_diff_B = []
-                    read_HU = False
-                    read_diff = False
-                    read_diff_B = False
-
-                    for i in range(test_row + 1, len(txt)):
-                        if i in test_rows:
-                            break  # next test
-                        else:
-                            if not any(
-                                    [read_HU, read_diff, read_diff_B]):
-                                if fnmatch(txt[i],
-                                           search_strings['slicewidth'] + '*'):
-                                    read_HU = True
-                            else:
-                                if read_diff and len(res_HU_diff) > 0:
-                                    if fnmatch(txt[i],
-                                               '*'+search_strings[
-                                                   'results']+'*'):
-                                        read_diff = False
-                                        if len(test_rows) > 1:
-                                            if test_row == test_rows[-1]:
-                                                read_diff_B = True
-                                        else:
-                                            break
-
-                                if len(res_HU_val) > 0 and read_diff_B is False:
-                                    if fnmatch(txt[i],
-                                               '*'+search_strings[
-                                                   'results']+'*'):
-                                        read_HU = False
-                                        read_diff = True
-
-                                if fnmatch(txt[i],
-                                           search_strings['slice']+'*'):
-                                    split_txt = txt[i].split()
-                                    if read_HU:
-                                        if len(split_txt) >= 3:
-                                            res_HU_val.append(
-                                                float(split_txt[2]))
-                                        if len(split_txt) == 6:
-                                            # dual tube
-                                            res_HU_val_B.append(
-                                                float(split_txt[4]))
-                                        elif len(split_txt) == 8:
-                                            # dual tube
-                                            res_HU_val_B.append(
-                                                float(split_txt[5]))
-
-                                    if read_diff:
-                                        if len(split_txt) == 12:
-                                            res_HU_diff.extend(
-                                                [split_txt[4], split_txt[6],
-                                                 split_txt[8], split_txt[10]])
-                                        elif len(split_txt) == 17:
-                                            res_HU_diff.extend(
-                                                [split_txt[5], split_txt[8],
-                                                 split_txt[11], split_txt[14]])
-                                    if read_diff_B:
-                                        if len(split_txt) == 12:
-                                            res_HU_diff_B.extend(
-                                                [split_txt[4], split_txt[6],
-                                                 split_txt[8], split_txt[10]])
-                                        elif len(split_txt) == 17:
-                                            res_HU_diff_B.extend(
-                                                [split_txt[5], split_txt[8],
-                                                 split_txt[11], split_txt[14]])
-                                        if len(res_HU_diff_B) == len(res_HU_diff):
-                                            break
-
-                    res_HU_diff = [
-                        float(val) for val in res_HU_diff]
-                    res_HU_diff_B = [
-                        float(val) for val in res_HU_diff_B]
-
-                    if test_str == search_strings['test_typical_head']:
-                        HUwater_head_min = f'{min(res_HU_val)}'
-                        HUwater_head_max = f'{max(res_HU_val)}'
-                        diff_head_max = f'{max(map(abs, res_HU_diff))}'
-                    else:
-                        if len(res_HU_val_B) == 0:
-                            HUwater_body_min = f'{min(res_HU_val)}'
-                            HUwater_body_max = f'{max(res_HU_val)}'
-                            diff_body_max = (
-                                f'{max(map(abs, res_HU_diff))}')
-                        else:
-                            HUwater_dblA_min = f'{min(res_HU_val)}'
-                            HUwater_dblA_max = f'{max(res_HU_val)}'
-                            HUwater_dblB_min = f'{min(res_HU_val_B)}'
-                            HUwater_dblB_max = f'{max(res_HU_val_B)}'
-                            diff_dblA_max = (
-                                f'{max(map(abs, res_HU_diff))}')
-                            diff_dblB_max = (
-                                f'{max(map(abs, res_HU_diff_B))}')
-
-    return [HUwater_head_min, HUwater_head_max,
-            HUwater_body_min, HUwater_body_max,
-            diff_head_max, diff_body_max,
-            HUwater_dblA_min, HUwater_dblA_max,
-            HUwater_dblB_min, HUwater_dblB_max,
-            diff_dblA_max, diff_dblB_max]
-
-
-def get_noise_SiemensCT(txt, match_str,
-                        rownos_description, search_strings):
-    """Read noise parameters from Siemens CT report.
-
-    Parameters
-    ----------
-    txt : list of str
-        pdf content
-    match_str : str
-        string to find position of test in txt
-    rownos_description : list of int
-        all positions in txt where description (new test starts)
-    search_strings : dict
-        search strings for given language
-
-    Returns
-    -------
-    list
-        noise results
-    """
-    noise_head_max = ''
-    noise_body_max = ''
-    noise_dblA_max = ''
-    noise_dblB_max = ''
-
-    rownos = [
-        index for index in range(len(txt))
-        if fnmatch(txt[index], match_str)]
-    if len(rownos) == 2:
-        try:
-            next_test = list(filter(
-                lambda i: i > rownos[-1], rownos_description))[1]
-        except IndexError:
-            next_test = -1
-
-        for test_str in [
-                search_strings['test_typical_head'],
-                search_strings['test_typical_body']]:
-
-            max_test = next_test if next_test > -1 else len(txt)
-            test_rows = [row for row
-                         in range(rownos[-1], max_test)
-                         if fnmatch(txt[row], test_str + '*')]
-
-            if len(test_rows) > 0:
-                for test_row in test_rows:  # body twice if dual tube
-                    started = False
-                    noise_res = []
-                    noise_res_B = []
-
-                    for i in range(test_row, len(txt)):
-                        if started is False:
-                            if fnmatch(txt[i],
-                                       search_strings['slicewidth']+'*'):
-                                started = True
-                        else:
-                            if fnmatch(txt[i], search_strings['slice']+'*'):
-
-                                if fnmatch(txt[i],
-                                           search_strings['slicewidth']+'*'):
-                                    break  # next test
-                                else:
-                                    split_txt = txt[i].split()
-                                    if len(split_txt) >= 3:
-                                        noise_res.append(float(split_txt[2]))
-                                    if len(split_txt) == 6:
-                                        # dual tube
-                                        noise_res_B.append(float(split_txt[4]))
-                                    elif len(split_txt) == 8:
-                                        # dual tube
-                                        noise_res_B.append(float(split_txt[5]))
-
-                    if test_str == search_strings['test_typical_head']:
-                        noise_head_max = f'{max(noise_res)}'
-                    else:
-                        if len(noise_res_B) == 0:
-                            noise_body_max = f'{max(noise_res)}'
-                        else:
-                            noise_dblA_max = f'{max(noise_res)}'
-                            noise_dblB_max = f'{max(noise_res_B)}'
-
-    return [noise_head_max, noise_body_max,
-            noise_dblA_max, noise_dblB_max]
-
-
-def get_MTF_SiemensCT(txt, match_str,
-                      rownos_description, search_strings):
-    """Read MTF parameters from Siemens CT report.
-
-    Parameters
-    ----------
-    txt : list of str
-        pdf content
-    match_str : str
-        string to find position of test in txt
-    rownos_description : list of int
-        all positions in txt where description (new test starts)
-    search_strings : dict
-        search strings for given language
-
-    Returns
-    -------
-    list
-        MTF results
-    """
-    MTF50_body_smooth = ''
-    MTF10_body_smooth = ''
-    MTF50_head_smooth = ''
-    MTF10_head_smooth = ''
-    MTF50_head_sharp = ''
-    MTF10_head_sharp = ''
-    MTF50_UHR = ''
-    MTF10_UHR = ''
-    MTF50_dblA_smooth = ''
-    MTF10_dblA_smooth = ''
-    MTF50_dblB_smooth = ''
-    MTF10_dblB_smooth = ''
-
-    rownos = [
-        index for index in range(len(txt))
-        if fnmatch(txt[index], match_str)]
-    if len(rownos) == 2:
-        try:
-            next_test = list(filter(
-                lambda i: i > rownos[-1], rownos_description))[1]
-        except IndexError:
-            next_test = -1
-
-        for test_str in [
-                search_strings['test_typical_head'],
-                search_strings['test_typical_body'],
-                search_strings['test_sharpest_mode'],
-                ]:
-
-            max_test = next_test if next_test > -1 else len(txt)
-            test_rows = [row for row
-                         in range(rownos[-1], max_test)
-                         if fnmatch(txt[row], test_str + '*')]
-
-            if len(test_rows) > 0:
-                for test_row in test_rows:
-                    # body twice if dual tube
-                    # + twice sharpest (without/with UHR)
-                    started = False
-                    mtf50_res = []
-                    mtf10_res = []
-
-                    for i in range(test_row, len(txt)):
-                        if started is False:
-                            if fnmatch(
-                                    txt[i],
-                                    search_strings['slicewidth'] + '*'):
-                                started = True
-                        else:
-                            if fnmatch(
-                                    txt[i],
-                                    search_strings['slicewidth'] + '*'):
-                                break  # next test has started
-                            elif fnmatch(txt[i],
-                                         search_strings['slice'] + '*'):
-                                split_txt = txt[i].split()
-                                if len(split_txt) == 6:
-                                    mtf50_res.append(float(split_txt[2]))
-                                    mtf10_res.append(float(split_txt[4]))
-                                elif len(split_txt) == 8:  # old style
-                                    mtf50_res.append(float(split_txt[2]))
-                                    mtf10_res.append(float(split_txt[5]))
-
-                    if test_str == search_strings['test_typical_head']:
-                        MTF50_head_smooth = (
-                            f'{sum(mtf50_res)/len(mtf50_res):.2f}')
-                        MTF10_head_smooth = (
-                            f'{sum(mtf10_res)/len(mtf10_res):.2f}')
-                    elif test_str == search_strings[
-                            'test_typical_body']:
-                        if len(MTF50_body_smooth) == 0:
-                            MTF50_body_smooth = (
-                                f'{sum(mtf50_res)/len(mtf50_res):.2f}')
-                            MTF10_body_smooth = (
-                                f'{sum(mtf10_res)/len(mtf10_res):.2f}')
-                        else:
-                            # dual tube results combined
-                            # first half is tube A
-                            v = int(len(mtf50_res)/2)
-                            MTF50_dblA_smooth = f'{sum(mtf50_res[0:v])/v:.2f}'
-                            MTF50_dblB_smooth = f'{sum(mtf50_res[v:])/v:.2f}'
-                            MTF10_dblA_smooth = f'{sum(mtf10_res[0:v])/v:.2f}'
-                            MTF10_dblB_smooth = f'{sum(mtf10_res[v:])/v:.2f}'
-                    else:
-                        # without and with UHR, without first
-                        if len(MTF50_head_sharp) == 0:
-                            MTF50_head_sharp = (
-                                f'{sum(mtf50_res)/len(mtf50_res):.2f}')
-                            MTF10_head_sharp = (
-                                f'{sum(mtf10_res)/len(mtf10_res):.2f}')
-                        else:
-                            MTF50_UHR = (
-                                f'{sum(mtf50_res)/len(mtf50_res):.2f}')
-                            MTF10_UHR = (
-                                f'{sum(mtf10_res)/len(mtf10_res):.2f}')
-
-    return [MTF50_body_smooth, MTF10_body_smooth,
-            MTF50_head_smooth, MTF10_head_smooth,
-            MTF50_head_sharp, MTF10_head_sharp,
-            MTF50_UHR, MTF10_UHR,
-            MTF50_dblA_smooth, MTF10_dblA_smooth,
-            MTF50_dblB_smooth, MTF10_dblB_smooth]
-
-
 def get_pdf_txt(path):
     """Extract text from pdf file using pdfplumber.
-    
+
     Return
     ------
     pdf_txt : list of str
     """
     pdf_txt = []
-    with pdfplumber.open(path) as f:
-        for page in f.pages:
+    with pdfplumber.open(path) as file:
+        for page in file.pages:
             pdf_txt.extend(page.extract_text().splitlines())
 
     return pdf_txt

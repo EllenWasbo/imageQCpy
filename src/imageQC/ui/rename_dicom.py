@@ -12,17 +12,17 @@ import pydicom
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QDialog, QWidget, QSplitter,
-    QVBoxLayout, QHBoxLayout, QToolBar,
-    QLabel, QLineEdit, QPushButton, QAction,
-    QTreeWidget, QTreeWidgetItem, QFileDialog,
+    QWidget, QSplitter, QVBoxLayout, QHBoxLayout, QToolBar,
+    QLabel, QLineEdit, QPushButton, QAction, QTreeWidget, QTreeWidgetItem, QFileDialog,
     QMessageBox
     )
 
 # imageQC block start
-import imageQC.ui.reusables as uir
-from imageQC.ui.settings import RenamePatternWidget
-import imageQC.config.config_classes as cfc
+from imageQC.ui import reusable_widgets as uir
+from imageQC.ui.ui_dialogs import ImageQCDialog
+from imageQC.ui import messageboxes
+from imageQC.ui.settings_dicom_tags import RenamePatternWidget
+from imageQC.config import config_classes as cfc
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.scripts.dcm import find_all_valid_dcm_files, get_dcm_info_list
 from imageQC.scripts.mini_methods_format import (
@@ -30,112 +30,103 @@ from imageQC.scripts.mini_methods_format import (
 # imageQC block end
 
 
-class RenameDicomDialog(uir.ImageQCDialog):
+class RenameDicomDialog(ImageQCDialog):
     """GUI setup for the Rename Dicom dialog window."""
 
-    def __init__(self, open_filepaths=[], initial_modality='CT', tag_infos=None):
+    def __init__(self, main):
         super().__init__()
-
-        self.start_files = open_filepaths
-        self.current_modality = initial_modality
+        self.current_modality = main.current_modality
 
         self.orignal_names = []  # list for found files or folders (first step)
         self.new_names = []  # list for generated new names (first step)
         self.valid_dict = {}  # dict for folders (first) + files (second step)
 
         self.setWindowTitle('Rename DICOM')
-
         splitter = QSplitter(Qt.Vertical)
-        vLO = QVBoxLayout()
-        self.setLayout(vLO)
-        vLO.addWidget(splitter)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        vlo.addWidget(splitter)
 
         subtxt = '''Rename DICOM files and folders by DICOM header data.
         Subfolders will be renamed by the first file found in the folder.<br>
         Note also option to split files into subfolders based on
         DICOM header or gather all DICOM files into one folder.<br>
         The split series will use seriesUID if subfolder template is not set.'''
-        self.wTagPattern = RenamePatternWidget(
+        self.wid_rename_pattern = RenamePatternWidget(
             initial_modality=self.current_modality, header='', subtxt=subtxt)
-        splitter.addWidget(self.wTagPattern)
+        self.wid_rename_pattern.save_blocked = main.save_blocked
+        splitter.addWidget(self.wid_rename_pattern)
 
-        wBtm = QWidget()
-        splitter.addWidget(wBtm)
-        vLO2 = QVBoxLayout()
-        wBtm.setLayout(vLO2)
-        hLObrowse = QHBoxLayout()
-        vLO2.addLayout(hLObrowse)
-        lbl = QLabel('Selected folder: ')
-        hLObrowse.addWidget(lbl)
+        wid_btm = QWidget()
+        splitter.addWidget(wid_btm)
+        vlo2 = QVBoxLayout()
+        wid_btm.setLayout(vlo2)
+        hlo_browse = QHBoxLayout()
+        vlo2.addLayout(hlo_browse)
+        hlo_browse.addWidget(QLabel('Selected folder: '))
         self.path = QLineEdit()
-        hLObrowse.addWidget(self.path)
-        tbBrowse = uir.ToolBarBrowse(
+        hlo_browse.addWidget(self.path)
+        tb_browse = uir.ToolBarBrowse(
             'Browse for folder with DICOM files', clear=True)
-        tbBrowse.actBrowse.triggered.connect(self.browse)
-        tbBrowse.actClear.triggered.connect(self.clear_path)
-        hLObrowse.addWidget(tbBrowse)
+        tb_browse.act_browse.triggered.connect(self.browse)
+        tb_browse.act_clear.triggered.connect(self.clear_path)
+        hlo_browse.addWidget(tb_browse)
 
-        lbl = uir.LabelItalic(
+        vlo2.addWidget(uir.LabelItalic(
             """If selected folder is left blank, open images
-            in main window will be subject to renaming.""")
-        vLO2.addWidget(lbl)
+            in main window will be subject to renaming."""))
 
-        tbSplitGather = QToolBar()
-        hLObrowse.addWidget(tbSplitGather)
-        actSplit = QAction(
+        tb_split_gather = QToolBar()
+        hlo_browse.addWidget(tb_split_gather)
+        act_split = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}split.png'),
             'Move files into folders according to subfolder template or seriesUID',
             self)
-        actSplit.triggered.connect(self.split_series)
-        '''Cannot use same icon twice with different meaning (open.png)
-        actOpen = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}open.png'),
-            'Open explorer for selected path to inspect content', self)
-        actOpen.triggered.connect(self.open_path)'''
-        actGather = QAction(
+        act_split.triggered.connect(self.split_series)
+        act_gather = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}gather.png'),
             'Gather all DICOM files in subfolders to selected folder', self)
-        actGather.triggered.connect(self.gather_files)
-        tbSplitGather.addActions([actSplit, actGather])
+        act_gather.triggered.connect(self.gather_files)
+        tb_split_gather.addActions([act_split, act_gather])
 
-        hLOtable = QHBoxLayout()
-        vLO2.addLayout(hLOtable)
+        hlo_table = QHBoxLayout()
+        vlo2.addLayout(hlo_table)
         self.table = QTreeWidget()
         self.table.setHeaderLabels(
             ['Original name', 'Suggested name'])
         self.table.setRootIsDecorated(False)
         self.table.setColumnWidth(0, 500)
         self.table.setColumnWidth(1, 500)
-        hLOtable.addWidget(self.table)
-        vLObtnsTable = QVBoxLayout()
-        hLOtable.addLayout(vLObtnsTable)
-        btnTest10 = QPushButton('Test 10 first')
-        btnTest10.clicked.connect(self.test_10_first)
-        vLObtnsTable.addWidget(btnTest10)
-        btnGenerateNames = QPushButton('Prepare names')
-        btnGenerateNames.clicked.connect(self.generate_names)
-        vLObtnsTable.addWidget(btnGenerateNames)
-        self.btnRename = QPushButton('Rename')
-        self.btnRename.setDisabled(True)
-        self.btnRename.clicked.connect(self.rename)
-        vLObtnsTable.addWidget(self.btnRename)
-        vLObtnsTable.addStretch()
+        hlo_table.addWidget(self.table)
+        vlo_btns_table = QVBoxLayout()
+        hlo_table.addLayout(vlo_btns_table)
+        btn_test_10 = QPushButton('Test 10 first')
+        btn_test_10.clicked.connect(self.test_10_first)
+        vlo_btns_table.addWidget(btn_test_10)
+        btn_generate_names = QPushButton('Prepare names')
+        btn_generate_names.clicked.connect(self.generate_names)
+        vlo_btns_table.addWidget(btn_generate_names)
+        self.btn_rename = QPushButton('Rename')
+        self.btn_rename.setDisabled(True)
+        self.btn_rename.clicked.connect(self.rename)
+        vlo_btns_table.addWidget(self.btn_rename)
+        vlo_btns_table.addStretch()
 
-        hLOdlgBtns = QHBoxLayout()
-        vLO.addLayout(hLOdlgBtns)
-        hLOdlgBtns.addStretch()
-        btnClose = QPushButton('Close window')
-        btnClose.clicked.connect(self.accept)
-        hLOdlgBtns.addWidget(btnClose)
+        hlo_dlg_btns = QHBoxLayout()
+        vlo.addLayout(hlo_dlg_btns)
+        hlo_dlg_btns.addStretch()
+        btn_close = QPushButton('Close window')
+        btn_close.clicked.connect(self.accept)
+        hlo_dlg_btns.addWidget(btn_close)
 
-        self.wTagPattern.update_from_yaml()
+        self.wid_rename_pattern.update_from_yaml()
 
     def reset_names(self):
         """Reset variables/GUI if generated names no longer valid."""
         self.orignal_names = []
         self.new_names = []
         self.table.clear()
-        self.btnRename.setDisabled(True)
+        self.btn_rename.setDisabled(True)
 
     def fill_table(self):
         """Fill table with original and generated names."""
@@ -144,8 +135,8 @@ class RenameDicomDialog(uir.ImageQCDialog):
             orignames = [x.name for x in self.original_names]
             newnames = [x.name for x in self.new_names]
 
-            for i, f in enumerate(orignames):
-                row_strings = [f, newnames[i]]
+            for idx, fname in enumerate(orignames):
+                row_strings = [fname, newnames[idx]]
                 item = QTreeWidgetItem(row_strings)
                 self.table.addTopLevelItem(item)
 
@@ -175,7 +166,7 @@ class RenameDicomDialog(uir.ImageQCDialog):
                 proceed = False
 
             if proceed:
-                proceed = uir.proceed_question(
+                proceed = messageboxes.proceed_question(
                     self,
                     f'Found {len(dcm_dict["files"])} valid DICOM files. '
                     'Proceed moving these files directly into the '
@@ -185,33 +176,33 @@ class RenameDicomDialog(uir.ImageQCDialog):
                 count_renamed = 0
                 failed_paths = []
                 for file in dcm_dict['files']:
-                    p = Path(file)
-                    new_file = Path(self.path.text()) / p.name
+                    path = Path(file)
+                    new_file = Path(self.path.text()) / path.name
                     new_file_str = generate_uniq_filepath(new_file.resolve())
                     if new_file_str != '':
                         try:
-                            p.rename(new_file_str)
+                            path.rename(new_file_str)
                             count_renamed += 1
-                        except FileExistsError as e:
+                        except FileExistsError as err:
                             failed_paths.append(file.resolve())
-                            print(f'Faile renameing {file} to {new_file_str}/n{e}')
+                            print(f'Faile renameing {file} to {new_file_str}/n{err}')
                     else:
                         failed_paths.append(file.resolve())
                 self.reset_names()
                 if count_renamed != len(dcm_dict['files']):
-                    msg = QMessageBox.warning(
-                        self, "Issues",
-                        (f"Moved {count_renamed} of {len(dcm_dict['files'])}."
-                         "See details for paths failing."))
-                    msg.setDetailedText('\n'.join(failed_paths))
-                    msg.exec()
+                    dlg = messageboxes.MessageBoxWithDetails(
+                        self, title='Issues',
+                        msg=(f'Moved {count_renamed} of {len(dcm_dict["files"])}.'
+                             'See details for paths failing.'),
+                        details=failed_paths, icon=QMessageBox.Warning)
+                    dlg.exec()
 
-                proceed = uir.proceed_question(
+                proceed = messageboxes.proceed_question(
                     self,
                     'Remove empty folders?')
 
             if proceed:
-                for root, dirs, files in os.walk(
+                for root, dirs, _ in os.walk(
                         self.path.text(), topdown=False):
                     for name in dirs:
                         if len(os.listdir(os.path.join(root, name))) == 0:
@@ -222,13 +213,13 @@ class RenameDicomDialog(uir.ImageQCDialog):
     def split_series(self):
         """Split series into subfolders based on subfolder tag pattern."""
         errmsg = []
-        serUID = False
-        if len(self.wTagPattern.current_template.list_tags) == 0:
-            serUID = True
+        series_uid = False
+        if len(self.wid_rename_pattern.current_template.list_tags) == 0:
+            series_uid = True
         else:
             tag_pattern = cfc.TagPatternFormat(
-                list_tags=self.wTagPattern.current_template.list_tags,
-                list_format=self.wTagPattern.current_template.list_format)
+                list_tags=self.wid_rename_pattern.current_template.list_tags,
+                list_format=self.wid_rename_pattern.current_template.list_format)
 
         proceed = True
         if os.access(self.path.text(), os.W_OK) is False:
@@ -241,13 +232,13 @@ class RenameDicomDialog(uir.ImageQCDialog):
                 grouped=False, search_subfolders=False)
             if len(dcm_dict['files']) > 0:
 
-                if serUID:
+                if series_uid:
                     info_txt = 'if they share series UID?'
                 else:
                     info_txt = (
                         'if they share the same parameters defined in '
                         'the subfolder pattern?')
-                proceed = uir.proceed_question(
+                proceed = messageboxes.proceed_question(
                     self,
                     (f'Found {len(dcm_dict["files"])} valid DICOM files. '
                      'Proceed grouping these files into subfolders '
@@ -257,20 +248,20 @@ class RenameDicomDialog(uir.ImageQCDialog):
                 if proceed:
                     new_folders = []
                     dcm_files = dcm_dict['files']
-                    maxVal = len(dcm_files)
+                    max_val = len(dcm_files)
                     progress = uir.ProgressModal(
                         "Building new subfolder names...", "Stop",
-                        0, maxVal, self)
-                    if serUID:
+                        0, max_val, self)
+                    if series_uid:
                         new_folders, sorted_dcm_files = self.sort_seriesUID(
                             dcm_files, progress_widget=progress)
                     else:
                         for i, file in enumerate(dcm_files):
                             progress.setValue(i)
                             pd = pydicom.dcmread(
-                                dcm_files[i].resolve(), stop_before_pixels=True)
+                                file.resolve(), stop_before_pixels=True)
                             name_parts = get_dcm_info_list(
-                                pd, tag_pattern, self.wTagPattern.tag_infos,
+                                pd, tag_pattern, self.wid_rename_pattern.tag_infos,
                                 prefix_separator='', suffix_separator='',
                                 not_found_text='')
                             new_name = "_".join(name_parts)
@@ -281,11 +272,11 @@ class RenameDicomDialog(uir.ImageQCDialog):
                                 new_folders = []
                                 break
 
-                    progress.setValue(maxVal)
+                    progress.setValue(max_val)
                     if len(new_folders) > 0:
                         uniq_new_folders = list(set(new_folders))
 
-                        proceed = uir.proceed_question(
+                        proceed = messageboxes.proceed_question(
                             self,
                             ('Proceed sorting the files into '
                              f'{len(uniq_new_folders)} subfolders? '),
@@ -298,10 +289,10 @@ class RenameDicomDialog(uir.ImageQCDialog):
                         proceed = False
 
                     if proceed:
-                        maxVal = len(dcm_files)
+                        max_val = len(dcm_files)
                         progress = uir.ProgressModal(
                             "Moving files into subfolders...", "Stop",
-                            0, maxVal, self)
+                            0, max_val, self)
                         for i, file in enumerate(dcm_files):
                             progress.setValue(i)
                             new_folder = new_folders[i]
@@ -319,17 +310,14 @@ class RenameDicomDialog(uir.ImageQCDialog):
 
                             if progress.wasCanceled():
                                 break
-                        progress.setValue(maxVal)
+                        progress.setValue(max_val)
 
         if len(errmsg) > 0:
-            msg = QMessageBox(
-                QMessageBox.Warning,
-                'Issues',
-                'There were issues moving one or more files. See details.',
-                parent=self)
-            msg.setDetailedText('\n'.join(errmsg))
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec()
+            dlg = messageboxes.MessageBoxWithDetails(
+                self, title='Issues',
+                msg='There were issues moving one or more files. See details.',
+                details=errmsg, icon=QMessageBox.Warning)
+            dlg.exec()
 
     def test_10_first(self):
         """Generate names for first 10 folders or files."""
@@ -352,8 +340,8 @@ class RenameDicomDialog(uir.ImageQCDialog):
                 self.original_names = dcm_folders
                 self.new_names = []
                 tag_pattern = cfc.TagPatternFormat(
-                    list_tags=self.wTagPattern.current_template.list_tags,
-                    list_format=self.wTagPattern.current_template.list_format)
+                    list_tags=self.wid_rename_pattern.current_template.list_tags,
+                    list_format=self.wid_rename_pattern.current_template.list_format)
                 if len(tag_pattern.list_tags) > 0:
                     if limit > 0:
                         if len(dcm_folders) > limit:
@@ -362,7 +350,7 @@ class RenameDicomDialog(uir.ImageQCDialog):
                         pd = pydicom.dcmread(
                             dcm_files[i][0].resolve(), stop_before_pixels=True)
                         name_parts = get_dcm_info_list(
-                            pd, tag_pattern, self.wTagPattern.tag_infos,
+                            pd, tag_pattern, self.wid_rename_pattern.tag_infos,
                             prefix_separator='', suffix_separator='',
                             not_found_text='')
                         new_name = "_".join(name_parts)
@@ -373,8 +361,8 @@ class RenameDicomDialog(uir.ImageQCDialog):
 
             else:  # no subfolders, only files directly in search path
                 tag_pattern = cfc.TagPatternFormat(
-                    list_tags=self.wTagPattern.current_template.list_tags2,
-                    list_format=self.wTagPattern.current_template.list_format2)
+                    list_tags=self.wid_rename_pattern.current_template.list_tags2,
+                    list_format=self.wid_rename_pattern.current_template.list_format2)
                 if len(tag_pattern.list_tags) > 0:
                     dcm_files = dcm_files[0]
                     self.original_names = dcm_files
@@ -386,7 +374,7 @@ class RenameDicomDialog(uir.ImageQCDialog):
                         pd = pydicom.dcmread(
                             file.resolve(), stop_before_pixels=True)
                         name_parts = get_dcm_info_list(
-                            pd, tag_pattern, self.wTagPattern.tag_infos,
+                            pd, tag_pattern, self.wid_rename_pattern.tag_infos,
                             prefix_separator='', suffix_separator='',
                             not_found_text='')
                         new_name = "_".join(name_parts)
@@ -403,7 +391,7 @@ class RenameDicomDialog(uir.ImageQCDialog):
 
             self.fill_table()
             if limit == 0 and len(self.new_names) > 0:
-                self.btnRename.setDisabled(False)
+                self.btn_rename.setDisabled(False)
 
     def rename(self):
         """Rename folders or files."""
@@ -414,43 +402,43 @@ class RenameDicomDialog(uir.ImageQCDialog):
                 proceed = True
 
         if proceed:  # rename first step
-            maxVal = len(self.original_names)
+            max_val = len(self.original_names)
             progress = uir.ProgressModal(
-                "Renaming ...", "Stop", 0, maxVal, self)
+                "Renaming ...", "Stop", 0, max_val, self)
             for i, path in enumerate(self.original_names):
                 progress.setValue(i)
                 try:
                     path.rename(self.new_names[i])
-                except (PermissionError, OSError) as e:
-                    errmsg.append(f'{path.resolve}: {e}')
+                except (PermissionError, OSError) as err:
+                    errmsg.append(f'{path.resolve}: {err}')
                 if progress.wasCanceled():
                     break
-            progress.setValue(maxVal)
+            progress.setValue(max_val)
 
         tag_pattern = cfc.TagPatternFormat(
-            list_tags=self.wTagPattern.current_template.list_tags2,
-            list_format=self.wTagPattern.current_template.list_format2)
+            list_tags=self.wid_rename_pattern.current_template.list_tags2,
+            list_format=self.wid_rename_pattern.current_template.list_format2)
         if (proceed and self.new_names[0].is_dir()
                 and len(tag_pattern.list_tags) > 0):
             proceed = False
             if self.valid_dict['folders'] == self.original_names:
-                proceed = uir.proceed_question(
+                proceed = messageboxes.proceed_question(
                     self,
                     'Proceed renaming files?')
         else:
             proceed = False
 
         if proceed:  # rename files in subfolders
-            maxVal = sum([len(li) for li in self.valid_dict['files']])
+            max_val = sum(len(li) for li in self.valid_dict['files'])
             progress = uir.ProgressModal(
                 "Renaming files in subfolders...", "Stop",
-                0, maxVal, self)
+                0, max_val, self)
 
             counter = 0
-            for folderNo, li in enumerate(self.valid_dict['files']):
-                new_folder = self.new_names[folderNo]
+            for folder_no, file_list in enumerate(self.valid_dict['files']):
+                new_folder = self.new_names[folder_no]
                 if new_folder.exists():
-                    for file in li:
+                    for file in file_list:
                         progress.setValue(counter)
                         file_new_loc = new_folder / file.name
                         try:
@@ -458,7 +446,7 @@ class RenameDicomDialog(uir.ImageQCDialog):
                                 file_new_loc.resolve(),
                                 stop_before_pixels=True)
                             name_parts = get_dcm_info_list(
-                                pd, tag_pattern, self.wTagPattern.tag_infos,
+                                pd, tag_pattern, self.wid_rename_pattern.tag_infos,
                                 prefix_separator='', suffix_separator='',
                                 not_found_text='')
                             new_name = "_".join(name_parts)
@@ -467,21 +455,21 @@ class RenameDicomDialog(uir.ImageQCDialog):
                                 file_new_loc.parent / new_name)
                         except pydicom.errors.InvalidDicomError:
                             pass  # should be validated already
-                        except (PermissionError, OSError) as e:
-                            errmsg.append(f'{path.resolve}: {e}')
+                        except (PermissionError, OSError) as err:
+                            errmsg.append(f'{file.resolve}: {err}')
                         if progress.wasCanceled():
                             break
                         counter += 1
                 if progress.wasCanceled():
                     break
-            progress.setValue(maxVal)
+            progress.setValue(max_val)
 
         if len(errmsg) > 0:
-            msg = QMessageBox.warning(
-                self, 'Failed renaming',
-                'Failed renaming one or more files. Writing permission?')
-            msg.setDetailedText('\n'.join(errmsg))
-            msg.exec()
+            dlg = messageboxes.MessageBoxWithDetails(
+                self, title='Failed renaming',
+                msg='Failed renaming one or more files. See details',
+                details=errmsg, icon=QMessageBox.Warning)
+            dlg.exec()
 
     def sort_seriesUID(self, dcm_files, progress_widget=None):
         """Sort images based on series UID.
@@ -515,7 +503,7 @@ class RenameDicomDialog(uir.ImageQCDialog):
                 file.resolve(), stop_before_pixels=True)
             info_list = get_dcm_info_list(
                 pd,
-                tag_pattern, self.wTagPattern.tag_infos,
+                tag_pattern, self.wid_rename_pattern.tag_infos,
                 prefix_separator='', suffix_separator='',
                 not_found_text='')
             uids.append(info_list[0])

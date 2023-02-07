@@ -7,7 +7,6 @@ Constants accessible for several modules within imageQC.
 """
 
 import os
-# import configparser
 
 # imageQC block start
 import imageQC.config.config_classes as cfc
@@ -24,16 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.8alpha'
-'''if os.path.exists(cfg_path):
-    config = configparser.ConfigParser()
-    try:
-        config.read(cfg_path)
-        VERSION = config['metadata']['version']
-    except:
-        print("Failed reading version from setup.cfg")
-        '''
-
+VERSION = '3.0.9alpha'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -47,7 +37,7 @@ USER_PREFS_FNAME = 'user_preferences.yaml'
 
 QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
-           'HUw', 'Dim', 'Rin', 'NPS'],
+           'HUw', 'Rin', 'Dim', 'NPS'],
     'Xray': ['DCM', 'ROI', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
     'NM': ['DCM', 'ROI', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
     'SPECT': ['DCM', 'ROI', 'MTF', 'Con'],
@@ -230,10 +220,11 @@ HEADERS_SUP = {
         }
     }
 
+# should end with '(.suffix)' to get file_suffix
 VENDOR_FILE_OPTIONS = {
     'CT': ['Siemens CT Constancy/Daily Reports (.pdf)'],
     'Xray': ['GE QAP (.txt)'],
-    'NM': ['Siemens exported energy spectrum'],
+    'NM': ['Siemens exported energy spectrum (.txt)'],
     'SPECT': [],
     'PET': ['Siemens PET-CT DailyQC Reports (.pdf)',
             'Siemens PET-MR DailyQC Reports (.xml)'],
@@ -246,9 +237,8 @@ list of vendor file types to be read."""
 tag_infos_default = iQCconstants_functions.read_tag_infos_from_yaml()
 CONFIG_FNAMES = {
     'paramsets': {
-        'saved_as': 'modality_dict',
-        'default': iQCconstants_functions.empty_template_dict(
-            QUICKTEST_OPTIONS, dummy=cfc.ParamSet())
+        'saved_as': 'object_list',
+        'default': []
         },
     'tag_infos': {
         'saved_as': 'object_list',

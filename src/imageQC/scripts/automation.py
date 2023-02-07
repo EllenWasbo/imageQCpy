@@ -24,7 +24,7 @@ import imageQC.scripts.dcm as dcm
 from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.scripts.mini_methods_format import valid_path
 import imageQC.config.config_classes as cfc
-from imageQC.ui.reusables import proceed_question
+from imageQC.ui.messageboxes import proceed_question
 # imageQC block end
 
 pydicom.config.future_behavior(True)
@@ -582,7 +582,7 @@ def move_rename_file(filepath_orig, filepath_new):
 
 
 def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
-                 pre_selected_files=[], parent_widget=None):#, input_main_this=None):
+                 parent_widget=None):
     """Find new images, generate img_dict, sort by date/sortpattern.
 
     Parameters
@@ -601,8 +601,6 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
         values = list of QuickTestTemplate defined in config_classes.py
     tag_infos : list
         list of TagInfo as defined in config_classes.py
-    pre_selected_files : list of str, optional
-        list of filepaths to analyse, not search for new. The default is [].
     parent_widget : widget, optional
         Widget to recieve messages. The default is None i.e. print messages to console.
 
@@ -629,12 +627,22 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
             log.append(
                 ('No Paramset linked to the automation template. Template ignored.'))
         if proceed:
-            if len(pre_selected_files) > 0:
-                files = pre_selected_files
-            else:
-                p = Path(auto_template.path_input)
+            err_exist = False
+            p = Path(auto_template.path_input)
+            if p.exists():
                 files = [x for x in p.glob('*') if x.is_file()]
-            if len(files) > 0:
+            else:
+                files = []
+                err_exist = True
+            if len(files) == 0:
+                if err_exist:
+                    err_txt = (f'{modality}/{auto_template.label}: '
+                               f'Input path do not exist ({auto_template.path_input})')
+                    if parent_widget is None:
+                        print(err_txt)
+                    else:
+                        log.append(err_txt)
+            else:
                 if parent_widget is None:
                     print(f'Reading {len(files)} new files for template ',
                           f'{modality}/{auto_template.label} ...',
@@ -722,7 +730,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
     return (log, not_written)
 
 
-def run_template_vendor(auto_template, modality, pre_selected_files=[]):
+def run_template_vendor(auto_template, modality, parent_widget=None):
     """Find new files and read."""
     log = []
     not_written = []
@@ -731,44 +739,54 @@ def run_template_vendor(auto_template, modality, pre_selected_files=[]):
     if auto_template.file_type == '':
         log.append('\t File type not specified. Failed to proceed.')
     else:
-        if len(pre_selected_files) > 0:
-            files = pre_selected_files
+        err_exist = False
+        if auto_template.path_input == '':
+            log.append('\t Input path not defined.')
         else:
-            if auto_template.path_input == '':
-                log.append('\t Input path not defined.')
-            else:
-                files = []
-                p = Path(auto_template.path_input)
+            files = []
+            p = Path(auto_template.path_input)
+            if p.exists():
                 if p.is_dir():
                     #glob_string = '**/*' if search_subfolders else '*'
                     #TODO - if GE QAP - search subfolder but not Archive
                     glob_string = '*'
                     files = [
                         x for x in p.glob(glob_string)
-                        if x.suffix == auto_template.file_type
+                        if x.suffix == auto_template.file_suffix
                         ]
-            if len(files) > 0:
-                write_ok = os.access(auto_template.path_output, os.W_OK)
-                if write_ok is False:
-                    log.append(
-                        f'''\t Failed to write to output path
-                        {auto_template.path_output}''')
-                for file in files:
-                    txt = read_vendor_QC_reports.get_pdf_txt(file)
-                    res = read_vendor_QC_reports.read_Siemens_CT_QC(txt)
+            else:
+                err_exist = True
 
-                    status, print_array = append_auto_res_vendor(
-                        auto_template.path_output,
-                        res, to_file=write_ok
-                        )
-                    if write_ok is False:
-                        if len(not_written) == 0:
-                            not_written.append(print_array)
+        if len(files) == 0:
+            if err_exist:
+                err_txt = (f'{modality}/{auto_template.label}: '
+                           f'Input path do not exist ({auto_template.path_input})')
+                if parent_widget is None:
+                    print(err_txt)
+                else:
+                    log.append(err_txt)
+        else:
+            write_ok = os.access(auto_template.path_output, os.W_OK)
+            if write_ok is False:
+                log.append(
+                    f'''\t Failed to write to output path
+                    {auto_template.path_output}''')
+            for file in files:
+                txt = read_vendor_QC_reports.get_pdf_txt(file)
+                res = read_vendor_QC_reports.read_Siemens_CT_QC(txt)
+
+                status, print_array = append_auto_res_vendor(
+                    auto_template.path_output,
+                    res, to_file=write_ok
+                    )
+                if write_ok is False:
+                    if len(not_written) == 0:
+                        not_written.append(print_array)
+                    else:
+                        if len(not_written[-1]) == len(print_array[0]):
+                            not_written.append(print_array[-1])  # ignore headers
                         else:
-                            if len(not_written[-1]) == len(print_array[0]):
-                                not_written.append(print_array[-1])  # ignore headers
-                            else:
-                                not_written.append(print_array)
+                            not_written.append(print_array)
 
     if len(log) > 0:
         log.insert(0, log_pre)

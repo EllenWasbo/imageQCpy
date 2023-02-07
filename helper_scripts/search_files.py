@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "detail"
+search_string = "image_dict"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

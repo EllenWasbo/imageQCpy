@@ -6,6 +6,7 @@ vendor_QC_reports/
 __pycache__/
 .pytest_cache/
 *automation.log
+.pylintrc
 
 # Distribution / packaging
 .Python

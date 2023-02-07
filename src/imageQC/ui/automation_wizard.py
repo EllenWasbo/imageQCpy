@@ -20,7 +20,7 @@ from imageQC.config.iQCconstants import (
     ENV_ICON_PATH, QUICKTEST_OPTIONS, ENV_CONFIG_FOLDER
     )
 from imageQC.config.config_func import (
-    check_save_conflict, test_config_folder,
+    check_save_conflict, verify_config_folder,
     load_settings, save_settings
     )
 import imageQC.ui.settings

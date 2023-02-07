@@ -11,8 +11,8 @@ from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
-    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QListWidget,
+    QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
+    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QListWidget, QTextEdit,
     QLabel, QRadioButton, QCheckBox, QFileDialog
     )
 
@@ -22,23 +22,38 @@ from imageQC.config.iQCconstants import (
     )
 from imageQC.config.config_func import init_user_prefs
 from imageQC.config.read_config_idl import ConfigIdl2Py
-from imageQC.ui.reusables import QuestionBox
+from imageQC.ui import messageboxes
 import imageQC.resources
 # imageQC block end
 
 
-class StartUpDialog(QDialog):
+class ImageQCDialog(QDialog):
+    """Dialog for reuse with imageQC icon and flags."""
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
+        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
+        self.setWindowFlags(
+            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
+    def start_wait_cursor(self):
+        """Block mouse events by wait cursor."""
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        qApp.processEvents()
+
+    def stop_wait_cursor(self):
+        """Return to normal mouse cursor after wait cursor."""
+        QApplication.restoreOverrideCursor()
+
+
+class StartUpDialog(ImageQCDialog):
     """Startup dialog if config file not found."""
 
     def __init__(self):
         super().__init__()
         self.setModal(True)
         self.setWindowTitle("Welcome to imageQC")
-        self.setWindowIcon(QIcon(':/icons/iQC_icon.png'))
-
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         layout = QVBoxLayout()
         layout.setAlignment(QtCore.Qt.AlignCenter)
@@ -131,7 +146,7 @@ class StartUpDialog(QDialog):
         if ask_first:
             quest = ('Locate or initiate shared configuration folder now?'
                      '(May alse be done later from the Settings manager)')
-            res = QuestionBox(
+            res = messageboxes.QuestionBox(
                 self, title='Shared config folder', msg=quest,
                 yes_text='Yes, now', no_text='No, later')
             if res.exec() == 0:
@@ -253,3 +268,76 @@ class EditAnnotationsDialog(QDialog):
             self.spin_line.value(),
             self.spin_font.value()
             )
+
+
+class ResetAutoTemplateDialog(ImageQCDialog):
+    """Dialog to move directories/files in input_path/Archive to input_path."""
+
+    def __init__(self, parent_widget, files=[], directories=[]):
+        super().__init__()
+        self.setWindowTitle('Reset Automation template')
+        self.setMinimumHeight(300)
+        self.setMinimumWidth(300)
+        files_or_folders = 'files'
+        if len(files) > 0:
+            self.list_elements = [file.name for file in files]
+        else:
+            self.list_elements = [folder.name for folder in directories]
+            files_or_folders = 'folders'
+
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
+
+        self.list_file_or_dirs = QListWidget()
+        self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)
+        self.list_file_or_dirs.addItems(self.list_elements)
+
+        vLO.addWidget(QLabel(
+            'Move files out of Archive to regard these files as incoming.'))
+        vLO.addStretch()
+        vLO.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
+        vLO.addWidget(self.list_file_or_dirs)
+        vLO.addStretch()
+        hLO_buttons = QHBoxLayout()
+        vLO.addLayout(hLO_buttons)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vLO.addWidget(self.buttonBox)
+
+    def get_idxs(self):
+        """Return selected indexes in list."""
+        idxs = []
+        for sel in self.list_file_or_dirs.selectedIndexes():
+            idxs.append(sel.row())
+        return idxs
+
+
+class TextDisplay(ImageQCDialog):
+    """QDialog with QTextEdit.setPlainText to display text."""
+
+    def __init__(self, parent_widget, text, title='',
+                 read_only=True,
+                 min_width=1000, min_height=1000):
+        super().__init__()
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
+        txtEdit = QTextEdit('', self)
+        txtEdit.setPlainText(text)
+        txtEdit.setReadOnly(read_only)
+        txtEdit.createStandardContextMenu()
+        txtEdit.setMinimumWidth(min_width)
+        txtEdit.setMinimumHeight(min_height)
+        vLO.addWidget(txtEdit)
+        buttons = QDialogButtonBox.Close
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vLO.addWidget(self.buttonBox)
+
+        self.setWindowTitle(title)
+        self.setMinimumWidth(min_width)
+        self.setMinimumHeight(min_height)
+        #self.show()

@@ -21,11 +21,12 @@ from imageQC.config.iQCconstants import (
     CONFIG_FNAMES, USER_PREFS_FNAME, QUICKTEST_OPTIONS
     )
 import imageQC.config.config_classes as cfc
+from imageQC.ui import messageboxes
 from imageQC.scripts.mini_methods import get_included_tags
 # imageQC block end
 
 
-def test_config_folder(widget):
+def verify_config_folder(widget):
     """Test whether config folder exist, ask to create if not.
 
     Parameters
@@ -192,7 +193,7 @@ def save_user_prefs(userpref, parentwidget=None):
     except KeyError:
         if parentwidget is not None:
             quest = ('Save user_preferences.yaml in:')
-            res = QuestionBox(
+            res = messageboxes.QuestionBox(
                 parentwidget, title='Save as', msg=quest,
                 yes_text=f'{APPDATA}', no_text=f'{TEMPDIR}')
             p = APPDATA if res.exec() == 0 else TEMPDIR
@@ -276,7 +277,7 @@ def get_config_filename(fname, force=False):
     Parameters
     ----------
     fname : str
-        filename as defined in CONFIG_FNAMES
+        filename as defined in CONFIG_FNAMES (or + _<modality> if paramsets)
     force : bool
         force return filename even though it does not exist
 
@@ -286,7 +287,7 @@ def get_config_filename(fname, force=False):
         full path to yaml file if it exist, empty if not verified
     """
     path = ''
-    """
+    """TODO delete?
     user_prefs_ok, user_path, userprefs = load_user_prefs()
     if user_prefs_ok:
         path_temp = os.path.join(
@@ -370,26 +371,89 @@ def load_settings(fname='', temp_config_folder=''):
 
     if fname != '':
         return_default = False
-        if temp_config_folder == '':
-            path = get_config_filename(fname)
+        if fname == 'paramsets':
+            all_paramsets = True
+            path = (
+                get_config_folder() if temp_config_folder == '' else temp_config_folder)
         else:
-            path = str(Path(temp_config_folder) / f'{fname}.yaml')
-        if path != '':
-            if CONFIG_FNAMES[fname]['saved_as'] == 'object_list':
-                #try:
-                with open(path, 'r') as file:
-                    docs = yaml.safe_load_all(file)
-                    settings = []
-                    for doc in docs:
-                        if fname == 'tag_infos':
-                            updated_doc = verify_input_dict(doc, cfc.TagInfo())
-                            settings.append(cfc.TagInfo(**updated_doc))
+            all_paramsets = False
+            if temp_config_folder == '':
+                path = get_config_filename(fname)
+            else:
+                path = str(Path(temp_config_folder) / f'{fname}.yaml')
+        fname_ = 'paramsets' if 'paramsets' in fname else fname
+
+        if path != '' or all_paramsets:
+            if CONFIG_FNAMES[fname_]['saved_as'] == 'object_list':
+                if fname_ != 'paramsets':
+                    with open(path, 'r') as file:
+                        docs = yaml.safe_load_all(file)
+                        settings = []
+                        for doc in docs:
+                            if fname == 'tag_infos':
+                                updated_doc = verify_input_dict(doc, cfc.TagInfo())
+                                settings.append(cfc.TagInfo(**updated_doc))
                     if fname == 'tag_infos':
                         taginfos_reset_sort_index(settings)
+
+                else:  # paramsets
+                    if all_paramsets:  # load as dict
+                        fnames = [f'paramsets_{m}' for m in QUICKTEST_OPTIONS]
+                        settings = {}
+                    else:
+                        fnames = [fname]
+
+                    for fn in fnames:
+                        sett_this = []
+                        if len(fnames) > 1:
+                            path_this = str(Path(path) / f'{fn}.yaml')
+                        else:
+                            path_this = path
+                        if Path(path_this).exists():
+                            with open(path_this, 'r') as file:
+                                docs = yaml.safe_load_all(file)
+                                for doc in docs:
+                                    upd = verify_input_dict(doc['dcm_tagpattern'],
+                                                            cfc.TagPatternFormat())
+                                    doc['dcm_tagpattern'] = cfc.TagPatternFormat(**upd)
+                                    tests = {}
+                                    for key, test in doc['output']['tests'].items():
+                                        tests[key] = []
+                                        for sub in test:
+                                            upd = verify_input_dict(
+                                                sub, cfc.QuickTestOutputSub())
+                                            tests[key].append(
+                                                cfc.QuickTestOutputSub(**upd))
+                                    doc['output'] = cfc.QuickTestOutputTemplate(
+                                        include_header=doc['output']['include_header'],
+                                        transpose_table=doc[
+                                            'output']['transpose_table'],
+                                        decimal_mark=doc['output']['decimal_mark'],
+                                        include_filename=doc[
+                                            'output']['include_filename'],
+                                        tests=tests)
+                                    modality = fn.split('_')[1]
+                                    if modality == 'CT':
+                                        upd = verify_input_dict(doc['ctn_table'],
+                                                                cfc.HUnumberTable())
+                                        doc['ctn_table'] = cfc.HUnumberTable(**upd)
+                                        upd = verify_input_dict(doc, cfc.ParamSetCT())
+                                        sett_this.append(cfc.ParamSetCT(**upd))
+                                    else:
+                                        class_ = getattr(cfc, f'ParamSet{modality}')
+                                        upd = verify_input_dict(doc, class_())
+                                        sett_this.append(class_(**upd))
+
+                                    if len(fnames) == 1:
+                                        settings = sett_this
+                                    else:
+                                        settings[modality] = sett_this
+                        else:
+                            return_default = True
+
                 status = True
-                #except:
-                #    return_default = True
-            elif CONFIG_FNAMES[fname]['saved_as'] == 'modality_dict':
+
+            elif CONFIG_FNAMES[fname_]['saved_as'] == 'modality_dict':
                 try:
                     with open(path, 'r') as file:
                         docs = yaml.safe_load(file)
@@ -397,68 +461,7 @@ def load_settings(fname='', temp_config_folder=''):
                         for mod, doc in docs.items():
                             settings[mod] = []
                             for temp in doc:
-                                if fname == 'paramsets':
-                                    upd = verify_input_dict(
-                                        temp['dcm_tagpattern'],
-                                        cfc.TagPatternFormat())
-                                    temp['dcm_tagpattern'] = (
-                                        cfc.TagPatternFormat(**upd))
-                                    tests = {}
-                                    for key, test in temp[
-                                            'output']['tests'].items():
-                                        tests[key] = []
-                                        for sub in test:
-                                            upd = verify_input_dict(
-                                                sub, cfc.QuickTestOutputSub())
-                                            tests[key].append(
-                                                cfc.QuickTestOutputSub(**upd))
-                                    temp['output'] = (
-                                        cfc.QuickTestOutputTemplate(
-                                            include_header=temp[
-                                                'output']['include_header'],
-                                            transpose_table=temp[
-                                                'output']['transpose_table'],
-                                            decimal_mark=temp[
-                                                'output']['decimal_mark'],
-                                            include_filename=temp[
-                                                'output']['include_filename'],
-                                            tests=tests))
-                                    if mod == 'CT':
-                                        upd = verify_input_dict(
-                                            temp['ctn_table'],
-                                            cfc.HUnumberTable())
-                                        temp['ctn_table'] = (
-                                            cfc.HUnumberTable(**upd))
-                                        upd = verify_input_dict(
-                                            temp, cfc.ParamSetCT())
-                                        settings[mod].append(
-                                            cfc.ParamSetCT(**upd))
-                                    elif mod == 'Xray':
-                                        upd = verify_input_dict(
-                                            temp, cfc.ParamSetXray())
-                                        settings[mod].append(
-                                            cfc.ParamSetXray(**upd))
-                                    elif mod == 'NM':
-                                        upd = verify_input_dict(
-                                            temp, cfc.ParamSetNM())
-                                        settings[mod].append(
-                                            cfc.ParamSetNM(**upd))
-                                    elif mod == 'SPECT':
-                                        upd = verify_input_dict(
-                                            temp, cfc.ParamSetSPECT())
-                                        settings[mod].append(
-                                            cfc.ParamSetSPECT(**upd))
-                                    elif mod == 'PET':
-                                        upd = verify_input_dict(
-                                            temp, cfc.ParamSetPET())
-                                        settings[mod].append(
-                                            cfc.ParamSetPET(**upd))
-                                    elif mod == 'MR':
-                                        upd = verify_input_dict(
-                                            temp, cfc.ParamSetMR())
-                                        settings[mod].append(
-                                            cfc.ParamSetMR(**upd))
-                                elif fname == 'quicktest_templates':
+                                if fname == 'quicktest_templates':
                                     upd = verify_input_dict(
                                         temp, cfc.QuickTestTemplate())
                                     settings[mod].append(
@@ -499,7 +502,6 @@ def load_settings(fname='', temp_config_folder=''):
                 except:
                     return_default = True
             else:  # settings as one object
-                #try:
                 with open(path, 'r') as file:
                     doc = yaml.safe_load(file)
                     if fname == 'auto_common':
@@ -512,19 +514,26 @@ def load_settings(fname='', temp_config_folder=''):
                         upd = verify_input_dict(doc, cfc.LastModified())
                         settings = cfc.LastModified(**upd)
                 status = True
-                #except: what to except.... wait for error
-                #    return_default = True
         else:
             return_default = True
 
         if return_default:
-            settings = CONFIG_FNAMES[fname]['default']
-            if fname == 'paramsets':
+            if 'paramsets' in fname:
                 default_tags_dcm = load_default_dcm_test_tag_patterns()
-                for mod in default_tags_dcm:
-                    settings[mod][0].dcm_tagpattern = default_tags_dcm[mod]
-            if fname == 'tag_infos':
-                taginfos_reset_sort_index(settings)
+                if fname == 'paramsets':  # load as dict
+                    for m in QUICKTEST_OPTIONS:
+                        if m not in settings:
+                            class_ = getattr(cfc, f'ParamSet{m}')
+                            settings[m] = [class_(
+                                dcm_tagpattern=default_tags_dcm[m])]
+                else:
+                    m = fname.split('_')[1]
+                    class_ = getattr(cfc, f'ParamSet{m}')
+                    settings = [class_(dcm_tagpattern=default_tags_dcm[m])]
+            else:
+                settings = CONFIG_FNAMES[fname]['default']
+                if fname == 'tag_infos':
+                    taginfos_reset_sort_index(settings)
 
     return (status, path, settings)
 
@@ -634,14 +643,36 @@ def save_settings(settings, fname=''):
         return status
 
     if fname != '':
-        path = get_config_filename(fname, force=True)
         proceed = False
-        if os.access(Path(path).parent, os.W_OK):
-            proceed = True
+        fname_input = fname
+        if fname == 'paramsets':
+            all_paramsets = True
+            path = get_config_folder()
+            if os.access(Path(path), os.W_OK):
+                proceed = True
+        else:
+            all_paramsets = False
+            path = get_config_filename(fname, force=True)
+            if os.access(Path(path).parent, os.W_OK):
+                proceed = True
+            if 'paramsets' in fname:
+                fname = 'paramsets'
         if proceed:
             if CONFIG_FNAMES[fname]['saved_as'] == 'object_list':
-                listofdict = [asdict(temp) for temp in settings]
-                status = try_save(listofdict)
+                if all_paramsets:
+                    status_all = []
+                    folder = path
+                    for m, sett_this in settings.items():
+                        listofdict = [asdict(temp) for temp in sett_this]
+                        path = str(Path(folder) / f'paramset_{m}.yaml')
+                        status_this = try_save(listofdict)
+                        status_all.append(status_this)
+                        update_last_modified(f'paramset_{m}')
+                    path = folder  # output
+                    status = all(status_all)
+                else:
+                    listofdict = [asdict(temp) for temp in settings]
+                    status = try_save(listofdict)
             elif CONFIG_FNAMES[fname]['saved_as'] == 'modality_dict':
                 temp_dict = {}
                 for key, val in settings.items():
@@ -651,8 +682,8 @@ def save_settings(settings, fname=''):
             else:
                 status = try_save(asdict(settings))
 
-        if fname != 'last_modified':
-            update_last_modified(fname)
+        if fname != 'last_modified' and all_paramsets is False:
+            update_last_modified(fname_input)
 
     return (status, path)
 
@@ -669,6 +700,7 @@ def import_settings(import_main):
 
     list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
                   if item['saved_as'] == 'modality_dict']
+    list_dicts.append('paramsets')
     for d in list_dicts:
         new_temps = getattr(import_main, d, {})
         if new_temps != {}:
@@ -687,7 +719,12 @@ def import_settings(import_main):
                                         new_labels[new_id] + '_import')
                                     any_same_name = True
                                 temps[key].append(new_temps[key][new_id])
-            status, path = save_settings(temps, fname=d)
+                        if d == 'paramsets':
+                            if new_labels[0] != '':
+                                status, path = save_settings(
+                                    temps[key], fname=f'paramsets_{key}')
+            if d != 'paramsets':
+                status, path = save_settings(temps, fname=d)
 
     try:
         if import_main.auto_common.import_path != '':
@@ -741,7 +778,7 @@ def get_taginfos_used_in_templates(object_with_templates):
 
         fname = 'auto_common'
         if hasattr(object_with_templates, fname):
-            templates = getattr(object_with_templates, fname)
+            template = getattr(object_with_templates, fname)
         else:
             ok, path, template = load_settings(fname=fname)
         found_attributes['CT'].extend(template.auto_delete_criterion_attributenames)
@@ -798,16 +835,23 @@ def verify_auto_templates(main):
                 main.auto_templates, ref_attr=ref_attr)
             if hasattr(main, fname):
                 mod_dict = getattr(main, fname)
-                for mod, templist in mod_dict:
+                for mod, templist in mod_dict.items():
                     all_labels = [t.label for t in templist]
                     missing = []
-                    temp_labels, _ = np.array(temp_in_auto[mod]).T.tolist()
-                    for label in temp_labels:
-                        if label not in all_labels:
-                            missing.append(label)
-                    if len(missing) > 0:
-                        log.append(f'{mod}: missing definition of {fname} {missing}')
-                        status = False
+                    auto_labels, temp_labels = np.array(temp_in_auto[mod]).T.tolist()
+                    if auto_labels[0] != '':
+                        for label in temp_labels:
+                            if label not in all_labels:
+                                missing.append(label)
+                        if len(missing) > 0:
+                            if '' in missing:
+                                log.append(
+                                    f'{mod}: {fname} not defined for some templates')
+                                missing.remove('')
+                            if len(missing) > 0:
+                                log.append(
+                                    f'{mod}: missing definition of {fname} {missing}')
+                            status = False
 
     return (status, log)
 
@@ -950,7 +994,16 @@ def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):
                             log.append(f'\t\t used in AutoTemplate: {used_in}')
 
                 if name == '':  # save changes
-                    ok, path = save_settings(templates, fname=fname)
+                    if fname == 'paramsets':
+                        changed_mod = [f[0] for f in found_in]
+                        changed_mod = list(set(changed_mod))
+                        ok_all = []
+                        for m in changed_mod:
+                            ok, path = save_settings(templates[m], fname=f'{fname}_{m}')
+                            ok_all.append(ok)
+                        ok = all(ok_all)
+                    else:
+                        ok, path = save_settings(templates, fname=fname)
                     oks.append(ok)
                     if ok:
                         log.append('Saved')
@@ -1067,49 +1120,3 @@ def get_icon_path(user_pref_dark_mode):
         path_icons = ':/icons_darkmode/'
 
     return path_icons
-
-
-class QuestionBox(QMessageBox):
-    """QMessageBox with changed yes no text as options."""
-
-    def __init__(
-            self, parent=None, title='?', msg='?',
-            yes_text='Yes', no_text='No', msg_width=500):
-        """Initiate QuestionBox.
-
-        Parameters
-        ----------
-        parent : widget, optional
-            The default is None.
-        title : str, optional
-            The default is '?'.
-        msg : str, optional
-            Question text. The default is '?'.
-        yes_text : TYPE, optional
-            Text on yes button. The default is 'Yes'.
-        no_text : TYPE, optional
-            Text on no button. The default is 'No'.
-        msg_width : int, optional
-            Width of question label. The default is 500.
-
-        Returns
-        -------
-        None.
-
-        """
-        super().__init__(
-            QMessageBox.Question, title, msg, parent=parent)
-        self.setIcon(QMessageBox.Question)
-        self.setWindowTitle(title)
-        self.setText(msg)
-        self.addButton(no_text, QMessageBox.RejectRole)
-        self.addButton(yes_text, QMessageBox.AcceptRole)
-        self.setStyleSheet(
-            f"""
-            QPushButton {{
-                padding: 5px;
-                }}
-            QLabel {{
-                width: {msg_width}px;
-                }}
-            """)

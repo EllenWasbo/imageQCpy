@@ -538,3 +538,26 @@ def resample(input_y, input_x, step, first_step=0, n_steps=None):
     new_y = np.interp(new_x, input_x, input_y)
 
     return (new_x, new_y)
+
+def get_min_max_pos_2d(image, roi_array):
+    """Get position of first min and max value in image.
+
+    Parameters
+    ----------
+    image : np.array
+    roi_array : np.array
+        dtype bool
+
+    Returns
+    -------
+    list
+        min_idx, max_idx
+    """
+    arr = np.ma.masked_array(image, mask=np.invert(roi_array))
+    min_idx = np.where(arr == np.min(arr))
+    max_idx = np.where(arr == np.max(arr))
+
+    return [
+        [min_idx[0][0], min_idx[1][0]],
+        [max_idx[0][0], max_idx[1][0]]
+        ]

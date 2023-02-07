@@ -9,23 +9,21 @@ import os
 import numpy as np
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup,
+    QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup,
     QPushButton, QLabel, QLineEdit, QSpinBox, QDoubleSpinBox,
-    QListWidget, QRadioButton, QAction, QAbstractItemView,
+    QListWidget, QRadioButton, QAbstractItemView,
     QFileDialog, QDialogButtonBox,
-)
+    )
 
 # imageQC block start
-from imageQC.config.iQCconstants import ENV_ICON_PATH
-from imageQC.ui.reusables import (
-    FontItalic, LabelItalic, LabelHeader, HLine, ToolBarBrowse)
+from imageQC.ui.ui_dialogs import ImageQCDialog
+from imageQC.ui import reusable_widgets as uir
 from imageQC.scripts.dcm import find_all_valid_dcm_files, read_dcm_info
 # imageQC block end
 
 
-class OpenMultiDialog(QDialog):
+class OpenMultiDialog(ImageQCDialog):
     """GUI for opening images using selection rules.
 
     Reads all images also in subfolder and sort these into series.
@@ -35,28 +33,23 @@ class OpenMultiDialog(QDialog):
 
     def __init__(self, main):
         super().__init__()
+        self.setWindowTitle('Select images to open')
         self.main = main
         self.imgs = []
         self.open_imgs = []
 
-        self.setWindowTitle('Select images to open')
-        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
 
-        vLO = QVBoxLayout()
-        self.setLayout(vLO)
-
-        hLObrowse = QHBoxLayout()
-        vLO.addLayout(hLObrowse)
+        hlo_browse = QHBoxLayout()
+        vlo.addLayout(hlo_browse)
         lbl = QLabel('Selected folder: ')
-        hLObrowse.addWidget(lbl)
+        hlo_browse.addWidget(lbl)
         self.path = QLineEdit()
-        hLObrowse.addWidget(self.path)
-        tb = ToolBarBrowse('Browse to folder with DICOM images')
-        tb.actBrowse.triggered.connect(self.browse)
-        hLObrowse.addWidget(tb)
+        hlo_browse.addWidget(self.path)
+        toolb = uir.ToolBarBrowse('Browse to folder with DICOM images')
+        toolb.act_browse.triggered.connect(self.browse)
+        hlo_browse.addWidget(toolb)
         info_text = (
             'All DICOM files in the selected folder listed as series '
             'according to series number + series description.<br>'
@@ -65,132 +58,120 @@ class OpenMultiDialog(QDialog):
             'Images will be displayed in the list as defined in Settings - '
             'Special tag patterns - File list display.'
         )
-        vLO.addWidget(LabelItalic(info_text))
+        vlo.addWidget(uir.LabelItalic(info_text))
 
-        vLO.addWidget(HLine())
+        vlo.addWidget(uir.HLine())
 
-        hLOlists = QHBoxLayout()
-        vLO.addLayout(hLOlists)
+        hlo_lists = QHBoxLayout()
+        vlo.addLayout(hlo_lists)
 
-        minHeight = 200
-        minWidth = 400
+        min_height = 200
+        min_width = 400
 
-        vLOseries = QVBoxLayout()
-        hLOlists.addLayout(vLOseries)
-        lblSeries = LabelHeader('Series', 4)
-        lblSeries.setAlignment(Qt.AlignCenter)
-        vLOseries.addWidget(lblSeries)
+        vlo_series = QVBoxLayout()
+        hlo_lists.addLayout(vlo_series)
+        lbl_series = uir.LabelHeader('Series', 4)
+        lbl_series.setAlignment(Qt.AlignCenter)
+        vlo_series.addWidget(lbl_series)
         self.list_series = QListWidget()
-        self.list_series.setMinimumHeight(minHeight)
-        self.list_series.setMinimumWidth(minWidth)
+        self.list_series.setMinimumHeight(min_height)
+        self.list_series.setMinimumWidth(min_width)
         self.list_series.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list_series.currentRowChanged.connect(self.update_list_images)
-        vLOseries.addWidget(self.list_series)
-        vLOseries.addStretch()
+        vlo_series.addWidget(self.list_series)
+        vlo_series.addStretch()
 
-        vLOimages = QVBoxLayout()
-        hLOlists.addLayout(vLOimages)
-        lblimages = LabelHeader('Images', 4)
-        lblimages.setAlignment(Qt.AlignCenter)
-        vLOimages.addWidget(lblimages)
+        vlo_images = QVBoxLayout()
+        hlo_lists.addLayout(vlo_images)
+        lbl_images = uir.LabelHeader('Images', 4)
+        lbl_images.setAlignment(Qt.AlignCenter)
+        vlo_images.addWidget(lbl_images)
         self.list_images = QListWidget()
-        self.list_images.setMinimumHeight(minHeight)
+        self.list_images.setMinimumHeight(min_height)
         self.list_images.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        vLOimages.addWidget(self.list_images)
+        vlo_images.addWidget(self.list_images)
 
-        gbSelPattern = QGroupBox('Selection pattern')
-        gbSelPattern.setFont(FontItalic())
-        vLOimages.addWidget(gbSelPattern)
-        vLOgb = QVBoxLayout()
-        gbSelPattern.setLayout(vLOgb)
+        gb_select_pattern = QGroupBox('Selection pattern')
+        gb_select_pattern.setFont(uir.FontItalic())
+        vlo_images.addWidget(gb_select_pattern)
+        vlo_gb = QVBoxLayout()
+        gb_select_pattern.setLayout(vlo_gb)
         self.bgrSelPattern = QButtonGroup()
         lbls = ['Select all', 'Select the ', 'Select the ']
-        rbSelPattern = []
+        rb_select_pattern = []
         for i, lbl in enumerate(lbls):
-            rbSelPattern.append(QRadioButton(lbl))
-            self.bgrSelPattern.addButton(rbSelPattern[i], i)
-        vLOgb.addWidget(rbSelPattern[0])
-        hLOsel1 = QHBoxLayout()
-        hLOsel1.addWidget(rbSelPattern[1])
-        self.spinNclose = QSpinBox()
-        self.spinNclose.setMinimum(1)
-        hLOsel1.addWidget(self.spinNclose)
-        hLOsel1.addWidget(QLabel('image(s) closest to zpos = '))
-        self.spinZclose = QDoubleSpinBox()
-        self.spinZclose.setDecimals(1)
-        self.spinZclose.setMinimum(-9999)
-        self.spinZclose.setMaximum(9999)
-        hLOsel1.addWidget(self.spinZclose)
-        vLOgb.addLayout(hLOsel1)
+            rb_select_pattern.append(QRadioButton(lbl))
+            self.bgrSelPattern.addButton(rb_select_pattern[i], i)
+        vlo_gb.addWidget(rb_select_pattern[0])
+        hlo_sel1 = QHBoxLayout()
+        hlo_sel1.addWidget(rb_select_pattern[1])
+        self.spin_n_close = QSpinBox()
+        self.spin_n_close.setMinimum(1)
+        hlo_sel1.addWidget(self.spin_n_close)
+        hlo_sel1.addWidget(QLabel('image(s) closest to zpos = '))
+        self.spin_z_close = QDoubleSpinBox()
+        self.spin_z_close.setDecimals(1)
+        self.spin_z_close.setMinimum(-9999)
+        self.spin_z_close.setMaximum(9999)
+        hlo_sel1.addWidget(self.spin_z_close)
+        vlo_gb.addLayout(hlo_sel1)
 
-        hLOsel2 = QHBoxLayout()
-        hLOsel2.addWidget(rbSelPattern[2])
-        self.spinNpos = QSpinBox()
-        self.spinNpos.setMinimum(1)
-        hLOsel2.addWidget(self.spinNpos)
-        self.bgrSelPos = QButtonGroup()
+        hlo_sel2 = QHBoxLayout()
+        hlo_sel2.addWidget(rb_select_pattern[2])
+        self.spin_n_pos = QSpinBox()#TODO not in use?
+        self.spin_n_pos.setMinimum(1)
+        hlo_sel2.addWidget(self.spin_n_pos)
+        self.bgr_select_pos = QButtonGroup()#TODO not in use?
         lbls = ['first', 'mid', 'last']
-        rbSelPos = []
+        rb_select_pos = []
         for i, lbl in enumerate(lbls):
-            rbSelPos.append(QRadioButton(lbl))
-            self.bgrSelPos.addButton(rbSelPos[i], i)
-            hLOsel2.addWidget(rbSelPos[i])
-        hLOsel2.addWidget(QLabel('image(s)'))
-        vLOgb.addLayout(hLOsel2)
+            rb_select_pos.append(QRadioButton(lbl))
+            self.bgr_select_pos.addButton(rb_select_pos[i], i)
+            hlo_sel2.addWidget(rb_select_pos[i])
+        hlo_sel2.addWidget(QLabel('image(s)'))
+        vlo_gb.addLayout(hlo_sel2)
 
-        btnTestPattern = QPushButton(
+        btn_test_pattern = QPushButton(
             'Test pattern on current series')
-        btnTestPattern.clicked.connect(self.test_pattern)
-        vLOgb.addWidget(btnTestPattern)
-        btnPushPattern = QPushButton(
+        btn_test_pattern.clicked.connect(self.test_pattern)
+        vlo_gb.addWidget(btn_test_pattern)
+        btn_push_pattern = QPushButton(
             'Add images to list using pattern >>')
-        btnPushPattern.clicked.connect(self.push_pattern)
-        vLOgb.addWidget(btnPushPattern)
+        btn_push_pattern.clicked.connect(self.push_pattern)
+        vlo_gb.addWidget(btn_push_pattern)
 
-        vLOpush = QVBoxLayout()
-        hLOlists.addLayout(vLOpush)
-        btnPush = QPushButton('>>')
-        btnPush.setToolTip('Add selected images to list of images to open')
-        btnPush.clicked.connect(self.push_selected)
-        vLOpush.addSpacing(100)
-        vLOpush.addWidget(btnPush)
-        vLOpush.addStretch()
+        vlo_push = QVBoxLayout()
+        hlo_lists.addLayout(vlo_push)
+        btn_push = QPushButton('>>')
+        btn_push.setToolTip('Add selected images to list of images to open')
+        btn_push.clicked.connect(self.push_selected)
+        vlo_push.addSpacing(100)
+        vlo_push.addWidget(btn_push)
+        vlo_push.addStretch()
 
-        vLOopen = QVBoxLayout()
-        hLOlists.addLayout(vLOopen)
-        lblOpen = LabelHeader('Images to open', 4)
-        lblOpen.setAlignment(Qt.AlignCenter)
-        vLOopen.addWidget(lblOpen)
+        vlo_open = QVBoxLayout()
+        hlo_lists.addLayout(vlo_open)
+        lbl_open = uir.LabelHeader('Images to open', 4)
+        lbl_open.setAlignment(Qt.AlignCenter)
+        vlo_open.addWidget(lbl_open)
         self.list_open_images = QListWidget()
-        self.list_open_images.setMinimumHeight(minHeight)
-        self.list_open_images.setMinimumWidth(minWidth)
+        self.list_open_images.setMinimumHeight(min_height)
+        self.list_open_images.setMinimumWidth(min_width)
         self.list_open_images.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        vLOopen.addWidget(self.list_open_images)
-        hLObtns = QHBoxLayout()
-        btnRemSel = QPushButton('Remove selected')
-        btnRemSel.clicked.connect(self.remove_selected)
-        hLObtns.addWidget(btnRemSel)
-        btnClearList = QPushButton('Clear list')
-        btnClearList.clicked.connect(self.clear_list)
-        hLObtns.addWidget(btnClearList)
-        vLOopen.addLayout(hLObtns)
-        vLOopen.addStretch()
+        vlo_open.addWidget(self.list_open_images)
+        hlo_btns = QHBoxLayout()
+        btn_remove_selected = QPushButton('Remove selected')
+        btn_remove_selected.clicked.connect(self.remove_selected)
+        hlo_btns.addWidget(btn_remove_selected)
+        btn_clear_list = QPushButton('Clear list')
+        btn_clear_list.clicked.connect(self.clear_list)
+        hlo_btns.addWidget(btn_clear_list)
+        vlo_open.addLayout(hlo_btns)
+        vlo_open.addStretch()
 
-        '''TODO - show quick_test together with list of images to open?
-        vLOqt = QVBoxLayout()
-        hLOlists.addLayout(vLOqt)
-        lblQT = LabelHeader('QuickTest', 4)
-        lblQT.setAlignment(Qt.AlignCenter)
-        vLOqt.addWidget(lblQT)
-        self.listQT = QListWidget()
-        self.listQT.setMinimumHeight(minHeight)
-        vLOqt.addWidget(self.listQT)
-        vLOqt.addStretch()
-        '''
-
-        hLOdlgBtns = QHBoxLayout()
-        vLO.addLayout(hLOdlgBtns)
-        hLOdlgBtns.addStretch()
+        hlo_dlg_btns = QHBoxLayout()
+        vlo.addLayout(hlo_dlg_btns)
+        hlo_dlg_btns.addStretch()
         btns = QDialogButtonBox()
         btns.setOrientation(Qt.Horizontal)
         btns.setStandardButtons(
@@ -198,7 +179,7 @@ class OpenMultiDialog(QDialog):
         btns.button(QDialogButtonBox.Ok).setText('Open selected')
         btns.button(QDialogButtonBox.Ok).clicked.connect(self.accept)
         btns.button(QDialogButtonBox.Cancel).clicked.connect(self.reject)
-        hLOdlgBtns.addWidget(btns)
+        hlo_dlg_btns.addWidget(btns)
 
     def browse(self):
         """Browse to set selected folder and start searching for images."""
@@ -219,12 +200,12 @@ class OpenMultiDialog(QDialog):
                 path, parent_widget=self, grouped=False)
             if len(dcm_dict['files']) > 0:
                 dcm_files = dcm_dict['files']
-                imgInfos, ignored_files = read_dcm_info(
+                img_infos, ignored_files = read_dcm_info(
                     dcm_files, tag_infos=self.main.tag_infos,
                     tag_patterns_special=self.main.tag_patterns_special)
                 series_nmb_name = []
                 self.imgs = []
-                for img in imgInfos:
+                for img in img_infos:
                     ser = ' '.join(img.series_list_strings)
                     if ser in series_nmb_name:
                         serno = series_nmb_name.index(ser)
@@ -270,7 +251,7 @@ class OpenMultiDialog(QDialog):
             if push:
                 for sel in sel_series:
                     self.open_imgs.extend(self.imgs[sel.row()])
-            set_selected_ids = [i for i in range(self.list_images.count())]
+            set_selected_ids = list(range(self.list_images.count()))
         elif btn_id == 1:  # select n images closest to zpos
             first = True
             for sel in sel_series:
@@ -280,8 +261,8 @@ class OpenMultiDialog(QDialog):
                         for img in self.imgs[sel.row()]:
                             zpos_arr.append(img.zpos)
                         if None not in zpos_arr:
-                            n_img = self.spinNclose.value()
-                            zpos = self.spinZclose.value()
+                            n_img = self.spin_n_close.value()
+                            zpos = self.spin_z_close.value()
                             diff = np.abs(np.asarray(zpos_arr) - zpos)
                             n_lowest = np.argsort(diff)[:n_img]
                             if push:

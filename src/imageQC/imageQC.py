@@ -5,7 +5,7 @@
 @author: EllenWasbo
 url: https://github.com/EllenWasbo/imageQC
 """
-
+from timeit import default_timer as timer  #TODO delete
 import sys
 import os
 from pathlib import Path
@@ -33,6 +33,7 @@ def prepare_debug():
 
 
 if __name__ == '__main__':
+    start = timer()
     prepare_debug()  # not needen when not debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     # verify that config_folder exists
@@ -166,7 +167,12 @@ if __name__ == '__main__':
             dlg.show()
             splash.finish(dlg)
             dlg.exec()
+        end = timer()
+        print(f'Before MainWindow: {end - start}')
+        start = timer()
         w = ui_main.MainWindow(scX=sz.width(), scY=sz.height(), char_width=char_width)
+        end = timer()
+        print(f'Create MainWindow before show: {end - start}')
         w.show()
         splash.finish(w)
         app.exec()

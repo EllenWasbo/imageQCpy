@@ -76,7 +76,8 @@ def test_CT_Sli_axial():
         automation_active=False,
         )
 
-    file_path = path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' / 'CTP404_FOV150_001.dcm'
+    file_path = (
+        path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' / 'CTP404_FOV150_001.dcm')
     img_infos, ignored_files = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
@@ -85,6 +86,27 @@ def test_CT_Sli_axial():
     values10 = np.round(10.*np.array(input_main.results['Sli']['values'][0]))
     assert np.array_equal(
         values10, np.array([48., 44., 46., 46., 46., 46., -49.]))
+
+
+def test_CT_Rin():
+    input_main = InputMain(
+        current_modality='CT',
+        current_test='Rin',
+        current_paramset=cfc.ParamSetCT(rin_sigma_image=2.),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Rin']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (
+        path_tests / 'test_inputs' / 'CT' / 'CTP486' / 'CTP486_005.dcm')
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(10*np.array(input_main.results['Rin']['values'][0]))
+    assert np.array_equal(values, np.array([-4., 5.]))
 
 
 def test_CT_Dim():

@@ -132,9 +132,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
 
             slice_thickness, pix = get_dcm_info_list(
                     pd,
-                    TagPatternFormat(
-                        list_tags=['SliceThickness', 'PixelSpacing'],
-                        list_format=['', '']),
+                    TagPatternFormat(list_tags=['SliceThickness', 'PixelSpacing']),
                     tag_infos,
                     prefix_separator='', suffix_separator='',
                     )
@@ -773,9 +771,9 @@ def get_tag_data(pd, tag_info=None):
             else:
                 data_element = pd[gr, el]
         except KeyError:
-            pass
+            data_element = None
         except IndexError:
-            pass
+            data_element = None
 
     return data_element
 
@@ -835,7 +833,7 @@ def find_all_valid_dcm_files(
         p = Path(path_str)
         if p.is_dir():
             glob_string = '**/*' if search_subfolders else '*'
-            dcm_files = [x for x in p.glob(glob_string) if x.suffix == 'dcm']
+            dcm_files = [x for x in p.glob(glob_string) if x.suffix == '.dcm']
             if len(dcm_files) == 0:
                 files = [x for x in p.glob(glob_string) if x.is_file()]
                 dcm_files = []

@@ -13,7 +13,7 @@ import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
 # imageQC block start
-from imageQC.scripts.mini_methods import get_min_max_pos_2d
+from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
 # imageQC block end
 
 
@@ -57,7 +57,7 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         self.fig = matplotlib.figure.Figure(dpi=150)
         self.fig.subplots_adjust(0., 0., 1., 1.)
         FigureCanvasQTAgg.__init__(self, self.fig)
-        self.setParent = parent
+        #self.setParent = parent
         self.ax = self.fig.add_subplot(111)
         self.last_clicked_pos = (-1, -1)
         self.profile_length = 20  # assume click drag > length in pix = draw profile
@@ -67,6 +67,17 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         self.img = self.ax.imshow(np.zeros((2, 2)))
         self.ax.cla()
         self.ax.axis('off')
+
+        # intialize parameters to make pylint happy
+        self.contours = []
+        self.scatters = []
+        self.linewidth = 2
+        self.fontsize = 10
+        self.current_image = None
+        self.cmap = 'gray'
+        self.min_val = None
+        self.max_val = None
+        self.title = ''
 
     def profile_draw(self, x2, y2, pix=None):
         """Draw line for profile.
@@ -94,7 +105,7 @@ class GenericImageCanvas(FigureCanvasQTAgg):
             if length > self.profile_length:
                 self.ax.add_artist(matplotlib.lines.Line2D(
                     [x1, x2], [y1, y2],
-                    color='red', linewidth=self.main.vGUI.annotations_line_thick,
+                    color='red', linewidth=self.main.gui.annotations_line_thick,
                     gid='profile'))
                 self.draw()
                 plotstatus = True
@@ -140,22 +151,21 @@ class ImageCanvas(GenericImageCanvas):
 
         nparr = self.main.active_img
         if auto is False:
-            WLmin, WLmax = self.main.windowLevelWidget.get_min_max(
-                self.main.active_img)
-            annotate = self.main.vGUI.annotations
+            wl_min, wl_max = self.main.wid_window_level.get_min_max()
+            annotate = self.main.gui.annotations
         else:
             annotate = False
             if len(window_level) > 0:
-                WLmin, WLmax = window_level
+                wl_min, wl_max = window_level
             else:
                 meanval = np.mean(self.main.active_img)
                 stdval = np.std(self.main.active_img)
-                WLmin = meanval-stdval
-                WLmax = meanval+stdval
+                wl_min = meanval-stdval
+                wl_max = meanval+stdval
 
         if len(np.shape(nparr)) == 2:
             self.img = self.ax.imshow(
-                nparr, cmap='gray', vmin=WLmin, vmax=WLmax)
+                nparr, cmap='gray', vmin=wl_min, vmax=wl_max)
         elif len(np.shape(nparr)) == 3:
             # rgb to grayscale NTSC formula
             nparr = (0.299 * nparr[:, :, 0]
@@ -167,19 +177,19 @@ class ImageCanvas(GenericImageCanvas):
         if annotate:
             # central crosshair
             szy, szx = np.shape(nparr)
-            if self.main.vGUI.delta_a == 0:
+            if self.main.gui.delta_a == 0:
                 self.ax.axhline(
-                    y=szy*0.5 + self.main.vGUI.delta_y,
+                    y=szy*0.5 + self.main.gui.delta_y,
                     color='red', linewidth=1., linestyle='--')
                 self.ax.axvline(
-                    x=szx*0.5 + self.main.vGUI.delta_x,
+                    x=szx*0.5 + self.main.gui.delta_x,
                     color='red', linewidth=1., linestyle='--')
             else:
                 x1, x2, y1, y2 = get_rotated_crosshair(
                     szx, szy,
-                    (self.main.vGUI.delta_x,
-                     self.main.vGUI.delta_y,
-                     self.main.vGUI.delta_a)
+                    (self.main.gui.delta_x,
+                     self.main.gui.delta_y,
+                     self.main.gui.delta_a)
                     )
                 # NB keep these two lines as first and second in ax.lines
                 self.ax.add_artist(matplotlib.lines.Line2D(
@@ -198,10 +208,10 @@ class ImageCanvas(GenericImageCanvas):
                     )
             else:
                 annot_text = self.main.imgs[
-                    self.main.vGUI.active_img_no].annotation_list
+                    self.main.gui.active_img_no].annotation_list
             at = matplotlib.offsetbox.AnchoredText(
                 '\n'.join(annot_text),
-                prop=dict(size=self.main.vGUI.annotations_font_size, color='red'),
+                prop=dict(size=self.main.gui.annotations_font_size, color='red'),
                 frameon=False, loc='upper left')
             self.ax.add_artist(at)
             self.roi_draw()
@@ -211,19 +221,17 @@ class ImageCanvas(GenericImageCanvas):
 
     def roi_draw(self):
         """Update ROI countours on image."""
-        if hasattr(self, 'contours'):
-            for contour in self.contours:
-                for coll in contour.collections:
-                    try:
-                        coll.remove()
-                    except ValueError:
-                        pass
-        if hasattr(self, 'scatters'):
-            for s in self.scatters:
+        for contour in self.contours:
+            for coll in contour.collections:
                 try:
-                    s.remove()
+                    coll.remove()
                 except ValueError:
                     pass
+        for scatter in self.scatters:
+            try:
+                scatter.remove()
+            except ValueError:
+                pass
         if hasattr(self.ax, 'lines'):
             n_lines = len(self.ax.lines)
             if n_lines > 2:
@@ -234,11 +242,10 @@ class ImageCanvas(GenericImageCanvas):
 
         if self.main.current_roi is not None:
             try:
-                self.linewidth = self.main.vGUI.annotations_line_thick
-                self.fontsize = self.main.vGUI.annotations_font_size
+                self.linewidth = self.main.gui.annotations_line_thick
+                self.fontsize = self.main.gui.annotations_font_size
             except AttributeError:
-                self.linewidth = 2
-                self.fontsize = 10
+                pass  # default
 
             class_method = getattr(self, self.main.current_test, None)
             if class_method is not None:
@@ -318,7 +325,7 @@ class ImageCanvas(GenericImageCanvas):
         v_colors = ['c', 'r', 'm', 'darkorange']
         search_margin = self.main.current_paramset.sli_search_width
         background_length = self.main.current_paramset.sli_background_width
-        pix = self.main.imgs[self.main.vGUI.active_img_no].pix
+        pix = self.main.imgs[self.main.gui.active_img_no].pix
         background_length = background_length / pix[0]
         for l_idx, line in enumerate(self.main.current_roi['h_lines']):
             y1, x1, y2, x2 = line
@@ -391,7 +398,7 @@ class ImageCanvas(GenericImageCanvas):
         if 'Dim' in self.main.results:
             if 'details_dict' in self.main.results['Dim']:
                 details_dict = self.main.results['Dim'][
-                    'details_dict'][self.main.vGUI.active_img_no]
+                    'details_dict'][self.main.gui.active_img_no]
                 if 'centers_x' in details_dict:
                     xs = details_dict['centers_x']
                     ys = details_dict['centers_y']
@@ -503,6 +510,21 @@ class ResultImageCanvas(GenericImageCanvas):
         self.ax.axis('off')
         self.draw()
 
+    def Rin(self):
+        """Prepare result image for test Rin."""
+        try:
+            details_dict = self.main.results['Rin']['details_dict'][
+                self.main.gui.active_img_no]
+        except KeyError:
+            details_dict = {}
+        self.cmap = 'viridis'
+        if self.main.current_paramset.rin_sigma_image > 0:
+            self.title = 'Gaussian filtered and masked image'
+        else:
+            self.title = 'Masked image'
+        if 'processed_image' in details_dict:
+            self.current_image = details_dict['processed_image']
+
     def Uni(self):
         """Prepare result image for test Uni."""
         if self.main.current_paramset.uni_sum_first:
@@ -513,11 +535,11 @@ class ResultImageCanvas(GenericImageCanvas):
         else:
             try:
                 details_dict = self.main.results['Uni']['details_dict'][
-                    self.main.vGUI.active_img_no]
+                    self.main.gui.active_img_no]
             except KeyError:
                 details_dict = {}
         self.cmap = 'viridis'
-        type_img = self.main.tabNM.uni_result_image.currentIndex()
+        type_img = self.main.tab_nm.uni_result_image.currentIndex()
         if type_img == 0:
             self.title = 'Differential uniformity map in UFOV (max in x/y direction)'
             if 'du_matrix' in details_dict:

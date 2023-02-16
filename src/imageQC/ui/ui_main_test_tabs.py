@@ -125,6 +125,9 @@ class ParamsTabCommon(QTabWidget):
                         print(f'Warning: Parameter {field.name} not set ',
                               '(ui_main_test_tabs.update_displayed_params)')
 
+        if self.main.current_modality == 'Xray':
+            self.update_NPS_independent_pixels()
+
         self.update_enabled()
         self.flag_ignore_signals = False
 
@@ -202,6 +205,8 @@ class ParamsTabCommon(QTabWidget):
                     content = sender.isChecked()
                 elif hasattr(sender, 'setValue'):
                     content = round(sender.value(), sender.decimals())
+                    if sender.decimals() == 0:
+                        content = int(content)
                 elif hasattr(sender, 'setText'):
                     content = sender.text()
                 elif hasattr(sender, 'setCurrentIndex'):  # QComboBox
@@ -216,18 +221,25 @@ class ParamsTabCommon(QTabWidget):
                 if update_roi:
                     self.main.update_roi()
                 if clear_results:
-                    if self.main.current_test in [*self.main.results]:
-                        self.main.results[self.main.current_test] = None
-                        self.main.refresh_results_display()
+                    self.clear_results_current_test()
                 if ((update_plot or update_results_table)
                         and clear_results is False):
                     if attribute == 'mtf_gaussian':
                         self.update_values_mtf()
                     self.main.refresh_results_display()
+                if all([self.main.current_modality == 'Xray',
+                        self.main.current_test == 'NPS']):
+                    self.update_NPS_independent_pixels()
+
+    def clear_results_current_test(self):
+        """Clear results of current test."""
+        if self.main.current_test in [*self.main.results]:
+            self.main.results[self.main.current_test] = None
+            self.main.refresh_results_display()
 
     def update_values_mtf(self):
         """Update MTF table values when changing analytic vs discrete options."""
-        if 'MTF' in self.main.results:
+        if 'MTF' in self.main.results and self.main.modality in ['CT', 'Xray', 'MR']:
             if self.main.results['MTF']['pr_image']:
                 details_dicts = self.main.results['MTF']['details_dict']
             else:
@@ -254,6 +266,12 @@ class ParamsTabCommon(QTabWidget):
                 self.main.results['MTF']['values'] = new_values
                 self.main.refresh_results_display()
                 self.main.status_bar.showMessage('MTF tabular values updated', 1000)
+
+    def update_NPS_independent_pixels(self):
+        """Calculate independent pixels for NPS Xray."""
+        nsub = self.main.current_paramset.nps_n_sub
+        nroi = self.main.current_paramset.nps_roi_size
+        self.nps_npix.setText(f'{1e-06*(((nsub*2-1)*nroi)**2):.2f} mill')
 
     def set_offset(self, attribute, reset=False):
         """Get last mouse click position and set as offset position for test.
@@ -321,16 +339,20 @@ class ParamsTabCommon(QTabWidget):
         self.roi_type.currentIndexChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_type'))
 
-        self.roi_radius = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.roi_radius = QDoubleSpinBox(decimals=1, minimum=0.1, maximum=10000,
+                                         singleStep=0.1)
         self.roi_radius.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_radius'))
-        self.roi_x = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.roi_x = QDoubleSpinBox(decimals=1, minimum=0.1,  maximum=10000,
+                                    singleStep=0.1)
         self.roi_x.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_x'))
-        self.roi_y = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.roi_y = QDoubleSpinBox(decimals=1, minimum=0.1,  maximum=10000,
+                                    singleStep=0.1)
         self.roi_y.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_y'))
-        self.roi_a = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
+        self.roi_a = QDoubleSpinBox(decimals=1, minimum=0,  maximum=359.9,
+                                    singleStep=0.1)
         self.roi_a.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_a'))
 
@@ -378,6 +400,11 @@ class ParamsTabCommon(QTabWidget):
         self.mtf_cut_lsf_w.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_cut_lsf_w'))
 
+        self.mtf_gaussian = BoolSelectTests(
+            self, attribute='mtf_gaussian',
+            text_true='Gaussian', text_false='Discrete',
+            update_roi=False, clear_results=False, update_plot=False)
+
         self.mtf_plot = QComboBox()
         self.mtf_plot.currentIndexChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_plot',
@@ -386,8 +413,6 @@ class ParamsTabCommon(QTabWidget):
 
     def create_tab_mtf_xray_mr(self):
         """GUI of tab MTF - common to Xray and MR."""
-        self.mtf_type.addItems(['Exponential fit', 'Gaussian fit', 'No LSF fit'])
-
         self.mtf_roi_size_x = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.mtf_roi_size_x.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_roi_size_x'))
@@ -410,11 +435,6 @@ class ParamsTabCommon(QTabWidget):
         self.mtf_plot.addItems(['Edge position',
                                 'Sorted pixel values', 'LSF', 'MTF'])
 
-        self.mtf_gaussian = BoolSelectTests(
-            self, attribute='mtf_gaussian',
-            text_true='Analytical', text_false='Discrete',
-            update_roi=False, clear_results=False, update_plot=False)
-
         self.create_offset_widget('mtf')
 
         hlo_size = QHBoxLayout()
@@ -426,9 +446,8 @@ class ParamsTabCommon(QTabWidget):
         vlo1 = QVBoxLayout()
         vlo1.addLayout(hlo_size)
         flo1 = QFormLayout()
-        flo1.addRow(QLabel('MTF method'), self.mtf_type)
         flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
-                     self.mtf_sampling_frequency)
+                    self.mtf_sampling_frequency)
         vlo1.addLayout(flo1)
         vlo1.addWidget(self.wid_mtf_offset)
         self.tab_mtf.hlo.addLayout(vlo1)
@@ -448,6 +467,38 @@ class ParamsTabCommon(QTabWidget):
         flo3.addRow(QLabel('Plot'), self.mtf_plot)
         vlo2.addLayout(flo3)
         self.tab_mtf.hlo.addLayout(vlo2)
+
+    def add_NPS_plot_settings(self):
+        """Add common NPS settings and gui."""
+        self.nps_sampling_frequency = QDoubleSpinBox(
+            decimals=2, minimum=0.01, singleStep=0.01)
+        self.nps_sampling_frequency.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_sampling_frequency'))
+        self.nps_smooth_width = QDoubleSpinBox(
+            decimals=2, minimum=0.01, singleStep=0.01)
+        self.nps_smooth_width.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_smooth_width'))
+
+        self.nps_normalize = QComboBox()
+        self.nps_normalize.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_normalize',
+                                                update_roi=False,
+                                                clear_results=False))
+        self.nps_normalize.addItems(['', 'Area under curve (AUC)',
+                                     'Large area signal ^2 (LAS)'])
+        self.nps_plot = QComboBox()
+        self.nps_plot.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_plot',
+                                                update_roi=False,
+                                                clear_results=False))
+
+        self.flo_nps_plot = QFormLayout()
+        self.flo_nps_plot.addRow(QLabel('NPS sampling frequency (1/mm)'),
+                                 self.nps_sampling_frequency)
+        self.flo_nps_plot.addRow(QLabel('Smooth NPS by width (1/mm)'),
+                                 self.nps_smooth_width)
+        self.flo_nps_plot.addRow(QLabel('Normalize NPS curve by'), self.nps_normalize)
+        self.flo_nps_plot.addRow(QLabel('Plot'), self.nps_plot)
 
     def run_tests(self):
         """Run all tests in current quicktest template."""
@@ -497,6 +548,7 @@ class ParamsTabCT(ParamsTabCommon):
         self.create_tab_huw()
         self.create_tab_rin()
         self.create_tab_dim()
+        self.create_tab_nps()
 
         self.addTab(self.tab_hom, "Homogeneity")
         self.addTab(self.tab_noi, "Noise")
@@ -506,6 +558,7 @@ class ParamsTabCT(ParamsTabCommon):
         self.addTab(self.tab_huw, "HU water")
         self.addTab(self.tab_rin, "Ring artifacts")
         self.addTab(self.tab_dim, "Dimensions")
+        self.addTab(self.tab_nps, "NPS")
 
     def update_enabled(self):
         """Update enabled/disabled features."""
@@ -541,6 +594,7 @@ class ParamsTabCT(ParamsTabCommon):
     def create_tab_hom(self):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate homogeneity')
+        self.tab_hom.hlo_top.addWidget(uir.LabelItalic('Homogeneity'))
 
         self.hom_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
@@ -557,7 +611,6 @@ class ParamsTabCT(ParamsTabCommon):
         flo.addRow(QLabel('ROI radius (mm)'), self.hom_roi_size)
         flo.addRow(QLabel('ROI distance (mm)'), self.hom_roi_distance)
         flo.addRow(QLabel('Rotate ROI positions (deg)'), self.hom_roi_rotation)
-        self.tab_hom.vlo_top.addSpacing(50)
         self.tab_hom.hlo.addLayout(flo)
         self.tab_hom.hlo.addStretch()
 
@@ -599,6 +652,9 @@ class ParamsTabCT(ParamsTabCommon):
         self.sli_average_width = QDoubleSpinBox(decimals=0, minimum=1)
         self.sli_average_width.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_average_width'))
+        self.sli_auto_center = QCheckBox('')
+        self.sli_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_auto_center'))
         self.sli_plot = QComboBox()
         self.update_sli_plot_options()
         self.sli_plot.currentIndexChanged.connect(self.main.refresh_results_display)
@@ -611,16 +667,16 @@ class ParamsTabCT(ParamsTabCommon):
         self.tab_sli.vlo_top.addLayout(hlo_type)
 
         flo1 = QFormLayout()
-        flo1.addRow(QLabel('Center to ramp distance (mm)'),
-                     self.sli_ramp_distance)
+        flo1.addRow(QLabel('Center to ramp distance (mm)'), self.sli_ramp_distance)
         flo1.addRow(QLabel('Profile length (mm)'), self.sli_ramp_length)
         flo1.addRow(QLabel('Profile search margin (pix)'), self.sli_search_width)
+        flo1.addRow(QLabel('Auto center'), self.sli_auto_center)
         flo2 = QFormLayout()
         flo2.addRow(
             QLabel('Within search margin, average over neighbour profiles (#)'),
             self.sli_average_width)
         flo2.addRow(QLabel('Background from profile outer (mm)'),
-                     self.sli_background_width)
+                    self.sli_background_width)
         flo2.addRow(QLabel('Plot image profiles'), self.sli_plot)
         self.tab_sli.hlo.addLayout(flo1)
         self.tab_sli.hlo.addWidget(uir.VLine())
@@ -642,11 +698,15 @@ class ParamsTabCT(ParamsTabCommon):
         self.ctn_search = QCheckBox('')
         self.ctn_search.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='ctn_search'))
+        self.ctn_auto_center = QCheckBox('')
+        self.ctn_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='ctn_auto_center'))
 
         flo1 = QFormLayout()
         flo1.addRow(QLabel('ROI radius (mm)'), self.ctn_roi_size)
         flo1.addRow(QLabel('Search for circular element'), self.ctn_search)
         flo1.addRow(QLabel('Search radius (mm)'), self.ctn_search_size)
+        flo1.addRow(QLabel('Auto center'), self.ctn_auto_center)
         self.tab_ctn.hlo.addLayout(flo1)
         self.tab_ctn.hlo.addWidget(uir.VLine())
         self.tab_ctn.hlo.addWidget(self.ctn_table_widget)
@@ -687,10 +747,7 @@ class ParamsTabCT(ParamsTabCommon):
         self.mtf_type.addItems(ALTERNATIVES['CT']['MTF'])
         self.mtf_plot.addItems(['Centered xy profiles',
                                 'Sorted pixel values', 'LSF', 'MTF'])
-        self.mtf_gaussian = BoolSelectTests(
-            self, attribute='mtf_gaussian',
-            text_true='Gaussian', text_false='Discrete',
-            update_roi=False, clear_results=False, update_plot=False)
+
         self.mtf_cy_pr_mm = BoolSelectTests(
             self, attribute='mtf_cy_pr_mm',
             text_true='cy/mm', text_false='cy/cm',
@@ -707,7 +764,7 @@ class ParamsTabCT(ParamsTabCommon):
             QLabel('Width of background (bead method)'), self.mtf_background_width)
         flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
         flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
-                     self.mtf_sampling_frequency)
+                    self.mtf_sampling_frequency)
         vlo1.addLayout(flo1)
 
         vlo1.addWidget(self.wid_mtf_offset)
@@ -716,9 +773,9 @@ class ParamsTabCT(ParamsTabCommon):
         vlo2 = QVBoxLayout()
         flo2 = QFormLayout()
         flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
-        flo2.addRow(QLabel('    Cut at halfmax + (#FWHM)'), self.mtf_cut_lsf_w)
+        flo2.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.mtf_cut_lsf_w)
         flo2.addRow(
-            QLabel('    Fade out within (#FWHM)'), self.mtf_cut_lsf_w_fade)
+            QLabel('    Fade out within n*FWHM, n='), self.mtf_cut_lsf_w_fade)
         vlo2.addLayout(flo2)
         flo3 = QFormLayout()
         flo3.addRow(QLabel('Table results from'), self.mtf_gaussian)
@@ -733,8 +790,7 @@ class ParamsTabCT(ParamsTabCommon):
         info_txt = '''
         Extract radial profile to quantify ring artifacts. Image center is assumed to
         be at center of scanner.<br>
-        The radial profile is extracted by sorting pixels by distance from center and
-        rebin/interpolate to 0.1*pix size.<br>
+        The radial profile is extracted by sorting pixels by distance from center.<br>
         Linear trend (or mean signal) is removed from the profile to calculate min/max
         as a measure of ring artifacts.<br>
         Values closer than 4 pix from center will always be ignored.
@@ -786,6 +842,34 @@ class ParamsTabCT(ParamsTabCommon):
             QLabel('Calculate distance between rods in Catphan'))
         self.tab_dim.vlo_top.addWidget(QLabel(
             'NB: difference from expected distance in supplement table'))
+
+    def create_tab_nps(self):
+        """GUI of tab NPS."""
+        self.tab_nps = ParamsWidget(self, run_txt='Calculate NPS')
+        self.tab_nps.hlo_top.addWidget(uir.LabelItalic('Noise Power Spectrum (NPS)'))
+
+        self.nps_roi_size = QDoubleSpinBox(decimals=0,
+                                           minimum=10, maximum=500, singleStep=1)
+        self.nps_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_roi_size'))
+        self.nps_roi_distance = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
+        self.nps_roi_distance.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_roi_distance'))
+        self.nps_n_sub = QDoubleSpinBox(decimals=0, minimum=1, singleStep=1)
+        self.nps_n_sub.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_n_sub'))
+
+        flo = QFormLayout()
+        flo.addRow(QLabel('ROI size (pix)'), self.nps_roi_size)
+        flo.addRow(QLabel('Radius to center of ROIs (mm)'), self.nps_roi_distance)
+        flo.addRow(QLabel('Number of ROIs'), self.nps_n_sub)
+
+        self.add_NPS_plot_settings()
+        self.nps_plot.addItems(['NPS pr image', 'NPS average all images',
+                                'NPS pr image + average', 'NPS all images + average'])
+        self.tab_nps.hlo.addLayout(flo)
+        self.tab_nps.hlo.addWidget(uir.VLine())
+        self.tab_nps.hlo.addLayout(self.flo_nps_plot)
 
 
 class ParamsTabXray(ParamsTabCommon):
@@ -875,27 +959,55 @@ class ParamsTabXray(ParamsTabCommon):
     def create_tab_nps(self):
         """GUI of tab NPS."""
         self.tab_nps = ParamsWidget(self, run_txt='Calculate NPS')
-        self.tab_nps.vlo_top.addWidget(uir.UnderConstruction())
+        self.tab_nps.hlo_top.addWidget(uir.LabelItalic('Noise Power Spectrum (NPS)'))
+        info_txt = '''
+        The large area (combined all ROIs) will be trend corrected using a second order
+        polynomial fit.<br>
+        The resulting corrected large area can be visualized in the Result Image tab.
+        <br>
+        The horizontal and vertical 1d NPS curves are extracted from the 7 lines at each
+        side of the axis (excluding the axis).<br>
+        Also the values closest to 0 frequency are excluded from the resampled curves.
+        <br>
+        And the axis is set to zero in the NPS array (see Result Image tab).
+        '''
+        self.tab_nps.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
-        self.nps_roi_size = QDoubleSpinBox(decimals=0, minimum=22)
+        self.nps_roi_size = QDoubleSpinBox(decimals=0, minimum=22, maximum=10000)
         self.nps_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='nps_roi_size'))
-        self.nps_sub_size = QDoubleSpinBox(decimals=0, minimum=1)
-        self.nps_sub_size.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='nps_sub_size'))
+        self.nps_n_sub = QDoubleSpinBox(decimals=0, minimum=3)
+        self.nps_n_sub.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_n_sub'))
 
         flo = QFormLayout()
         flo.addRow(QLabel('ROI size (pix)'), self.nps_roi_size)
-        flo.addRow(QLabel('Total area to analyse (n x ROI size) n = '),
-                    self.nps_sub_size)
+        flo.addRow(QLabel('Total area to analyse (n x ROI size)^2, n = '),
+                   self.nps_n_sub)
         self.tab_nps.hlo.addLayout(flo)
-        self.tab_nps.hlo.addStretch()
+        self.add_NPS_plot_settings()
+        self.nps_plot.addItems(['NPS pr image', 'NPS all images'])
+        self.nps_plot_profile = QComboBox()
+        self.nps_plot_profile.currentIndexChanged.connect(
+            self.main.refresh_results_display)
+        self.nps_plot_profile.addItems([
+            'horizontal and vertical', 'horizontal', 'vertical', 'radial', 'all'])
+        self.nps_show_image = QComboBox()
+        self.nps_show_image.currentIndexChanged.connect(
+            self.main.refresh_results_display)
+        self.nps_show_image.addItems(['2d NPS', 'large area - trend subtracted'])
+        self.flo_nps_plot.addRow(QLabel('Show profile'), self.nps_plot_profile)
+        self.flo_nps_plot.addRow(QLabel('Result image'), self.nps_show_image)
+        self.tab_nps.hlo.addWidget(uir.VLine())
+        self.tab_nps.hlo.addLayout(self.flo_nps_plot)
 
         hlo_npix = QHBoxLayout()
         hlo_npix.addWidget(uir.LabelItalic(
-            '# of independent pixels/image (preferrably > 4 mill):'))
-        self.nps_npix = QLabel('')
+            'Number of independent pixels/image = ((n*2-1)*roi size)^2 = '))
+        self.nps_npix = QLabel('? mill    ')
         hlo_npix.addWidget(self.nps_npix)
+        hlo_npix.addWidget(uir.LabelItalic('(preferrably > 4 mill)'))
+        hlo_npix.addStretch()
         self.tab_nps.vlo.addLayout(hlo_npix)
 
     def create_tab_stp(self):
@@ -917,20 +1029,30 @@ class ParamsTabXray(ParamsTabCommon):
     def create_tab_var(self):
         """GUI of tab Variance."""
         self.tab_var = ParamsWidget(self, run_txt='Calculate variance image(s)')
-        self.tab_var.vlo_top.addWidget(uir.UnderConstruction())
 
         self.var_roi_size = QDoubleSpinBox(decimals=1, minimum=1., singleStep=0.1)
         self.var_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='var_roi_size'))
+        self.var_percent = QDoubleSpinBox(decimals=1,
+                                          minimum=0.1, maximum=100., singleStep=0.1)
+        self.var_percent.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='var_percent'))
 
         self.tab_var.vlo_top.addWidget(uir.LabelItalic(
             'The variance image can reveal artifacts in the image.<br>'
             'Adjust ROI size to find artifacts of different sizes.'))
 
-        self.tab_var.hlo.addWidget(QLabel('ROI size (mm)'))
-        self.tab_var.hlo.addWidget(self.var_roi_size)
-        self.tab_var.hlo.addWidget(QLabel('if less than 3 pix, 3 pix will be used'))
-        self.tab_var.hlo.addStretch()
+        hlo_roi_size = QHBoxLayout()
+        hlo_roi_size.addWidget(QLabel('ROI size (mm)'))
+        hlo_roi_size.addWidget(self.var_roi_size)
+        hlo_roi_size.addWidget(QLabel('if less than 3 pix, 3 pix will be used'))
+        hlo_roi_size.addStretch()
+        hlo_percent = QHBoxLayout()
+        hlo_percent.addWidget(QLabel('ROI width and height (% of image)'))
+        hlo_percent.addWidget(self.var_percent)
+        hlo_percent.addStretch()
+        self.tab_var.vlo.addLayout(hlo_roi_size)
+        self.tab_var.vlo.addLayout(hlo_percent)
 
     def hom_tab_alt_changed(self):
         """Change alternative method (columns to display)."""
@@ -989,7 +1111,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.create_tab_bar()
         self.addTab(self.tab_uni, "Uniformity")
         self.addTab(self.tab_sni, "SNI")
-        self.addTab(self.tab_mtf, "MTF")
+        self.addTab(self.tab_mtf, "Spatial resolution")
         self.addTab(self.tab_spe, "Scan speed")
         self.addTab(self.tab_bar, "Bar phantom")
 
@@ -1125,7 +1247,7 @@ class ParamsTabNM(ParamsTabCommon):
 
         flo = QFormLayout()
         flo.addRow(QLabel('Ratio of nonzero part of image to be analysed'),
-                    self.sni_area_ratio)
+                   self.sni_area_ratio)
         vlo_left.addLayout(flo)
 
         vlo_eye = QVBoxLayout()
@@ -1166,10 +1288,6 @@ class ParamsTabNM(ParamsTabCommon):
             lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
         self.mtf_plot.addItems(['Centered xy profiles', 'Line/Edge fit',
                                 'Sorted pixel values', 'LSF', 'MTF'])
-        self.mtf_gaussian = BoolSelectTests(
-            self, attribute='mtf_gaussian',
-            text_true='Analytical', text_false='Discrete',
-            update_roi=False, clear_results=False, update_plot=False)
 
         hlo_size = QHBoxLayout()
         hlo_size.addWidget(QLabel('ROI width/height (mm)'))
@@ -1182,7 +1300,7 @@ class ParamsTabNM(ParamsTabCommon):
         flo1 = QFormLayout()
         flo1.addRow(QLabel('MTF method'), self.mtf_type)
         flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
-                     self.mtf_sampling_frequency)
+                    self.mtf_sampling_frequency)
         vlo1.addLayout(flo1)
         vlo1.addStretch()
         self.tab_mtf.hlo.addLayout(vlo1)
@@ -1295,7 +1413,7 @@ class ParamsTabSPECT(ParamsTabCommon):
         self.create_tab_mtf()
         self.create_tab_con()
 
-        self.addTab(self.tab_mtf, "MTF")
+        self.addTab(self.tab_mtf, "Spatial resolution")
         self.addTab(self.tab_con, "Contrast")
 
     def create_tab_mtf(self):
@@ -1304,7 +1422,50 @@ class ParamsTabSPECT(ParamsTabCommon):
 
         self.tab_mtf.vlo_top.addWidget(uir.UnderConstruction())
 
-        #...
+        self.mtf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.mtf_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
+        self.mtf_background_width = QDoubleSpinBox(
+            decimals=1, minimum=0.1, singleStep=0.1)
+        self.mtf_background_width.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_background_width'))
+        self.mtf_auto_center = QCheckBox('')
+        self.mtf_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
+        self.mtf_cut_lsf_w_fade = QDoubleSpinBox(
+            decimals=1, minimum=0, singleStep=0.1)
+        self.mtf_cut_lsf_w_fade.valueChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='mtf_cut_lsf_w_fade'))
+        self.mtf_type.addItems(ALTERNATIVES['SPECT']['MTF'])
+        self.mtf_plot.addItems(['Centered xy profiles',
+                                'Sorted pixel values', 'LSF', 'MTF'])
+
+        vlo1 = QVBoxLayout()
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('MTF method'), self.mtf_type)
+        flo1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
+        flo1.addRow(
+            QLabel('Width of background (point method)'), self.mtf_background_width)
+        flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
+        flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
+                    self.mtf_sampling_frequency)
+        vlo1.addLayout(flo1)
+
+        self.tab_mtf.hlo.addLayout(vlo1)
+        self.tab_mtf.hlo.addWidget(uir.VLine())
+        vlo2 = QVBoxLayout()
+        flo2 = QFormLayout()
+        flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
+        flo2.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.mtf_cut_lsf_w)
+        flo2.addRow(
+            QLabel('    Fade out within n*FWHM, n='), self.mtf_cut_lsf_w_fade)
+        vlo2.addLayout(flo2)
+        flo3 = QFormLayout()
+        flo3.addRow(QLabel('Table results from'), self.mtf_gaussian)
+        flo3.addRow(QLabel('Plot'), self.mtf_plot)
+        vlo2.addLayout(flo3)
+        self.tab_mtf.hlo.addLayout(vlo2)
 
     def create_tab_con(self):
         """GUI of tab Contrast."""
@@ -1347,13 +1508,61 @@ class ParamsTabPET(ParamsTabCommon):
 
     def create_tab_cro(self):
         """GUI of tab Cross Calibration."""
-        self.tab_cro = QWidget()
-        vlo = QVBoxLayout()
-        vlo.addWidget(uir.UnderConstruction())
+        self.tab_cro = ParamsWidget(self, run_txt='Calculate calibration factor')
+        info_txt = '''
+        Based on Siemens PET-CT Cross calibration procedure with F-18.<br>
+        Injected activity is read from DICOM header together with time of
+        activity and scan start.<br>
+        Option to set initial calibration factor different from 1.0 to skip part of
+        resetting calibration factor before this test.<br>
+        Images will be sorted by sliceposition during calculation.
+        '''
+        self.tab_cro.hlo_top.addWidget(uir.LabelItalic('PET Cross calibration F18'))
+        self.tab_cro.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
-        #...
+        # configurable settings
+        self.cro_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.cro_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='cro_roi_size'))
+        self.cro_volume = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=150000, singleStep=0.1)
+        self.cro_volume.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='cro_volume'))
 
-        self.tab_cro.setLayout(vlo)
+        self.cro_auto_select_slices = QGroupBox('Auto select slices')
+        self.cro_auto_select_slices.setCheckable(True)
+        self.cro_auto_select_slices.setFont(uir.FontItalic())
+        self.cro_auto_select_slices.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='cro_auto_select_slices'))
+
+        self.cro_percent_slices = QDoubleSpinBox(
+            decimals=0, minimum=10, maximum=100, singleStep=1)
+        self.cro_percent_slices.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='cro_percent_slices'))
+
+        # input not configurable (will differ from time to time)
+        self.cro_calibration_factor = QDoubleSpinBox(
+            decimals=3, minimum=0.5, maximum=1.5)
+        self.cro_calibration_factor.setValue(1.)
+        self.cro_calibration_factor.valueChanged.connect(
+            self.clear_results_current_test)
+
+        flo0 = QFormLayout()
+        flo0.addRow(QLabel('ROI size (mm)'), self.cro_roi_size)
+        flo0.addRow(QLabel('Volume of container (ml)'), self.cro_volume)
+        flo0.addRow(QLabel('Current calibration factor'), self.cro_calibration_factor)
+        flo0.addRow(QLabel('           '),
+                    uir.LabelItalic('(NB: Current calibration factor cannot be saved)'))
+        self.tab_cro.hlo.addLayout(flo0)
+        self.tab_cro.hlo.addStretch()
+
+        hlo_auto_select = QHBoxLayout()
+        self.cro_auto_select_slices.setLayout(hlo_auto_select)
+        hlo_auto_select.addWidget(
+            QLabel('Use percentage of images within FWHM of z-profile of ROIs'))
+        hlo_auto_select.addWidget(self.cro_percent_slices)
+        hlo_auto_select.addWidget(QLabel('%'))
+        self.tab_cro.vlo.addWidget(self.cro_auto_select_slices)
 
 
 class ParamsTabMR(ParamsTabCommon):

@@ -9,10 +9,12 @@ from fnmatch import fnmatch
 import datetime
 import xml.etree.ElementTree as ET
 
+import numpy as np
 import pdfplumber
 
 # imageQC block start
-from imageQC.scripts.mini_methods_calculate import get_width_center_at_threshold
+from imageQC.scripts.mini_methods_calculate import (
+    get_width_center_at_threshold, get_curve_values)
 # imageQC block end
 
 try:  # only needed with pyinstaller, importerror if run from spyder
@@ -52,6 +54,7 @@ def read_energy_spectrum_Siemens_gamma_camera(filepath):
     lines = []
     with open(filepath, 'r') as file:
         lines = file.readlines()
+    lines = lines[1:]  # skip first line
     curve_energy = []
     curve_counts = []
     status = False
@@ -76,11 +79,18 @@ def read_energy_spectrum_Siemens_gamma_camera(filepath):
         headers = ['Max (counts)', 'keV at max', 'FWHM', 'Energy resolution (%)']
         max_counts = max(curve_counts)
         idx_max = curve_counts.index(max_counts)
-        width, _ = get_width_center_at_threshold(curve_counts, 0.5*max_counts)
-        fwhm = width * (curve_energy[1] - curve_energy[0])
+        width, center = get_width_center_at_threshold(curve_counts, 0.5*max_counts)
+        keV_fwhm_start_stop = get_curve_values(
+                curve_energy, np.arange(len(curve_energy)),
+                [center-width/2, center+width/2]
+                )
+        denergy = curve_energy[idx_max] - curve_energy[idx_max-1]
+        fwhm = width * denergy
         keV_at_max = curve_energy[idx_max]
         values = [max_counts, keV_at_max, fwhm, 100.*fwhm/keV_at_max]
-        details = {'curve_counts': curve_counts, 'curve_energy': curve_energy}
+        details = {'curve_counts': np.array(curve_counts),
+                   'curve_energy': np.array(curve_energy),
+                   'keV_fwhm_start_stop': keV_fwhm_start_stop, 'keV_max': keV_at_max}
 
     data = {'status': status, 'errmsg': errmsg,
             'values': values, 'headers': headers,

@@ -23,7 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.9alpha'
+VERSION = '3.0.10alpha'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -61,6 +61,9 @@ ALTERNATIVES = {
     'NM': {
         'MTF': ['Point', 'One line source', 'Two perpendicular line sources',
                 'Four edges', 'Circular edge']
+        },
+    'SPECT': {
+        'MTF': ['Point source', 'Line source', 'Cylinder source']
         }
     }
 """dict: with lists defining the alternative methods/table displays
@@ -102,7 +105,9 @@ HEADERS = {
         'Dim': {
             'alt0': ['Upper', 'Lower', 'Left', 'Right', 'Diagonal 1', 'Diagonal 2']
             },
-        'Rin': {'alt0': ['Min diff from trend (HU)', 'Max diff from trend (HU)']}
+        'Rin': {'alt0': ['Min diff from trend (HU)', 'Max diff from trend (HU)']},
+        'NPS': {'alt0': ['Median frequency (1/mm)', 'Average AUC unnormalized',
+                         'Average variance', 'ROIs avg HU', 'ROIs stdev HU (noise)']}
         },
     'Xray': {
         'ROI': {'alt0': roi_headers},
@@ -121,7 +126,10 @@ HEADERS = {
             'alt0': ['MTF @ 0.5/mm', 'MTF @ 1.0/mm', 'MTF @ 1.5/mm',
                      'MTF @ 2.0/mm', 'MTF @ 2.5/mm', 'Freq @ MTF 0.5']
             },
-        'STP': {'alt0': ['Dose', 'Q', 'Mean pix', 'Stdev pix']}
+        'NPS': {'alt0': ['Average variance', 'Large area signal',
+                         'Large area stdev (noise)', 'AUC horiz/AUC vert']},
+        'STP': {'alt0': ['Dose', 'Q', 'Mean pix', 'Stdev pix']},
+        'Var': {'alt0': ['Min variance', 'Max variance', 'Median variance']}
         },
     'NM': {
         'ROI': {'alt0': roi_headers},
@@ -147,7 +155,11 @@ HEADERS = {
         },
     'SPECT': {
         'ROI': {'alt0': roi_headers},
-        'MTF': {},
+        'MTF': {
+            'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt1': ['FWHM', 'FWTM'],
+            'alt2': ['FWHM', 'FWTM'],
+            },
         'Con': {}
         },
     'PET': {
@@ -156,6 +168,13 @@ HEADERS = {
             'alt0': ['Center', 'at12', 'at15', 'at18', 'at21',
                      'dMean% C', 'dMean% at12', 'dMean% at15',
                      'dMean% at18', 'dMean% at21']
+            },
+        'Cro': {
+            'alt0': [
+                'Injected (MBq)', 'Inj. time', 'Scan time',
+                'Activity at scan (MBq)', 'Bq/ml',
+                'Bq/ml from images', 'SUV',
+                'New calibration factor']
             }
         },
     'MR': {
@@ -191,7 +210,9 @@ HEADERS_SUP = {
             'alt0': ['Upper', 'Lower', 'Left', 'Right', 'Diagonal 1', 'Diagonal 2']
             },
         },
-    'Xray': {},
+    'Xray': {
+        'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2']}
+        },
     'NM': {
         'Uni': {
             'altAll': ['FitX (mm from center)', 'FitY (mm from center)',
@@ -209,14 +230,22 @@ HEADERS_SUP = {
             'alt4': ['MTF 50%', 'MTF 10%', 'MTF 2%']
             },
         },
-    'SPECT': {},
+    'SPECT': {
+        'MTF': {
+            'alt0': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
+                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
+            'alt1': ['A1', 'sigma1', 'A2', 'sigma2'],
+            'alt2': ['A1', 'sigma1', 'A2', 'sigma2']
+            },
+        },
     'PET':  {},
     'MR': {
         'PIU': {
             'altAll': ['x min (pix from lower left)', 'y min',
                        'x max', 'y max']
             },
-        'Sli': {'altAll': ['FWHM upper (mm)', 'FWHM lower (mm)']}
+        'Sli': {'altAll': ['FWHM upper (mm)', 'FWHM lower (mm)']},
+        'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2']}
         }
     }
 

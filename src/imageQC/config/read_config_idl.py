@@ -364,11 +364,9 @@ class ConfigIdl2Py():
             if 'NPSROISZ' in param_names:
                 paramset.CT.nps_roi_size = cp.NPSROISZ[0]
             if 'NPSROIDIST' in param_names:
-                paramset.CT.nps_roi_dist = cp.NPSROIDIST[0]
+                paramset.CT.nps_roi_distance = cp.NPSROIDIST[0]
             if 'NPSSUBNN' in param_names:
                 paramset.CT.nps_n_sub = cp.NPSSUBNN[0]
-            if 'NPSAVG' in param_names:
-                paramset.CT.nps_plot_average = bool(cp.NPSAVG[0])
 
             if 'HOMOGROISZX' in param_names:
                 paramset.Xray.hom_roi_size = cp.HOMOGROISZX[0]
@@ -394,8 +392,6 @@ class ConfigIdl2Py():
                 paramset.Xray.roi_offset_xy = list(cp.OFFXYROIX[0].astype('float64'))
             if 'OFFXYROIX_UNIT' in param_names:
                 paramset.Xray.roi_offset_mm = bool(cp.OFFXYROIX_UNIT[0])
-            if 'MTFTYPEX' in param_names:
-                paramset.Xray.mtf_type = cp.MTFTYPEX[0]
             if 'MTFROISZX' in param_names:
                 paramset.Xray.mtf_roi_size_x = cp.MTFROISZX[0][0]
                 paramset.Xray.mtf_roi_size_y = cp.MTFROISZX[0][1]
@@ -414,7 +410,7 @@ class ConfigIdl2Py():
             if 'NPSROISZX' in param_names:
                 paramset.Xray.nps_roi_size = cp.NPSROISZX[0]
             if 'NPSSUBSZX' in param_names:
-                paramset.Xray.nps_sub_size = cp.NPSSUBSZX[0]
+                paramset.Xray.nps_n_sub = cp.NPSSUBSZX[0]
             if 'NPSAVG' in param_names:
                 paramset.Xray.nps_plot_average = cp.NPSAVG[0]
             if 'STPROISZ' in param_names:
@@ -476,6 +472,8 @@ class ConfigIdl2Py():
 
             if 'MTFTYPESPECT' in param_names:
                 paramset.SPECT.mtf_type = cp.MTFTYPESPECT[0]
+                if paramset.SPECT.mtf_type == 3:
+                    paramset.SPECT.mtf_type = 2  # removed option 2 for edge
             if 'MTFROISZSPECT' in param_names:
                 paramset.SPECT.mtf_roi_size = cp.MTFROISZSPECT[0]
             if 'PLOTMTFSPECT' in param_names:

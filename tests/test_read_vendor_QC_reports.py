@@ -5,8 +5,11 @@ Tests reading vendor QC reports.
 @author: ewas
 """
 import os
+from pathlib import Path
 
 from imageQC.scripts import read_vendor_QC_reports
+
+path_tests = Path(__file__).parent
 
 def test_Siemens_PET_dailyQC():
     """Test reading Siemens PET dailyQC for different software versions."""
@@ -14,8 +17,8 @@ def test_Siemens_PET_dailyQC():
     file_names = ['Siemens_PET_DailyQC_VG60A.pdf',
                   'Siemens_PET_DailyQC_VG80B.pdf']
     expected_res = [
-        ['21.02.2017', 'LAB19-PETCT', '', '', '', '1.000000', '103.4',
-         '37.9', '33.5', '3.161e+007', '0', '0', '0', '-1', '-5.7'],
+        ['21.02.2017', 'LAB19-PETCT', '', '', '', 
+         1.0, 103.4, 37.9, 33.5, 31610000.0, 0, 0, 0, -1.0, -5.7],
         ['30.05.2022', 'LAB19-PETCT', 'X', '', '', '0.940000', '103.112',
          '36.2', '31.617', '3.079e+007', '0', '0', '0', '-1.5', '-3.0']
         ]
@@ -25,14 +28,15 @@ def test_Siemens_PET_dailyQC():
                          'vendor_QC_reports', 'SiemensPET', f)
         txt = read_vendor_QC_reports.get_pdf_txt(p)
         res = read_vendor_QC_reports.read_Siemens_PET_dailyQC(txt)
-        assert res['values_txt'] == expected_res[i]
+        breakpoint()
+        assert res['values'] == expected_res[i]
 
 def test_Siemens_PET_dailyQC_xml():
     """Test reading Siemens PET dailyQC xml report (PET MR)."""
     dir_tests = os.path.dirname(__file__)
     file_names = ['Siemens_PET_DailyQC_MR.xml']
     expected_res = [
-        ['02.08.2021', '1', '106.7', '52.8', '32.7', '1.951e+007', '0', '0', '0']
+        ['02.08.2021', 1.0, 106.7, 52.8, 32.7, '1.951e+007', '0', '0', '0']
         ]
 
     for i, f in enumerate(file_names):
@@ -40,7 +44,8 @@ def test_Siemens_PET_dailyQC_xml():
                          'vendor_QC_reports', 'SiemensPET', f)
         root = read_vendor_QC_reports.get_xml_tree(p)
         res = read_vendor_QC_reports.read_Siemens_PET_dailyQC_xml(root)
-        assert res['values_txt'] == expected_res[i]
+        breakpoint()
+        assert res['values'] == expected_res[i]
 
 def test_Siemens_CT_QC():
     """Test reading Siemens CT constancy and daily QC.
@@ -89,7 +94,8 @@ def test_Siemens_CT_QC():
                          'vendor_QC_reports', 'SiemensCT', f)
         txt = read_vendor_QC_reports.get_pdf_txt(p)
         res = read_vendor_QC_reports.read_Siemens_CT_QC(txt)
-        assert res['values_txt'] == expected_res[i]
+        breakpoint()
+        assert res['values'] == expected_res[i]
 
 
 def test_Siemens_CT_QC_Intevo():
@@ -122,7 +128,8 @@ def test_Siemens_CT_QC_Intevo():
                          'vendor_QC_reports', 'SiemensCT', 'Intevo', f)
         txt = read_vendor_QC_reports.get_pdf_txt(p)
         res = read_vendor_QC_reports.read_Siemens_CT_QC(txt)
-        assert res['values_txt'] == expected_res[i]
+        breakpoint()
+        assert res['values'] == expected_res[i]
 
 
 def test_Siemens_CT_QC_Symia():
@@ -140,5 +147,13 @@ def test_Siemens_CT_QC_Symia():
                          'vendor_QC_reports', 'SiemensCT', 'Symbia', f)
         txt = read_vendor_QC_reports.get_pdf_txt(p)
         res = read_vendor_QC_reports.read_Siemens_CT_QC(txt)
-        assert res['values_txt'] == []
+        assert res['values'] == []
         assert res['status'] is False
+
+
+def test_Siemens_NM_energy_spectrum():
+    file_name = (path_tests / 'test_inputs' / 'vendor_QC_reports' / 'SiemensNM' /
+                 'eResDet1.txt')
+    res = read_vendor_QC_reports.read_energy_spectrum_Siemens_gamma_camera(
+        file_name.resolve())
+    assert res['values'] == [32706.0, 141.350159, 12.678160069552563, 8.96932848130193]

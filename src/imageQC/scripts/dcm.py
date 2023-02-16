@@ -41,8 +41,9 @@ class DcmInfo():
     frame_number: int = -1
     pix: tuple = (-1., -1.)
     shape: tuple = (-1, -1)  # rows, columns
-    slice_thickness: float = -1.0
-    nm_radius: float = -1.0  # radius of gamma camera
+    slice_thickness: Optional[float] = None
+    nm_radius: Optional[float] = None  # radius of gamma camera
+    zpos: Optional[float] = None
     acq_date: str = ''
     studyUID: str = ''
 
@@ -63,7 +64,6 @@ class DcmInfoGui(DcmInfo):
     # for seriesnumber / seriesdescription used in open multi
     window_width: int = 0
     window_center: int = 0
-    zpos: Optional[float] = None
 
 
 def fix_sop_class(elem, **kwargs):
@@ -130,13 +130,14 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 'studyUID': (pd.get('StudyInstanceUID', ''))
                 }
 
-            slice_thickness, pix = get_dcm_info_list(
+            slice_thickness, pix, slice_location = get_dcm_info_list(
                     pd,
-                    TagPatternFormat(list_tags=['SliceThickness', 'PixelSpacing']),
+                    TagPatternFormat(list_tags=[
+                        'SliceThickness', 'PixelSpacing', 'SliceLocation']),
                     tag_infos,
                     prefix_separator='', suffix_separator='',
                     )
-            attrib['slice_thickness'] = -1.
+            attrib['slice_thickness'] = None
             if isinstance(slice_thickness, str):
                 if '[' in slice_thickness:
                     slice_thickness = slice_thickness[1:-1]
@@ -151,8 +152,9 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 except ValueError:
                     pass
             if mod == 'NM':  # test if slicethickness - then SPECT
-                if attrib['slice_thickness'] != -1.:
+                if attrib['slice_thickness'] is not None:
                     attrib['modality'] = 'SPECT'
+                    mod = 'SPECT'
 
             attrib['pix'] = [0, 0]
             if isinstance(pix, list):
@@ -174,7 +176,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
             attrib['acq_date'] = acq_date
 
             nm_radius = []
-            if mod in ['NM', 'SPECT']:
+            if mod == 'NM':
                 # attrib nm_radius
                 nm_radius = get_dcm_info_list(
                         pd,
@@ -205,9 +207,9 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 attrib['window_center'] = wc
 
             if frames == -1:
+                if attrib['slice_thickness'] is not None:
+                    attrib['zpos'] = float(slice_location)  # try?
                 if GUI:
-                    zpos = pd.get('SliceLocation', None)
-                    attrib['zpos'] = zpos
                     attrib.update(get_dcm_gui_info_lists(
                         pd,
                         tag_infos=tag_infos,
@@ -220,7 +222,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     dcm_obj = DcmInfo(**attrib)
                 list_of_DcmInfo.append(dcm_obj)
             else:  # multiframe
-                seq = pd.get('PerFrameFunctionalGroupsSequence', None)
+                #TODO delete? seq = pd.get('PerFrameFunctionalGroupsSequence', None)
                 if GUI:
                     gui_info = get_dcm_gui_info_lists(
                         pd, tag_infos=tag_infos,
@@ -228,28 +230,37 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                         modality=mod)
                 for frame in range(frames):
                     attrib.update({'frame_number': frame})
+                    #TODO Delete?
+                    '''
+                    if seq is not None:
+                        try:
+                            zpos = seq[frame][
+                                'PlanePositionSequence'][0][
+                                    'ImagePositionPatient'].value[2]
+                            attrib['zpos'] = zpos
+                        except (IndexError, KeyError):
+                            pass
+                    '''
+                    if attrib['slice_thickness'] is not None:
+                        try:
+                            info_this = info_extract_frame(
+                                frame, {'zpos': [slice_location]})
+                            attrib['zpos'] = float(info_this['zpos'][0])
+                        except (IndexError, ValueError):
+                            attrib['zpos'] = frame * attrib['slice_thickness']
                     if GUI:
-                        if seq is not None:
-                            try:
-                                zpos = seq[frame][
-                                    'PlanePositionSequence'][0][
-                                        'ImagePositionPatient'].value[2]
-                                attrib['zpos'] = zpos
-                            except (IndexError, KeyError):
-                                pass
                         gui_info_this = info_extract_frame(frame, gui_info)
                         attrib.update(gui_info_this)
                         dcm_obj = DcmInfoGui(**attrib)
                     else:
-                        if len(nm_radius) > 0:
-                            gui_info_this = info_extract_frame(
+                        try:
+                            info_this = info_extract_frame(
                                 frame, {'nm_radius': [nm_radius]})
-                            gui_info_this['nm_radius'] = float(
-                                gui_info_this['nm_radius'][0])
-                            attrib.update(gui_info_this)
+                            attrib['nm_radius'] = float(info_this['nm_radius'][0])
+                        except IndexError:
+                            pass
                         dcm_obj = DcmInfo(**attrib)
                     list_of_DcmInfo.append(dcm_obj)
-
         else:
             ignored_files.append(file)
 

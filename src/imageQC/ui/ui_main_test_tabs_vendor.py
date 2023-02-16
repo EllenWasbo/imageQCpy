@@ -83,7 +83,8 @@ class ParamsTabVendor(QWidget):
                 self.main.current_modality][self.selected]
             implemented_types = [
                 'Siemens CT Constancy/Daily Reports (.pdf)',
-                'Siemens PET-CT DailyQC Reports (.pdf)'
+                'Siemens PET-CT DailyQC Reports (.pdf)',
+                'Siemens exported energy spectrum (.txt)'
                 ]
             if file_type in implemented_types:
                 file_suffix = file_type.split('(')[1]

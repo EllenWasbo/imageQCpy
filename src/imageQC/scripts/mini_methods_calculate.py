@@ -10,6 +10,59 @@ from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter
 
 
+def get_distance_map_point(shape, center_dx=0., center_dy=0.):
+    """Calculate distances from center point in image (optionally with offset).
+
+    Parameters
+    ----------
+    shape : tuple
+        shape of array do generate
+    center_dx : float, optional
+        offset from center in shape. The default is 0..
+    center_dy : float, optional
+        offset from center in shape. The default is 0..
+
+    Returns
+    -------
+    distance_map : ndarray
+        of shape equal to input shape
+    """
+    sz_y, sz_x = shape
+    xs, ys = np.meshgrid(np.arange(sz_x), np.arange(sz_y))
+    center_pos_x = center_dx + 0.5 * sz_x
+    center_pos_y = center_dy + 0.5 * sz_y
+    distance_map = np.sqrt((xs-center_pos_x) ** 2 + (ys-center_pos_y) ** 2)
+
+    return distance_map
+
+
+def get_distance_map_edge(shape, slope=0., intercept=0.):
+    """Calculate distances from edge defined by y = ax + b.
+
+    distance from x0,y0 normal to line = (b + a*x0 - y0)/sqrt(1+a^2)
+    https://en.wikipedia.org/wiki/Distance_from_a_point_to_
+
+    Parameters
+    ----------
+    shape : tuple
+        shape of 2darray to generate map for
+    slope : float, optional
+        a in y = ax + b. The default is 0.
+    intercept : float, optional
+        b in y = ax + b. The default is 0.
+
+    Returns
+    -------
+    distance_map : 2darray
+        of shape equal to input shape
+    """
+    sz_y, sz_x = shape
+    xs, ys = np.meshgrid(np.arange(sz_x), np.arange(sz_y))
+    distance_map = (ys - intercept - slope*xs) / np.sqrt(1 + slope**2)
+
+    return distance_map
+
+
 def gauss_4param(x, H, A, x0, sigma):
     """Calculate gaussian curve from x values and parameters."""
     return H + A * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
@@ -25,7 +78,7 @@ def gauss_4param_fit(x, y):
 
 def gauss(x, A, sigma):
     """Calculate gaussian curve from x values and parameters."""
-    return A * np.exp(-(x ** 2) / (2 * sigma ** 2))
+    return A * np.exp(-0.5 * (x ** 2) / (sigma ** 2))
 
 
 def gauss_fit(x, y, fwhm=0):
@@ -38,7 +91,7 @@ def gauss_fit(x, y, fwhm=0):
     A = max(y)
     popt, pcov = curve_fit(
         gauss, x, y, p0=[A, sigma],
-        bounds=([0.5*A, 0.5*sigma], [2*A, 2*sigma])
+        bounds=([0.9*A, 0.5*sigma], [1.1*A, 2*sigma])
         )
     return popt
 
@@ -49,29 +102,93 @@ def gauss_double(x, A1, sigma1, A2, sigma2):
             A2 * np.exp(-(x) ** 2 / (2 * sigma2 ** 2)))
 
 
-def gauss_double_fit(x, y, fwhm1=0):
-    """Fit x,y to double gaussian - (centered, 1 positive and 1 negative amplitude)."""
-    A1 = np.max(y) - 2 * np.min(y)
-    if fwhm1 == 0:
+def gauss_double_fit(x, y, fwhm1=None, A2_positive=False):
+    """Fit x,y to centered double gaussian.
+
+    Parameters
+    ----------
+    x : np.1darray
+    y : np.1darray
+    fwhm1 : float, optional
+        Option to specify fwhm1 to calculate sigma1. The default is 0.
+    A2_positive : bool, optional
+        If false: either A1 positive and A2 negative or fit to single gaussian (CT LSF).
+        If true: force both A1 and A2 positive (Xray LSF).
+        The default is False.
+
+    Returns
+    -------
+    popt from scipy.optimize.curve_fit
+    """
+    if fwhm1 is None:
         width, center = get_width_center_at_threshold(y, np.max(y)/2)
         if width is not None:
             fwhm1 = width * (x[1] - x[0])
     sigma1 = fwhm1 / (2 * np.sqrt(2 * np.log(2)))
-    A2 = 2 * np.min(y)
-    sigma2 = 2 * sigma1
-    if A2 < 0:
+
+    if A2_positive:
+        A1 = 0.9 * np.max(y)
+        A2 = 0.1 * np.max(y)
+        sigma = sigma1
         popt, pcov = curve_fit(
-            gauss_double, x, y, p0=[A1, sigma1, A2, sigma2],
-            bounds=([0.5*A1, 0.5*sigma1, 2*A2, 0.5*sigma2],
-                    [2*A1, 2*sigma1, 0, 2*sigma2]),
+            gauss_double, x, y, p0=[A1, sigma, A2, sigma],
+            bounds=([0.5*A1, 0.7*sigma, 0, 0.7*sigma],
+                    [2*A1, 2*sigma, 2*A1, 3*sigma]),
             )
     else:
-        A1 = max(y)
-        popt, pcov = curve_fit(
-            gauss, x, y, p0=[A1, sigma1],
-            bounds=([0.5*A1, 0.5*sigma1], [2*A1, 2*sigma1]),
-            )
+        A1 = np.max(y) - 2 * np.min(y)
+        A2 = 2 * np.min(y)
+        sigma2 = 2 * sigma1
+        if A2 < 0:
+            popt, pcov = curve_fit(
+                gauss_double, x, y, p0=[A1, sigma1, A2, sigma2],
+                bounds=([0.5*A1, 0.5*sigma1, 2*A2, 0.5*sigma2],
+                        [2*A1, 2*sigma1, 0, 2*sigma2]),
+                )
+        else:
+            A1 = max(y)
+            popt, pcov = curve_fit(
+                gauss, x, y, p0=[A1, sigma1],
+                bounds=([0.5*A1, 0.5*sigma1], [2*A1, 2*sigma1]),
+                )
     return popt
+
+
+def polyfit_2d(array_2d, max_order=2):
+    """Fit 2d array to polynomial plane.
+
+    https://scipython.com/blog/linear-least-squares-fitting-of-a-two-dimensional-data/
+
+    Parameters
+    ----------
+    array_2d : np.array
+    max_order : int
+        max polynomial order
+
+    Returns
+    -------
+    fitted_2darray
+    """
+    def get_basis(x, y, max_order=2):
+        """Return the fit basis polynomials: 1, x, x^2, ..., xy, x^2y, ... etc."""
+        basis = []
+        for i in range(max_order+1):
+            for j in range(max_order - i + 1):
+                basis.append(x**j * y**i)
+        return basis
+    sz_y, sz_x = array_2d.shape
+    xs, ys = np.meshgrid(np.arange(sz_x), np.arange(sz_y))
+    basis = get_basis(xs.ravel(), ys.ravel(), max_order)
+    # Linear, least-squares fit.
+    A = np.vstack(basis).T
+    b = array_2d.ravel()
+    c, r, rank, s = np.linalg.lstsq(A, b, rcond=None)
+
+    # Calculate the fitted surface from the coefficients, c.
+    fitted_2darray = np.sum(c[:, None, None] * np.array(get_basis(xs, ys, max_order))
+                            .reshape(len(basis), *xs.shape), axis=0)
+
+    return fitted_2darray
 
 
 def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
@@ -86,7 +203,10 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
     prefilter_sigma : float, optional
         prefiltered with gaussian filter, sigma=prefilter_sigma. The default is None.
     gaussfit : str, optional
-        single or double (sum of two gaussian). The default is 'single'.
+        single or double or double_allow_both_positive (sum of two gaussian).
+        double assume by default 1 negative + 1 positive gauss.
+        double_both_positive demand both positive.
+        The default is 'single'.
 
     Returns
     -------
@@ -107,7 +227,11 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
             else:
                 A1, sigma1 = popt
                 LSF_fit = gauss(LSF_x, *popt)
-        else:  # single
+        elif gaussfit == 'double_both_positive':
+            popt = gauss_double_fit(LSF_x, LSF, fwhm1=width * dx, A2_positive=True)
+            A1, sigma1, A2, sigma2 = popt
+            LSF_fit = gauss_double(LSF_x, *popt)
+        else: # single
             A1, sigma1 = gauss_fit(LSF_x, LSF)
             LSF_fit = gauss(LSF_x, A1, sigma1)
 
@@ -165,6 +289,126 @@ def get_MTF_discrete(LSF, dx=1, padding_factor=1):
     MTF = MTF/MTF[0]
 
     return {'MTF_freq': freq, 'MTF': MTF}
+
+
+def get_2d_NPS(sub_image, pix):
+    """Calculate fourier transform of 2d array."""
+    fourier = np.fft.fft2(sub_image)
+    fourier = np.fft.fftshift(fourier)
+    factor = pix**2 / (sub_image.shape[0] * sub_image.shape[1])
+    return factor * np.abs(fourier) ** 2
+
+
+def get_NPSuv_profile(NPS_array, nlines=7, exclude_axis=True, pix=1., step_size=None):
+    """Extract horizontal and vertical 1d NPS.
+
+    Parameters
+    ----------
+    NPS_array : np.2darray
+    nlines : int, optional
+        number of lines to include at each side. The default is 7.
+    exclude_axis : bool, optional
+        exclude line at axis (often very high). The default is True.
+    pix : float, optional
+        pixelsize of image. The default is 1..
+    step_size : float, optional
+        sampling step size for curves. The default is None = no resampling.
+
+    Returns
+    -------
+    freq : np.1darray
+        frequency axis
+    u_profile : np.1darray
+        horizontal NPS
+    v_profile : np.1darray
+        vertical NPS
+    """
+    if exclude_axis:
+        lines = np.arange(nlines) + 1
+        lines = NPS_array.shape[0] // 2 + np.concatenate((-np.flip(lines), lines))
+    else:
+        lines = np.arange(nlines)
+        lines = NPS_array.shape[0] // 2 + np.concatenate((-np.flip(lines[1:]), lines))
+    u_profile = np.mean(NPS_array[lines], axis=0)
+    v_profile = np.mean(NPS_array[:][:, lines], axis=1)
+
+    u_profile = np.fft.fftshift(u_profile)
+    v_profile = np.fft.fftshift(v_profile)
+    freq = np.fft.fftfreq(NPS_array.shape[0], d=pix)
+
+    # skip symmetry part and zero value
+    u_profile = u_profile[1:NPS_array.shape[0] // 2]
+    v_profile = v_profile[1:NPS_array.shape[0] // 2]
+    freq = freq[1:NPS_array.shape[0] // 2]
+
+    if step_size is not None:
+        freq_new, u_profile = resample_by_binning(
+            u_profile, freq, step_size, first_step=freq[1])
+        freq_new, v_profile = resample_by_binning(
+            v_profile, freq, step_size, first_step=freq[1])
+        freq = freq_new
+    return (freq, u_profile, v_profile)
+
+
+def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None, step_size=1.):
+    """Calculate radial profile of image.
+
+    Parameters
+    ----------
+    array_2d : np.2darray
+        image to calculate radial profile from
+    pix : float, optional
+        Pixel size to scale x axis. The default is 1..
+    start_dist : float, optional
+        set other than 0 to skip values close to center. The default is 0.
+        dist scaled to same unit as pix
+    stop_dist : float or None, optional
+        set other than None to skip values at larger distances. The default is None.
+        dist scaled to same unit as pix
+    step_size: float
+        step size (sampling frequency) of profile
+
+    Returns
+    -------
+    radial_profile_x : np.1darray
+        x values
+    radial_profile : np.1darray
+        profile values
+    """
+    # sort pixel values from center
+    dist_map = get_distance_map_point(array_2d.shape)
+    dists_flat = dist_map.flatten()
+    sort_idxs = np.argsort(dists_flat)
+    dists = pix * dists_flat[sort_idxs]
+    values_flat = array_2d.flatten()[sort_idxs]
+
+    # ignore dists?
+    if stop_dist is not None:
+        dists_cut_temp = dists[dists < stop_dist]
+        values_temp = values_flat[dists < stop_dist]
+    else:
+        dists_cut_temp = dists
+        values_temp = values_flat
+    if start_dist > 0:
+        dists_cut = dists_cut_temp[dists_cut_temp > start_dist]
+        values = values_temp[dists_cut_temp > start_dist]
+    else:
+        dists_cut = dists_cut_temp
+        values = values_temp
+
+    radial_profile_x, radial_profile = resample_by_binning(
+        values, dists_cut, step_size, first_step=start_dist)
+
+    return (radial_profile_x, radial_profile)
+
+
+def find_median_spectrum(x, y):
+    """Find frequency that split spectrum in two (same area)."""
+    cumsum = np.cumsum(y)
+    find_median = np.where(cumsum > np.max(cumsum)/2)
+    median_x = x[find_median[0][0]]
+    median_y = y[find_median[0][0]]
+    return (median_x, median_y)
 
 
 def point_source_func(x, C, D):
@@ -385,6 +629,7 @@ def ESF_to_LSF(ESF, prefilter_sigma):
 
     return (LSF, LSF_not_filtered, values_f)
 
+
 def cut_and_fade_LSF(profile, center=0, fwhm=0, cut_width=0, fade_width=0):
     """Cut and fade profile fwhm from center to reduce noise in LSF.
 
@@ -398,7 +643,7 @@ def cut_and_fade_LSF(profile, center=0, fwhm=0, cut_width=0, fade_width=0):
     cut_width : float
         cut profile cut_width*fwhm from halfmax. If zero, also fade width ignored.
     fade_width : float (or None)
-        fade profile to background fade*fwhm outside cut_width
+        fade profile to background fade*fwhm inside cut_width
 
     Returns
     -------
@@ -406,7 +651,7 @@ def cut_and_fade_LSF(profile, center=0, fwhm=0, cut_width=0, fade_width=0):
     cut_dist_pix : float
         distance from center where profile is cut (unit = pix)
     fade_dist_pix : float
-        distance from center where profile stops fading (unit = pix)
+        distance from center where profile starts fading (unit = pix)
     """
     modified_profile = profile
     n_fade = 0
@@ -418,24 +663,24 @@ def cut_and_fade_LSF(profile, center=0, fwhm=0, cut_width=0, fade_width=0):
         if fade_width is None:
             fade_width = 0
         if fade_width > 0:
+            fade_width = min(fade_width, cut_width)
             n_fade = round(fade_width*fwhm)
-            first_fade_x = max(first_x - n_fade, 0)
-            last_fade_x = min(last_x + n_fade, len(profile) - 1)
-            nn = first_x - first_fade_x
+            first_fade_x = first_x + n_fade
+            last_fade_x = last_x - n_fade
+            nn = first_fade_x - first_x
             gradient = np.multiply(
-                np.arange(nn)/nn, profile[first_fade_x:first_x])
-            modified_profile[first_fade_x:first_x] = gradient
-            nn = last_fade_x - last_x
+                np.arange(nn)/nn, profile[first_x:first_fade_x])
+            modified_profile[first_x:first_fade_x] = gradient
+            nn = last_x - last_fade_x
             gradient = np.multiply(
-                np.flip(np.arange(nn)/nn), profile[last_x:last_fade_x])
-            modified_profile[last_x:last_fade_x] = gradient
-            first_x = first_fade_x
-            last_x = last_fade_x
+                np.flip(np.arange(nn)/nn), profile[last_fade_x:last_x])
+            modified_profile[last_fade_x:last_x] = gradient
         if first_x > 0:
-            modified_profile[0:first_x - 1] = 0
+            modified_profile[0:first_x] = 0
         if last_x < len(profile) - 2:
-            modified_profile[last_x + 1:] = 0
-    return (modified_profile, dx, dx + n_fade)
+            modified_profile[last_x:] = 0
+
+    return (modified_profile, dx, dx - n_fade)
 
 
 def rotate_point(xy, rotation_axis_xy, angle):
@@ -445,7 +690,7 @@ def rotate_point(xy, rotation_axis_xy, angle):
     ----------
     xy : tuple of floats
         coordinates to rotate
-    origin_xy: tuple of floats
+    rotation_axis_xy: tuple of floats
         coordinate of origin
     angle : float
         rotation angle in degrees
@@ -538,6 +783,62 @@ def resample(input_y, input_x, step, first_step=0, n_steps=None):
     new_y = np.interp(new_x, input_x, input_y)
 
     return (new_x, new_y)
+
+
+def resample_by_binning(input_y, input_x, step, bin_size=None, 
+                        first_step=0, n_steps=None):
+    """Resample input_y with regular step.
+
+    Binning -slower than resample method, but smoother because averaging over step size.
+    Use if step size might be larger than original.
+
+    Parameters
+    ----------
+    input_y : array like of float
+    input_x : array like of float
+        assumed to be sorted
+    step : float
+        resulting step size of x
+    bin_size : float
+        bin_size for avaraging
+    first_step : float
+        first value of x to output
+    n_steps : int, optional
+        number of values in new_x / new_y
+
+    Returns
+    -------
+    new_x : np.array of float
+    new_y : np.array of float
+    """
+    input_y = np.array(input_y)
+    input_x = np.array(input_x)
+    if n_steps is None:
+        n_steps = (np.max(input_x) - first_step) // step
+    new_x = step * np.arange(n_steps) + first_step
+    new_y = []
+    if bin_size is None:
+        bin_size = step
+    n_values_this = []
+    for this_x in new_x:
+        values_this = input_y[np.logical_and(
+            input_x >= this_x - 0.5*bin_size,
+            input_x <= this_x + 0.5*bin_size)]
+        if values_this.size > 0:
+            new_y.append(np.nanmean(values_this))
+        else:
+            new_y.append(np.NaN)
+        n_values_this.append(values_this.size)
+    new_y = np.array(new_y)
+
+    def nan_helper(y):
+        return np.isnan(y), lambda z: z.nonzero()[0]
+
+    nans, x = nan_helper(new_y)
+    new_y[nans] = np.interp(x(nans), x(~nans), new_y[~nans])
+
+    return (new_x, new_y)
+
 
 def get_min_max_pos_2d(image, roi_array):
     """Get position of first min and max value in image.

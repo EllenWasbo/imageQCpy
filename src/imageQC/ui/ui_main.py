@@ -332,9 +332,10 @@ class MainWindow(QMainWindow):
 
     def update_active_img(self, current):
         """Overwrite pixmap in memory with new active image, refresh GUI."""
-        if len(self.imgs) > 0:
-            self.gui.active_img_no = self.tree_file_list.indexOfTopLevelItem(
-                current)
+        if len(self.imgs) > 0 and not self.wid_image_display.tool_sum.isChecked():
+            if current is not None:
+                self.gui.active_img_no = self.tree_file_list.indexOfTopLevelItem(
+                    current)
             self.active_img, _ = dcm.get_img(
                 self.imgs[self.gui.active_img_no].filepath,
                 frame_number=self.imgs[self.gui.active_img_no].frame_number)
@@ -440,6 +441,7 @@ class MainWindow(QMainWindow):
             if self.wid_quicktest.gb_quicktest.isChecked():
                 self.current_quicktest = cfc.QuickTestTemplate()
                 self.refresh_img_display()
+        self.reset_results()
 
     def update_current_test(self, reset_index=False, refresh_display=True):
         """Update GUI when selected test change.
@@ -449,6 +451,7 @@ class MainWindow(QMainWindow):
         reset_index : bool
             Rest test index if mode change. Default is False
         """
+        self.start_wait_cursor()
         widget = self.stack_test_tabs.currentWidget()
         if widget is not None:
             if hasattr(widget, 'currentIndex'):
@@ -460,6 +463,7 @@ class MainWindow(QMainWindow):
                 if self.active_img is not None and refresh_display:
                     self.update_roi()
                     self.refresh_results_display()
+        self.stop_wait_cursor()
 
     def update_roi(self, clear_results_test=False):
         """Recalculate ROI."""
@@ -495,29 +499,43 @@ class MainWindow(QMainWindow):
             new sort order. The default is None.
         """
         if n_added_imgs > 0:
+            del_keys = []
             for test, res_dict in self.results.items():
-                if res_dict['pr_image']:
-                    empty_extend = [[] for i in range(n_added_imgs)]
-                    res_dict['values'].extend(empty_extend)
-                    if 'values_sup' in res_dict:
-                        res_dict['values_sup'].extend(empty_extend)
-                    if 'details_dict' in res_dict:
-                        res_dict['details_dict'].extend(empty_extend)
+                if res_dict is not None:
+                    if res_dict['pr_image']:
+                        empty_extend = [[] for i in range(n_added_imgs)]
+                        res_dict['values'].extend(empty_extend)
+                        if 'values_sup' in res_dict:
+                            res_dict['values_sup'].extend(empty_extend)
+                        if 'details_dict' in res_dict:
+                            res_dict['details_dict'].extend(empty_extend)
+                    else:
+                        del_keys.append(test)
                 else:
-                    del self.results[test]
+                    del_keys.append(test)
+            if del_keys:
+                for key in del_keys:
+                    del self.results[key]
 
         if deleted_idxs:
             deleted_idxs.sort(reverse=True)
+            del_keys = []
             for test, res_dict in self.results.items():
-                if res_dict['pr_image']:
-                    for idx in deleted_idxs:
-                        del res_dict['values'][idx]
-                        if 'values_sup' in res_dict:
-                            del res_dict['values_sup'][idx]
-                        if 'details_dict' in res_dict:
-                            del res_dict['details_dict'][idx]
+                if res_dict is not None:
+                    if res_dict['pr_image']:
+                        for idx in deleted_idxs:
+                            del res_dict['values'][idx]
+                            if 'values_sup' in res_dict:
+                                del res_dict['values_sup'][idx]
+                            if 'details_dict' in res_dict:
+                                del res_dict['details_dict'][idx]
+                    else:
+                        del_keys.append(test)
                 else:
-                    del self.results[test]
+                    del_keys.append(test)
+            if del_keys:
+                for key in del_keys:
+                    del self.results[key]
 
         if sort_idxs:
             orig_res = copy.deepcopy(self.results)
@@ -602,15 +620,17 @@ class MainWindow(QMainWindow):
     def refresh_selected_table_row(self):
         """Set selected results table row to the same as image selected file."""
         if self.current_test in self.results:
-            if self.results[self.current_test]['pr_image']:
-                wid = self.tab_results.currentWidget()
-                if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
-                    self.wid_res_tbl.result_table.blockSignals(True)
-                    self.wid_res_tbl_sup.result_table.blockSignals(True)
-                    self.wid_res_tbl.result_table.selectRow(self.gui.active_img_no)
-                    self.wid_res_tbl_sup.result_table.selectRow(self.gui.active_img_no)
-                    self.wid_res_tbl.result_table.blockSignals(False)
-                    self.wid_res_tbl_sup.result_table.blockSignals(False)
+            if self.results[self.current_test] is not None:
+                if self.results[self.current_test]['pr_image']:
+                    wid = self.tab_results.currentWidget()
+                    if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
+                        self.wid_res_tbl.result_table.blockSignals(True)
+                        self.wid_res_tbl_sup.result_table.blockSignals(True)
+                        self.wid_res_tbl.result_table.selectRow(self.gui.active_img_no)
+                        self.wid_res_tbl_sup.result_table.selectRow(
+                            self.gui.active_img_no)
+                        self.wid_res_tbl.result_table.blockSignals(False)
+                        self.wid_res_tbl_sup.result_table.blockSignals(False)
 
     def sort_imgs(self):
         """Resort images by dicom info."""

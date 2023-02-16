@@ -5,7 +5,7 @@ Calculation processes for the different tests.
 
 @author: Ellen Wasbø
 """
-
+from timeit import default_timer as timer  #TODO delete
 import numpy as np
 from scipy import ndimage
 from skimage import feature
@@ -122,9 +122,9 @@ def get_rois(image, image_number, input_main):
         except AttributeError:
             pass
 
-        if input_main.current_modality == 'CT':
+        if input_main.current_modality in ['CT', 'SPECT']:
             roi_size_in_pix = paramset.mtf_roi_size / image_info.pix[0]
-            if paramset.mtf_type == 0:  # bead
+            if paramset.mtf_type == 0:  # bead / point source
                 if paramset.mtf_auto_center:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)
@@ -143,7 +143,7 @@ def get_rois(image, image_number, input_main):
                     offcenter_xy=off_center_xy)
                 background_outer[roi_this[0] == True] = False
                 roi_this[1] = background_outer
-            else:  # circular edge / wire
+            else:  # circular edge / wire or cylinder source / line source
                 if paramset.mtf_auto_center:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)
@@ -325,14 +325,48 @@ def get_rois(image, image_number, input_main):
 
         return (roi_this, errmsg)
 
+    def NPS():
+        if input_main.current_modality == 'CT':
+            center_xy = (delta_xya[0] + img_shape[1] // 2,
+                         delta_xya[1] + img_shape[0] // 2)
+            dist_in_pix = paramset.nps_roi_distance / image_info.pix[0]
+            first_xy = (center_xy[0], center_xy[1] - dist_in_pix)
+            angle_dist = 360 / paramset.nps_n_sub
+            roi_array = []
+            for i in range(paramset.nps_n_sub):
+                center_roi = mmcalc.rotate_point(first_xy, center_xy, i * angle_dist)
+                offcenter_roi = (center_roi[0] - img_shape[1] // 2,
+                                 center_roi[1] - img_shape[0] // 2)
+                roi_array.append(get_roi_rectangle(
+                    img_shape, roi_width=paramset.nps_roi_size,
+                    roi_height=paramset.nps_roi_size, offcenter_xy=offcenter_roi))
+        elif input_main.current_modality == 'Xray':
+            roi_array = []
+            pos = 0.5 * paramset.nps_roi_size * (
+                np.arange(2*paramset.nps_n_sub-1) - (paramset.nps_n_sub-1))
+            for i in pos:
+                for j in pos:
+                    roi_array.append(get_roi_rectangle(
+                        img_shape, roi_width=paramset.nps_roi_size,
+                        roi_height=paramset.nps_roi_size, offcenter_xy=(i, j)))
+
+        else:
+            roi_array = None
+        return roi_array
+
     def STP():
         roi_size_in_pix = paramset.stp_roi_size / image_info.pix[0]
         return get_roi_circle(img_shape, tuple(delta_xya[0:2]), roi_size_in_pix)
 
     def Var():
         roi_size_in_pix = paramset.var_roi_size / image_info.pix[0]
-        return get_roi_rectangle(
+        roi_small = get_roi_rectangle(
             img_shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
+        w = 0.01 * paramset.noi_percent * img_shape[1]
+        h = 0.01 * paramset.noi_percent * img_shape[0]
+        roi_large = get_roi_rectangle(
+            img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
+        return [roi_large, roi_small]
 
     def Uni():
         return get_ratio_NM(
@@ -352,6 +386,10 @@ def get_rois(image, image_number, input_main):
 
     def SNI():
         return get_roi_SNI(image, image_info, paramset)
+
+    def Cro():
+        roi_size_in_pix = paramset.cro_roi_size / image_info.pix[0]
+        return get_roi_circle(img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
 
     def SNR():
         return get_roi_circle_MR(
@@ -639,6 +677,12 @@ def get_roi_CTn(image, image_info, test_params, delta_xya=[0, 0, 0.]):
     errmsg = None
 
     if roi_size_in_pix > 0:
+        if test_params.ctn_auto_center:
+            res = mmcalc.optimize_center(image, 0)
+            if res is not None:
+                center_x, center_y, _, _ = res
+                delta_xya[0] = center_x - 0.5*image_info.shape[1]
+                delta_xya[1] = center_y - 0.5*image_info.shape[0]
         filt_image = ndimage.gaussian_filter(image, sigma=5)
         n_rois = len(test_params.ctn_table.pos_x)
         off_centers = []
@@ -984,6 +1028,12 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
     size_yhalf = 0.5 * image_info.shape[0]
     prof_half = 0.5 * paramset.sli_ramp_length / image_info.pix[0]
     if modality == 'CT':
+        if paramset.sli_auto_center:
+            res = mmcalc.optimize_center(image, 0)
+            if res is not None:
+                center_x, center_y, _, _ = res
+                dxya[0] = center_x - 0.5*image_info.shape[1]
+                dxya[1] = center_y - 0.5*image_info.shape[0]
         if paramset.sli_type != 1:
             dist = paramset.sli_ramp_distance / image_info.pix[0]
         else:

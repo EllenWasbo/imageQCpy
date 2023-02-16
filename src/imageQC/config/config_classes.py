@@ -257,21 +257,26 @@ class ParamSetCT(ParamSetCommon):
     ctn_search_size: float = 11.
     ctn_search: bool = True
     ctn_table: HUnumberTable = field(default_factory=HUnumberTable)
+    ctn_auto_center: bool = False
     sli_ramp_distance: float = 38.
     sli_ramp_length: float = 60.
     sli_background_width: float = 5.
     sli_search_width: int = 10
     sli_average_width: int = 1
     sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom
+    sli_auto_center: bool = False
     rin_sigma_image: float = 0.  # sigma for gaussfilter of image
     rin_sigma_profile: float = 0.  # sigma for gaussfilter of radial profile
     rin_range_start: float = 5.  # mm from center
     rin_range_stop: float = 65.  # mm from center
     rin_subtract_trend: bool = True  # True = subtract trend, False = subtract mean
     nps_roi_size: int = 50
-    nps_roi_dist: float = 50.
+    nps_roi_distance: float = 50.
     nps_n_sub: int = 20
-    nps_plot_average: bool = True
+    nps_smooth_width: float = 0.05  # 1/mm
+    nps_sampling_frequency: float = 0.01  # 1/mm
+    nps_normalize: int = 0  # normalize curve by 0 = None, 1 = AUC, 2 = large area sign
+    nps_plot: int = 0  # default plot 0=pr image, 1=avg, 2=pr image+avg, 3=all img+avg
 
 
 @dataclass
@@ -285,11 +290,10 @@ class ParamSetXray(ParamSetCommon):
     # if non-zero - same distance to center for all (half if distance is zero)
     hom_tab_alt: int = 0  # alternatives for what to calculate in table
     noi_percent: int = 90
-    mtf_type: int = 1  # exponential=0, gaussian=1, None(discrete)=2
     mtf_roi_size_x: int = 20.
     mtf_roi_size_y: int = 50.
     mtf_plot: int = 3
-    mtf_gaussian: bool = True  # True= (gaussian/exp) fit, False = discrete FFT
+    mtf_gaussian: bool = True  # True= use gaussian fit, False = discrete FFT
     mtf_cut_lsf: bool = True
     mtf_cut_lsf_w: float = 3.
     mtf_offset_xy: list[float] = field(default_factory=lambda: [0., 0.])
@@ -298,9 +302,14 @@ class ParamSetXray(ParamSetCommon):
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     nps_roi_size: int = 256
-    nps_sub_size: int = 5
+    nps_n_sub: int = 5
+    nps_smooth_width: float = 0.05  # 1/mm
+    nps_sampling_frequency: float = 0.01  # 1/mm
+    nps_normalize: int = 0  # normalize curve by 0 = None, 1 = AUC, 2 = large area sign
+    nps_plot: int = 0  # default plot 0=pr image, 1=avg, 2=pr image+avg, 3=all img+avg
     stp_roi_size: float = 11.3
     var_roi_size: float = 2.0
+    var_percent: int = 90
 
 
 @dataclass
@@ -348,11 +357,19 @@ class ParamSetNM(ParamSetCommon):
 class ParamSetSPECT(ParamSetCommon):
     """Set of parameters regarding SPECT tests."""
 
-    mtf_type: int = 1
+    mtf_type: int = 1  # 0=point, 1=line, 2=circular edge
     mtf_roi_size: float = 30.
+    mtf_background_width: float = 1.  # used if point method
+    mtf_line_tolerance: int = 10
+    # ignore slices having max value differing more than % from mean of 3 highest max
     mtf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
-    mtf_plot: int = 4
-    mtf_3d: bool = True
+    mtf_plot: int = 4  # default plot 0=xyprofiles, 1=edge, 2=sorted, 3=LSF, 4=MTF
+    mtf_cut_lsf: bool = False
+    mtf_cut_lsf_w: float = 3.  # lsf_w from halfmax x FWHM
+    mtf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
+    mtf_auto_center: bool = False
+    mtf_3d: bool = True  # not used yet - assumed 3d for line and circ. edge
+    mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     con_roi_size: float = 20.
     con_roi_dist: float = 58.
 
@@ -364,7 +381,9 @@ class ParamSetPET(ParamSetCommon):
     hom_roi_size: float = 10.
     hom_roi_distance: float = 55.
     cro_roi_size: float = 60.
-    cro_volume: float = 0.
+    cro_volume: float = 6283.
+    cro_auto_select_slices: bool = False
+    cro_percent_slices: float = 75  # percentage within fwhm of signal profile to include
 
 
 @dataclass
@@ -391,11 +410,10 @@ class ParamSetMR(ParamSetCommon):
     sli_dist_lower: float = -2.5
     sli_dist_upper: float = 2.5
     sli_optimize_center: bool = True
-    mtf_type: int = 1  # exponential=0, gaussian=1, None(discrete)=2
     mtf_roi_size_x: int = 20.
     mtf_roi_size_y: int = 50.
     mtf_plot: int = 3
-    mtf_gaussian: bool = True  # True= (gaussian/exp) fit, False = discrete FFT
+    mtf_gaussian: bool = True  # True= use gaussian fit, False = discrete FFT
     mtf_cut_lsf: bool = True
     mtf_cut_lsf_w: float = 3.
     mtf_offset_xy: list[float] = field(default_factory=lambda: [0., 0.])

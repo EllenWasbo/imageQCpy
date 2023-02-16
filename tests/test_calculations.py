@@ -106,7 +106,7 @@ def test_CT_Rin():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(10*np.array(input_main.results['Rin']['values'][0]))
-    assert np.array_equal(values, np.array([-4., 5.]))
+    assert np.array_equal(values, np.array([-3., 4.]))
 
 
 def test_CT_Dim():
@@ -254,6 +254,48 @@ def test_CT_Polystyrene_MTF_circular_edge():
     assert len(input_main.results['MTF']['values'][0]) == 3
 
 
+def test_CT_NPS():
+    input_main = InputMain(
+        current_modality='CT',
+        current_test='NPS',
+        current_paramset=cfc.ParamSetCT(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['NPS']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (
+        path_tests / 'test_inputs' / 'CT' / 'CTP486' / 'CTP486_005.dcm')
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(10*np.array(input_main.results['NPS']['values'][0]))
+    assert np.array_equal(values, np.array([3., 245., 463., 131.,  68.]))
+
+
+def test_Xray_NPS():
+    input_main = InputMain(
+        current_modality='Xray',
+        current_test='NPS',
+        current_paramset=cfc.ParamSetXray(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['NPS']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (
+        path_tests / 'test_inputs' / 'Xray' / 'hom.dcm')
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(np.array(input_main.results['NPS']['values'][0]))
+    assert np.array_equal(values, np.array([8.2e+01, 1.1e+03, 1.7e+01, 1.0e+00]))
+
+
 def test_Xray_MTF_autocenter():
     """Test MTF from combined edges of auto_detected rectangle object."""
     input_main = InputMain(
@@ -274,6 +316,27 @@ def test_Xray_MTF_autocenter():
     assert len(input_main.results['MTF']['values'][0]) == 6
     values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
     assert np.array_equal(values10, np.array([9., 7., 4., 2., 1., 13.]))
+
+
+def test_Xray_Var():
+    input_main = InputMain(
+        current_modality='Xray',
+        current_test='Var',
+        current_paramset=cfc.ParamSetXray(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Var']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (
+        path_tests / 'test_inputs' / 'Xray' / 'hom.dcm')
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(np.array(input_main.results['Var']['values'][0]))
+    assert np.array_equal(values, np.array([ 31., 192.,  80.]))
 
 
 def test_NM_uniformity():
@@ -337,29 +400,58 @@ def test_NM_MTF_2_linesources():
 
     print(input_main.results['MTF']['values'])
     assert round(input_main.results['Uni']['values'][0][0]) == 6
-
-
-
-def test_NM_SNI():
-
-    tag_infos = read_tag_infos_from_yaml()
-    file_path = path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
-        [file_path], GUI=False, tag_infos=tag_infos)
-    image, tags = dcm.get_img(file_path, frame_number=0)
-    image_dict = img_infos[0]
-
-    paramset = cfc.ParamSetNM()
-    roi_array = calculate_roi.get_roi_SNI(
-        image, image_dict, paramset)
-    res = calculate_qc.get_corrections_point_source(
-            image, image_dict, roi_array[0],
-            fit_x=True, fit_y=True, lock_z=-1.)
-    values = calculate_qc.calculate_NM_SNI(
-        res['corrected_image'], roi_array, image_dict.pix[0])
-
-    assert res['distance'] > 0
 '''
+
+
+def test_SPECT_MTF_linesource():
+    """Test MTF 3d line."""
+    input_main = InputMain(
+        current_modality='SPECT',
+        current_test='MTF',
+        current_paramset=cfc.ParamSetSPECT(
+            mtf_type=1,
+            mtf_auto_center=True
+            ),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]*77),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = path_tests / 'test_inputs' / 'SPECT' / 'linesource_tomo_recon.dcm'
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    breakpoint()
+    assert len(input_main.results['MTF']['values'][0]) == 6
+    values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
+    assert np.array_equal(values10, np.array([11., 15., 18., 11., 15., 19.]))
+
+
+def test_PET_Cro():
+    input_main = InputMain(
+        current_modality='PET',
+        current_test='Cro',
+        current_paramset=cfc.ParamSetPET(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Cro']]*6),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = path_tests / 'test_inputs' / 'PET' / 'waterphantom'
+    no = ['007', '010', '034', '035', '036']
+    files = [file_path / f'PT_PETWB_{no[i]}.dcm' for i in range(5)]
+    img_infos, ignored_files = dcm.read_dcm_info(
+        files, GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(np.array(input_main.results['Cro']['values'][0][3:]))
+    assert np.array_equal(
+        values,
+        np.array([7.3000e+01, 1.1599e+04, 1.1835e+04, 1.0000e+00, 1.0000e+00]))
+
 
 def test_MR_SNR():
 

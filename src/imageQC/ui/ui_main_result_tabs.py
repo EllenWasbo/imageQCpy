@@ -13,7 +13,8 @@ from PyQt5.QtGui import QIcon, QKeyEvent
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QAction, QToolBar, QToolButton,
-    QTableWidget, QTableWidgetItem, QAbstractItemView, QAbstractScrollArea
+    QTableWidget, QTableWidgetItem, QAbstractItemView, QAbstractScrollArea,
+    QMessageBox, QLabel, QSizePolicy
     )
 import matplotlib
 import matplotlib.figure
@@ -27,6 +28,7 @@ from imageQC.ui import reusable_widgets as uir
 from imageQC.ui.plot_widgets import PlotWidget, PlotCanvas
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.scripts import mini_methods_format as mmf
+from imageQC.scripts.mini_methods_calculate import find_median_spectrum
 # imageQC block end
 
 
@@ -153,12 +155,27 @@ class ResultTable(QTableWidget):
             If vendor QC specific settings and test 'vendor'
             Default is False
         """
+        print(f'col labels {col_labels}')
+        print(f'values cols {values_cols}')
+        print(f'linked image {linked_image_list}')
         self.parent.table_info.setText(table_info)
+
+        decimal_mark = '.'
+        if self.parent.tb_copy.tool_decimal.isChecked():
+            decimal_mark = ','
 
         if vendor:
             try:
                 row_labels = self.main.results['vendor']['headers']
                 values_cols = self.main.results['vendor']['values']
+                df = pd.DataFrame(values_cols)
+                temp_rows = df.T
+                txt_rows = []
+                for i in range(len(row_labels)):
+                    row_list = temp_rows.loc[i, :].values.flatten().tolist()
+                    txt_rows.append(mmf.val_2_str(row_list, decimal_mark=decimal_mark))
+                df = pd.DataFrame(txt_rows)
+                values_cols = df.T.values.tolist()
                 linked_image_list = False
             except KeyError:
                 pass
@@ -188,7 +205,7 @@ class ResultTable(QTableWidget):
 
         if values_cols == [[]]:
             if values_rows != [[]]:
-                # convert rows to columns for better formatting (precision)
+                # convert rows to columns for better formatting -columns similar numbers
                 for r in range(n_rows):
                     if len(values_rows[r]) == 0:
                         values_rows[r] = [None] * n_cols
@@ -196,12 +213,12 @@ class ResultTable(QTableWidget):
                 for c in range(n_cols):
                     values_cols.append([row[c] for row in values_rows])
         if values_cols != [[]]:
-            decimal_mark = '.'
-            if self.parent.tb_copy.tool_decimal.isChecked():
-                decimal_mark = ','
             for c in range(len(values_cols)):
-                this_col = mmf.val_2_str(values_cols[c],
-                                         decimal_mark=decimal_mark)
+                if vendor:
+                    this_col = values_cols[c]  # formatted above
+                else:
+                    this_col = mmf.val_2_str(values_cols[c],
+                                             decimal_mark=decimal_mark)
                 for r in range(len(this_col)):
                     twi = QTableWidgetItem(this_col[r])
                     twi.setTextAlignment(4)
@@ -316,15 +333,37 @@ class ResultPlotCanvas(PlotCanvas):
 
         self.draw()
 
-    def test_values_outside_yrange(self, yrange):
-        """Set yrange to min/max (=None) if values outside default range."""
+    def test_values_outside_yrange(self, yrange, limit_xrange=None):
+        """Set yrange to min/max (=None) if values outside default range.
+
+        Parameters
+        ----------
+        yrange: list
+            [min_y, max_y] if any values outside - set to None = include values outside
+        limit_xrange: list
+            set to [min_x, max_x] to evaluate. Default is None (ignored).
+        """
+        def get_yvals_to_eval(curve):
+            idxs = np.where(np.logical_and(
+                curve['xvals'] > limit_xrange[0],
+                curve['xvals'] < limit_xrange[1]))
+            return curve['yvals'][idxs[0]]
+
         for curve in self.curves:
             if yrange[0] is not None:
-                if min(curve['yvals']) < yrange[0]:
-                    yrange[0] = None
+                if limit_xrange is None:
+                    if min(curve['yvals']) < yrange[0]:
+                        yrange[0] = None
+                else:
+                    if min(get_yvals_to_eval(curve)) < yrange[0]:
+                        yrange[0] = None
             if yrange[1] is not None:
-                if max(curve['yvals']) > yrange[1]:
-                    yrange[1] = None
+                if limit_xrange is None:
+                    if max(curve['yvals']) > yrange[1]:
+                        yrange[1] = None
+                else:
+                    if max(get_yvals_to_eval(curve)) > yrange[1]:
+                        yrange[1] = None
             if not any(yrange):
                 break
         return yrange
@@ -614,10 +653,12 @@ class ResultPlotCanvas(PlotCanvas):
                         'label': 'gaussian MTF pre-smoothed',
                         'xvals': xvals,
                         'yvals': yvals,
-                        'style': '--b'
+                        'style': '--',
+                        'color': 'gray'
                          })
 
-            self.default_range_y = self.test_values_outside_yrange([0, 1.3])
+            self.default_range_y = self.test_values_outside_yrange(
+                [0, 1.3], limit_xrange=[0, nyquist_freq])
             self.default_range_x = [0, 1.1 * nyquist_freq]
             self.curves.append({
                 'label': '_nolegend_',
@@ -631,22 +672,22 @@ class ResultPlotCanvas(PlotCanvas):
             # MTF %
             values = self.main.results[self.main.current_test]['values'][rowno]
             if self.main.current_modality == 'Xray':
-                yvals = [[0, .5]]
-                xvals = [[values[-1], values[-1]]]
+                yvals = [[.5, .5]]
+                xvals = [[0, values[-1]]]
+                yvals.extend([[0, values[i]] for i in range(5)])
+                xvals.extend([[.5, .5], [1, 1], [1.5, 1.5], [2, 2], [2.5, 2.5]])
+                for i in range(len(xvals)):
+                    self.curves.append({
+                        'label': '_nolegend_',
+                        'xvals': xvals[i],
+                        'yvals': yvals[i],
+                        'style': ':k'
+                         })
+
             else:
                 yvals = [[0, .5], [0, .1], [0, .02]]
-                xvals = [[values[i], values[i]] for i in range(3)]
-            for i in range(len(xvals)):
-                self.curves.append({
-                    'label': '_nolegend_',
-                    'xvals': xvals[i],
-                    'yvals': yvals[i],
-                    'style': ':k'
-                     })
-            # MTF lp
-            if self.main.current_modality == 'Xray':
-                yvals = [[values[i], values[i]] for i in range(5)]
-                xvals = [[0, .5], [0, 1], [0, 1.5], [0, 2], [0, 2.5]]
+                factor = 10 if mtf_cy_pr_mm is False else 1
+                xvals = [[factor*values[i], factor*values[i]] for i in range(3)]
                 for i in range(len(xvals)):
                     self.curves.append({
                         'label': '_nolegend_',
@@ -713,17 +754,16 @@ class ResultPlotCanvas(PlotCanvas):
                                     ha='left', size=8, color='gray')
                             if 'cut_width_fade' in dd_this:
                                 cwf = dd_this['cut_width_fade']
-                                if cwf > cw:
-                                    for x in [-1, 1]:
-                                        self.curves.append({
-                                            'label': '_nolegend_',
-                                            'xvals': [x * cwf] * 2,
-                                            'yvals': minmax,
-                                            'style': ':k'
-                                            })
-                                        self.ax.text(
-                                            x * cwf, np.mean(minmax), 'fade',
-                                            ha='left', size=8, color='gray')
+                                for x in [-1, 1]:
+                                    self.curves.append({
+                                        'label': '_nolegend_',
+                                        'xvals': [x * cwf] * 2,
+                                        'yvals': minmax,
+                                        'style': ':k'
+                                        })
+                                    self.ax.text(
+                                        x * cwf, np.mean(minmax), 'fade',
+                                        ha='left', size=8, color='gray')
                             self.default_range_x = [-1.5*cw, 1.5*cw]
 
         def prepare_plot_sorted_pix():
@@ -738,7 +778,7 @@ class ResultPlotCanvas(PlotCanvas):
                 if 'edge_details' in details_dicts[0]:  # from straight edge
                     edge_details_dicts = details_dicts[0]['edge_details']
                     try:
-                        xvals = edge_details_dicts[0]['sorted_pixels_x']
+                        xvals = [ed['sorted_pixels_x'] for ed in edge_details_dicts]
                         proceed = True
                         use_edge_data = True
                     except KeyError:
@@ -751,20 +791,29 @@ class ResultPlotCanvas(PlotCanvas):
                     sorted_pixels = [ed['sorted_pixels'] for ed in edge_details_dicts]
                 else:
                     sorted_pixels = details_dicts[0]['sorted_pixels']
+                    if not isinstance(sorted_pixels, list):
+                        sorted_pixels = [sorted_pixels]
+                    xvals = details_dicts[0]['sorted_pixels_x']
+                    if not isinstance(xvals, list):
+                        xvals = [xvals]
 
                 for no, yvals in enumerate(sorted_pixels):
                     if no == 0:
                         self.curves.append({
                             'label': 'Sorted pixels',
-                            'xvals': xvals,
+                            'xvals': xvals[no],
                             'yvals': yvals,
                             'style': '.',
                             'color': 'darkgray',
                             'markersize': 2.,
                              })
                     else:
-                        self.curves[-1]['xvals'] = np.append(
-                            self.curves[-1]['xvals'], xvals)
+                        if len(xvals) > 1:
+                            self.curves[-1]['xvals'] = np.append(
+                                self.curves[-1]['xvals'], xvals[no])
+                        else:
+                            self.curves[-1]['xvals'] = np.append(
+                                self.curves[-1]['xvals'], xvals[0])
                         self.curves[-1]['yvals'] = np.append(
                             self.curves[-1]['yvals'], yvals)
                 if 'interpolated_x' in details_dicts[0]:
@@ -784,15 +833,16 @@ class ResultPlotCanvas(PlotCanvas):
                         'style': '-b'
                          })
                 if 'ESF' in details_dicts[0]:
-                    xvals = details_dicts[0]['LSF_x']
                     if isinstance(details_dicts[0]['ESF'], list):
-                        for ESF in details_dicts[0]['ESF']:
+                        colors = ['r', 'b', 'g', 'c']
+                        xvals = details_dicts[0]['ESF_x']
+                        for no, ESF in enumerate(details_dicts[0]['ESF']):
                             lbl = f' {no}' if len(details_dicts[0]['ESF']) > 1 else ''
                             self.curves.append({
                                 'label': f'ESF{lbl}',
                                 'xvals': xvals,
-                                'yvals': ESF[:-1],
-                                'style': '-r'
+                                'yvals': ESF,
+                                'style': f'-{colors[no]}'
                                  })
 
         def prepare_plot_centered_profiles():
@@ -914,6 +964,200 @@ class ResultPlotCanvas(PlotCanvas):
         except (KeyError, IndexError):
             pass
 
+    def NPS(self):
+        """Prepare plot for test Rin."""
+        imgno = self.main.gui.active_img_no
+        self.title = 'Noise Power Spectrum'
+        self.ytitle = r'NPS ($\mathregular{mm^{2}}$)'
+        self.xtitle = 'NPS (pr mm)'
+        normalize = self.main.current_paramset.nps_normalize
+
+        if self.main.current_modality == 'Xray':
+            test_widget = self.main.stack_test_tabs.currentWidget()
+            sel_text = test_widget.nps_plot_profile.currentText()
+            profile_keys = []
+            info_texts = []
+            styles = []
+            if sel_text == 'all':
+                profile_keys = ['radial_profile', 'u_profile', 'v_profile']
+                info_texts = [' radial', ' horizontal', ' vertical']
+                styles = ['-b', '-m', '-c']
+            else:
+                if sel_text == 'radial':
+                    profile_keys = ['radial_profile']
+                    info_texts.append(' radial')
+                    styles.append('-b')
+                if 'horizontal' in sel_text:
+                    profile_keys.append('u_profile')
+                    info_texts.append(' horizontal')
+                    styles.append('-m')
+                if 'vertical' in sel_text:
+                    profile_keys.append('v_profile')
+                    info_texts.append(' vertical')
+                    styles.append('-c')
+        else:
+            profile_keys = ['radial_profile']
+            info_texts = ['']
+            styles = ['-b']
+
+        def plot_current_NPS():
+            try:
+                details_dict = self.main.results['NPS']['details_dict'][imgno]
+                max_ys = []
+                for i, prof_key in enumerate(profile_keys):
+                    if normalize == 1:
+                        AUC = details_dict[f'{prof_key}_AUC']
+                        norm_factor = 1/AUC
+                    elif normalize == 2:
+                        norm_factor = 1/(details_dict['large_area_signal']**2)
+                    else:
+                        norm_factor = 1
+                    yvals = norm_factor * details_dict[prof_key]
+                    if prof_key == 'radial_profile':
+                        xvals = details_dict['freq']
+                    else:
+                        xvals = details_dict['freq_uv']
+                    self.curves.append(
+                        {'label': f'img {imgno}{info_texts[i]}',
+                         'xvals': xvals, 'yvals': yvals, 'style': styles[i]})
+                    max_ys.append(np.max(yvals))
+
+                if self.main.current_modality == 'CT':
+                    self.curves.append({
+                        'label': '_nolegend_',
+                        'xvals': [
+                            details_dict['median_freq'], details_dict['median_freq']],
+                        'yvals': [0, norm_factor * details_dict['median_val']],
+                        'style': '-b'})
+
+                nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
+                maxy = max(max_ys)
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [nyquist_freq, nyquist_freq],
+                    'yvals': [0, maxy],
+                    'style': ':k'
+                     })
+                self.ax.text(
+                    0.9*nyquist_freq, 0.5*maxy,
+                    'Nyquist frequency', ha='left', size=8, color='gray')
+            except (KeyError, IndexError):
+                pass
+
+        def plot_average_NPS():  # only for CT
+            try:
+                dicts = self.main.results['NPS']['details_dict']
+                xvals = None
+                yvals = None
+                n_profiles = 0
+                for i, details_dict in enumerate(dicts):
+                    proceed = True
+                    if details_dict:
+                        if xvals is not None:
+                            xvals_this = details_dict['freq']
+                            if (xvals != xvals_this).all():
+                                proceed = False
+                        else:
+                            xvals = details_dict['freq']
+                    if proceed is False:
+                        errmsg = 'Failed plotting average NPS. Not same pixel sizes.'
+                        QMessageBox.information(self, 'Failed averaging', errmsg)
+                        xvals = None
+                        yvals = None
+                        n_profiles = 0
+                        break
+                    else:
+                        n_profiles += 1
+                        if normalize == 1:
+                            AUC = self.main.results['NPS']['values'][i][1]
+                            norm_factor = 1/AUC
+                        elif normalize == 2:
+                            norm_factor = 1/(details_dict['large_area_signal']**2)
+                        else:
+                            norm_factor = 1
+                        if yvals is None:
+                            yvals = norm_factor * details_dict['radial_profile']
+                        else:
+                            yvals = yvals + norm_factor * details_dict['radial_profile']
+                if n_profiles > 0:
+                    y_avg = 1/n_profiles * yvals
+
+                    self.curves.append(
+                        {'label': 'average NPS', 'xvals': xvals, 'yvals': y_avg,
+                         'style': '-k'})
+                    median_frequency, median_val = find_median_spectrum(xvals, y_avg)
+                    self.curves.append({
+                        'label': '_nolegend_',
+                        'xvals': [median_frequency, median_frequency],
+                        'yvals': [0, median_val],
+                        'style': '-k'})
+            except (KeyError, IndexError):
+                pass
+
+        def plot_all_NPS():
+            try:
+                imgno = self.main.gui.active_img_no
+                dicts = self.main.results['NPS']['details_dict']
+                curve_this = None
+                med_this = None
+                for i, details_dict in enumerate(dicts):
+                    if details_dict:
+                        max_ys = []
+                        for prof_key in profile_keys:
+                            if normalize == 1:
+                                AUC = details_dict[f'{prof_key}_AUC']
+                                norm_factor = 1/AUC
+                            elif normalize == 2:
+                                norm_factor = 1/(details_dict['large_area_signal']**2)
+                            else:
+                                norm_factor = 1
+                            yvals = norm_factor * details_dict[prof_key]
+                            if prof_key == 'radial_profile':
+                                xvals = details_dict['freq']
+                            else:
+                                xvals = details_dict['freq_uv']
+                            color = 'r' if i == imgno else 'darkgray'
+                            curve = {'label': f'img {i}',
+                                     'xvals': xvals, 'yvals': yvals, 'color': color}
+                            max_ys.append(np.max(yvals))
+
+                            if i == imgno:
+                                curve_this = curve
+                            else:
+                                self.curves.append(curve)
+                            if self.main.current_modality == 'CT':
+                                curve_med = {
+                                    'label': '_nolegend_',
+                                    'xvals': [details_dict['median_freq'],
+                                              details_dict['median_freq']],
+                                    'yvals': [0,
+                                              norm_factor * details_dict['median_val']],
+                                    'color': color}
+                                if i == imgno:
+                                    med_this = curve_med
+                                else:
+                                    self.curves.append(curve_med)
+
+                if curve_this is not None:
+                    self.curves.append(curve_this)
+                if med_this is not None:
+                    self.curves.append(med_this)
+            except (KeyError, IndexError):
+                pass
+
+        test_widget = self.main.stack_test_tabs.currentWidget()
+        try:
+            sel_text = test_widget.nps_plot.currentText()
+        except AttributeError:
+            sel_text = ''
+        if 'pr image' in sel_text:
+            plot_current_NPS()
+        if 'average' in sel_text:
+            plot_average_NPS()
+        if 'NPS all images' in sel_text:
+            plot_all_NPS()
+        self.title = sel_text
+
     def Uni(self):
         """Prepare plot for test Uni."""
         plot_idx = self.main.tab_nm.uni_plot.currentIndex()
@@ -996,7 +1240,7 @@ class ResultPlotCanvas(PlotCanvas):
                 self.ax.add_artist(at)
 
     def Spe(self):
-        """Prepare plot for test Spe."""
+        """Prepare plot for test NM Speed test."""
         self.title = 'Scan speed profile'
         self.xtitle = 'Position (mm)'
         self.ytitle = 'Difference from mean %'
@@ -1018,6 +1262,19 @@ class ResultPlotCanvas(PlotCanvas):
 
         self.default_range_y = self.test_values_outside_yrange([-7, 7])
 
+    def Cro(self):
+        """Prepare plot for test PET cross calibration."""
+        self.title = 'z profile'
+        self.xtitle = 'Slice position (mm)'
+        self.ytitle = 'Average in ROI (Bq/ml)'
+        details_dict = self.main.results['Cro']['details_dict']
+        self.curves.append(
+            {'label': 'all slices', 'xvals': details_dict['zpos'],
+             'yvals': details_dict['roi_averages'], 'style': '-k'})
+        self.curves.append(
+            {'label': 'used slices', 'xvals': details_dict['used_zpos'],
+             'yvals': details_dict['used_roi_averages'], 'style': '-r'})
+
     def vendor(self):
         """Prepare plot if vendor test results contain details."""
         # Currently only energy spectrum from Siemens gamma camera have this option.
@@ -1030,7 +1287,20 @@ class ResultPlotCanvas(PlotCanvas):
             col_i = i % len(colors)
             self.curves.append(
                 {'label': f'file {i}', 'xvals': details['curve_energy'],
-                 'yvals': details['curve_counts'], 'color': col_i})
+                 'yvals': details['curve_counts'], 'color': colors[col_i]})
+            self.curves.append(
+                {'label': '_nolegend_', 'xvals': [details['keV_max']]*2,
+                 'yvals': [0, np.max(details['curve_counts'])],
+                 'style': ':', 'color': colors[col_i]})
+            self.curves.append(
+                {'label': '_nolegend_',
+                 'xvals': details['keV_fwhm_start_stop'],
+                 'yvals': [0.5*np.max(details['curve_counts'])]*2,
+                 'style': ':', 'color': colors[col_i]})
+            self.default_range_x = [
+                details['keV_fwhm_start_stop'][0]*0.5,
+                details['keV_fwhm_start_stop'][1]*1.5
+                ]
 
 
 class ResultImageWidget(GenericImageWidget):
@@ -1051,6 +1321,11 @@ class ResultImageWidget(GenericImageWidget):
 
         tb_top = QToolBar()
         tb_top.addWidget(GenericImageToolbarPosVal(self.canvas, self))
+        self.image_title = QLabel()
+        tb_top.addWidget(self.image_title)
+        empty = QWidget()
+        empty.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        tb_top.addWidget(empty)
 
         hlo.addWidget(toolb)
         vlo_mid = QVBoxLayout()

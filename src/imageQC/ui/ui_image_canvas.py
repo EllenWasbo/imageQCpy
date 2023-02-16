@@ -257,7 +257,7 @@ class ImageCanvas(GenericImageCanvas):
             sleep(.2)
 
     def add_contours_to_all_rois(self, colors=None, reset_contours=True,
-                                 roi_indexes=None):
+                                 roi_indexes=None, filled=False):
         """Draw all ROIs in self.main.current_roi (list) with specific colors.
 
         Parameters
@@ -268,6 +268,8 @@ class ImageCanvas(GenericImageCanvas):
             Default is True
         roi_indexes : list of int, optional
             roi indexes to draw. Default is None = all
+        filled : bool
+            if true used contourf (filled) instead
         """
         this_roi = self.main.current_roi
         if not isinstance(self.main.current_roi, list):
@@ -282,9 +284,13 @@ class ImageCanvas(GenericImageCanvas):
 
         for color_no, roi_no in enumerate(roi_indexes):
             mask = np.where(this_roi[roi_no], 0, 1)
-            contour = self.ax.contour(
-                mask, levels=[0.9],
-                colors=colors[color_no], alpha=0.5, linewidths=self.linewidth)
+            if filled:
+                contour = self.ax.contourf(
+                    mask, levels=[0, 0.5], colors=colors[color_no], alpha=0.3)
+            else:
+                contour = self.ax.contour(
+                    mask, levels=[0.9],
+                    colors=colors[color_no], alpha=0.5, linewidths=self.linewidth)
             self.contours.append(contour)
 
     def Hom(self):
@@ -409,6 +415,19 @@ class ImageCanvas(GenericImageCanvas):
                             linestyle='dotted',
                             ))
 
+    def NPS(self):
+        """Draw NPS ROIs."""
+        if self.main.current_modality == 'CT':
+            self.add_contours_to_all_rois(
+                colors=['w']*self.main.current_paramset.nps_n_sub, filled=True)
+        elif self.main.current_modality == 'Xray':
+            n_sub = self.main.current_paramset.nps_n_sub
+            idxs = [0, n_sub*2-2, n_sub*2, n_sub*4, -(n_sub*2-1), -1]
+            self.add_contours_to_all_rois(
+                colors=['r']*6, filled=True, roi_indexes=idxs)
+        else:
+            pass
+
     def Bar(self):
         """Draw Bar ROIs."""
         self.contours = []
@@ -499,7 +518,8 @@ class ResultImageCanvas(GenericImageCanvas):
             self.img = self.ax.imshow(
                 self.current_image,
                 cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
-            self.ax.set_title(self.title)
+            #self.ax.set_title(self.title)
+            self.parent.image_title.setText(self.title)
         else:
             self.img = self.ax.imshow(np.zeros((100, 100)))
             at = matplotlib.offsetbox.AnchoredText(
@@ -507,6 +527,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 prop=dict(size=14, color='gray'),
                 frameon=False, loc='center')
             self.ax.add_artist(at)
+            self.parent.image_title.setText('')
         self.ax.axis('off')
         self.draw()
 
@@ -524,6 +545,43 @@ class ResultImageCanvas(GenericImageCanvas):
             self.title = 'Masked image'
         if 'processed_image' in details_dict:
             self.current_image = details_dict['processed_image']
+
+    def NPS(self):
+        """Prepare result image for test NPS."""
+        try:
+            details_dict = self.main.results['NPS']['details_dict'][
+                self.main.gui.active_img_no]
+        except KeyError:
+            details_dict = {}
+        self.cmap = 'viridis'
+
+        if self.main.current_modality == 'CT':
+            self.title = '2d Noise Power Spectrum - average of ROIs'
+            if 'NPS_array' in details_dict:
+                self.current_image = details_dict['NPS_array']
+        elif self.main.current_modality == 'Xray':
+            test_widget = self.main.stack_test_tabs.currentWidget()
+            sel_text = test_widget.nps_show_image.currentText()
+            if 'NPS' in sel_text:
+                self.title = '2d Noise Power Spectrum - average of all ROIs'
+                if 'NPS_array' in details_dict:
+                    self.current_image = details_dict['NPS_array']
+            else:
+                self.title = 'Large area correct for second order 2d polynomial trend'
+                if 'trend_corrected_sub_matrix' in details_dict:
+                    self.current_image = details_dict['trend_corrected_sub_matrix']
+
+    def Var(self):
+        """Prepare variance image."""
+        try:
+            details_dict = self.main.results['Var']['details_dict'][
+                self.main.gui.active_img_no]
+            self.cmap = 'viridis'
+            self.title = (
+                f'Variance image of central {self.main.current_paramset.var_percent} %')
+            self.current_image = details_dict['variance_image']
+        except KeyError:
+            pass
 
     def Uni(self):
         """Prepare result image for test Uni."""

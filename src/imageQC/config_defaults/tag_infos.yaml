@@ -46,7 +46,7 @@ sequence: ['']
 limited2mod: ['']
 unit: ''
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 5
 attribute_name: ActualFrameDuration
@@ -166,7 +166,7 @@ sequence: ['']
 limited2mod: [CT, SPECT, PET]
 unit: ''
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 17
 attribute_name: ConvolutionKernel
@@ -176,7 +176,7 @@ sequence: [SharedFunctionalGroupsSequence, CTReconstructionSequence]
 limited2mod: [CT]
 unit: ''
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 18
 attribute_name: ConvolutionKernel
@@ -186,7 +186,7 @@ sequence: [PerFrameFunctionalGroupsSequence, CTReconstructionSequence]
 limited2mod: [CT]
 unit: ''
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 19
 attribute_name: CountsAccumulated
@@ -1306,7 +1306,7 @@ sequence: [RadiopharmaceuticalInformationSequence]
 limited2mod: [NM, SPECT, PET]
 unit: MBq
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 131
 attribute_name: Radiopharmaceutical
@@ -1326,7 +1326,7 @@ sequence: [RadiopharmaceuticalInformationSequence]
 limited2mod: [NM, SPECT, PET]
 unit: ''
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 133
 attribute_name: ReceiveCoilName
@@ -1616,7 +1616,7 @@ sequence: [PerFrameFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
 limited2mod: [CT]
 unit: mm
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 162
 attribute_name: SliceLocation
@@ -1626,7 +1626,7 @@ sequence: ['']
 limited2mod: [CT, SPECT, PET, MR]
 unit: mm
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 163
 attribute_name: SliceLocation
@@ -1636,7 +1636,7 @@ sequence: [PerFrameFunctionalGroupsSequence, PlanePositionSequence]
 limited2mod: [CT, SPECT, PET, MR]
 unit: ''
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 164
 attribute_name: SliceThickness
@@ -1876,7 +1876,7 @@ sequence: ['']
 limited2mod: [PET]
 unit: ''
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 188
 attribute_name: WindowCenter

@@ -181,6 +181,7 @@ class TreeFileList(QTreeWidget):
                 selrows.sort(reverse=True)
                 for row in selrows:
                     del self.main.imgs[row]
+                self.main.update_results(deleted_idxs=selrows)
                 if self.main.summed_img is not None:
                     self.main.reset_summed_img()
                 if last_selected < len(self.main.imgs):
@@ -188,7 +189,7 @@ class TreeFileList(QTreeWidget):
                 else:
                     self.main.set_active_img(0)
                 self.update_file_list()
-                self.main.update_results(deleted_idxs=selrows)
+                self.main.refresh_img_display()
 
     def clear_marking(self):
         """Remove all marks for testing from selected images."""

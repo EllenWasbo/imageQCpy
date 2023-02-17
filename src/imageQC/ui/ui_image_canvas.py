@@ -387,10 +387,13 @@ class ImageCanvas(GenericImageCanvas):
     def MTF(self):
         """Draw MTF ROI."""
         if (
-                self.main.current_modality == 'CT'
-                and self.main.current_paramset.mtf_type == 0):
+                self.main.current_modality in ['CT', 'SPECT']
+                and self.main.current_paramset.mtf_type in [0, 1]):
             # bead show background rim
-            self.add_contours_to_all_rois(roi_indexes=[1])
+            if self.main.current_roi[1].any():
+                self.add_contours_to_all_rois(roi_indexes=[1])
+            else:
+                self.add_contours_to_all_rois(roi_indexes=[0])
         else:
             self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
 

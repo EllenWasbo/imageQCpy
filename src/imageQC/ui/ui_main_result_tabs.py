@@ -155,9 +155,6 @@ class ResultTable(QTableWidget):
             If vendor QC specific settings and test 'vendor'
             Default is False
         """
-        print(f'col labels {col_labels}')
-        print(f'values cols {values_cols}')
-        print(f'linked image {linked_image_list}')
         self.parent.table_info.setText(table_info)
 
         decimal_mark = '.'
@@ -627,7 +624,8 @@ class ResultPlotCanvas(PlotCanvas):
             infotext = ['gaussian', 'discrete']
             prefix = ['g', 'd']
             suffix = [' x', ' y'] if len(details_dicts) == 2 else ['']
-            for ddno, dd in enumerate(details_dicts):
+            for ddno in range(2):
+                dd = details_dicts[ddno]
                 for no in range(len(prefix)):
                     key = f'{prefix[no]}MTF_details'
                     dd_this = dd[key]
@@ -702,13 +700,15 @@ class ResultPlotCanvas(PlotCanvas):
             self.legend_location = 'upper left'
 
             linestyles = ['-', '--']
-            suffix = [' x', ' y'] if len(details_dicts) == 2 else ['']
+            suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
             lbl_prefilter = ''
             prefilter = False
             if 'sigma_prefilter' in details_dicts[0]:
                 prefilter = True
                 lbl_prefilter = ' presmoothed'
-            for ddno, dd in enumerate(details_dicts):
+            for ddno in range(2):
+                dd = details_dicts[ddno]
+                breakpoint()
                 xvals = dd['LSF_x']
                 yvals = dd['LSF']
                 self.curves.append({
@@ -846,40 +846,46 @@ class ResultPlotCanvas(PlotCanvas):
                                  })
 
         def prepare_plot_centered_profiles():
-            self.xtitle = 'pos (mm)'
-            self.ytitle = 'Pixel value'
+            proceed = True
+            if self.main.current_modality in ['CT', 'SPECT']:
+                if self.main.current_paramset.mtf_type == 1:
+                    proceed = False
 
-            linestyles = ['-', '--']  # x, y
-            colors = ['g', 'b', 'r', 'k', 'c', 'm']
-            if len(details_dicts) == 2:
-                center_xy = [details_dicts[i]['center'] for i in range(2)]
-                submatrix = [details_dicts[0]['matrix']]
-            else:
-                center_xy = details_dicts[0]['center_xy']
-                submatrix = details_dicts[0]['matrix']
+            if proceed:
+                self.xtitle = 'pos (mm)'
+                self.ytitle = 'Pixel value'
 
-            marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
-            pix = self.main.imgs[marked_imgs[0]].pix[0]
-            for no, sli in enumerate(submatrix):
-                if no in marked_imgs:
-                    suffix = f' {no}' if len(submatrix) > 1 else ''
-                    szy, szx = sli.shape
-                    xvals = pix * (np.arange(szx) - center_xy[0])
-                    yvals = sli[round(center_xy[0]), :]
-                    self.curves.append({
-                        'label': 'x' + suffix,
-                        'xvals': xvals,
-                        'yvals': yvals,
-                        'style': linestyles[0] + colors[no % len(colors)]
-                         })
-                    xvals = pix * (np.arange(szy) - center_xy[1])
-                    yvals = sli[:, round(center_xy[1])]
-                    self.curves.append({
-                        'label': 'y' + suffix,
-                        'xvals': xvals,
-                        'yvals': yvals,
-                        'style': linestyles[1] + colors[no % len(colors)]
-                         })
+                linestyles = ['-', '--']  # x, y
+                colors = ['g', 'b', 'r', 'k', 'c', 'm']
+                if len(details_dicts) == 2:
+                    center_xy = [details_dicts[i]['center'] for i in range(2)]
+                    submatrix = [details_dicts[0]['matrix']]
+                else:
+                    center_xy = details_dicts[0]['center_xy']
+                    submatrix = details_dicts[0]['matrix']
+
+                marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+                pix = self.main.imgs[marked_imgs[0]].pix[0]
+                for no, sli in enumerate(submatrix):
+                    if no in marked_imgs:
+                        suffix = f' {no}' if len(submatrix) > 1 else ''
+                        szy, szx = sli.shape
+                        xvals = pix * (np.arange(szx) - center_xy[0])
+                        yvals = sli[round(center_xy[0]), :]
+                        self.curves.append({
+                            'label': 'x' + suffix,
+                            'xvals': xvals,
+                            'yvals': yvals,
+                            'style': linestyles[0] + colors[no % len(colors)]
+                             })
+                        xvals = pix * (np.arange(szy) - center_xy[1])
+                        yvals = sli[:, round(center_xy[1])]
+                        self.curves.append({
+                            'label': 'y' + suffix,
+                            'xvals': xvals,
+                            'yvals': yvals,
+                            'style': linestyles[1] + colors[no % len(colors)]
+                             })
 
         def prepare_plot_edge_position():
             self.xtitle = 'pos (mm)'

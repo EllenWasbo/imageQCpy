@@ -23,7 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.10alpha'
+VERSION = '3.0.10.1alpha'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -98,7 +98,8 @@ HEADERS = {
         'MTF': {
             'alt0': ['MTFx 50%', 'MTFx 10%', 'MTFx 2%',
                      'MTFy 50%', 'MTFy 10%', 'MTFy 2%'],
-            'alt1': ['MTF 50%', 'MTF 10%', 'MTF 2%'],
+            'alt1': ['MTFx 50%', 'MTFx 10%', 'MTFx 2%',
+                     'MTFy 50%', 'MTFy 10%', 'MTFy 2%'],
             'alt2': ['MTF 50%', 'MTF 10%', 'MTF 2%']
             },
         'HUw': {'alt0': ['CT number (HU)', 'Noise=Stdev']},
@@ -157,7 +158,7 @@ HEADERS = {
         'ROI': {'alt0': roi_headers},
         'MTF': {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            'alt1': ['FWHM', 'FWTM'],
+            'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt2': ['FWHM', 'FWTM'],
             },
         'Con': {}
@@ -203,7 +204,8 @@ HEADERS_SUP = {
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
                      'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
-            'alt1': ['A1', 'sigma1', 'A2', 'sigma2'],
+            'alt1': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
+                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
             'alt2': ['A1', 'sigma1', 'A2', 'sigma2']
             },
         'Dim': {
@@ -232,9 +234,8 @@ HEADERS_SUP = {
         },
     'SPECT': {
         'MTF': {
-            'alt0': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
-                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
-            'alt1': ['A1', 'sigma1', 'A2', 'sigma2'],
+            'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
+            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt2': ['A1', 'sigma1', 'A2', 'sigma2']
             },
         },

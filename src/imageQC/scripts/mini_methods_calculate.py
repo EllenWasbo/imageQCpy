@@ -232,8 +232,9 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
             A1, sigma1, A2, sigma2 = popt
             LSF_fit = gauss_double(LSF_x, *popt)
         else: # single
-            A1, sigma1 = gauss_fit(LSF_x, LSF)
-            LSF_fit = gauss(LSF_x, A1, sigma1)
+            popt = gauss_fit(LSF_x, LSF)
+            LSF_fit = gauss(LSF_x, *popt)
+            A1, sigma1 = popt
 
         n_steps = 200  # sample 20 steps from 0 to 1 stdv MTF curve (stdev = 1/sigma1)
         # TODO user configurable n_steps

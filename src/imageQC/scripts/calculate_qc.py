@@ -563,7 +563,6 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
             if any(marked_3d):
                 results_dict = calculate_3d(
                     matrix, marked_3d, input_main, extra_tag_list)
-
                 for test in results_dict:
                     if results_dict[test].errmsg is not None:
                         if len(results_dict[test].errmsg) > 0:
@@ -1301,19 +1300,28 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         sum_image = np.add(sum_image, matrix[imgNo])
                 roi_array, errmsg = get_rois(
                     sum_image, images_to_test[0], input_main)
-                rows = np.max(roi_array, axis=1)
-                cols = np.max(roi_array, axis=0)
+                if paramset.mtf_type == 1:
+                    roi_array_inner = roi_array[0]
+                else:
+                    roi_array_inner = roi_array
+                rows = np.max(roi_array_inner, axis=1)
+                cols = np.max(roi_array_inner, axis=0)
                 sub = []
                 for sli in matrix:
                     if sli is not None:
-                        sub.append(sli[rows][:, cols])
+                        this_sub = sli[rows][:, cols]
+                        if paramset.mtf_type == 1:  # background subtract
+                            arr = np.ma.masked_array(
+                                sli, mask=np.invert(roi_array[1]))
+                            this_sub = this_sub - np.mean(arr)
+                        sub.append(this_sub)
                     else:
                         sub.append(None)
 
                 if paramset.mtf_type == 1:  # wire
                     if len(images_to_test) > 2:
                         details_dict, errmsg = calculate_MTF_3d_line(
-                            sub, roi_array[rows][:, cols], images_to_test,
+                            sub, roi_array_inner[rows][:, cols], images_to_test,
                             img_infos, paramset)
                     else:
                         errmsg = 'At least 3 images required for MTF wire test in 3d'
@@ -1321,25 +1329,49 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     details_dict, errmsg = calculate_MTF_circular_edge(
                         sub, roi_array[rows][:, cols],
                         img_infos[images_to_test[0]].pix[0], paramset)
+                    details_dict = [details_dict]
 
+                values = None
+                values_sup = None
                 if modality == 'CT':
                     prefix = 'g' if paramset.mtf_gaussian else 'd'
-                    try:
-                        values = details_dict[prefix + 'MTF_details']['values']
-                        values_sup = details_dict['gMTF_details']['LSF_fit_params']
-                    except KeyError:
-                        values = None
-                        values_sup = None
+                    if paramset.mtf_type == 1:  # wire x-dir, y-dir
+                        try:
+                            values = details_dict[0][prefix + 'MTF_details']['values']
+                            values_sup = list(details_dict[0][
+                                'gMTF_details']['LSF_fit_params'])
+                            values.extend(
+                                details_dict[1][prefix + 'MTF_details']['values'])
+                            values_sup.extend(list(
+                                details_dict[1]['gMTF_details']['LSF_fit_params']))
+                        except KeyError:
+                            pass
+                    else:
+                        try:
+                            values = details_dict[prefix + 'MTF_details']['values']
+                            values_sup = details_dict['gMTF_details']['LSF_fit_params']
+                        except KeyError:
+                            pass
                 else:  # SPECT
-                    try:
-                        values = details_dict['values']
-                        values_sup = details_dict['gMTF_details']['LSF_fit_params']
-                    except KeyError:
-                        values = None
-                        values_sup = None
+                    if paramset.mtf_type == 1:  # line x-dir, y-dir
+                        try:
+                            values = details_dict[0]['values']
+                            values_sup = list(details_dict[0][
+                                'gMTF_details']['LSF_fit_params'])
+                            values.extend(details_dict[1]['values'])
+                            values_sup.extend(list(details_dict[1][
+                                'gMTF_details']['LSF_fit_params']))
+                        except KeyError:
+                            pass
+                    else:
+                        try:
+                            values = details_dict['values']
+                            values_sup = details_dict['gMTF_details']['LSF_fit_params']
+                        except KeyError:
+                            pass
                 res = Results(headers=headers, values=[values],
                               headers_sup=headers_sup, values_sup=[values_sup],
-                              details_dict=[details_dict],
+                              details_dict=details_dict,
                               alternative=paramset.mtf_type, pr_image=False,
                               errmsg=errmsg)
         else:
@@ -1858,15 +1890,17 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
         [MTF 50%, 10%, 2%]
     values_sup : list of float
         [A1 mu1, sigma1, A2, mu2, sigma2]
-    details_dict: dict
+    details_dict: list of dict
+        x_dir, y_dir, common_details
     """
-    details_dict = {}
+    details_dict = []
+    common_details_dict = {}
     errmsg = []
     matrix = [sli for sli in matrix if sli is not None]
     zpos = np.array([image_infos[sli].zpos for sli in images_to_test])
     max_values = np.array([np.max(sli) for sli in matrix])
-    details_dict['max_roi_marked_images'] = max_values
-    details_dict['zpos_marked_images'] = zpos
+    common_details_dict['max_roi_marked_images'] = max_values
+    common_details_dict['zpos_marked_images'] = zpos
 
     ignore_slices = []
     try:  # ignore slices with max outside tolerance
@@ -1904,13 +1938,14 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
                 del center_xy[i]
                 max_values_copy[i] = np.NaN
                 zpos_copy[i] = np.NaN
-            details_dict['max_roi_used'] = max_values_copy
-            details_dict['zpos_used'] = zpos_copy
+            common_details_dict['max_roi_used'] = max_values_copy
+            common_details_dict['zpos_used'] = zpos_copy
             if len(matrix) < 3:
                 errmsg.append(
                     'Found position of 3d line traversing the slices for less than 3 '
                     'slices. Calculation aborted.')
                 proceed = False
+
     if proceed:
         center_x = np.array([vals[0] for vals in center_xy])
         center_y = np.array([vals[1] for vals in center_xy])
@@ -1933,31 +1968,25 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
 
     if proceed:
         pix = image_infos[images_to_test[0]].pix[0]
-        '''psf not lsf...
-        # sort pixel values from line
-        sz_z, sz_x = dist_map_xy[0].shape
-        dist_map_x = np.broadcast_to(dist_map_xy[0], (size_xy[1], sz_z, sz_x))
-        dist_map_x = np.moveaxis(dist_map_x, 0, 1)
-        sz_z, sz_y = dist_map_xy[1].shape
-        dist_map_y = np.broadcast_to(dist_map_xy[1], (size_xy[0], sz_z, sz_y))
-        dist_map_y = np.moveaxis(dist_map_y, 0, -1)
-        dists_3d = np.sqrt(dist_map_x**2 + dist_map_y**2)
-        dists_flat = dists_3d.flatten()
-        sort_idxs = np.argsort(dists_flat)
-        dists = dists_flat[sort_idxs]
-        dists = pix * dists
-        matrix = np.array(matrix)
-        values_flat = matrix.flatten()
-        sorted_pixels = values_flat[sort_idxs]
-
-        # ignore dists > radius
-        radius = 0.5 * matrix[0].shape[0] * pix
-        dists_cut = dists[dists < radius]
-        values = sorted_pixels[dists < radius]
-        '''
         radius = 0.5 * matrix[0].shape[0] * pix  # ignore dists > radius
+        fade_lsf_fwhm = 0
+        cw = 0
+        cwf = 0
+        try:
+            cut_lsf = paramset.mtf_cut_lsf
+            cut_lsf_fwhm = paramset.mtf_cut_lsf_w
+            try:
+                fade_lsf_fwhm = paramset.mtf_cut_lsf_w_fade
+            except AttributeError:
+                pass
+        except AttributeError:
+            cut_lsf = False
+            cut_lsf_fwhm = None
+
         for i in [0, 1]:
-            matrix_xz = np.sum(matrix, axis=i)
+            details_dict_this = {}
+            axis = 2 if i == 0 else 1
+            matrix_xz = np.sum(matrix, axis=axis)
             dists_flat = dist_map_xy[i].flatten()
             sort_idxs = np.argsort(dists_flat)
             dists = dists_flat[sort_idxs]
@@ -1968,76 +1997,53 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
             values = sorted_pixels[dists < radius]
 
             step_size = .1 * pix
-            new_x, new_y = mmcalc.resample_by_binning(
-                input_y=values, input_x=dists_cut, step=step_size)
-            breakpoint()
+            LSF_x, LSF = mmcalc.resample_by_binning(
+                input_y=values, input_x=dists_cut,
+                first_step=-radius, step=step_size)
+            width, _ = mmcalc.get_width_center_at_threshold(
+                LSF, np.max(LSF)/2)
+            center = 0
+            if width is not None:
+                # Discrete MTF
+                if cut_lsf:
+                    LSF, cw, cwf = mmcalc.cut_and_fade_LSF(
+                        LSF, center=center, fwhm=width,
+                        cut_width=cut_lsf_fwhm, fade_width=fade_lsf_fwhm)
+                dMTF_details = mmcalc.get_MTF_discrete(LSF, dx=step_size)
+                dMTF_details['cut_width'] = cw * step_size
+                dMTF_details['cut_width_fade'] = cwf * step_size
+                LSF_x = step_size * (np.arange(LSF.size) - center)
 
-        '''
-        step_size = .1 * pix
-        new_x, new_y = mmcalc.resample_by_binning(
-            input_y=values, input_x=dists_cut, step=step_size)
-        '''
+                if isinstance(paramset, cfc.ParamSetCT):
+                    gMTF_details = mmcalc.get_MTF_gauss(
+                        LSF, dx=step_size, gaussfit='double')
+                    gMTF_details['values'] = mmcalc.get_curve_values(
+                            gMTF_details['MTF_freq'],
+                            gMTF_details['MTF'], [0.5, 0.1, 0.02])
+                    dMTF_details['values'] = mmcalc.get_curve_values(
+                            dMTF_details['MTF_freq'],
+                            dMTF_details['MTF'], [0.5, 0.1, 0.02],
+                            force_first_below=True)
+                    details_dict_this['dMTF_details'] = dMTF_details
 
-        LSF_x = np.concatenate((np.flip(new_x), new_x[1:]))
-        LSF = np.concatenate((np.flip(new_y), new_y[1:]))
-        LSF = LSF - np.min(LSF)
-        width, _ = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/2)
-        center = 0
-        if width is not None:
-            # Discrete MTF
-            # modality specific settings
-            fade_lsf_fwhm = 0
-            cw = 0
-            cwf = 0
-            try:
-                cut_lsf = paramset.mtf_cut_lsf
-                cut_lsf_fwhm = paramset.mtf_cut_lsf_w
-                try:
-                    fade_lsf_fwhm = paramset.mtf_cut_lsf_w_fade
-                except AttributeError:
-                    pass
-            except AttributeError:
-                cut_lsf = False
-                cut_lsf_fwhm = None
-            if cut_lsf:
-                LSF, cw, cwf = mmcalc.cut_and_fade_LSF(
-                    LSF, center=center, fwhm=width,
-                    cut_width=cut_lsf_fwhm, fade_width=fade_lsf_fwhm)
-            dMTF_details = mmcalc.get_MTF_discrete(LSF, dx=step_size)
-            dMTF_details['cut_width'] = cw * step_size
-            dMTF_details['cut_width_fade'] = cwf * step_size
+                else:  # SPECT
+                    gMTF_details = mmcalc.get_MTF_gauss(
+                        LSF, dx=step_size, gaussfit='single')
+                    fwtm, _ = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/10)
+                    details_dict_this['values'] = [width, fwtm]
 
-            LSF_x = step_size * (np.arange(LSF.size) - center)
-
-            values = None
-            if isinstance(paramset, cfc.ParamSetCT):
-                gMTF_details = mmcalc.get_MTF_gauss(
-                    LSF, dx=step_size, gaussfit='double')
-                gMTF_details['values'] = mmcalc.get_curve_values(
-                        gMTF_details['MTF_freq'], gMTF_details['MTF'], [0.5, 0.1, 0.02])
-                dMTF_details['values'] = mmcalc.get_curve_values(
-                        dMTF_details['MTF_freq'], dMTF_details['MTF'], [0.5, 0.1, 0.02],
-                        force_first_below=True)
-                breakpoint()
-
-            else:  # SPECT
-                gMTF_details = mmcalc.get_MTF_gauss(
-                    LSF, dx=step_size, gaussfit='single')
-                fwtm, _ = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/10)
-                values = [width, fwtm]
-
-            details_dict.update(
-                {
+                details_dict_this.update({
                     'center_xy': center_xy,
                     'LSF_x': LSF_x, 'LSF': LSF,
                     'sorted_pixels_x': dists_cut, 'sorted_pixels': values,
-                    'interpolated_x': new_x, 'interpolated': new_y,
-                    'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details,
-                    'values': values
-                }
-                )
-        else:
-            errmsg.append('Failed finding line spread function.')
+                    'interpolated_x': LSF_x, 'interpolated': LSF,
+                    'gMTF_details': gMTF_details
+                    })
+                details_dict.append(details_dict_this)
+            else:
+                errmsg.append('Failed finding line spread function.')
+                details_dict.append(None)
+    details_dict.append(common_details_dict)
 
     return (details_dict, errmsg)
 

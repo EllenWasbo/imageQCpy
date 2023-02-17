@@ -124,6 +124,7 @@ def get_rois(image, image_number, input_main):
 
         if input_main.current_modality in ['CT', 'SPECT']:
             roi_size_in_pix = paramset.mtf_roi_size / image_info.pix[0]
+
             if paramset.mtf_type == 0:  # bead / point source
                 if paramset.mtf_auto_center:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
@@ -135,22 +136,15 @@ def get_rois(image, image_number, input_main):
                     roi_width=2*roi_size_in_pix + 1,
                     roi_height=2*roi_size_in_pix + 1,
                     offcenter_xy=off_center_xy)
-                bg_width_in_pix = paramset.mtf_background_width / image_info.pix[0]
-                background_outer = get_roi_rectangle(
-                    img_shape,
-                    roi_width=2*(roi_size_in_pix + bg_width_in_pix) + 1,
-                    roi_height=2*(roi_size_in_pix + bg_width_in_pix) + 1,
-                    offcenter_xy=off_center_xy)
-                background_outer[roi_this[0] == True] = False
-                roi_this[1] = background_outer
             else:  # circular edge / wire or cylinder source / line source
                 if paramset.mtf_auto_center:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)
                     off_center_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
 
-                if paramset.mtf_type == 1:  # wire
-                    roi_this = get_roi_rectangle(
+                if paramset.mtf_type == 1:  # wire / line
+                    roi_this = [[], []]
+                    roi_this[0] = get_roi_rectangle(
                         img_shape,
                         roi_width=2*roi_size_in_pix + 1,
                         roi_height=2*roi_size_in_pix + 1,
@@ -158,6 +152,17 @@ def get_rois(image, image_number, input_main):
                 elif paramset.mtf_type == 2:  # circular edge
                     roi_this = get_roi_circle(
                         img_shape, off_center_xy, roi_size_in_pix)
+
+            # outer background rim
+            if paramset.mtf_type in [0, 1]:  # bead/wire or point/line
+                bg_width_in_pix = paramset.mtf_background_width // image_info.pix[0]
+                background_outer = get_roi_rectangle(
+                    img_shape,
+                    roi_width=2*(roi_size_in_pix + bg_width_in_pix) + 1,
+                    roi_height=2*(roi_size_in_pix + bg_width_in_pix) + 1,
+                    offcenter_xy=off_center_xy)
+                background_outer[roi_this[0] == True] = False
+                roi_this[1] = background_outer
 
         elif input_main.current_modality in ['Xray', 'MR']:
             dx = delta_xya[0]  # center of ROI

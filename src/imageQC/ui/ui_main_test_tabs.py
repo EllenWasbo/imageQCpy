@@ -761,7 +761,7 @@ class ParamsTabCT(ParamsTabCommon):
         flo1.addRow(QLabel('MTF method'), self.mtf_type)
         flo1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
         flo1.addRow(
-            QLabel('Width of background (bead method)'), self.mtf_background_width)
+            QLabel('Width of background (bead/wire)'), self.mtf_background_width)
         flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
         flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
                     self.mtf_sampling_frequency)
@@ -1426,7 +1426,7 @@ class ParamsTabSPECT(ParamsTabCommon):
         self.mtf_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
         self.mtf_background_width = QDoubleSpinBox(
-            decimals=1, minimum=0.1, singleStep=0.1)
+            decimals=1, minimum=0, singleStep=0.1)
         self.mtf_background_width.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_background_width'))
         self.mtf_auto_center = QCheckBox('')
@@ -1446,7 +1446,7 @@ class ParamsTabSPECT(ParamsTabCommon):
         flo1.addRow(QLabel('MTF method'), self.mtf_type)
         flo1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
         flo1.addRow(
-            QLabel('Width of background (point method)'), self.mtf_background_width)
+            QLabel('Width of background (point/line)'), self.mtf_background_width)
         flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
         flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
                     self.mtf_sampling_frequency)

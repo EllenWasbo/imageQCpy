@@ -27,6 +27,7 @@ from imageQC.ui import ui_image_canvas
 from imageQC.config.iQCconstants import ENV_ICON_PATH, QUICKTEST_OPTIONS
 from imageQC.ui import settings
 from imageQC.scripts import automation
+from imageQC.scripts.dcm import sort_imgs
 # imageQC block end
 
 
@@ -360,12 +361,15 @@ class OpenAutomationDialog(ImageQCDialog):
                 if temp.label != '':
                     arr.append(mod + ' - (vendor file) ' + temp.label)
                     if count:
-                        n_files, err = self.count_files(temp.path_input)
-                        if n_files > 0:
-                            arr[-1] = arr[-1] + '(' + str(n_files) + ')'
+                        if temp.path_input != '':
+                            n_files, err = self.count_files(temp.path_input)
+                            if n_files > 0:
+                                arr[-1] = arr[-1] + '(' + str(n_files) + ')'
+                            else:
+                                if err is not None:
+                                    errormsgs.append(f'{err}')
                         else:
-                            if err is not None:
-                                errormsgs.append(f'{err}')
+                            arr[-1] = arr[-1] + '(input path unknown)'
             if len(arr) > 0:
                 self.templates_mod.extend([mod] * len(arr))
                 self.templates_is_vendor.extend([True] * len(arr))
@@ -409,7 +413,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     )
 
     def reset_auto_template(self):
-        """Move files from Archive to input_path."""
+        """Move files from Archive to path_input."""
         sel = self.list_templates.selectedIndexes()
         if len(sel) > 0:
             for sno in sel:
@@ -444,7 +448,7 @@ class OpenAutomationDialog(ImageQCDialog):
             self.run_templates(tempnos=tempno_list)
 
     def run_selected_files(self):
-        """Run one selected template and define input files to use."""
+        """Run one selected template in main window and define input files to use."""
         sels = self.list_templates.selectedIndexes()
         if len(sels) != 1:
             QMessageBox.warning(
@@ -463,11 +467,11 @@ class OpenAutomationDialog(ImageQCDialog):
                 filt = 'DICOM files (*.dcm);;All files (*)'
                 open_txt = 'Open DICOM files'
 
-            if temp_this.input_path == '':
+            if temp_this.path_input == '':
                 fnames = QFileDialog.getOpenFileNames(self, open_txt, filter=filt)
             else:
                 fnames = QFileDialog.getOpenFileNames(
-                    self, open_txt, temp_this.input_path, filter=filt)
+                    self, open_txt, temp_this.path_input, filter=filt)
             pre_selected_files = fnames[0]
 
             if self.templates_is_vendor[tempno]:
@@ -477,8 +481,12 @@ class OpenAutomationDialog(ImageQCDialog):
                 self.main.update_mode()
                 self.main.tab_vendor.run_template(template=temp_this, files=fnames)
             else:
+                self.main.start_wait_cursor()
                 self.main.chk_append.setChecked(False)
                 self.main.open_files(file_list=pre_selected_files)
+                self.main.imgs = sort_imgs(
+                    self.main.imgs, temp_this.sort_pattern, self.tag_infos)
+                self.main.tree_file_list.update_file_list()
                 paramset_labels = [temp.label for temp in self.main.paramsets]
                 quicktemp_labels = [
                     temp.label for temp in self.main.quicktest_templates[
@@ -497,6 +505,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     proceed = False
                 if proceed:
                     self.main.wid_quicktest.run_quicktest()
+                self.main.stop_wait_cursor()
             self.close()
 
     def run_templates(self, tempnos=[]):
@@ -510,15 +519,15 @@ class OpenAutomationDialog(ImageQCDialog):
         if len(tempnos) > 0:
             log = []
             self.automation_active = True
-            #self.main.start_wait_cursor()
+            self.main.start_wait_cursor()
 
             for i, tempno in enumerate(tempnos):
                 proceed = True
                 if self.chk_pause_between.isChecked() and i > 0:
-                    #self.main.stop_wait_cursor()
+                    self.main.stop_wait_cursor()
                     proceed = messageboxes.proceed_question(
                         self, 'Continue to next template?')
-                    #self.main.start_wait_cursor()
+                    self.main.start_wait_cursor()
                 if proceed is False:
                     break
                 mod = self.templates_mod[tempno]
@@ -550,7 +559,7 @@ class OpenAutomationDialog(ImageQCDialog):
             self.automation_active = False
             self.main.refresh_results_display()
             self.main.status_bar.showMessage('Finished', 1000)
-            #self.main.stop_wait_cursor()
+            self.main.stop_wait_cursor()
 
             if len(log) > 0:
                 if isinstance(log, list):

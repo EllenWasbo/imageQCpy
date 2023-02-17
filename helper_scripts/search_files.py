@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "lockA"
+search_string = "went wrong while search"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

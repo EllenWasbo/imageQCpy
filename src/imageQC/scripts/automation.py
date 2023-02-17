@@ -689,6 +689,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                             if uniq_date_uid == date_uid_list[i]:
                                 img_infos_this.append(img_info)
 
+                        print(f'sort pattern {auto_template.sort_pattern.list_tags}')
+                        print(f'sort pattern {auto_template.sort_pattern.list_sort}')
                         if len(auto_template.sort_pattern.list_tags) > 0:
                             img_infos = dcm.sort_imgs(
                                 img_infos, auto_template.sort_pattern, tag_infos)
@@ -697,7 +699,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                         input_main_this.results = {}
                         input_main_this.current_group_indicators = []
 
-                        calculate_qc(input_main_this, auto_widget=parent_widget,
+                        calculate_qc(input_main_this, wid_auto=parent_widget,
                                      auto_template_label=auto_template.label)
                         value_list, header_list = quicktest_output(input_main_this)
                         header_list = ['Date'] + header_list

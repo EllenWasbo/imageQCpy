@@ -4,7 +4,6 @@
 
 @author: Ellen Wasbo
 """
-from timeit import default_timer as timer  #TODO delete
 import sys
 import os
 import copy
@@ -80,7 +79,6 @@ class MainWindow(QMainWindow):
     screenChanged = pyqtSignal(QScreen, QScreen)
 
     def __init__(self, scX=1400, scY=700, char_width=7):
-        start = timer()
         super().__init__()
 
         self.save_blocked = False
@@ -103,9 +101,6 @@ class MainWindow(QMainWindow):
         self.current_group_indicators = []
         # string for each image if output set pr group with quicktest (paramset.output)
         self.automation_active = False
-        end = timer()
-        print(f'Settings: {end-start}')
-        start = timer()
         # parameters specific to GUI version
         self.gui = GuiVariables()
         self.gui.panel_width = round(0.48*scX)
@@ -138,9 +133,6 @@ class MainWindow(QMainWindow):
         self.wid_paramset = ui_main_quicktest_paramset_select.SelectParamsetWidget(self)
         self.create_result_tabs()
         self.create_test_tabs()
-        end = timer()
-        print(f'Create GUI main: {end-start}')
-        start = timer()
         # set main layout (left/right)
         bbox = QHBoxLayout()
         self.split_lft_rgt = QSplitter(Qt.Horizontal)
@@ -208,8 +200,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(scroll)
         self.reset_split_sizes()
         self.update_mode()
-        end = timer()
-        print(f'Fill GUI: {end-start}')
 
     def clear_all_images(self):
         """Set empty values at startup and when all images closed."""
@@ -759,29 +749,17 @@ class MainWindow(QMainWindow):
 
     def update_settings(self):
         """Refresh data from settings files affecting GUI in main window."""
-        start = timer()
         self.lastload = time()
         status, path, self.user_prefs = cff.load_user_prefs()
         if self.user_prefs.dark_mode:
             plt.style.use('dark_background')
-        end = timer()
-        print(f'Load user settings: {end-start}')
-        start = timer()
         status, path, self.paramsets = cff.load_settings(
             fname=f'paramsets_{self.current_modality}')
-        end = timer()
-        print(f'Load paramsets: {end-start}')
-        start = timer()
         status, path, self.quicktest_templates = cff.load_settings(
             fname='quicktest_templates')
-        end = timer()
-        print(f'Load quicktest templates: {end-start}')
-        start = timer()
         status, path, self.tag_infos = cff.load_settings(fname='tag_infos')
         status, path, self.tag_patterns_special = cff.load_settings(
             fname='tag_patterns_special')
-        end = timer()
-        print(f'Load not that necessary templates: {end-start}')
 
         try:  # avoid error before gui ready
             self.wid_quicktest.modality_dict = self.quicktest_templates

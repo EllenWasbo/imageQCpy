@@ -358,12 +358,12 @@ class ParamSetSPECT(ParamSetCommon):
     """Set of parameters regarding SPECT tests."""
 
     mtf_type: int = 1  # 0=point, 1=line, 2=circular edge
-    mtf_roi_size: float = 30.
-    mtf_background_width: float = 1.  # used if point method
+    mtf_roi_size: float = 25.
+    mtf_background_width: float = 5.  # used if point method
     mtf_line_tolerance: int = 10
     # ignore slices having max value differing more than % from mean of 3 highest max
     mtf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
-    mtf_plot: int = 4  # default plot 0=xyprofiles, 1=edge, 2=sorted, 3=LSF, 4=MTF
+    mtf_plot: int = 2  # default plot 0=xyprofiles, 1=edge, 2=sorted, 3=LSF, 4=MTF
     mtf_cut_lsf: bool = False
     mtf_cut_lsf_w: float = 3.  # lsf_w from halfmax x FWHM
     mtf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM

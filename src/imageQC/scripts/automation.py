@@ -689,11 +689,9 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                             if uniq_date_uid == date_uid_list[i]:
                                 img_infos_this.append(img_info)
 
-                        print(f'sort pattern {auto_template.sort_pattern.list_tags}')
-                        print(f'sort pattern {auto_template.sort_pattern.list_sort}')
                         if len(auto_template.sort_pattern.list_tags) > 0:
-                            img_infos = dcm.sort_imgs(
-                                img_infos, auto_template.sort_pattern, tag_infos)
+                            img_infos_this = dcm.sort_imgs(
+                                img_infos_this, auto_template.sort_pattern, tag_infos)
 
                         input_main_this.imgs = img_infos_this
                         input_main_this.results = {}

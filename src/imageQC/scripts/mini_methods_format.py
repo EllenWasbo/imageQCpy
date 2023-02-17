@@ -233,7 +233,7 @@ def convert_lists_to_numbers(taglists, ignore_columns=[]):
     return taglists
 
 
-def val_2_str(val_list, decimal_mark='.'):
+def val_2_str(val_list, decimal_mark='.', format_best=True):
     """Convert value to string with some rules of precision.
 
     Parameters
@@ -242,7 +242,9 @@ def val_2_str(val_list, decimal_mark='.'):
         input to be converted
     decimal_mark : str
         Decimal mark of output. Default is '.'
-
+    format_best : bool, optional
+        Set same number of decimals to all numbers in list depending on content.
+        Default is True.
     Returns
     -------
     string_list : list of strings
@@ -269,8 +271,11 @@ def val_2_str(val_list, decimal_mark='.'):
     if type_list.count('str') == len(actual_vals):
         string_list = val_list
     elif type_list.count('float') == len(actual_vals):
-        max_val = max(actual_vals)
-        format_string = get_dynamic_formatstring(max_val)
+        if format_best:
+            max_val = max(actual_vals)
+            format_string = get_dynamic_formatstring(max_val)
+        else:
+            format_string = ''
         for val in val_list:
             if val != '':
                 string_list.append(f'{val:{format_string}}')

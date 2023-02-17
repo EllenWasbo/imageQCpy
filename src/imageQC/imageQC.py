@@ -5,13 +5,13 @@
 @author: EllenWasbo
 url: https://github.com/EllenWasbo/imageQC
 """
-from timeit import default_timer as timer  #TODO delete
 import sys
 import os
 from pathlib import Path
 import logging
 
-from PyQt5 import QtGui, QtWidgets
+from PyQt5.QtGui import QPixmap, QFont, QFontMetrics, QPalette, QColor
+from PyQt5.QtWidgets import QApplication, QSplashScreen
 from PyQt5.QtCore import Qt
 
 # imageQC block start
@@ -33,13 +33,13 @@ def prepare_debug():
 
 
 if __name__ == '__main__':
-    start = timer()
     prepare_debug()  # not needen when not debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     # verify that config_folder exists
     if user_prefs.config_folder != '':
         if not os.path.exists(user_prefs.config_folder):
-            print(f'Config folder do not exist.({user_prefs.config_folder})', flush=True)
+            print(
+                f'Config folder do not exist.({user_prefs.config_folder})', flush=True)
             print('Config folder will be unlinked.', flush=True)
             user_prefs.config_folder = ''
 
@@ -72,6 +72,7 @@ if __name__ == '__main__':
 
         sys.exit('Program exits')
     else:
+        print('imageQC is starting up...', flush=True)
         # to set taskbar icon correctly for windows
         try:
             from ctypes import windll  # Only exists on Windows.
@@ -80,12 +81,12 @@ if __name__ == '__main__':
         except ImportError:
             pass
 
-        app = QtWidgets.QApplication(sys.argv)
+        app = QApplication(sys.argv)
         screen = app.primaryScreen()
         sz = screen.geometry()
 
-        splash_img = QtGui.QPixmap(':/icons/iQC_splash.png')
-        splash = QtWidgets.QSplashScreen(
+        splash_img = QPixmap(':/icons/iQC_splash.png')
+        splash = QSplashScreen(
             splash_img, Qt.WindowStaysOnTopHint)
         splash.show()
 
@@ -137,29 +138,29 @@ if __name__ == '__main__':
             QPushButton:pressed {{
                 {pressed_background}
                 }}""")
-        myFont = QtGui.QFont()
+        myFont = QFont()
         myFont.setPointSize(user_prefs.font_size)
         app.setFont(myFont)
-        font_metric = QtGui.QFontMetrics(myFont)
+        font_metric = QFontMetrics(myFont)
         char_width = font_metric.averageCharWidth()
 
         if user_prefs.dark_mode:
-            palette = QtGui.QPalette()
-            palette.setColor(QtGui.QPalette.Window, QtGui.QColor(53, 53, 53))
-            palette.setColor(QtGui.QPalette.WindowText, Qt.white)
-            palette.setColor(QtGui.QPalette.Base, QtGui.QColor(25, 25, 25))
+            palette = QPalette()
+            palette.setColor(QPalette.Window, QColor(53, 53, 53))
+            palette.setColor(QPalette.WindowText, Qt.white)
+            palette.setColor(QPalette.Base, QColor(25, 25, 25))
             palette.setColor(
-                QtGui.QPalette.AlternateBase, QtGui.QColor(53, 53, 53))
-            palette.setColor(QtGui.QPalette.ToolTipBase, Qt.black)
-            palette.setColor(QtGui.QPalette.ToolTipText, Qt.white)
-            palette.setColor(QtGui.QPalette.Text, Qt.white)
-            palette.setColor(QtGui.QPalette.Button, QtGui.QColor(53, 53, 53))
-            palette.setColor(QtGui.QPalette.ButtonText, Qt.white)
-            palette.setColor(QtGui.QPalette.BrightText, Qt.red)
-            palette.setColor(QtGui.QPalette.Link, QtGui.QColor(42, 130, 218))
+                QPalette.AlternateBase, QColor(53, 53, 53))
+            palette.setColor(QPalette.ToolTipBase, Qt.black)
+            palette.setColor(QPalette.ToolTipText, Qt.white)
+            palette.setColor(QPalette.Text, Qt.white)
+            palette.setColor(QPalette.Button, QColor(53, 53, 53))
+            palette.setColor(QPalette.ButtonText, Qt.white)
+            palette.setColor(QPalette.BrightText, Qt.red)
+            palette.setColor(QPalette.Link, QColor(42, 130, 218))
             palette.setColor(
-                QtGui.QPalette.Highlight, QtGui.QColor(42, 130, 218))
-            palette.setColor(QtGui.QPalette.HighlightedText, Qt.black)
+                QPalette.Highlight, QColor(42, 130, 218))
+            palette.setColor(QPalette.HighlightedText, Qt.black)
             app.setPalette(palette)
 
         if os.environ[ENV_USER_PREFS_PATH] == '':
@@ -167,12 +168,7 @@ if __name__ == '__main__':
             dlg.show()
             splash.finish(dlg)
             dlg.exec()
-        end = timer()
-        print(f'Before MainWindow: {end - start}')
-        start = timer()
         w = ui_main.MainWindow(scX=sz.width(), scY=sz.height(), char_width=char_width)
-        end = timer()
-        print(f'Create MainWindow before show: {end - start}')
         w.show()
         splash.finish(w)
         app.exec()

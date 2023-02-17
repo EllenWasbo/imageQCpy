@@ -199,7 +199,8 @@ def quicktest_output(input_main):
                                 calculation=sub.calculation
                                 )
                             string_list.extend(
-                                mmf.val_2_str(out_values, decimal_mark=dm)
+                                mmf.val_2_str(out_values, decimal_mark=dm,
+                                              format_best=False)
                                 )
                             if len(out_values) > 1:
                                 suffixes.append(image_names_this)
@@ -226,7 +227,8 @@ def quicktest_output(input_main):
                                     calculation=sub.calculation
                                     )
                                 string_list.extend(
-                                    mmf.val_2_str(out_values, decimal_mark=dm)
+                                    mmf.val_2_str(out_values, decimal_mark=dm,
+                                                  format_best=False)
                                     )
                                 if res_pr_image:
                                     suffixes.append(image_names[r])

@@ -291,6 +291,7 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         self.list_file_or_dirs = QListWidget()
         self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)
         self.list_file_or_dirs.addItems(self.list_elements)
+        self.list_file_or_dirs.setCurrentIndex(len(self.list_elements) - 1)
 
         vLO.addWidget(QLabel(
             'Move files out of Archive to regard these files as incoming.'))

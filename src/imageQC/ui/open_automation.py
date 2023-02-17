@@ -344,12 +344,15 @@ class OpenAutomationDialog(ImageQCDialog):
                 if temp.label != '':
                     arr.append(mod + ' - ' + temp.label)
                     if count:
-                        n_files, err = self.count_files(temp.path_input)
-                        if n_files > 0:
-                            arr[-1] = arr[-1] + '(' + str(n_files) + ')'
+                        if temp.path_input != '':
+                            n_files, err = self.count_files(temp.path_input)
+                            if n_files > 0:
+                                arr[-1] = arr[-1] + '(' + str(n_files) + ')'
+                            else:
+                                if err is not None:
+                                    errormsgs.append(f'{err}')
                         else:
-                            if err is not None:
-                                errormsgs.append(f'{err}')
+                            arr[-1] = arr[-1] + '(input path unknown)'
             if len(arr) > 0:
                 self.templates_mod.extend([mod] * len(arr))
                 self.templates_is_vendor.extend([False] * len(arr))

@@ -246,7 +246,7 @@ class MainWindow(QMainWindow):
                 file_list, tag_infos=self.tag_infos,
                 tag_patterns_special=self.tag_patterns_special)
             self.stop_wait_cursor()
-            self.status_bar.showMessage('Finished reading images', 2000)
+            self.status_bar.showMessage('Finished reading image headers', 2000)
             if ignored_files:
                 dlg = messageboxes.MessageBoxWithDetails(
                     self, title='Some files ignored',

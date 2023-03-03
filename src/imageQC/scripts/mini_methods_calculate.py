@@ -72,7 +72,10 @@ def gauss_4param_fit(x, y):
     """Fit x,y to gaussian curve."""
     mean = sum(x * y) / sum(y)
     sigma = np.sqrt(sum(y * (x - mean) ** 2) / sum(y))
-    popt, pcov = curve_fit(gauss_4param, x, y, p0=[min(y), max(y), mean, sigma])
+    try:
+        popt, pcov = curve_fit(gauss_4param, x, y, p0=[min(y), max(y), mean, sigma])
+    except RuntimeError:
+        popt = None
     return popt
 
 
@@ -89,10 +92,13 @@ def gauss_fit(x, y, fwhm=0):
             fwhm = width * (x[1] - x[0])
     sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
     A = max(y)
-    popt, pcov = curve_fit(
-        gauss, x, y, p0=[A, sigma],
-        bounds=([0.9*A, 0.5*sigma], [1.1*A, 2*sigma])
-        )
+    try:
+        popt, pcov = curve_fit(
+            gauss, x, y, p0=[A, sigma],
+            bounds=([0.9*A, 0.5*sigma], [1.1*A, 2*sigma])
+            )
+    except RuntimeError:
+        popt = None
     return popt
 
 
@@ -130,27 +136,33 @@ def gauss_double_fit(x, y, fwhm1=None, A2_positive=False):
         A1 = 0.9 * np.max(y)
         A2 = 0.1 * np.max(y)
         sigma = sigma1
-        popt, pcov = curve_fit(
-            gauss_double, x, y, p0=[A1, sigma, A2, sigma],
-            bounds=([0.5*A1, 0.7*sigma, 0, 0.7*sigma],
-                    [2*A1, 2*sigma, 2*A1, 3*sigma]),
-            )
+        try:
+            popt, pcov = curve_fit(
+                gauss_double, x, y, p0=[A1, sigma, A2, sigma],
+                bounds=([0.5*A1, 0.7*sigma, 0, 0.7*sigma],
+                        [2*A1, 2*sigma, 2*A1, 3*sigma]),
+                )
+        except RuntimeError:
+            popt = None
     else:
         A1 = np.max(y) - 2 * np.min(y)
         A2 = 2 * np.min(y)
         sigma2 = 2 * sigma1
-        if A2 < 0:
-            popt, pcov = curve_fit(
-                gauss_double, x, y, p0=[A1, sigma1, A2, sigma2],
-                bounds=([0.5*A1, 0.5*sigma1, 2*A2, 0.5*sigma2],
-                        [2*A1, 2*sigma1, 0, 2*sigma2]),
-                )
-        else:
-            A1 = max(y)
-            popt, pcov = curve_fit(
-                gauss, x, y, p0=[A1, sigma1],
-                bounds=([0.5*A1, 0.5*sigma1], [2*A1, 2*sigma1]),
-                )
+        try:
+            if A2 < 0:
+                popt, pcov = curve_fit(
+                    gauss_double, x, y, p0=[A1, sigma1, A2, sigma2],
+                    bounds=([0.5*A1, 0.5*sigma1, 2*A2, 0.5*sigma2],
+                            [2*A1, 2*sigma1, 0, 2*sigma2]),
+                    )
+            else:
+                A1 = max(y)
+                popt, pcov = curve_fit(
+                    gauss, x, y, p0=[A1, sigma1],
+                    bounds=([0.5*A1, 0.5*sigma1], [2*A1, 2*sigma1]),
+                    )
+        except RuntimeError:
+            popt = None
     return popt
 
 
@@ -212,54 +224,64 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
     -------
     dict
         with calculation details
+    str
+        error message
     """
     popt = None
+    details = {}
+    errmsg = None
     width, center = get_width_center_at_threshold(LSF, 0.5 * max(LSF))
-    if center is not None:
+    if center is None:
+        errmsg = 'Failed finding center of LSF.'
+    else:
         LSF_x = dx * (np.arange(LSF.size) - center)
         A2 = None
         sigma2 = None
         if gaussfit == 'double':
             popt = gauss_double_fit(LSF_x, LSF, fwhm1=width * dx)
-            if len(popt) == 4:
-                A1, sigma1, A2, sigma2 = popt
-                LSF_fit = gauss_double(LSF_x, *popt)
-            else:
-                A1, sigma1 = popt
-                LSF_fit = gauss(LSF_x, *popt)
+            if popt is not None:
+                if len(popt) == 4:
+                    A1, sigma1, A2, sigma2 = popt
+                    LSF_fit = gauss_double(LSF_x, *popt)
+                else:
+                    A1, sigma1 = popt
+                    LSF_fit = gauss(LSF_x, *popt)
         elif gaussfit == 'double_both_positive':
             popt = gauss_double_fit(LSF_x, LSF, fwhm1=width * dx, A2_positive=True)
-            A1, sigma1, A2, sigma2 = popt
-            LSF_fit = gauss_double(LSF_x, *popt)
-        else: # single
+            if popt is not None:
+                A1, sigma1, A2, sigma2 = popt
+                LSF_fit = gauss_double(LSF_x, *popt)
+        else:  # single
             popt = gauss_fit(LSF_x, LSF)
-            LSF_fit = gauss(LSF_x, *popt)
-            A1, sigma1 = popt
+            if popt is not None:
+                LSF_fit = gauss(LSF_x, *popt)
+                A1, sigma1 = popt
 
-        n_steps = 200  # sample 20 steps from 0 to 1 stdv MTF curve (stdev = 1/sigma1)
-        # TODO user configurable n_steps
-        k_vals = np.arange(n_steps) * (10./n_steps) / sigma1
-        MTF = gauss(k_vals, A1*sigma1, 1/sigma1)
-        if A2 is not None and sigma2 is not None:
-            F2 = gauss(k_vals, A2*sigma2, 1/sigma2)
-            MTF = np.add(MTF, F2)
-        MTF_filtered = None
-        if prefilter_sigma is not None:
-            if prefilter_sigma > 0:
-                F_filter = gauss(k_vals, 1., 1/prefilter_sigma)
-                MTF_filtered = 1/MTF[0] * MTF  # for display
-                MTF = np.divide(MTF, F_filter)
-        MTF = 1/MTF[0] * MTF
-        k_vals = k_vals / (2*np.pi)
-        details = {
-            'LSF_fit_x': LSF_x, 'LSF_fit': LSF_fit, 'LSF_prefit': LSF,
-            'LSF_fit_params': popt,
-            'MTF_freq': k_vals, 'MTF': MTF, 'MTF_filtered': MTF_filtered
-            }
-    else:
-        details = {}
+        if popt is None:
+            errmsg = 'Failed fitting LSF to gaussian.'
+        else:
+            n_steps = 200  # sample 20 steps from 0 to 1 stdv MTF curve (stdev = 1/sigma1)
+            # TODO user configurable n_steps
+            k_vals = np.arange(n_steps) * (10./n_steps) / sigma1
+            MTF = gauss(k_vals, A1*sigma1, 1/sigma1)
+            if A2 is not None and sigma2 is not None:
+                F2 = gauss(k_vals, A2*sigma2, 1/sigma2)
+                MTF = np.add(MTF, F2)
+            MTF_filtered = None
+            if prefilter_sigma is not None:
+                if prefilter_sigma > 0:
+                    F_filter = gauss(k_vals, 1., 1/prefilter_sigma)
+                    MTF_filtered = 1/MTF[0] * MTF  # for display
+                    MTF = np.divide(MTF, F_filter)
+            MTF = 1/MTF[0] * MTF
+            k_vals = k_vals / (2*np.pi)
+            details = {
+                'LSF_fit_x': LSF_x, 'LSF_fit': LSF_fit, 'LSF_prefit': LSF,
+                'LSF_fit_params': popt,
+                'MTF_freq': k_vals, 'MTF': MTF, 'MTF_filtered': MTF_filtered
+                }
 
-    return details
+    return (details, errmsg)
 
 
 def get_MTF_discrete(LSF, dx=1, padding_factor=1):
@@ -424,8 +446,11 @@ def point_source_func(x, C, D):
 def point_source_func_fit(x, y, center_value=0., avg_radius=0.):
     """Fit foton fluence from point source at detector."""
     C = center_value*avg_radius**2
-    popt, pcov = curve_fit(point_source_func, x, y,
-                           p0=[C, avg_radius])
+    try:
+        popt, pcov = curve_fit(point_source_func, x, y,
+                               p0=[C, avg_radius])
+    except RuntimeError:
+        popt = None
     return popt
 
 

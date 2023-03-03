@@ -6,13 +6,12 @@ Functions used for iQCconstants on startup.
 @author: Ellen Wasbo
 """
 from copy import deepcopy
-import pandas as pd
-from PyQt5.QtCore import QFile, QIODevice, QTextStream
-from io import BytesIO
+from PyQt5.QtCore import QFile, QTextStream
 import yaml
 
 # imageQC block start
 import imageQC.config.config_classes as cfc
+import imageQC.resources  # needed for read_tag_infos
 # imageQC block end
 
 

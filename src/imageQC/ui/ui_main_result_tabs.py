@@ -5,8 +5,8 @@
 @author: Ellen Wasbo
 """
 import os
+import copy
 import numpy as np
-
 import pandas as pd
 
 from PyQt5.QtGui import QIcon, QKeyEvent
@@ -177,7 +177,7 @@ class ResultTable(QTableWidget):
             except KeyError:
                 pass
 
-        if values_rows == [[]]:
+        if len(row_labels) != 0:
             n_cols = len(values_cols)
             n_rows = len(row_labels)
         else:
@@ -200,16 +200,15 @@ class ResultTable(QTableWidget):
         else:
             self.verticalHeader().setVisible(False)
 
-        if values_cols == [[]]:
-            if values_rows != [[]]:
-                # convert rows to columns for better formatting -columns similar numbers
-                for r in range(n_rows):
-                    if len(values_rows[r]) == 0:
-                        values_rows[r] = [None] * n_cols
-                values_cols = []
-                for c in range(n_cols):
-                    values_cols.append([row[c] for row in values_rows])
-        if values_cols != [[]]:
+        if len(col_labels) > 0:
+            # convert rows to columns for better formatting -columns similar numbers
+            for r in range(n_rows):
+                if len(values_rows[r]) == 0:
+                    values_rows[r] = [None] * n_cols
+            values_cols = []
+            for c in range(n_cols):
+                values_cols.append([row[c] for row in values_rows])
+        if len(values_cols[0]) > 0:
             for c in range(len(values_cols)):
                 if vendor:
                     this_col = values_cols[c]  # formatted above
@@ -623,22 +622,29 @@ class ResultPlotCanvas(PlotCanvas):
             linestyles = ['-', '--']
             infotext = ['gaussian', 'discrete']
             prefix = ['g', 'd']
-            suffix = [' x', ' y'] if len(details_dicts) == 2 else ['']
+            suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
             for ddno in range(2):
-                dd = details_dicts[ddno]
-                for no in range(len(prefix)):
-                    key = f'{prefix[no]}MTF_details'
-                    dd_this = dd[key]
-                    xvals = dd_this['MTF_freq']
-                    if mtf_cy_pr_mm is False:
-                        xvals = 10. * xvals  # convert to /cm
-                    yvals = dd_this['MTF']
-                    self.curves.append({
-                        'label': infotext[no] + ' MTF' + suffix[ddno],
-                        'xvals': xvals,
-                        'yvals': yvals,
-                        'style': linestyles[ddno] + colors[no]
-                         })
+                try:
+                    dd = details_dicts[ddno]
+                    suffix_this = suffix[ddno]
+                    proceed = True
+                except IndexError:
+                    proceed = False
+                if proceed:
+                    for no in range(len(prefix)):
+                        key = f'{prefix[no]}MTF_details'
+                        if key in dd:
+                            dd_this = dd[key]
+                            xvals = dd_this['MTF_freq']
+                            if mtf_cy_pr_mm is False:
+                                xvals = 10. * xvals  # convert to /cm
+                            yvals = dd_this['MTF']
+                            self.curves.append({
+                                'label': infotext[no] + ' MTF' + suffix[ddno],
+                                'xvals': xvals,
+                                'yvals': yvals,
+                                'style': linestyles[ddno] + colors[no]
+                                 })
 
             if 'MTF_filtered' in details_dicts[0]['gMTF_details']:
                 yvals = details_dicts[0]['gMTF_details']['MTF_filtered']
@@ -707,64 +713,68 @@ class ResultPlotCanvas(PlotCanvas):
                 prefilter = True
                 lbl_prefilter = ' presmoothed'
             for ddno in range(2):
-                dd = details_dicts[ddno]
-                breakpoint()
-                xvals = dd['LSF_x']
-                yvals = dd['LSF']
-                self.curves.append({
-                    'label': 'LSF' + suffix[ddno],
-                    'xvals': xvals,
-                    'yvals': yvals,
-                    'style': linestyles[ddno] + 'r'
-                     })
-                dd_this = dd['gMTF_details']
-                if prefilter:
-                    xvals = dd_this['LSF_fit_x']
-                    yvals = dd_this['LSF_prefit']
+                try:
+                    dd = details_dicts[ddno]
+                    proceed = True
+                except IndexError:
+                    proceed = False
+                if proceed:
+                    xvals = dd['LSF_x']
+                    yvals = dd['LSF']
                     self.curves.append({
-                        'label': f'LSF{lbl_prefilter}' + suffix[ddno],
+                        'label': 'LSF' + suffix[ddno],
                         'xvals': xvals,
                         'yvals': yvals,
-                        'style': linestyles[ddno] + 'b'
+                        'style': linestyles[ddno] + 'r'
                          })
-                xvals = dd_this['LSF_fit_x']
-                yvals = dd_this['LSF_fit']
-                self.curves.append({
-                    'label': f'LSF{lbl_prefilter} - gaussian fit' + suffix[ddno],
-                    'xvals': xvals,
-                    'yvals': yvals,
-                    'style': linestyles[ddno] + 'k'
-                     })
+                    dd_this = dd['gMTF_details']
+                    if prefilter:
+                        xvals = dd_this['LSF_fit_x']
+                        yvals = dd_this['LSF_prefit']
+                        self.curves.append({
+                            'label': f'LSF{lbl_prefilter}' + suffix[ddno],
+                            'xvals': xvals,
+                            'yvals': yvals,
+                            'style': linestyles[ddno] + 'b'
+                             })
+                    xvals = dd_this['LSF_fit_x']
+                    yvals = dd_this['LSF_fit']
+                    self.curves.append({
+                        'label': f'LSF{lbl_prefilter} - gaussian fit' + suffix[ddno],
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': linestyles[ddno] + 'k'
+                         })
 
-                if ddno == 0:
-                    dd_this = dd['dMTF_details']
-                    if 'cut_width' in dd_this:
-                        cw = dd_this['cut_width']
-                        if cw > 0:
-                            minmax = [np.min(yvals), np.max(yvals)]
-                            for x in [-1, 1]:
-                                self.curves.append({
-                                    'label': '_nolegend_',
-                                    'xvals': [x * cw] * 2,
-                                    'yvals': minmax,
-                                    'style': ':k'
-                                    })
-                                self.ax.text(
-                                    x * cw, np.mean(minmax), 'cut',
-                                    ha='left', size=8, color='gray')
-                            if 'cut_width_fade' in dd_this:
-                                cwf = dd_this['cut_width_fade']
+                    if ddno == 0 and 'dMTF_details' in dd:
+                        dd_this = dd['dMTF_details']
+                        if 'cut_width' in dd_this:
+                            cw = dd_this['cut_width']
+                            if cw > 0:
+                                minmax = [np.min(yvals), np.max(yvals)]
                                 for x in [-1, 1]:
                                     self.curves.append({
                                         'label': '_nolegend_',
-                                        'xvals': [x * cwf] * 2,
+                                        'xvals': [x * cw] * 2,
                                         'yvals': minmax,
                                         'style': ':k'
                                         })
                                     self.ax.text(
-                                        x * cwf, np.mean(minmax), 'fade',
+                                        x * cw, np.mean(minmax), 'cut',
                                         ha='left', size=8, color='gray')
-                            self.default_range_x = [-1.5*cw, 1.5*cw]
+                                if 'cut_width_fade' in dd_this:
+                                    cwf = dd_this['cut_width_fade']
+                                    for x in [-1, 1]:
+                                        self.curves.append({
+                                            'label': '_nolegend_',
+                                            'xvals': [x * cwf] * 2,
+                                            'yvals': minmax,
+                                            'style': ':k'
+                                            })
+                                        self.ax.text(
+                                            x * cwf, np.mean(minmax), 'fade',
+                                            ha='left', size=8, color='gray')
+                                self.default_range_x = [-1.5*cw, 1.5*cw]
 
         def prepare_plot_sorted_pix():
             try:
@@ -783,58 +793,88 @@ class ResultPlotCanvas(PlotCanvas):
                         use_edge_data = True
                     except KeyError:
                         proceed = False
-
             if proceed:
                 self.xtitle = 'pos (mm)'
                 self.ytitle = 'Pixel value'
                 if use_edge_data:
                     sorted_pixels = [ed['sorted_pixels'] for ed in edge_details_dicts]
                 else:
-                    sorted_pixels = details_dicts[0]['sorted_pixels']
-                    if not isinstance(sorted_pixels, list):
-                        sorted_pixels = [sorted_pixels]
-                    xvals = details_dicts[0]['sorted_pixels_x']
-                    if not isinstance(xvals, list):
-                        xvals = [xvals]
-
-                for no, yvals in enumerate(sorted_pixels):
-                    if no == 0:
-                        self.curves.append({
-                            'label': 'Sorted pixels',
-                            'xvals': xvals[no],
-                            'yvals': yvals,
-                            'style': '.',
-                            'color': 'darkgray',
-                            'markersize': 2.,
-                             })
+                    if len(details_dicts) > 1:
+                        sorted_pixels = []
+                        xvals = []
+                        for i in range(len(details_dicts)):
+                            if 'sorted_pixels' in details_dicts[i]:
+                                sorted_pixels.append(details_dicts[i]['sorted_pixels'])
+                                xvals.append(details_dicts[i]['sorted_pixels_x'])
                     else:
-                        if len(xvals) > 1:
-                            self.curves[-1]['xvals'] = np.append(
-                                self.curves[-1]['xvals'], xvals[no])
-                        else:
-                            self.curves[-1]['xvals'] = np.append(
-                                self.curves[-1]['xvals'], xvals[0])
-                        self.curves[-1]['yvals'] = np.append(
-                            self.curves[-1]['yvals'], yvals)
+                        sorted_pixels = details_dicts[0]['sorted_pixels']
+                        xvals = details_dicts[0]['sorted_pixels_x']
+                        if not isinstance(sorted_pixels, list):
+                            sorted_pixels = [sorted_pixels]
+                        if not isinstance(xvals, list):
+                            xvals = [xvals]
+
+                colors = ['r', 'b', 'g', 'c']
+                dotcolors = ['darksalmon', 'cornflowerblue',
+                             'mediumseagreen', 'paleturquoise']  # matching r,b,g,c
+                suffix = [' x', ' y'] if len(sorted_pixels) >= 2 else ['']
+                if len(sorted_pixels) > 3:
+                    suffix = [f' {x}' for x in range(len(sorted_pixels))]
+                for no, yvals in enumerate(sorted_pixels):
+                    if len(xvals) == len(sorted_pixels):
+                        xvals_this = xvals[no]
+                    else:
+                        xvals_this = xvals[0]
+
+                    self.curves.append({
+                        'label': f'Sorted pixels{suffix[no]}',
+                        'xvals': xvals_this,
+                        'yvals': yvals,
+                        'style': '.',
+                        'color': dotcolors[no % len(dotcolors)],
+                        'markersize': 2.,
+                         })
+
                 if 'interpolated_x' in details_dicts[0]:
-                    xvals = details_dicts[0]['interpolated_x']
-                    yvals = details_dicts[0]['interpolated']
-                    self.curves.append({
-                        'label': 'Interpolated',
-                        'xvals': xvals,
-                        'yvals': yvals,
-                        'style': '-r'
-                         })
-                    yvals = details_dicts[0]['presmoothed']
-                    self.curves.append({
-                        'label': 'Presmoothed',
-                        'xvals': xvals,
-                        'yvals': yvals,
-                        'style': '-b'
-                         })
+                    if len(details_dicts) > 1:
+                        interpolated = []
+                        xvals = []
+                        for i in range(len(details_dicts)):
+                            if 'interpolated' in details_dicts[i]:
+                                interpolated.append(details_dicts[i]['interpolated'])
+                                xvals.append(details_dicts[i]['interpolated_x'])
+                    else:
+                        interpolated = details_dicts[0]['interpolated']
+                        xvals = details_dicts[0]['interpolated_x']
+                        if not isinstance(interpolated, list):
+                            interpolated = [interpolated]
+                        if not isinstance(xvals, list):
+                            xvals = [xvals]
+
+                    for no, yvals in enumerate(interpolated):
+                        if len(xvals) == len(interpolated):
+                            xvals_this = xvals[no]
+                        else:
+                            xvals_this = xvals[0]
+                        self.curves.append({
+                                'label': f'Interpolated{suffix[no]}',
+                                'xvals': xvals_this,
+                                'yvals': yvals,
+                                'style': '-',
+                                'color': colors[no % len(colors)]
+                                 })
+
+                    if 'presmoothed' in details_dicts[0]:
+                        yvals = details_dicts[0]['presmoothed']
+                        self.curves.append({
+                            'label': 'Presmoothed',
+                            'xvals': xvals,
+                            'yvals': yvals,
+                            'style': '-b'
+                             })
+
                 if 'ESF' in details_dicts[0]:
                     if isinstance(details_dicts[0]['ESF'], list):
-                        colors = ['r', 'b', 'g', 'c']
                         xvals = details_dicts[0]['ESF_x']
                         for no, ESF in enumerate(details_dicts[0]['ESF']):
                             lbl = f' {no}' if len(details_dicts[0]['ESF']) > 1 else ''
@@ -926,6 +966,23 @@ class ResultPlotCanvas(PlotCanvas):
                     '\n'.join(txt_info), loc='lower right')
                 self.ax.add_artist(at)
 
+        def prepare_plot_zprofile():
+            self.xtitle = 'z position (mm)'
+            self.ytitle = 'Max pixel value in ROI'
+
+            if 'zpos_used' in details_dicts[-1]:
+                common_details = details_dicts[-1]
+                self.curves.append({
+                    'label': 'Max in marked images',
+                    'xvals': common_details['zpos_marked_images'],
+                    'yvals': common_details['max_roi_marked_images'],
+                    'style': '-b'})
+                self.curves.append({
+                    'label': 'Max in used images',
+                    'xvals': common_details['zpos_used'],
+                    'yvals': common_details['max_roi_used'],
+                    'style': '-r'})
+
         test_widget = self.main.stack_test_tabs.currentWidget()
         try:
             sel_text = test_widget.mtf_plot.currentText()
@@ -941,6 +998,8 @@ class ResultPlotCanvas(PlotCanvas):
             prepare_plot_centered_profiles()
         elif sel_text == 'Edge position':
             prepare_plot_edge_position()
+        elif 'z-profile' in sel_text:
+            prepare_plot_zprofile()
         self.title = sel_text
 
     def Rin(self):

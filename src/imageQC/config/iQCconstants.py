@@ -23,7 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.10.2alpha'
+VERSION = '3.0.11alpha'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -59,11 +59,10 @@ ALTERNATIVES = {
                 'Avg for each ROI + % difference from avg of all']
         },
     'NM': {
-        'MTF': ['Point', 'One line source', 'Two perpendicular line sources',
-                'Four edges', 'Circular edge']
+        'MTF': ['Point', 'One line source', 'Two perpendicular line sources', 'Edge']
         },
     'SPECT': {
-        'MTF': ['Point source', 'Line source', 'Cylinder source']
+        'MTF': ['Point source', 'Line source']
         }
     }
 """dict: with lists defining the alternative methods/table displays
@@ -150,16 +149,14 @@ HEADERS = {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt1': ['FWHM', 'FWTM'],
             'alt2': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            'alt3': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            'alt4': ['FWHM', 'FWTM']
+            'alt3': ['FWHM', 'FWTM']
             },
         },
     'SPECT': {
         'ROI': {'alt0': roi_headers},
         'MTF': {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            'alt2': ['FWHM', 'FWTM'],
+            'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y']
             },
         'Con': {}
         },
@@ -187,7 +184,8 @@ HEADERS = {
             'alt0': ['width_0', 'width_90', 'width_45', 'width_135',
                      'GD_0', 'GD_90', 'GD_45', 'GD_135']
             },
-        'Sli': {'alt0': ['Nominal (mm)', 'Measured (mm)', 'Diff (mm)', 'Diff (%)']}
+        'Sli': {'alt0': ['Nominal (mm)', 'Measured (mm)', 'Diff (mm)', 'Diff (%)']},
+        'MTF': {'alt0': ['MTF 50%', 'MTF 10%', 'MTF 2%']}
         }
     }
 
@@ -225,18 +223,16 @@ HEADERS_SUP = {
                        'Fit distance (mm)']
             },
         'MTF': {
-            'alt0': ['MTFx 50%', 'MTFx 10%', 'MTFy 50%', 'MTFy 10%'],
-            'alt1': ['MTF 50%', 'MTF 10%', 'MTF 2%'],
-            'alt2': ['MTFx 50%', 'MTFx 10%', 'MTFy 50%', 'MTFy 10%'],
-            'alt3': ['MTFx 50%', 'MTFx 10%', 'MTFy 50%', 'MTFy 10%'],
-            'alt4': ['MTF 50%', 'MTF 10%', 'MTF 2%']
+            'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
+            'alt1': ['A1', 'sigma1'],
+            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
+            'alt3': ['A1', 'sigma1']
             },
         },
     'SPECT': {
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt2': ['A1', 'sigma1', 'A2', 'sigma2']
+            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y']
             },
         },
     'PET':  {},
@@ -246,7 +242,7 @@ HEADERS_SUP = {
                        'x max', 'y max']
             },
         'Sli': {'altAll': ['FWHM upper (mm)', 'FWHM lower (mm)']},
-        'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2']}
+        'MTF': {'alt0': ['A1', 'sigma1']}
         }
     }
 

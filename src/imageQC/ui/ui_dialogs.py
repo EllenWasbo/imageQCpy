@@ -23,6 +23,7 @@ from imageQC.config.iQCconstants import (
 from imageQC.config.config_func import init_user_prefs
 from imageQC.config.read_config_idl import ConfigIdl2Py
 from imageQC.ui import messageboxes
+from imageQC.ui.reusable_widgets import BoolSelect
 import imageQC.resources
 # imageQC block end
 
@@ -211,7 +212,7 @@ class StartUpDialog(ImageQCDialog):
         return (self.bGroup.checkedId(), self.chk_import_idl.isChecked())
 
 
-class EditAnnotationsDialog(QDialog):
+class EditAnnotationsDialog(ImageQCDialog):
     """Dialog to set annotation settings."""
 
     def __init__(self, annotations=True, annotations_line_thick=0,
@@ -219,10 +220,6 @@ class EditAnnotationsDialog(QDialog):
         super().__init__()
 
         self.setWindowTitle('Set annotations')
-        self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
-        self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setMinimumHeight(300)
         self.setMinimumWidth(300)
 
@@ -270,6 +267,53 @@ class EditAnnotationsDialog(QDialog):
             )
 
 
+class QuickTestClipboardDialog(ImageQCDialog):
+    """Dialog to set whether to include headers/transpose when QuickTest results."""
+
+    def __init__(self, include_headers=True, transpose_table=False, ):
+        super().__init__()
+
+        self.setWindowTitle('QuickTest copy to clipboard settings')
+        self.setMinimumHeight(200)
+        self.setMinimumWidth(200)
+
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
+        vLO.addWidget(QLabel('Optionally change default settings for clipboard output:'))
+        fLO = QFormLayout()
+        vLO.addLayout(fLO)
+
+        self.chk_include_headers = QCheckBox('Include headers')
+        self.chk_include_headers.setChecked(include_headers)
+        fLO.addRow(QLabel(), self.chk_include_headers)
+
+        self.chk_transpose_table = BoolSelect(
+            self, text_true='column', text_false='row (like if automation)')
+        self.chk_transpose_table.setChecked(transpose_table)
+        fLO.addRow(QLabel('Output values as'), self.chk_transpose_table)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vLO.addWidget(self.buttonBox)
+
+    def get_data(self):
+        """Get settings.
+
+        Returns
+        -------
+        bool
+            include_headers
+        bool
+            transpose_table
+        """
+        return (
+            self.chk_include_headers.isChecked(),
+            self.chk_transpose_table.isChecked()
+            )
+
+
 class ResetAutoTemplateDialog(ImageQCDialog):
     """Dialog to move directories/files in input_path/Archive to input_path."""
 
@@ -291,7 +335,7 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         self.list_file_or_dirs = QListWidget()
         self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)
         self.list_file_or_dirs.addItems(self.list_elements)
-        self.list_file_or_dirs.setCurrentIndex(len(self.list_elements) - 1)
+        self.list_file_or_dirs.setCurrentRow(len(self.list_elements) - 1)
 
         vLO.addWidget(QLabel(
             'Move files out of Archive to regard these files as incoming.'))

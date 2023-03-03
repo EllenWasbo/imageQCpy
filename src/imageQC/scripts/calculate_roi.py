@@ -1176,6 +1176,7 @@ def find_rectangle_object(image):
         feature.corner_fast(image_binary, 10),
         min_distance=10
         )
+
     if corn.shape[1] != 2:  # try negative high signal
         image_binary = np.zeros(image.shape)
         image_binary[image < threshold] = 1.
@@ -1212,7 +1213,32 @@ def find_rectangle_object(image):
                 ]
 
             corners_xy = [[xs_sort[i], ys_sort[i]] for i in range(xs_sort.size)]
-            centers_of_edges_xy
+        else:
+            # try fwhm method - assume square (for now)
+            try:
+                center_x, center_y, width_x, width_y = mmcalc.optimize_center(
+                    image, mask_outer=0.05*image.shape[0])
+                y0 = round(center_y)
+                y1 = round(center_y + 0.1*width_y)
+                center_y0_y1 = []
+                for yval in [y0, y1]:
+                    profile = image[yval]
+                    _, center = mmcalc.get_width_center_at_threshold(
+                        profile, 0.5*(np.max(profile) + np.min(profile)))
+                    center_y0_y1.append(center)
+                if None not in center_y0_y1:
+                    tan_angle = (center_y0_y1[1] - center_y0_y1[0])/(y1-y0)
+                    angle = np.arctan(tan_angle)
+                    w_square = width_x * np.cos(angle)
+                    centers_of_edges_xy = []
+                    rot_angles = np.pi/2 * np.arange(4) - np.pi - angle
+                    for i in rot_angles:
+                        x, y = mmcalc.rotate_point(
+                            [center_x + w_square//2, center_y],
+                            [center_x, center_y], np.rad2deg(i))
+                        centers_of_edges_xy.append([x, y])
+            except TypeError:
+                pass
 
     #TODO find edges also if full rectangle not imaged
 

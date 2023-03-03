@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from time import time, ctime
 import numpy as np
 
-from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon, QScreen
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
@@ -35,6 +34,7 @@ from imageQC.ui import settings
 from imageQC.ui import open_multi
 from imageQC.ui import open_automation
 from imageQC.ui.ui_dialogs import TextDisplay
+from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
 from imageQC.config import config_func as cff
@@ -187,15 +187,15 @@ class MainWindow(QMainWindow):
         self.split_rgt_mid_btm.addWidget(self.tab_results)
         lo_rgt.addWidget(self.split_rgt_top_rest)
 
-        wid_full = QWidget()
-        wid_full.setLayout(bbox)
-        wid_full.setFixedSize(2*self.gui.panel_width, self.gui.panel_height)
+        self.wid_full = QWidget()
+        self.wid_full.setLayout(bbox)
+        self.wid_full.setFixedSize(2*self.gui.panel_width, self.gui.panel_height)
 
         scroll = QScrollArea()
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setWidgetResizable(True)
-        scroll.setWidget(wid_full)
+        scroll.setWidget(self.wid_full)
 
         self.setCentralWidget(scroll)
         self.reset_split_sizes()
@@ -322,13 +322,20 @@ class MainWindow(QMainWindow):
 
     def update_active_img(self, current):
         """Overwrite pixmap in memory with new active image, refresh GUI."""
-        if len(self.imgs) > 0 and not self.wid_image_display.tool_sum.isChecked():
+        if len(self.imgs) > 0:
             if current is not None:
                 self.gui.active_img_no = self.tree_file_list.indexOfTopLevelItem(
                     current)
-            self.active_img, _ = dcm.get_img(
-                self.imgs[self.gui.active_img_no].filepath,
-                frame_number=self.imgs[self.gui.active_img_no].frame_number)
+            read_img = True
+            if self.wid_image_display.tool_sum.isChecked():
+                marked_idxs = self.tree_file_list.get_marked_imgs_current_test()
+                if self.gui.active_img_no in marked_idxs:
+                    self.active_img = self.summed_img
+                    read_img = False
+            if read_img:
+                self.active_img, _ = dcm.get_img(
+                    self.imgs[self.gui.active_img_no].filepath,
+                    frame_number=self.imgs[self.gui.active_img_no].frame_number)
             if self.active_img is not None:
                 amin = round(np.amin(self.active_img))
                 amax = round(np.amax(self.active_img))
@@ -354,12 +361,9 @@ class MainWindow(QMainWindow):
             if recalculate_sum:
                 self.start_wait_cursor()
                 self.status_bar.showMessage('Calculating sum of marked images...')
-                testcode = ''
-                if self.wid_quicktest.gb_quicktest.isChecked():
-                    testcode = self.current_test
 
                 self.summed_img, errmsg = dcm.sum_marked_images(
-                    self.imgs, testcode=testcode)
+                    self.imgs, self.tree_file_list.get_marked_imgs_current_test())
                 self.stop_wait_cursor()
                 self.status_bar.showMessage('Finished summing marked images', 2000)
             if self.summed_img is not None:
@@ -439,7 +443,7 @@ class MainWindow(QMainWindow):
         Parameters
         ----------
         reset_index : bool
-            Rest test index if mode change. Default is False
+            Reset test index if mode change. Default is False
         """
         self.start_wait_cursor()
         widget = self.stack_test_tabs.currentWidget()
@@ -625,7 +629,7 @@ class MainWindow(QMainWindow):
     def sort_imgs(self):
         """Resort images by dicom info."""
         sort_template = cfc.TagPatternSort()
-        dlg = uir.TagPatternEditDialog(
+        dlg = TagPatternEditDialog(
             initial_pattern=sort_template,
             modality=self.current_modality,
             title='Sort images by DICOM header information',
@@ -690,19 +694,37 @@ class MainWindow(QMainWindow):
         self.split_rgt_mid_btm.setSizes(
             [round(self.gui.panel_height*0.4), round(self.gui.panel_height*0.4)])
 
-    def resize_main(self):
+    def resize_main(self, new_resolution=False):
         """Reset geometry of MainWindow."""
+        if new_resolution:
+            screens = QApplication.instance().screens()
+            screen_geometry = screens[0].geometry()
+            if len(screens) > 1:  # find which screen is current
+                screen_xs = [
+                    [screen.geometry().x(),
+                     screen.geometry().x() + screen.geometry().width()]
+                    for screen in screens]
+                for screen_id, xs in enumerate(screen_xs):
+                    if self.pos().x() > xs[0] and self.pos().x() < xs[1]:
+                        screen_geometry = screens[screen_id].geometry()
+                        break
+            self.gui.panel_width = round(0.48*screen_geometry.width())
+            self.gui.panel_height = round(0.86*screen_geometry.height())
+            self.wid_full.setFixedSize(
+                2*self.gui.panel_width, self.gui.panel_height)
         self.resize(
             round(self.gui.panel_width*2+30),
             round(self.gui.panel_height+50)
             )
+        if new_resolution:
+            self.reset_split_sizes()
         self.show()
 
     def moveEvent(self, event):
         """If window moved on screen or to other monitor."""
         try:
-            old_screen = QtWidgets.QApplication.screenAt(event.oldPos())
-            new_screen = QtWidgets.QApplication.screenAt(event.pos())
+            old_screen = QApplication.screenAt(event.oldPos())
+            new_screen = QApplication.screenAt(event.pos())
 
             if not old_screen == new_screen:
                 if not old_screen.geometry() == new_screen.geometry():
@@ -745,7 +767,6 @@ class MainWindow(QMainWindow):
                 self, initial_view=initial_view)
         dlg.exec()
         self.update_settings()
-        self.update_mode()
 
     def update_settings(self):
         """Refresh data from settings files affecting GUI in main window."""
@@ -762,11 +783,13 @@ class MainWindow(QMainWindow):
             fname='tag_patterns_special')
 
         try:  # avoid error before gui ready
+            prev_label = self.wid_quicktest.current_template.label
             self.wid_quicktest.modality_dict = self.quicktest_templates
-            self.wid_quicktest.fill_template_list()
+            self.wid_quicktest.fill_template_list(set_label=prev_label)
+            prev_label = self.current_paramset.label
             self.wid_paramset.modality_dict = {
                 f'{self.current_modality}': self.paramsets}
-            self.wid_paramset.fill_template_list()
+            self.wid_paramset.fill_template_list(set_label=prev_label)
         except AttributeError:
             pass
 
@@ -904,6 +927,8 @@ class MainWindow(QMainWindow):
             QIcon(f'{os.environ[ENV_ICON_PATH]}gears.png'),
             'Settings', self)
         act_settings.triggered.connect(self.run_settings)
+        act_resize_main = QAction('Refresh layout after resolution change', self)
+        act_resize_main.triggered.connect(lambda: self.resize_main(new_resolution=True))
         act_reset_split = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}layout.png'),
             'Reset layout', self)
@@ -934,7 +959,8 @@ class MainWindow(QMainWindow):
         menu_settings.addAction(act_settings)
         menu_bar.addMenu(menu_settings)
         menu_layout = QMenu('&Layout', self)
-        menu_layout.addAction(act_reset_split)
+        menu_layout.addActions([act_resize_main, act_reset_split])
+        menu_bar.addMenu(menu_layout)
         menu_bar.addMenu(QMenu('&Help', self))
 
         # fill toolbar

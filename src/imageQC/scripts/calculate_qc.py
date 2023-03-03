@@ -21,7 +21,7 @@ from imageQC.scripts.calculate_roi import get_rois
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
-from imageQC.config.iQCconstants import HEADERS, HEADERS_SUP
+from imageQC.config.iQCconstants import HEADERS, HEADERS_SUP, QUICKTEST_OPTIONS
 import imageQC.config.config_classes as cfc
 # imageQC block end
 
@@ -127,17 +127,12 @@ def quicktest_output(input_main):
         group_names = input_main.current_quicktest.group_names
     if input_main.results != {}:
         # image_names to headers?
-        if input_main.current_paramset.output.include_header:
-            if len(input_main.current_quicktest.image_names) > 0:
-                set_names = input_main.current_quicktest.image_names
-                if any(set_names):
-                    for i in range(n_imgs):
-                        if set_names[i] != '':
-                            image_names[i] = set_names[i]
-
-        include_header = True  # always included when automation if empty output file
-        if input_main.automation_active is False:
-            include_header = input_main.current_paramset.output.include_header
+        if len(input_main.current_quicktest.image_names) > 0:
+            set_names = input_main.current_quicktest.image_names
+            if any(set_names):
+                for i in range(n_imgs):
+                    if set_names[i] != '':
+                        image_names[i] = set_names[i]
 
         for test in input_main.results:
             if test in input_main.current_paramset.output.tests:
@@ -175,6 +170,7 @@ def quicktest_output(input_main):
                                     input_main.current_group_indicators[r])
                                 actual_image_names.append(image_names[r])
                                 actual_group_names.append(group_names[r])
+
                         uniq_group_ids = list(set(actual_group_ids))
                         for g, group_id in enumerate(uniq_group_ids):
                             values_this = []
@@ -200,7 +196,7 @@ def quicktest_output(input_main):
                                 )
                             string_list.extend(
                                 mmf.val_2_str(out_values, decimal_mark=dm,
-                                              format_best=False)
+                                              format_same=False)
                                 )
                             if len(out_values) > 1:
                                 suffixes.append(image_names_this)
@@ -228,30 +224,29 @@ def quicktest_output(input_main):
                                     )
                                 string_list.extend(
                                     mmf.val_2_str(out_values, decimal_mark=dm,
-                                                  format_best=False)
+                                                  format_same=False)
                                     )
                                 if res_pr_image:
                                     suffixes.append(image_names[r])
 
-                    if include_header:
-                        # output label or table header + image_name or group_name
-                        if len(out_values) > 1:  # as is or group/calculation failed
-                            if sub.columns == []:
-                                headers_this = headers
-                            else:
-                                headers_this = [
-                                    header for c, header in enumerate(headers)
-                                    if c in sub.columns]
+                    # output label or table header + image_name or group_name
+                    if len(out_values) > 1:  # as is or group/calculation failed
+                        if sub.columns == []:
+                            headers_this = headers
                         else:
-                            headers_this = [sub.label]
-                        all_headers_this = []
-                        if suffixes != []:
-                            for suffix in suffixes:
-                                for header in headers_this:
-                                    all_headers_this.append(header + '_' + suffix)
-                        else:
-                            all_headers_this = headers_this
-                        header_list.extend(all_headers_this)
+                            headers_this = [
+                                header for c, header in enumerate(headers)
+                                if c in sub.columns]
+                    else:
+                        headers_this = [sub.label]
+                    all_headers_this = []
+                    if suffixes != []:
+                        for suffix in suffixes:
+                            for header in headers_this:
+                                all_headers_this.append(header + '_' + suffix)
+                    else:
+                        all_headers_this = headers_this
+                    header_list.extend(all_headers_this)
 
     return (string_list, header_list)
 
@@ -332,6 +327,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
     if len(img_infos) == 0:
         proceed = False
 
+    flattened_marked = []
     if proceed:
         # load marked images (if not only DCM test)
         # run 2d tests while loading next image
@@ -438,7 +434,6 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
                             tag_lists[i] = tags[0]
                             if extra_tag_pattern is not None:
                                 extra_tag_list.append(tags[2])
-                        input_main.current_group_indicators[i] = '_'.join(tags[1])
                         if extra_tag_pattern is not None:
                             if len(extra_tag_list) == 2:
                                 if extra_tag_list[0] != extra_tag_list[1]:
@@ -459,7 +454,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
                             tag_lists[i] = tags[0]['dummy']
                         else:
                             tag_lists[i] = tags[0]
-                        input_main.current_group_indicators[i] = '_'.join(tags[1])
+                    input_main.current_group_indicators[i] = '_'.join(tags[1])
                 else:
                     if read_image[i]:
                         image, tags = dcm.get_img(
@@ -577,7 +572,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
                     input_main.results[test] = asdict(results_dict[test])
 
             # For test DCM
-            if any(read_tags):
+            if any(read_tags) and 'DCM' in flattened_marked:
                 ignore_cols = []
                 for idx, val in enumerate(paramset.dcm_tagpattern.list_format):
                     if len(val) > 2:
@@ -617,7 +612,13 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
                     input_main.results['Cro']['values'][0][-1] = corr_calib * old_calib
                 except (IndexError, KeyError):
                     pass
-            input_main.current_test = current_test_before
+            if current_test_before in flattened_marked or len(flattened_marked) == 0:
+                set_current_test = current_test_before
+            else:
+                set_current_test = flattened_marked[0]
+            idx_set_test = QUICKTEST_OPTIONS[modality].index(set_current_test)
+            widget = input_main.stack_test_tabs.currentWidget()
+            widget.setCurrentIndex(idx_set_test)
             input_main.refresh_results_display()
             input_main.stop_wait_cursor()
 
@@ -820,7 +821,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 sub = image2d[rows][:, cols]
                 arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[1]))
                 background = np.mean(arr)
-                details = calculate_MTF_point(
+                details, errmsg = calculate_MTF_point(
                     sub - background, image_info, paramset)
                 details[0]['matrix'] = sub
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
@@ -835,7 +836,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 res = Results(
                     headers=headers, values=values,
                     headers_sup=headers_sup, values_sup=values_sup,
-                    details_dict=details, alternative=alt)
+                    details_dict=details, alternative=alt, errmsg=errmsg)
 
         elif modality in ['Xray', 'MR']:
             headers = HEADERS[modality][test_code]['alt0']
@@ -879,7 +880,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             #    rows = np.max(roi_array[0], axis=1)
             #    cols = np.max(roi_array[0], axis=0)
             #    sub = image2d[rows][:, cols]
-            #    breakpoint()
 
         return res
 
@@ -1038,10 +1038,11 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             res = Results(headers=headers, headers_sup=headers_sup)
         else:
             details_dict = {}
+            errmsg = None
             values_sup = [None] * 3
             if paramset.uni_correct:
                 lock_z = paramset.uni_radius if paramset.uni_lock_radius else -1.
-                res = get_corrections_point_source(
+                res, errmsg = get_corrections_point_source(
                     image2d, image_info, roi_array[0],
                     fit_x=paramset.uni_correct_pos_x,
                     fit_y=paramset.uni_correct_pos_y,
@@ -1061,7 +1062,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             res = Results(
                 headers=headers, values=values,
                 headers_sup=headers_sup, values_sup=values_sup,
-                details_dict=details_dict)
+                details_dict=details_dict, errmsg=[errmsg])
 
         return res
 
@@ -1072,10 +1073,11 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             res = Results(headers=headers, headers_sup=headers_sup)
         else:
             details_dict = {}
+            errmsg = None
             values_sup = [None] * 3
             if paramset.sni_correct:
                 lock_z = paramset.sni_radius if paramset.sni_lock_radius else -1.
-                res = get_corrections_point_source(
+                res, errmsg = get_corrections_point_source(
                     image2d, image_info, roi_array[0],
                     fit_x=paramset.sni_correct_pos_x,
                     fit_y=paramset.sni_correct_pos_y,
@@ -1094,7 +1096,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             res = Results(
                 headers=headers, values=values,
                 headers_sup=headers_sup, values_sup=values_sup,
-                details_dict=details_dict)
+                details_dict=details_dict, errmsg=[errmsg])
 
         return res
 
@@ -1335,42 +1337,17 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
                 values = None
                 values_sup = None
-                if modality == 'CT':
-                    prefix = 'g' if paramset.mtf_gaussian else 'd'
-                    if paramset.mtf_type == 1:  # wire x-dir, y-dir
-                        try:
-                            values = details_dict[0][prefix + 'MTF_details']['values']
-                            values_sup = list(details_dict[0][
-                                'gMTF_details']['LSF_fit_params'])
-                            values.extend(
-                                details_dict[1][prefix + 'MTF_details']['values'])
-                            values_sup.extend(list(
-                                details_dict[1]['gMTF_details']['LSF_fit_params']))
-                        except KeyError:
-                            pass
-                    else:
-                        try:
-                            values = details_dict[prefix + 'MTF_details']['values']
-                            values_sup = details_dict['gMTF_details']['LSF_fit_params']
-                        except KeyError:
-                            pass
-                else:  # SPECT
-                    if paramset.mtf_type == 1:  # line x-dir, y-dir
-                        try:
-                            values = details_dict[0]['values']
-                            values_sup = list(details_dict[0][
-                                'gMTF_details']['LSF_fit_params'])
-                            values.extend(details_dict[1]['values'])
-                            values_sup.extend(list(details_dict[1][
-                                'gMTF_details']['LSF_fit_params']))
-                        except KeyError:
-                            pass
-                    else:
-                        try:
-                            values = details_dict['values']
-                            values_sup = details_dict['gMTF_details']['LSF_fit_params']
-                        except KeyError:
-                            pass
+                prefix = 'g' if paramset.mtf_gaussian else 'd'
+                values = details_dict[0][prefix + 'MTF_details']['values']
+                values_sup = list(details_dict[0][
+                    'gMTF_details']['LSF_fit_params'])
+                try:  # x-dir, y-dir
+                    values.extend(
+                        details_dict[1][prefix + 'MTF_details']['values'])
+                    values_sup.extend(list(
+                        details_dict[1]['gMTF_details']['LSF_fit_params']))
+                except (IndexError, KeyError):
+                    pass
                 res = Results(headers=headers, values=[values],
                               headers_sup=headers_sup, values_sup=[values_sup],
                               details_dict=details_dict,
@@ -1815,6 +1792,7 @@ def calculate_MTF_point(matrix, img_info, paramset):
             + values [MTF 50%, 10%, 2%]
     """
     details = []
+    errmsgs = []
     for ax in [1, 0]:
         details_dict = {}
         profile = np.sum(matrix, axis=ax)
@@ -1851,23 +1829,48 @@ def calculate_MTF_point(matrix, img_info, paramset):
             res = mmcalc.get_MTF_discrete(profile, dx=img_info.pix[0])
             res['cut_width'] = cw * img_info.pix[0]
             res['cut_width_fade'] = cwf * img_info.pix[0]
-            res['values'] = mmcalc.get_curve_values(
-                res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
+            if isinstance(paramset, cfc.ParamSetCT):
+                res['values'] = mmcalc.get_curve_values(
+                    res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
+            else:  # SPECT
+                fwtm, _ = mmcalc.get_width_center_at_threshold(
+                    profile, np.max(profile)/10)
+                if width is not None:
+                    width = width*img_info.pix[0]
+                if fwtm is not None:
+                    fwtm = fwtm*img_info.pix[0]
+                res['values'] = [width, fwtm]
             details_dict['dMTF_details'] = res
 
             # Gaussian MTF
             if isinstance(paramset, cfc.ParamSetCT):
                 gaussfit = 'double'
-            else:
+            else:  # SPECT
                 gaussfit = 'single'
-            res = mmcalc.get_MTF_gauss(profile, dx=img_info.pix[0], gaussfit=gaussfit)
-            res['values'] = mmcalc.get_curve_values(
-                res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
-            details_dict['gMTF_details'] = res
+            res, err = mmcalc.get_MTF_gauss(
+                profile, dx=img_info.pix[0], gaussfit=gaussfit)
+            if err is not None:
+                errmsgs.append(err)
+            else:
+                if isinstance(paramset, cfc.ParamSetCT):
+                    res['values'] = mmcalc.get_curve_values(
+                        res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
+                else:  # SPECT
+                    profile = res['LSF_fit']
+                    fwhm, _ = mmcalc.get_width_center_at_threshold(
+                        profile, np.max(profile)/2)
+                    fwtm, _ = mmcalc.get_width_center_at_threshold(
+                        profile, np.max(profile)/10)
+                    if fwhm is not None:
+                        fwhm = fwhm*img_info.pix[0]
+                    if fwtm is not None:
+                        fwtm = fwtm*img_info.pix[0]
+                    res['values'] = [fwhm, fwtm]
+                details_dict['gMTF_details'] = res
 
-            details.append(details_dict)
+                details.append(details_dict)
 
-    return details
+    return (details, errmsgs)
 
 
 def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
@@ -2002,9 +2005,8 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
             LSF_x, LSF = mmcalc.resample_by_binning(
                 input_y=values, input_x=dists_cut,
                 first_step=-radius, step=step_size)
-            width, _ = mmcalc.get_width_center_at_threshold(
+            width, center = mmcalc.get_width_center_at_threshold(
                 LSF, np.max(LSF)/2)
-            center = 0
             if width is not None:
                 # Discrete MTF
                 if cut_lsf:
@@ -2017,34 +2019,47 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
                 LSF_x = step_size * (np.arange(LSF.size) - center)
 
                 if isinstance(paramset, cfc.ParamSetCT):
-                    gMTF_details = mmcalc.get_MTF_gauss(
+                    gMTF_details, err = mmcalc.get_MTF_gauss(
                         LSF, dx=step_size, gaussfit='double')
-                    gMTF_details['values'] = mmcalc.get_curve_values(
-                            gMTF_details['MTF_freq'],
-                            gMTF_details['MTF'], [0.5, 0.1, 0.02])
+                    if err is not None:
+                        errmsg.append(err)
+                    else:
+                        gMTF_details['values'] = mmcalc.get_curve_values(
+                                gMTF_details['MTF_freq'],
+                                gMTF_details['MTF'], [0.5, 0.1, 0.02])
                     dMTF_details['values'] = mmcalc.get_curve_values(
                             dMTF_details['MTF_freq'],
                             dMTF_details['MTF'], [0.5, 0.1, 0.02],
                             force_first_below=True)
-                    details_dict_this['dMTF_details'] = dMTF_details
 
                 else:  # SPECT
-                    gMTF_details = mmcalc.get_MTF_gauss(
+                    fwtm, _ = mmcalc.get_width_center_at_threshold(
+                        LSF, np.max(LSF)/10)
+                    dMTF_details['values'] = [step_size*width, step_size*fwtm]
+                    gMTF_details, err = mmcalc.get_MTF_gauss(
                         LSF, dx=step_size, gaussfit='single')
-                    fwtm, _ = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/10)
-                    details_dict_this['values'] = [width, fwtm]
+                    if err is not None:
+                        errmsg.append(err)
+                    else:
+                        fwhm, _ = mmcalc.get_width_center_at_threshold(
+                            gMTF_details['LSF_fit'], np.max(gMTF_details['LSF_fit'])/2)
+                        fwtm, _ = mmcalc.get_width_center_at_threshold(
+                            gMTF_details['LSF_fit'], np.max(gMTF_details['LSF_fit'])/10)
+                        gMTF_details['values'] = [step_size*fwhm, step_size*fwtm]
 
                 details_dict_this.update({
                     'center_xy': center_xy,
                     'LSF_x': LSF_x, 'LSF': LSF,
                     'sorted_pixels_x': dists_cut, 'sorted_pixels': values,
                     'interpolated_x': LSF_x, 'interpolated': LSF,
-                    'gMTF_details': gMTF_details
+                    'gMTF_details': gMTF_details,
+                    'dMTF_details': dMTF_details
                     })
                 details_dict.append(details_dict_this)
             else:
                 errmsg.append('Failed finding line spread function.')
                 details_dict.append(None)
+
     details_dict.append(common_details_dict)
 
     return (details_dict, errmsg)
@@ -2193,21 +2208,38 @@ def calculate_MTF_edge(matrix, pix, paramset):
 
             LSF_x = step_size * (np.arange(LSF.size) - center)
 
-            gMTF_details = mmcalc.get_MTF_gauss(
+            if isinstance(paramset, cfc.ParamSetXray):
+                gaussfit_type = 'double_both_positive'
+                lp_vals = [0.5, 1, 1.5, 2, 2.5]
+                mtf_vals = [0.5]
+            else:  # MR
+                gaussfit_type = 'single'  #TODO correct?
+                lp_vals = None
+                mtf_vals = [0.5, 0.1, 0.02]
+            gMTF_details, err = mmcalc.get_MTF_gauss(
                 LSF, dx=step_size, prefilter_sigma=sigma_f*step_size,
-                gaussfit='double_both_positive')
+                gaussfit=gaussfit_type)
 
-            lp_vals = [0.5, 1, 1.5, 2, 2.5]
-            gMTF_details['values'] = mmcalc.get_curve_values(
-                    gMTF_details['MTF'], gMTF_details['MTF_freq'], lp_vals)
-            gMTF_details['values'].extend(mmcalc.get_curve_values(
-                    gMTF_details['MTF_freq'], gMTF_details['MTF'], [0.5]))
-            dMTF_details['values'] = mmcalc.get_curve_values(
-                    dMTF_details['MTF'], dMTF_details['MTF_freq'], lp_vals,
-                    force_first_below=True)
-            dMTF_details['values'].extend(mmcalc.get_curve_values(
-                    dMTF_details['MTF_freq'], dMTF_details['MTF'], [0.5],
-                    force_first_below=True))
+            if err is not None:
+                errmsg.append(err)
+            else:
+                if lp_vals is not None:
+                    gMTF_details['values'] = mmcalc.get_curve_values(
+                            gMTF_details['MTF'], gMTF_details['MTF_freq'], lp_vals)
+                    dMTF_details['values'] = mmcalc.get_curve_values(
+                            dMTF_details['MTF'], dMTF_details['MTF_freq'], lp_vals,
+                            force_first_below=True)
+                gvals = mmcalc.get_curve_values(
+                        gMTF_details['MTF_freq'], gMTF_details['MTF'], mtf_vals)
+                dvals = mmcalc.get_curve_values(
+                        dMTF_details['MTF_freq'], dMTF_details['MTF'], mtf_vals,
+                        force_first_below=True)
+                if lp_vals is not None:
+                    gMTF_details['values'].extend(gvals)
+                    dMTF_details['values'].extend(dvals)
+                else:
+                    gMTF_details['values'] = gvals
+                    dMTF_details['values'] = dvals
 
             details_dict = {
                 'LSF_x': LSF_x, 'LSF': LSF_no_filt, 'ESF_x': ESF_x, 'ESF': ESF_all,
@@ -2301,16 +2333,6 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
         dists_cut = dists[dists < radius]
         values = values_avg[dists < radius]
 
-        '''
-        # reduce noise using small window width ~0.1*pix assumed to not affect edge
-        diff_x = np.diff(dists_cut)
-        sigma_n = 0.1 * pix // np.median(diff_x)  # TODO *.5?
-        if sigma_n > 0:
-            values_filt = sp.ndimage.gaussian_filter(values, sigma=sigma_n)
-        else:
-            values_filt = values
-        # rebin to 1/10th pix size
-        '''
         step_size = .1 * pix
         new_x, new_y = mmcalc.resample_by_binning(
             input_y=values, input_x=dists_cut, step=step_size)
@@ -2346,17 +2368,20 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
 
             LSF_x = step_size * (np.arange(LSF.size) - center)
 
-            gMTF_details = mmcalc.get_MTF_gauss(
+            gMTF_details, err = mmcalc.get_MTF_gauss(
                 LSF, dx=step_size, prefilter_sigma=sigma_f*step_size, gaussfit='double')
 
-            gMTF_details['values'] = mmcalc.get_curve_values(
-                    gMTF_details['MTF_freq'], gMTF_details['MTF'], [0.5, 0.1, 0.02])
+            if err is not None:
+                errmsg.append(err)
+            else:
+                gMTF_details['values'] = mmcalc.get_curve_values(
+                        gMTF_details['MTF_freq'], gMTF_details['MTF'], [0.5, 0.1, 0.02])
             dMTF_details['values'] = mmcalc.get_curve_values(
                     dMTF_details['MTF_freq'], dMTF_details['MTF'], [0.5, 0.1, 0.02],
                     force_first_below=True)
 
             details_dict = {
-                'center_xy': center_xy,
+                'matrix': matrix, 'center_xy': center_xy,
                 'LSF_x': LSF_x, 'LSF': LSF_no_filt,
                 'sigma_prefilter': sigma_f*step_size,
                 'sorted_pixels_x': dists, 'sorted_pixels': values_all,
@@ -2532,10 +2557,13 @@ def get_corrections_point_source(
         dx : corrected x position (mm)
         dy : corrected y position (mm)
         distance : corrected distance (mm)
+    str
+        errormessage
     """
     corrected_image = image2d
     correction_matrix = np.ones(image2d.shape)
     distance = 0.
+    errmsg = None
 
     # get subarray
     rows = np.max(roi_array, axis=1)
@@ -2549,22 +2577,16 @@ def get_corrections_point_source(
     for a in range(2):
         if fit[a]:
             sum_vector = np.sum(ufov_denoised, axis=a)
-            C, A, x0, sigma = mmcalc.gauss_4param_fit(
+            popt = mmcalc.gauss_4param_fit(
                 np.arange(len(sum_vector)), sum_vector)
-            offset[a] = x0 - 0.5*len(sum_vector)
+            if popt is not None:
+                C, A, x0, sigma = popt
+                offset[a] = x0 - 0.5*len(sum_vector)
 
     dx, dy = offset
     if lock_z == -1.:
         # calculate distances from center in plane
         shape_ufov_y, shape_ufov_x = ufov_denoised.shape
-        '''
-        sz_y, sz_x = image2d.shape
-        xs, ys = np.meshgrid(np.arange(sz_x), np.arange(sz_y))
-        center_pos_x = dx + round(0.5*sz_x)
-        center_pos_y = dy + round(0.5*sz_y)
-        dists_inplane = np.sqrt((xs-center_pos_x) ** 2 + (ys-center_pos_y) ** 2)
-        '''
-        #TODO - precision offset from fit vs center in distance_map (up to 1 pixel wrong?)
         dists_inplane = mmcalc.get_distance_map_point(
             image2d.shape, center_dx=dx, center_dy=dy)
         dists_inplane = img_info.pix[0] * dists_inplane
@@ -2578,22 +2600,26 @@ def get_corrections_point_source(
 
         # fit values
         nm_radius = img_info.nm_radius if img_info.nm_radius != -1. else 400.
-        C, distance = mmcalc.point_source_func_fit(
+        popt = mmcalc.point_source_func_fit(
             dists, values,
             center_value=np.max(ufov_denoised),
             avg_radius=nm_radius)
-        fit = mmcalc.point_source_func(dists_inplane.flatten(), C, distance)
-        corr_sub = fit - fit[0]
-        corr_sub = (1./np.max(fit)) * fit  # matrix to subtract
-        corr_sub = 1./corr_sub
-        correction_matrix = corr_sub.reshape(image2d.shape)
-        corrected_image = image2d * correction_matrix
+        if popt is not None:
+            C, distance = popt
+            fit = mmcalc.point_source_func(dists_inplane.flatten(), C, distance)
+            corr_sub = fit - fit[0]
+            corr_sub = (1./np.max(fit)) * fit  # matrix to subtract
+            corr_sub = 1./corr_sub
+            correction_matrix = corr_sub.reshape(image2d.shape)
+            corrected_image = image2d * correction_matrix
+        else:
+            errmsg = 'Failed fitting matrix to point source.'
     else:
         distance = lock_z
 
-    return {'corrected_image': corrected_image,
+    return ({'corrected_image': corrected_image,
             'correction_matrix': correction_matrix,
-            'dx': dx, 'dy': dy, 'distance': distance}
+            'dx': dx, 'dy': dy, 'distance': distance}, errmsg)
 
 
 def calculate_NM_uniformity(image2d, roi_array, pix):

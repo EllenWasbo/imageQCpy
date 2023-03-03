@@ -556,8 +556,12 @@ class OpenAutomationDialog(ImageQCDialog):
                         log.append(msg)
                 if len(not_written) > 0:
                     #TODO offer to clipboard
-                    breakpoint()
-                    pass
+                    proceed = messageboxes.proceed_question(
+                        self,
+                        'Breakpoint to programmer... results not written. Ignore?')
+                    if proceed is False:
+                        breakpoint()
+                        pass
 
             self.automation_active = False
             self.main.refresh_results_display()

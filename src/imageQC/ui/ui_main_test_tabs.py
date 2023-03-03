@@ -239,7 +239,9 @@ class ParamsTabCommon(QTabWidget):
 
     def update_values_mtf(self):
         """Update MTF table values when changing analytic vs discrete options."""
-        if 'MTF' in self.main.results and self.main.modality in ['CT', 'Xray', 'MR']:
+        if (
+                'MTF' in self.main.results
+                and self.main.current_modality in ['CT', 'Xray', 'SPECT', 'MR']):
             if self.main.results['MTF']['pr_image']:
                 details_dicts = self.main.results['MTF']['details_dict']
             else:
@@ -754,8 +756,6 @@ class ParamsTabCT(ParamsTabCommon):
             update_roi=False, clear_results=False)
         self.create_offset_widget('mtf')
 
-        self.tab_mtf.hlo_top.addWidget(
-            uir.UnderConstruction(txt='Method wire not finished yet.'))
         vlo1 = QVBoxLayout()
         flo1 = QFormLayout()
         flo1.addRow(QLabel('MTF method'), self.mtf_type)
@@ -1420,8 +1420,6 @@ class ParamsTabSPECT(ParamsTabCommon):
         """GUI of tab MTF."""
         super().create_tab_mtf()
 
-        self.tab_mtf.vlo_top.addWidget(uir.UnderConstruction())
-
         self.mtf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.mtf_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
@@ -1432,6 +1430,9 @@ class ParamsTabSPECT(ParamsTabCommon):
         self.mtf_auto_center = QCheckBox('')
         self.mtf_auto_center.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
+        self.mtf_line_tolerance = QDoubleSpinBox(decimals=0, minimum=0.1, singleStep=1)
+        self.mtf_line_tolerance.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_line_tolerance'))
         self.mtf_cut_lsf_w_fade = QDoubleSpinBox(
             decimals=1, minimum=0, singleStep=0.1)
         self.mtf_cut_lsf_w_fade.valueChanged.connect(
@@ -1439,7 +1440,8 @@ class ParamsTabSPECT(ParamsTabCommon):
                 attribute='mtf_cut_lsf_w_fade'))
         self.mtf_type.addItems(ALTERNATIVES['SPECT']['MTF'])
         self.mtf_plot.addItems(['Centered xy profiles',
-                                'Sorted pixel values', 'LSF', 'MTF'])
+                                'Sorted pixel values', 'LSF', 'MTF',
+                                'Line source max z-profile'])
 
         vlo1 = QVBoxLayout()
         flo1 = QFormLayout()
@@ -1448,6 +1450,8 @@ class ParamsTabSPECT(ParamsTabCommon):
         flo1.addRow(
             QLabel('Width of background (point/line)'), self.mtf_background_width)
         flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
+        flo1.addRow(QLabel('Linesource max diff % from top 3'),
+                    self.mtf_line_tolerance)
         flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
                     self.mtf_sampling_frequency)
         vlo1.addLayout(flo1)

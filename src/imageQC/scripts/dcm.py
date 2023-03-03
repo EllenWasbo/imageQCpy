@@ -448,6 +448,7 @@ def get_dcm_info_list(
                         f'{prefix}{prefix_separator}'
                         f'{val_text}{suffix_separator}{suffix}'
                         )
+
                 break  # break for loop with same attr_name if found
 
         if isinstance(info, str):
@@ -1012,15 +1013,15 @@ def get_all_tags_name_number(pd, sequence_list=['']):
     return {'tags': tags, 'attribute_names': attribute_names}
 
 
-def sum_marked_images(img_infos, testcode=''):
+def sum_marked_images(img_infos, included_ids):
     """Calculate sum of marked images.
 
     Parameters
     ----------
     img_infos : list of Dcm(Gui)Info
         as defined in scripts/dcm.py
-    testcode : str
-        apply if specific testcode and quicktest active
+    included_ids : list of int
+        image ids to include in sum
 
     Returns
     -------
@@ -1032,12 +1033,7 @@ def sum_marked_images(img_infos, testcode=''):
     shape_failed = []
     errmsg = ''
     for idx, img_info in enumerate(img_infos):
-        include = False
-        if testcode == '':
-            include = img_info.marked
-        else:
-            include = testcode in img_info.marked_quicktest
-        if include:
+        if idx in included_ids:
             image, tags = get_img(
                 img_info.filepath,
                 frame_number=img_info.frame_number

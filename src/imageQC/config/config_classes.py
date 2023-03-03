@@ -334,7 +334,7 @@ class ParamSetNM(ParamSetCommon):
     sni_eye_filter_f: float = 1.3
     sni_eye_filter_c: float = 28.
     sni_eye_filter_r: float = 65.  # in mm
-    mtf_type: int = 1  # [Point, line (default), Two lines, Four edges, Circular edge]
+    mtf_type: int = 1  # [Point, line (default), Two lines, edge]
     mtf_roi_size_x: float = 50.
     mtf_roi_size_y: float = 50.
     mtf_plot: int = 4  # xyprofiles, line, sorted, LSF, MTF (default)
@@ -357,7 +357,7 @@ class ParamSetNM(ParamSetCommon):
 class ParamSetSPECT(ParamSetCommon):
     """Set of parameters regarding SPECT tests."""
 
-    mtf_type: int = 1  # 0=point, 1=line, 2=circular edge
+    mtf_type: int = 1  # 0=point, 1=line source
     mtf_roi_size: float = 25.
     mtf_background_width: float = 5.  # used if point method
     mtf_line_tolerance: int = 10
@@ -367,7 +367,7 @@ class ParamSetSPECT(ParamSetCommon):
     mtf_cut_lsf: bool = False
     mtf_cut_lsf_w: float = 3.  # lsf_w from halfmax x FWHM
     mtf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
-    mtf_auto_center: bool = False
+    mtf_auto_center: bool = True
     mtf_3d: bool = True  # not used yet - assumed 3d for line and circ. edge
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     con_roi_size: float = 20.
@@ -411,7 +411,7 @@ class ParamSetMR(ParamSetCommon):
     sli_dist_upper: float = 2.5
     sli_optimize_center: bool = True
     mtf_roi_size_x: int = 20.
-    mtf_roi_size_y: int = 50.
+    mtf_roi_size_y: int = 20.
     mtf_plot: int = 3
     mtf_gaussian: bool = True  # True= use gaussian fit, False = discrete FFT
     mtf_cut_lsf: bool = True
@@ -461,18 +461,37 @@ class QuickTestTemplate:
 
     def add_index(self, test_list=[], image_name='', group_name='', index=-1):
         """Add element in each list at given index or append."""
+        def add_name(name='', attribute='image_names'):
+            """Add name or initiate name list.
+
+            Parameters
+            ----------
+            name : str.
+            attribute : str
+                mage_names or group_names
+            """
+            new_list = getattr(self, attribute)  # get current
+            if name != '':
+                if len(new_list) == 0:
+                    new_list = [''] * len(self.tests)
+            if len(new_list) > 0:
+                if index == -1 and len(new_list) < len(self.tests):
+                    new_list.append('')
+                new_list[index] = name
+                setattr(self, attribute, new_list)
+
         if index == -1:
             self.tests.append(test_list)
-            if len(self.image_names) > 0:
-                self.image_names.append(image_name)
-            if len(self.group_names) > 0:
-                self.group_names.append(group_name)
+            if len(self.image_names) > 0 or image_name != '':
+                add_name(name=image_name, attribute='image_names')
+            if len(self.group_names) > 0 or group_name != '':
+                add_name(name=group_name, attribute='group_names')
         else:
             self.tests.insert(index, test_list)
-            if len(self.image_names) > 0:
-                self.image_names.insert(index, image_name)
-            if len(self.group_names) > 0:
-                self.group_names.insert(index, group_name)
+            if len(self.image_names) > 0 or image_name != '':
+                add_name(name=image_name, attribute='image_names')
+            if len(self.group_names) > 0 or group_name != '':
+                add_name(name=group_name, attribute='group_names')
 
     def remove_indexes(self, ids2remove=[]):
         """Remove element(s) in each list at given index(es)."""

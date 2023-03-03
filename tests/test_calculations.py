@@ -315,7 +315,7 @@ def test_Xray_MTF_autocenter():
     calculate_qc.calculate_qc(input_main)
     assert len(input_main.results['MTF']['values'][0]) == 6
     values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
-    assert np.array_equal(values10, np.array([9., 7., 4., 2., 1., 13.]))
+    assert np.array_equal(values10, np.array([8., 6., 4., 3., 2., 12.]))
 
 
 def test_Xray_Var():
@@ -349,7 +349,7 @@ def test_NM_uniformity():
 
     roi_array = calculate_roi.get_ratio_NM(
         image, image_dict, ufov_ratio=0.95, cfov_ratio=0.75)
-    res = calculate_qc.get_corrections_point_source(
+    res, errmsg = calculate_qc.get_corrections_point_source(
             image, image_dict, roi_array[0],
             fit_x=True, fit_y=True, lock_z=-1.)
 
@@ -423,10 +423,9 @@ def test_SPECT_MTF_linesource():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    breakpoint()
-    assert len(input_main.results['MTF']['values'][0]) == 6
+    assert len(input_main.results['MTF']['values'][0]) == 4
     values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
-    assert np.array_equal(values10, np.array([11., 15., 18., 11., 15., 19.]))
+    assert np.array_equal(values10, np.array([93., 169.,  93., 170.]))
 
 
 def test_PET_Cro():

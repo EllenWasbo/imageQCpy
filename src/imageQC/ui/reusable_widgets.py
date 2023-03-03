@@ -317,7 +317,10 @@ class ToolBarTableExport(QToolBar):
         else:
             self.parameters_output.decimal_mark = ','
         self.update_checked(icon_only=True)
-        self.parent.main.refresh_results_display()
+        try:
+            self.parent.main.refresh_results_display()  # if main window
+        except AttributeError:
+            pass
         if self.flag_edit:
             self.parent.flag_edit(True)
 

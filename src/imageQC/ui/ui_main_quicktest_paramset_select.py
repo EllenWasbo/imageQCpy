@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 # imageQC block start
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
+from imageQC.ui.ui_dialogs import QuickTestClipboardDialog
 from imageQC.config import config_func as cff
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.config import config_classes as cfc
@@ -58,8 +59,10 @@ class SelectTemplateWidget(QWidget):
                 set_index = labels.index(set_label)
             else:
                 set_index = 0
+            self.cbox_template.blockSignals(False)
             self.cbox_template.setCurrentIndex(set_index)
-        self.cbox_template.blockSignals(False)
+        else:
+            self.cbox_template.blockSignals(False)
         self.lastload = time()
 
     def add_current_template(self):
@@ -259,24 +262,41 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         self.main.current_quicktest = self.current_template
         calculate_qc(self.main)
 
-    def extract_results(self):
+    def extract_results(self, skip_questions=False):
         """Extract result values according to paramset.output to clipboard."""
-        value_list, header_list = quicktest_output(self.main)
-        date_str = self.main.imgs[0].acq_date  # yyyymmdd to dd.mm.yyyy
-        date_str_out = date_str[6:8] + '.' + date_str[4:6] + '.' + date_str[0:4]
-        value_list = [date_str_out] + value_list
-        if self.main.current_paramset.output.include_header:
-            header_list = ['Date'] + header_list
-            df = pd.DataFrame([value_list], columns=header_list)
-            if self.main.current_paramset.output.transpose_table:
-                df.transpose()
-            df.to_clipboard(index=False, excel=True, sep=None)
+        proceed = True
+        if skip_questions:  # for testing
+            include_headers = self.main.current_paramset.output.include_header
+            transpose_table = self.main.current_paramset.output.transpose_table
         else:
-            df = pd.DataFrame([value_list])
-            if self.main.current_paramset.output.transpose_table:
-                df.transpose()
-            df.to_clipboard(index=False, excel=True, sep=None, header=None)
-        self.main.status_bar.showMessage('Values in clipboard', 2000)
+            dlg = QuickTestClipboardDialog(
+                include_headers=self.main.current_paramset.output.include_header,
+                transpose_table=self.main.current_paramset.output.transpose_table)
+            res = dlg.exec()
+            if res:
+                include_headers, transpose_table = dlg.get_data()
+            else:
+                proceed = False
+
+        if proceed:
+            value_list, header_list = quicktest_output(self.main)
+            date_str = self.main.imgs[0].acq_date  # yyyymmdd to dd.mm.yyyy
+            date_str_out = date_str[6:8] + '.' + date_str[4:6] + '.' + date_str[0:4]
+            value_list = [date_str_out] + value_list
+            if include_headers:
+                header_list = ['Date'] + header_list
+                df = pd.DataFrame([value_list], columns=header_list)
+                if transpose_table:
+                    df = df.transpose().reset_index()
+                    df.to_clipboard(index=False, excel=True, sep=None, header=None)
+                else:
+                    df.to_clipboard(index=False, excel=True, sep=None)
+            else:
+                df = pd.DataFrame([value_list])
+                if transpose_table:
+                    df = df.transpose()
+                df.to_clipboard(index=False, excel=True, sep=None, header=None)
+            self.main.status_bar.showMessage('Values in clipboard', 2000)
 
 
 class SelectParamsetWidget(SelectTemplateWidget):

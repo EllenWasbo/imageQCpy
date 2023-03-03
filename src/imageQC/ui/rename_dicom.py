@@ -128,12 +128,14 @@ class RenameDicomDialog(ImageQCDialog):
         self.table.clear()
         self.btn_rename.setDisabled(True)
 
-    def fill_table(self):
+    def fill_table(self, limit=None):
         """Fill table with original and generated names."""
         self.table.clear()
         if len(self.original_names) > 0 and len(self.new_names) > 0:
             orignames = [x.name for x in self.original_names]
             newnames = [x.name for x in self.new_names]
+            if len(orignames) > len(newnames):  # limited to a few
+                orignames = orignames[:len(newnames)]
 
             for idx, fname in enumerate(orignames):
                 row_strings = [fname, newnames[idx]]

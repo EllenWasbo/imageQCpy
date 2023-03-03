@@ -694,6 +694,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                                 img_infos_this, auto_template.sort_pattern, tag_infos)
 
                         input_main_this.imgs = img_infos_this
+                        # reset
                         input_main_this.results = {}
                         input_main_this.current_group_indicators = []
 

@@ -12,7 +12,7 @@ from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox,
     QSlider, QMenu, QAction, QToolBar, QToolButton,
     QMessageBox, QInputDialog, QTreeWidget, QTreeWidgetItem, QFileDialog,
@@ -89,12 +89,17 @@ class TreeFileList(QTreeWidget):
     def update_file_list(self):
         """Populate tree with filepath/pattern and test indicators."""
         self.clear()
+        quicktest_active = self.main.wid_quicktest.gb_quicktest.isChecked()
         if len(self.main.imgs) == 0:
-            QTreeWidgetItem(self, ['', '', ''])
+            QTreeWidgetItem(self, [''] * 3)
         else:
             for img in self.main.imgs:
-                if self.main.wid_quicktest.gb_quicktest.isChecked():
+                if quicktest_active:
                     test_string = '+'.join(img.marked_quicktest)
+                    if img.quicktest_image_name != '':
+                        test_string += f' (Name: {img.quicktest_image_name})'
+                    if img.quicktest_group_name != '':
+                        test_string += f' (Group: {img.quicktest_group_name})'
                 else:
                     test_string = 'x' if img.marked else ''
                 frameno = f'{img.frame_number}' if img.frame_number > -1 else ''
@@ -146,8 +151,6 @@ class TreeFileList(QTreeWidget):
                 lambda: self.set_marking(remove_mark=True))
             act_remove_all_marks = QAction('Remove all marks')
             act_remove_all_marks.triggered.connect(self.clear_marking)
-            #act_markImgNo = QAction('Select imgNo .. to ..')
-            #act_markImgNo.triggered.connect(self.mark_imgNo)
             act_select_inverse = QAction('Select inverse')
             act_select_inverse.triggered.connect(self.select_inverse)
             act_close_sel = QAction('Close selected')
@@ -155,7 +158,15 @@ class TreeFileList(QTreeWidget):
             ctx_menu.addActions(
                     [act_mark, act_remove_mark_sel, act_remove_all_marks,
                      act_select_inverse, act_close_sel])
-
+            if self.main.wid_quicktest.gb_quicktest.isChecked():
+                ctx_menu.addSeparator()
+                act_set_image_name = QAction('Set image name...')
+                act_set_image_name.triggered.connect(
+                    lambda: self.set_image_or_group_name(image_or_group='image'))
+                act_set_group_name = QAction('Set group name...')
+                act_set_group_name.triggered.connect(
+                    lambda: self.set_image_or_group_name(image_or_group='group'))
+                ctx_menu.addActions([act_set_image_name, act_set_group_name])
             ctx_menu.exec(event.globalPos())
 
         return False
@@ -294,6 +305,24 @@ class TreeFileList(QTreeWidget):
                 self.main.imgs.insert(insert_no, this)
                 self.main.gui.active_img_no = insert_no
             self.update_file_list()
+
+    def set_image_or_group_name(self, image_or_group='image'):
+        """Set name of selected image for QuickTestTemplate."""
+        selrows, _ = self.get_selected_imgs()
+        if len(selrows) != 1:
+            QMessageBox.warning(
+                self, 'Select one image', 'Select only one image')
+        else:
+            attribute = f'quicktest_{image_or_group}_name'
+            current_name = getattr(self.main.imgs[selrows[0]], attribute, '')
+            text, proceed = QInputDialog.getText(
+                self, f'Set {image_or_group} name for selected image',
+                'Name:                                                            ',
+                text=current_name)
+            if proceed:
+                setattr(self.main.imgs[selrows[0]], attribute, text)
+                self.main.wid_quicktest.flag_edit(True)
+                self.update_file_list()
 
 
 class SelectTestcodeDialog(ImageQCDialog):
@@ -639,6 +668,96 @@ class CenterWidget(QGroupBox):
         self.val_delta_a.setValue(0)
         self.update_delta()
 
+class WindowLevelEditDialog(ImageQCDialog):
+    """Dialog to set window level by numbers."""
+
+    def __init__(self, min_max=[0, 0]):
+        super().__init__()
+
+        self.setWindowTitle('Edit window level')
+        self.setMinimumHeight(400)
+        self.setMinimumWidth(300)
+
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
+        fLO = QFormLayout()
+        vLO.addLayout(fLO)
+
+        self.spin_min = QSpinBox()
+        self.spin_min.setRange(-1000000, 1000000)
+        self.spin_min.setValue(min_max[0])
+        self.spin_min.editingFinished.connect(
+            lambda: self.recalculate_others(sender='min'))
+        fLO.addRow(QLabel('Minimum'), self.spin_min)
+
+        self.spin_max = QSpinBox()
+        self.spin_max.setRange(-1000000, 1000000)
+        self.spin_max.setValue(min_max[1])
+        self.spin_max.editingFinished.connect(
+            lambda: self.recalculate_others(sender='max'))
+        fLO.addRow(QLabel('Maximum'), self.spin_max)
+
+        self.spin_center = QSpinBox()
+        self.spin_center.setRange(-1000000, 1000000)
+        self.spin_center.setValue(0.5*(min_max[0] + min_max[1]))
+        self.spin_center.editingFinished.connect(
+            lambda: self.recalculate_others(sender='center'))
+        fLO.addRow(QLabel('Center'), self.spin_center)
+
+        self.spin_width = QSpinBox()
+        self.spin_width.setRange(0, 2000000)
+        self.spin_width.setValue(min_max[1] - min_max[0])
+        self.spin_width.editingFinished.connect(
+            lambda: self.recalculate_others(sender='width'))
+        fLO.addRow(QLabel('Width'), self.spin_width)
+
+        self.chk_lock = QCheckBox('')
+        self.chk_lock.setChecked(True)
+        fLO.addRow(QLabel('Lock WL for all images'), self.chk_lock)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.button_box = QDialogButtonBox(buttons)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        vLO.addWidget(self.button_box)
+
+    def accept(self):
+        """Aoid close on enter if not ok button focus."""
+        if self.button_box.button(QDialogButtonBox.Ok).hasFocus():
+            if self.spin_width.value() == 0:
+                QMessageBox.warning(
+                    self, 'Warning',
+                    'Window width should be larger than zero.')
+            elif self.spin_min.value() >= self.spin_max.value():
+                QMessageBox.warning(
+                    self, 'Warning',
+                    'Window max should be set larger than minimum.')
+            else:
+                super().accept()
+
+    def recalculate_others(self, sender='min'):
+        """Reset others based on input."""
+        self.blockSignals(True)
+        minval = self.spin_min.value()
+        maxval = self.spin_max.value()
+        width = self.spin_width.value()
+        center = self.spin_center.value()
+        if sender in ['min', 'max']:
+            self.spin_center.setValue(round(0.5*(minval + maxval)))
+            self.spin_width.setValue(maxval-minval)
+        else:  # sender in ['center', 'width']:
+            self.spin_min.setValue(center - round(0.5*width))
+            self.spin_max.setValue(center + round(0.5*width))
+        self.blockSignals(False)
+
+    def get_min_max_lock(self):
+        """Get min max values an lock setting as tuple."""
+        return (
+            self.spin_min.value(),
+            self.spin_max.value(),
+            self.chk_lock.isChecked()
+            )
+
 
 class WindowLevelWidget(QGroupBox):
     """Widget with groupbox holding WindowLevel display."""
@@ -686,9 +805,15 @@ class WindowLevelWidget(QGroupBox):
             QIcon(f'{os.environ[ENV_ICON_PATH]}fileDCM.png'))
         self.tool_dcm_wl.clicked.connect(
             lambda: self.clicked_window_level('dcm'))
+        self.tool_edit_wl = QToolButton()
+        self.tool_edit_wl.setToolTip("Edit WL by numbers")
+        self.tool_edit_wl.setIcon(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'))
+        self.tool_edit_wl.clicked.connect(self.set_window_level_by_numbers)
         tb_wl.addWidget(self.tool_min_max_wl)
         tb_wl.addWidget(self.tool_range_wl)
         tb_wl.addWidget(self.tool_dcm_wl)
+        tb_wl.addWidget(self.tool_edit_wl)
         self.chk_wl_update = QCheckBox('Lock WL')
         self.chk_wl_update.toggled.connect(self.update_window_level_mode)
         tb_wl.addWidget(self.chk_wl_update)
@@ -777,8 +902,22 @@ class WindowLevelWidget(QGroupBox):
 
         self.set_window_level(arg)
 
+    def set_window_level_by_numbers(self):
+        """Dialog box to set min/max or center/width and option to lock."""
+        dlg = WindowLevelEditDialog(min_max=[self.min_wl.value(), self.max_wl.value()])
+        res = dlg.exec()
+        if res:
+            minval, maxval, lock = dlg.get_min_max_lock()
+            self.update_window_level(minval, maxval)
+            if self.main.active_img is not None:
+                self.main.wid_image_display.canvas.img.set_clim(
+                    vmin=minval, vmax=maxval)
+                self.main.wid_image_display.canvas.draw()
+            self.chk_wl_update.setChecked(lock)
+            self.update_window_level_mode()
+
     def set_window_level(self, arg):
-        """Set window level based on active image."""
+        """Set window level based on active image conte t."""
         if self.main.active_img is not None:
             minval = 0
             maxval = 0
@@ -851,6 +990,14 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
                 amin, amax, (amax - amin)/100.))
             self.ax.plot(bins[:-1], hist)
             self.ax.axis('off')
+            at_min = matplotlib.offsetbox.AnchoredText(
+                f'Min:\n {amin:.0f}',
+                prop=dict(size=12), frameon=False, loc='upper left')
+            at_max = matplotlib.offsetbox.AnchoredText(
+                f'Max:\n {amax:.0f}',
+                prop=dict(size=12), frameon=False, loc='upper right')
+            self.ax.add_artist(at_min)
+            self.ax.add_artist(at_max)
 
             self.draw()
         except ValueError:

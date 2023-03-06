@@ -398,7 +398,19 @@ class ImageCanvas(GenericImageCanvas):
             else:
                 self.add_contours_to_all_rois(roi_indexes=[0])
         else:
-            self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
+            if isinstance(self.main.current_roi, list):
+                roi_indexes = list(range(len(self.main.current_roi) - 1))
+                self.add_contours_to_all_rois(
+                    roi_indexes=roi_indexes,
+                    colors=['red', 'blue', 'green', 'cyan'])
+                mask = np.where(self.main.current_roi[-1], 0, 1)
+                contour = self.ax.contour(
+                    mask, levels=[0.9],
+                    colors='red', alpha=0.5, linewidths=self.linewidth,
+                    linestyles='dotted')
+                self.contours.append(contour)
+            else:
+                self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
 
     def Uni(self):
         """Draw NM uniformity ROI."""

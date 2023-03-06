@@ -172,7 +172,9 @@ def get_rois(image, image_number, input_main):
                 paramset.mtf_roi_size_y / image_info.pix[1]
                 ]
             if paramset.mtf_auto_center:
-                rect_dict = find_rectangle_object(image)
+                mask_outer_pix = round(
+                    paramset.mtf_auto_center_mask_outer / image_info.pix[0])
+                rect_dict = find_rectangle_object(image, mask_outer=mask_outer_pix)
                 if rect_dict['centers_of_edges_xy'] is not None:
                     centers_of_edges_xy = rect_dict['centers_of_edges_xy']
                     cent = [image.shape[1] // 2, image.shape[0] // 2]
@@ -185,12 +187,12 @@ def get_rois(image, image_number, input_main):
                         idx_min = np.argmin(distsq)
                         height_idx = idx_min % 2
                         width_idx = 1 if height_idx == 0 else 0
-                        roi_this = get_roi_rectangle(
+                        roi_this = [get_roi_rectangle(
                             img_shape,
                             roi_width=roi_sz_xy[width_idx],
                             roi_height=roi_sz_xy[height_idx],
                             offcenter_xy=off_xy[idx_min]
-                            )
+                            )]
                     else:
                         roi_this = []
                         for i in range(len(off_xy)):
@@ -203,6 +205,11 @@ def get_rois(image, image_number, input_main):
                                 offcenter_xy=off_xy[i]
                                 )
                             )
+                    if mask_outer_pix > 0:
+                        inside = np.full(img_shape, False)
+                        inside[mask_outer_pix:-mask_outer_pix,
+                               mask_outer_pix:-mask_outer_pix] = True
+                        roi_this.append(inside)
 
             else:
                 if any(paramset.mtf_offset_xy):
@@ -1143,12 +1150,14 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
     return ({'h_lines': h_lines, 'v_lines': v_lines}, errmsg)
 
 
-def find_rectangle_object(image):
+def find_rectangle_object(image, mask_outer=0):
     """Detect rectangle in image.
 
     Parameters
     ----------
     image : np.array
+    mask_outer : int
+        mask outer pixels and ignore signal there
 
     Returns
     -------
@@ -1172,20 +1181,25 @@ def find_rectangle_object(image):
     threshold = 0.5 * (np.min(inner_img) + np.max(inner_img))
     image_binary = np.zeros(image.shape)
     image_binary[image > threshold] = 1.
+    if mask_outer > 0:
+        inside = np.full(image.shape, False)
+        inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
+        image_binary[inside == False] = 1.
+
     corn = feature.corner_peaks(
         feature.corner_fast(image_binary, 10),
         min_distance=10
         )
 
     if corn.shape[1] != 2:  # try negative high signal
-        image_binary = np.zeros(image.shape)
-        image_binary[image < threshold] = 1.
+        #image_binary = np.zeros(image.shape)
+        #image_binary[image < threshold] = 1.
+        image_binary = np.logical_not(image_binary).astype(int)
         corn = feature.corner_peaks(
             feature.corner_fast(image_binary, 10),
             min_distance=10
             )
 
-    #TODO adjust min_distance? exclude_borders also uses this value if not set
     if corn.shape[1] == 2:
         ys = np.array([c[0] for c in corn])
         xs = np.array([c[1] for c in corn])
@@ -1198,7 +1212,7 @@ def find_rectangle_object(image):
             # top lft to rgt
             if xs_sort[0] > xs_sort[1]:
                 xs_sort = np.append(np.flip(xs_sort[:2]), xs_sort[2:])
-                ys_sort = np.append(np.flip(xs_sort[:2]), ys_sort[2:])
+                ys_sort = np.append(np.flip(ys_sort[:2]), ys_sort[2:])
             # btm rgt to lft
             if xs_sort[3] > xs_sort[2]:
                 xs_sort = np.append(xs_sort[:2], np.flip(xs_sort[2:]))

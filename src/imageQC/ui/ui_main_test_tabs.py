@@ -434,6 +434,11 @@ class ParamsTabCommon(QTabWidget):
         self.mtf_auto_center_type.currentIndexChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_auto_center_type'))
 
+        self.mtf_auto_center_mask_outer = QDoubleSpinBox(
+            decimals=0, minimum=0, maximum=90, singleStep=1)
+        self.mtf_auto_center_mask_outer.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_auto_center_mask_outer'))
+
         self.mtf_plot.addItems(['Edge position',
                                 'Sorted pixel values', 'LSF', 'MTF'])
 
@@ -456,10 +461,10 @@ class ParamsTabCommon(QTabWidget):
         self.tab_mtf.hlo.addWidget(uir.VLine())
         vlo2 = QVBoxLayout()
         vlo2.addWidget(self.mtf_auto_center)
-        hlo_gb_auto = QHBoxLayout()
-        hlo_gb_auto.addWidget(QLabel('Use'))
-        hlo_gb_auto.addWidget(self.mtf_auto_center_type)
-        self.mtf_auto_center.setLayout(hlo_gb_auto)
+        flo_gb_auto = QFormLayout()
+        flo_gb_auto.addRow(QLabel('Use'), self.mtf_auto_center_type)
+        flo_gb_auto.addRow(QLabel('Ignore outer mm'), self.mtf_auto_center_mask_outer)
+        self.mtf_auto_center.setLayout(flo_gb_auto)
         flo2 = QFormLayout()
         flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
         flo2.addRow(QLabel('    Cut at halfmax + (#FWHM)'), self.mtf_cut_lsf_w)

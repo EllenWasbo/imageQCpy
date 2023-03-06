@@ -23,7 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.11alpha'
+VERSION = '3.0.12alpha'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 

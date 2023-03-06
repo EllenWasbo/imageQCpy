@@ -300,6 +300,7 @@ class ParamSetXray(ParamSetCommon):
     mtf_offset_mm: bool = False  # False = pix, True = mm
     mtf_auto_center: bool = False
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
+    mtf_auto_center_mask_outer: int = 30  # mask outer mm
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     nps_roi_size: int = 256
     nps_n_sub: int = 5
@@ -420,6 +421,7 @@ class ParamSetMR(ParamSetCommon):
     mtf_offset_mm: bool = False  # False = pix, True = mm
     mtf_auto_center: bool = False
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
+    mtf_auto_center_mask_outer: int = 10  # mask outer mm
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
 
 

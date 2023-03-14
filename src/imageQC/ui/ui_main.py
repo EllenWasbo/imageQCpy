@@ -335,7 +335,8 @@ class MainWindow(QMainWindow):
             if read_img:
                 self.active_img, _ = dcm.get_img(
                     self.imgs[self.gui.active_img_no].filepath,
-                    frame_number=self.imgs[self.gui.active_img_no].frame_number)
+                    frame_number=self.imgs[self.gui.active_img_no].frame_number,
+                    tag_infos=self.tag_infos)
             if self.active_img is not None:
                 amin = round(np.amin(self.active_img))
                 amax = round(np.amax(self.active_img))
@@ -363,7 +364,8 @@ class MainWindow(QMainWindow):
                 self.status_bar.showMessage('Calculating sum of marked images...')
 
                 self.summed_img, errmsg = dcm.sum_marked_images(
-                    self.imgs, self.tree_file_list.get_marked_imgs_current_test())
+                    self.imgs, self.tree_file_list.get_marked_imgs_current_test(),
+                    tag_infos=self.tag_infos)
                 self.stop_wait_cursor()
                 self.status_bar.showMessage('Finished summing marked images', 2000)
             if self.summed_img is not None:
@@ -394,7 +396,8 @@ class MainWindow(QMainWindow):
         try:
             self.active_img, tags = dcm.get_img(
                 self.imgs[self.gui.active_img_no].filepath,
-                frame_number=self.imgs[self.gui.active_img_no].frame_number)
+                frame_number=self.imgs[self.gui.active_img_no].frame_number,
+                tag_infos=self.tag_infos)
         except IndexError:
             pass
 
@@ -579,7 +582,7 @@ class MainWindow(QMainWindow):
                                 self.current_test]['pr_image'],
                             table_info=self.results[self.current_test]['values_info']
                             )
-                    except (KeyError, TypeError):
+                    except (KeyError, TypeError, IndexError):
                         self.wid_res_tbl.result_table.clear()
                     try:
                         self.wid_res_tbl_sup.result_table.fill_table(
@@ -590,7 +593,7 @@ class MainWindow(QMainWindow):
                             table_info=self.results[
                                 self.current_test]['values_sup_info']
                             )
-                    except (KeyError, TypeError):
+                    except (KeyError, TypeError, IndexError):
                         self.wid_res_tbl_sup.result_table.clear()
             elif isinstance(wid, ui_main_result_tabs.ResultPlotWidget):
                 self.wid_res_plot.plotcanvas.plot()

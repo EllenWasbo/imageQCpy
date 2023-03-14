@@ -62,6 +62,28 @@ def test_MTF_plot_Xray(qtbot):
             HEADERS[mod][test_code]['alt0'])
 
 
+def test_MTF_plot_CT(qtbot):
+    mod = 'CT'
+    test_code = 'MTF'
+    file_path = path_tests / 'test_inputs' / 'CT' / 'Wire_FOV50'
+    files = [x for x in file_path.glob('**/*') if x.is_file()]
+    main = MainWindow()
+    qtbot.addWidget(main)
+    main.open_files(file_list=files)
+    main.tab_ct.setCurrentIndex(QUICKTEST_OPTIONS[mod].index(test_code))
+
+    main.current_paramset.mtf_type = 0
+    main.current_paramset.mtf_roi_size = 3.
+    main.current_paramset.mtf_auto_center = True
+    main.tab_ct.run_current()
+    main.tab_results.setCurrentIndex(1)
+    plot_options = ['Centered xy profiles', 'Sorted pixel values', 'LSF', 'MTF']
+    for opt in plot_options:
+        main.tab_ct.mtf_plot.setCurrentText(opt)
+    assert len(main.results[test_code]['values'][0]) == len(
+        HEADERS[mod][test_code]['alt0'])
+
+
 def test_histogram_plot(qtbot):  # TODO delete or expand
     file_path = path_tests / 'test_inputs' / 'Xray' / 'hom.dcm'
     main = MainWindow()

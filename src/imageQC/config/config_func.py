@@ -714,11 +714,15 @@ def import_settings(import_main):
                             temps[key] = new_temps[key]
                         else:
                             for new_id, new_temp in enumerate(new_temps[key]):
-                                if new_labels[new_id] in old_labels:
-                                    new_temps[key][new_id].label = (
-                                        new_labels[new_id] + '_import')
-                                    any_same_name = True
-                                temps[key].append(new_temps[key][new_id])
+                                if d == 'tag_patterns_special':  # replace
+                                    old_id = old_labels.index(new_labels[new_id])
+                                    temps[key][old_id] = new_temps[key][new_id]
+                                else:
+                                    if new_labels[new_id] in old_labels:
+                                        new_temps[key][new_id].label = (
+                                            new_labels[new_id] + '_import')
+                                        any_same_name = True
+                                    temps[key].append(new_temps[key][new_id])
                         if d == 'paramsets':
                             if new_labels[0] != '':
                                 status, path = save_settings(
@@ -790,6 +794,7 @@ def get_taginfos_used_in_templates(object_with_templates):
             if attr not in defined_attributes[mod]:
                 missing.append(attr)
         if len(missing) > 0:
+            missing = list(set(missing))
             log.append(f'{mod}: missing definition of DICOM tags named {missing}')
             status = False
 

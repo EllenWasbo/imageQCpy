@@ -82,8 +82,10 @@ class ParamsTabCommon(QTabWidget):
         """Add star after cbox_paramsets to indicate any change from saved."""
         if indicate_change:
             self.main.wid_paramset.lbl_edit.setText('*')
+            self.main.wid_paramset.edited = True
         else:
             self.main.wid_paramset.lbl_edit.setText('')
+            self.main.wid_paramset.edited = False
 
     def update_displayed_params(self):
         """Display parameters according to current_paramset of main."""
@@ -239,9 +241,8 @@ class ParamsTabCommon(QTabWidget):
 
     def update_values_mtf(self):
         """Update MTF table values when changing analytic vs discrete options."""
-        if (
-                'MTF' in self.main.results
-                and self.main.current_modality in ['CT', 'Xray', 'SPECT', 'MR']):
+        if 'MTF' in self.main.results:
+                #and self.main.current_modality in ['CT', 'Xray', 'SPECT', 'MR']):
             if self.main.results['MTF']['pr_image']:
                 details_dicts = self.main.results['MTF']['details_dict']
             else:
@@ -507,12 +508,6 @@ class ParamsTabCommon(QTabWidget):
         self.flo_nps_plot.addRow(QLabel('Normalize NPS curve by'), self.nps_normalize)
         self.flo_nps_plot.addRow(QLabel('Plot'), self.nps_plot)
 
-    def run_tests(self):
-        """Run all tests in current quicktest template."""
-        self.main.wid_quicktest.get_current_template()
-        self.main.current_quicktest = self.main.wid_quicktest.current_template
-        calculate_qc(self.main)
-
     def run_current(self):
         """Run selected test."""
         tests = []
@@ -735,6 +730,8 @@ class ParamsTabCT(ParamsTabCommon):
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
+        self.tab_mtf.vlo_top.addWidget(uir.UnderConstruction(
+            txt='NB Method Wire not finished yet'))
 
         self.mtf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.mtf_roi_size.valueChanged.connect(
@@ -1291,7 +1288,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.mtf_auto_center = QCheckBox('Auto center ROI on object signal')
         self.mtf_auto_center.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
-        self.mtf_plot.addItems(['Centered xy profiles', 'Line/Edge fit',
+        self.mtf_plot.addItems(['Centered xy profiles', 'Line fit',
                                 'Sorted pixel values', 'LSF', 'MTF'])
 
         hlo_size = QHBoxLayout()
@@ -1424,6 +1421,8 @@ class ParamsTabSPECT(ParamsTabCommon):
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
+        self.tab_mtf.vlo_top.addWidget(uir.UnderConstruction(
+            txt='NB Method line source not finished yet'))
 
         self.mtf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.mtf_roi_size.valueChanged.connect(
@@ -1624,7 +1623,7 @@ class ParamsTabMR(ParamsTabCommon):
             lambda: self.param_changed_from_gui(attribute='snr_roi_cut_top'))
 
         flo = QFormLayout()
-        flo.addRow(QLabel('ROI % of circular phantom'), self.snr_roi_percent)
+        flo.addRow(QLabel('ROI % of circular phantom area'), self.snr_roi_percent)
         flo.addRow(QLabel('Cut top of ROI by (mm)'), self.snr_roi_cut_top)
         self.tab_snr.hlo.addLayout(flo)
         self.tab_snr.hlo.addStretch()
@@ -1654,7 +1653,7 @@ class ParamsTabMR(ParamsTabCommon):
             lambda: self.param_changed_from_gui(attribute='piu_roi_cut_top'))
 
         flo = QFormLayout()
-        flo.addRow(QLabel('ROI % of circular phantom'), self.piu_roi_percent)
+        flo.addRow(QLabel('ROI % of circular phantom area'), self.piu_roi_percent)
         flo.addRow(QLabel('Cut top of ROI by (mm)'), self.piu_roi_cut_top)
         self.tab_piu.hlo.addLayout(flo)
         self.tab_piu.hlo.addStretch()
@@ -1776,10 +1775,12 @@ class ParamsTabMR(ParamsTabCommon):
         self.sli_search_width = QDoubleSpinBox(decimals=0, minimum=0)
         self.sli_search_width.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_search_width'))
-        self.sli_dist_lower = QDoubleSpinBox(decimals=1, singleStep=0.1)
+        self.sli_dist_lower = QDoubleSpinBox(
+            decimals=1, minimum=-100, singleStep=0.1)
         self.sli_dist_lower.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_dist_lower'))
-        self.sli_dist_upper = QDoubleSpinBox(decimals=1, singleStep=0.1)
+        self.sli_dist_upper = QDoubleSpinBox(
+            decimals=1, minimum=-100, singleStep=0.1)
         self.sli_dist_upper.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_dist_upper'))
         self.sli_optimize_center = QCheckBox('')

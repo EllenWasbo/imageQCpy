@@ -227,14 +227,16 @@ class ConfigIdl2Py():
             label='default',
             list_tags=['ImagingFrequency', 'ReceiveCoilName', 'TransmitCoilName']
             )
-        self.errmsg.append(
-            '----------------<br>'
-            'Parametersets in IDL version included parameters for all modalities. '
-            'The relavant parameters for each modality are now saved as '
-            'separate modality specific templates.<br>'
-            '----------------<br>'
-            'Changes to filtering of CT test on ring artifacts. Please reestablish '
-            'tolerance values.'
+        self.errmsg.extend(
+            [
+                '----------------',
+                'Parametersets in IDL version included parameters for all modalities. '
+                'The relavant parameters for each modality are now saved as '
+                'separate modality specific templates.',
+                '----------------',
+                'Changes to filtering of CT test on ring artifacts. Please reestablish '
+                'tolerance values.'
+            ]
             )
 
         for i in range(1, len(c)):
@@ -755,7 +757,8 @@ class ConfigIdl2Py():
                                                 )
                                             )
                                 testsThis[upd_test_key[0]] = outputsThisTest
-
+                            else:
+                                testsThis[upd_test_key[0]] = [cfc.QuickTestOutputSub()]
                     else:
                         self.errmsg.append(
                             f'Test name {tst} for modality {m} no longer'
@@ -970,9 +973,8 @@ class ConfigIdl2Py():
                 self.errmsg.append(
                     'Found Rename templates in .dat file. IDL version did not '
                     'categorize these into modalities. All placed in modality CT. '
-                    'No option to recategorize (yet), but you could copy paste to '
-                    'another category directly in the rename_patterns.yaml file '
-                    'after import is saved.')
+                    'After import is finished you could move templates to another '
+                    'category (modality).')
 
     def convert_sortBy2tag_sort_template(
             self, sortBy, sortAsc, modality):

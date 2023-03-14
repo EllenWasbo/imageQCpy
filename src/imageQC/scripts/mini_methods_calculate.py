@@ -454,7 +454,7 @@ def point_source_func_fit(x, y, center_value=0., avg_radius=0.):
     return popt
 
 
-def center_xy_of_disc(matrix2d, threshold=None, roi=None, mode='mean'):
+def center_xy_of_disc(matrix2d, threshold=None, roi=None, mode='mean', sigma=5.):
     """Find center of disc (or point) object in image.
 
     Robust against noise and returning sub pixel precision center.
@@ -469,7 +469,11 @@ def center_xy_of_disc(matrix2d, threshold=None, roi=None, mode='mean'):
     roi : np.array of bool, optional
         ignore pixels outside roi
     mode : str, optional
-        Mean or max. Max better for point, mean better for disc. Default is 'mean'.
+        Mean, max or max_or_min. If max or min np.min if center signal low.
+        Default is 'mean'.
+    sigma : float, options
+        smooth by gaussian filter before finding center.
+        NB - might drag signal to one side
 
     Returns
     -------
@@ -477,20 +481,33 @@ def center_xy_of_disc(matrix2d, threshold=None, roi=None, mode='mean'):
     center_y : float
     """
     center_xy = []
-    smoothed_matrix = gaussian_filter(matrix2d, sigma=5)
+    smoothed_matrix = gaussian_filter(matrix2d, sigma=sigma)
     if roi is not None:
         smoothed_matrix = np.ma.masked_array(smoothed_matrix, mask=np.invert(roi))
     # smoothed mean or max profile (within ROI) to estimate center
     for ax in [0, 1]:
         if mode == 'mean':
             prof1 = np.mean(smoothed_matrix, axis=ax)
-        else:  # assume max
+        elif mode == 'max_or_min':  # min if center signal lower than outer
+            sz_y, sz_x = smoothed_matrix.shape
+            inner = smoothed_matrix[
+                sz_y // 2 - sz_y // 4: sz_y // 2 + sz_y // 4,
+                sz_x // 2 - sz_x // 4: sz_x // 2 + sz_x // 4]
+            if np.mean(inner) < np.mean(smoothed_matrix):
+                prof1 = np.min(smoothed_matrix, axis=ax)
+            else:
+                prof1 = np.max(smoothed_matrix, axis=ax)
+        else:
             prof1 = np.max(smoothed_matrix, axis=ax)
         if threshold is None:
             threshold = min(prof1) + 0.5 * (max(prof1) - min(prof1))
         width, center = get_width_center_at_threshold(
             prof1, threshold, get_widest=True)
         center_xy.append(center)
+        #for testing precision:
+        #xs = np.arange(prof1.shape[0])-center
+        #plt.plot(xs, prof1)
+        #plt.plot(-np.flip(xs), np.flip(prof1))
 
     return center_xy
 

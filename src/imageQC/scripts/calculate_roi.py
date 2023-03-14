@@ -233,7 +233,7 @@ def get_rois(image, image_number, input_main):
                 paramset.mtf_roi_size_y / image_info.pix[1]
                 ]
             if paramset.mtf_auto_center:
-                if paramset.mtf_type in [0, 1, 4]:
+                if paramset.mtf_type in [0, 1]:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)
                     offcenter_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
@@ -253,31 +253,10 @@ def get_rois(image, image_number, input_main):
                                 )
                             )
                     pass
-
-                elif paramset.mtf_type == 3:  # four edges
-                    rect_dict = find_rectangle_object(image)
-                    if rect_dict['centers_of_edges_xy'] is not None:
-                        centers_of_edges_xy = rect_dict['centers_of_edges_xy']
-                        cent = [image.shape[1] // 2, image.shape[0] // 2]
-                        off_xy = [
-                            [xy[0] - cent[0], xy[1] - cent[1]]
-                            for xy in centers_of_edges_xy]
-
-                        roi_this = []
-                        for i in range(len(off_xy)):
-                            height_idx = i % 2
-                            width_idx = 1 if height_idx == 0 else 0
-                            roi_this.append(get_roi_rectangle(
-                                img_shape,
-                                roi_width=roi_sz_xy[width_idx],
-                                roi_height=roi_sz_xy[height_idx],
-                                offcenter_xy=off_xy[i]
-                                )
-                            )
             else:
                 offcenter_xy = [dx, dy]
 
-            if roi_this is None and paramset.mtf_type != 3:
+            if roi_this is None:
                 roi_this = get_roi_rectangle(
                     img_shape,
                     roi_width=roi_sz_xy[0], roi_height=roi_sz_xy[1],
@@ -958,10 +937,10 @@ def get_roi_circle_MR(image, image_info, test_params, test_code, delta_xy):
         optimize_center = True
         cut_top = 0
         if test_code == 'SNR':
-            radius = 0.01 * test_params.snr_roi_percent * 0.5 * width
+            radius = 0.5 * width * np.sqrt(0.01 * test_params.snr_roi_percent)
             cut_top = test_params.snr_roi_cut_top
         elif test_code == 'PIU':
-            radius = 0.01 * test_params.piu_roi_percent * 0.5 * width
+            radius = 0.5 * width * np.sqrt(0.01 * test_params.snr_roi_percent)
             cut_top = test_params.piu_roi_cut_top
         elif test_code == 'Gho':
             radius = test_params.gho_roi_central / image_info.pix[0]
@@ -1269,74 +1248,24 @@ def find_lines(image):
 
     Returns
     -------
-    dict:
-        centers_of_lines_xy : list of list
-            for each line [center_x, center_y]
+    centers_of_lines_xy : list of list
+            for each line [center_x, center_y] relative to image center
     """
-    image_1s = np.zeros(image.shape)
-    image_1s[image > 0.5*np.max(image)] = 1
-    center_line_ydir_xy = []
-    center_line_xdir_xy = []
-    for direction in [1, 0]:
-        centers = []
-        group_nos = []
-        gno = -1
-        for i in range(image.shape[direction]):
-            profile = image_1s[i, :] if direction == 1 else image_1s[:, i]
-            if any(profile):
-                _, center = mmcalc.get_width_center_at_threshold(profile, 0.5,
-                                                                 get_widest=True)
-                centers.append(center)
-                group_nos.append(None)
-                if center is not None:
-                    if i > 0:
-                        if group_nos[-2] is not None:
-                            group_nos[-1] = group_nos[-2]
-                        else:
-                            gno += 1
-                            group_nos[-1] = gno
-                    else:
-                        gno += 1
-                        group_nos[-1] = gno
-            else:
-                centers.append(None)
-                group_nos.append(None)
+    prof_y = np.sum(image, axis=1)
+    prof_x = np.sum(image, axis=0)
 
-        centers = np.array(centers)
-        group_nos = np.array(group_nos)
-        if 1 in group_nos and 2 not in group_nos:  # two lines
-            len_groups = [np.count_nonzero(group_nos == group) for group in [0, 1]]
-            center_groups = [np.mean(centers[group_nos == group]) for group in [0, 1]]
-            longest_group_id = len_groups.index(max(len_groups))
-            shortest_group_id = len_groups.index(min(len_groups))
-            if direction == 1:  # found center in xdir, short = ydir line
-                center_line_xdir_xy.append(center_groups[longest_group_id])
-                center_line_ydir_xy.append(center_groups[shortest_group_id])
-            else:
-                center_line_ydir_xy.append(center_groups[longest_group_id])
-                center_line_xdir_xy.append(center_groups[shortest_group_id])
-        elif 0 in group_nos and 1 not in group_nos:  # overlapping coordinates
-            profile_orig = centers[group_nos == 0]
-            profile = profile_orig - np.min(profile_orig)
-            _, center = mmcalc.get_width_center_at_threshold(
-                profile, 0.5*np.max(profile), get_widest=True)
-            perp_center = profile_orig[round(center)]
-            long_center = np.median(profile_orig[profile < 0.2 * np.max(profile)])
-            if direction == 1:  # found center in x, center top for ydir line
-                center_line_ydir_xy.append(perp_center)
-                center_line_xdir_xy.append(long_center)
-            else:
-                center_line_xdir_xy.append(perp_center)
-                center_line_ydir_xy.append(long_center)
-        else:
-            if 0 in group_nos:  # any found
-                profile = centers[group_nos == 0]
-                center_line_xdir_xy.append(np.median(profile))
-                center_line_ydir_xy.append(np.median(profile))
+    _, center_ydir_x = mmcalc.get_width_center_at_threshold(
+        prof_x, 0.9*(np.max(prof_x)))
+    _, center_xdir_y = mmcalc.get_width_center_at_threshold(
+        prof_y, 0.9*(np.max(prof_y)))
+    _, center_xdir_x = mmcalc.get_width_center_at_threshold(
+        prof_x, 0.1*(np.max(prof_x)))
+    _, center_ydir_y = mmcalc.get_width_center_at_threshold(
+        prof_y, 0.1*(np.max(prof_y)))
 
-    center_line_xdir_xy[0] = center_line_xdir_xy[0] - image.shape[0] // 2
-    center_line_ydir_xy[0] = center_line_ydir_xy[0] - image.shape[0] // 2
-    center_line_xdir_xy[1] = center_line_xdir_xy[1] - image.shape[1] // 2
-    center_line_ydir_xy[1] = center_line_ydir_xy[1] - image.shape[1] // 2
+    center_line_ydir_xy = [
+        center_ydir_x - image.shape[1]/2, center_ydir_y - image.shape[0]/2]
+    center_line_xdir_xy = [
+        center_xdir_x - image.shape[1]/2, center_xdir_y - image.shape[0]/2]
 
     return [center_line_xdir_xy, center_line_ydir_xy]

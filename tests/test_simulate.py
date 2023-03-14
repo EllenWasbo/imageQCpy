@@ -18,9 +18,59 @@ def add_noise(input_signal, random_seed=0, dark_noise=2):
     rs = np.random.RandomState(random_seed)
     poisson_noise = rs.poisson(input_signal, size=input_signal.shape)
     dark_noise = rs.normal(scale=dark_noise, size=input_signal.shape)
-    noisy_image = poisson_noise + dark_noise
+    noisy_image = input_signal + poisson_noise + dark_noise
 
     return noisy_image
+
+
+def simulate_disc(matrix_shape, radius, sigma=5,
+                  center_xy=(0., 0.), inner_signal=1., outer_signal=0.,
+                  added_noise=False):
+    """Generate image of disc."""
+    image = np.full(matrix_shape, outer_signal)
+    dist_map = mmcalc.get_distance_map_point(
+        matrix_shape, center_dx=center_xy[0], center_dy=center_xy[1])
+    image[dist_map < radius] = inner_signal
+    image = ndimage.gaussian_filter(image, sigma=sigma)
+    if added_noise:
+        image = add_noise(image, dark_noise=0.05*np.max(image))
+
+    return image
+
+
+def test_center_disc():
+    image_size = (100, 100)
+    matrix_size = (75, 75)
+    radius = 23.3
+    image = simulate_disc(image_size, radius, sigma=3., center_xy=(0.5, 0.3),
+                          inner_signal=100., outer_signal=10, added_noise=False)
+    centers = [(0, 0), (-10.8, 0), (0, -10.5), (10.2, 10.3), (-10.4, -10.7)]
+    found_centers = []
+    dists = []
+    vals = []
+    for center in centers:
+        dy = image_size[1] // 2 - round(center[1]) - matrix_size[1] // 2
+        dx = image_size[0] // 2 -round(center[0]) - matrix_size[0] // 2
+        matrix = image[dy:dy+matrix_size[1], dx:dx+matrix_size[0]]
+        center_xy = mmcalc.center_xy_of_disc(matrix)
+        found_centers.append([
+            center_xy[0] - 0.5 * matrix_size[1],
+            center_xy[1] - 0.5 * matrix_size[0]
+            ])
+        dist_map = mmcalc.get_distance_map_point(
+            matrix_size,
+            center_dx=center_xy[0] - 0.5 * matrix_size[1],
+            center_dy=center_xy[1] - 0.5 * matrix_size[0])
+        #masked_img = np.copy(matrix)
+        #masked_img[dist_map > 0.3 * matrix.shape[0]] = 0
+        dists_flat = dist_map.flatten()
+        sort_idxs = np.argsort(dists_flat)
+        dists.append(dists_flat[sort_idxs])
+        vals.append(matrix.flatten()[sort_idxs])
+
+    breakpoint()
+    #plt.plot(dists[0], vals[0], '.', markersize=2, color='red')
+    assert 1==1
 
 
 def simulate_line_source_3d(matrix_shape, offset_xy=(5.3, 13.2), rotation=(5., 10.),

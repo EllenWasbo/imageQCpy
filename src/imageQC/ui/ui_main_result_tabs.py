@@ -592,7 +592,7 @@ class ResultPlotCanvas(PlotCanvas):
                     'style': '--',
                     'color': colors[l_idx]})
             self.xtitle = 'pos (mm)'
-            self.ytitle = 'HU'
+            self.ytitle = 'HU' if self.main.current_modality == 'CT' else 'Pixel value'
 
     def MTF(self):
         """Prepare plot for test MTF."""
@@ -607,98 +607,106 @@ class ResultPlotCanvas(PlotCanvas):
             rowno = 0
 
         def prepare_plot_MTF():
-            nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
-            try:
-                mtf_cy_pr_mm = self.main.current_paramset.mtf_cy_pr_mm
-            except AttributeError:
-                mtf_cy_pr_mm = True
-            if mtf_cy_pr_mm is False:
-                nyquist_freq = 10. * nyquist_freq
-
-            self.xtitle = 'frequency [1/mm]' if mtf_cy_pr_mm else 'frequency [1/cm]'
-            self.ytitle = 'MTF'
-
-            colors = ['k', 'r']  # gaussian black, discrete red
-            linestyles = ['-', '--']
-            infotext = ['gaussian', 'discrete']
-            prefix = ['g', 'd']
-            suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
-            for ddno in range(2):
+            if 'dMTF_details' in details_dicts[0]:
+                nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
                 try:
-                    dd = details_dicts[ddno]
-                    suffix_this = suffix[ddno]
-                    proceed = True
-                except IndexError:
-                    proceed = False
-                if proceed:
-                    for no in range(len(prefix)):
-                        key = f'{prefix[no]}MTF_details'
-                        if key in dd:
-                            dd_this = dd[key]
-                            xvals = dd_this['MTF_freq']
-                            if mtf_cy_pr_mm is False:
-                                xvals = 10. * xvals  # convert to /cm
-                            yvals = dd_this['MTF']
+                    mtf_cy_pr_mm = self.main.current_paramset.mtf_cy_pr_mm
+                except AttributeError:
+                    mtf_cy_pr_mm = True
+                if mtf_cy_pr_mm is False:
+                    nyquist_freq = 10. * nyquist_freq
+
+                self.xtitle = 'frequency [1/mm]' if mtf_cy_pr_mm else 'frequency [1/cm]'
+                self.ytitle = 'MTF'
+
+                colors = ['k', 'r']  # gaussian black, discrete red
+                linestyles = ['-', '--']
+                infotext = ['gaussian', 'discrete']
+                prefix = ['g', 'd']
+                suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
+                for ddno in range(2):
+                    try:
+                        dd = details_dicts[ddno]
+                        proceed = True
+                    except IndexError:
+                        proceed = False
+                    if proceed:
+                        for no in range(len(prefix)):
+                            key = f'{prefix[no]}MTF_details'
+                            if key in dd:
+                                dd_this = dd[key]
+                                xvals = dd_this['MTF_freq']
+                                if mtf_cy_pr_mm is False:
+                                    xvals = 10. * xvals  # convert to /cm
+                                yvals = dd_this['MTF']
+                                self.curves.append({
+                                    'label': infotext[no] + ' MTF' + suffix[ddno],
+                                    'xvals': xvals,
+                                    'yvals': yvals,
+                                    'style': linestyles[ddno] + colors[no]
+                                     })
+
+                if 'MTF_filtered' in details_dicts[0]['gMTF_details']:
+                    yvals = details_dicts[0]['gMTF_details']['MTF_filtered']
+                    if yvals is not None:
+                        xvals = details_dicts[0]['gMTF_details']['MTF_freq']
+                        if mtf_cy_pr_mm is False:
+                            xvals = 10. * xvals  # convert to /cm
+                        yvals = details_dicts[0]['gMTF_details']['MTF_filtered']
+                        self.curves.append({
+                            'label': 'gaussian MTF pre-smoothed',
+                            'xvals': xvals,
+                            'yvals': yvals,
+                            'style': '--',
+                            'color': 'gray'
+                             })
+
+                self.default_range_y = self.test_values_outside_yrange(
+                    [0, 1.3], limit_xrange=[0, nyquist_freq])
+                self.default_range_x = [0, 1.1 * nyquist_freq]
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [nyquist_freq, nyquist_freq],
+                    'yvals': [0, 1.3],
+                    'style': ':k'
+                     })
+                self.ax.text(0.9*nyquist_freq, 0.5, 'Nyquist frequency',
+                             ha='left', size=8, color='gray')
+
+                # MTF %
+                if self.main.current_modality != 'NM':
+                    values = self.main.results[self.main.current_test]['values'][rowno]
+                    if self.main.current_modality == 'Xray':
+                        yvals = [[.5, .5]]
+                        xvals = [[0, values[-1]]]
+                        yvals.extend([[0, values[i]] for i in range(5)])
+                        xvals.extend([[.5, .5], [1, 1], [1.5, 1.5], [2, 2], [2.5, 2.5]])
+                        for i in range(len(xvals)):
                             self.curves.append({
-                                'label': infotext[no] + ' MTF' + suffix[ddno],
-                                'xvals': xvals,
-                                'yvals': yvals,
-                                'style': linestyles[ddno] + colors[no]
+                                'label': '_nolegend_',
+                                'xvals': xvals[i],
+                                'yvals': yvals[i],
+                                'style': ':k'
                                  })
 
-            if 'MTF_filtered' in details_dicts[0]['gMTF_details']:
-                yvals = details_dicts[0]['gMTF_details']['MTF_filtered']
-                if yvals is not None:
-                    xvals = details_dicts[0]['gMTF_details']['MTF_freq']
-                    if mtf_cy_pr_mm is False:
-                        xvals = 10. * xvals  # convert to /cm
-                    yvals = details_dicts[0]['gMTF_details']['MTF_filtered']
-                    self.curves.append({
-                        'label': 'gaussian MTF pre-smoothed',
-                        'xvals': xvals,
-                        'yvals': yvals,
-                        'style': '--',
-                        'color': 'gray'
-                         })
-
-            self.default_range_y = self.test_values_outside_yrange(
-                [0, 1.3], limit_xrange=[0, nyquist_freq])
-            self.default_range_x = [0, 1.1 * nyquist_freq]
-            self.curves.append({
-                'label': '_nolegend_',
-                'xvals': [nyquist_freq, nyquist_freq],
-                'yvals': [0, 1.3],
-                'style': ':k'
-                 })
-            self.ax.text(0.9*nyquist_freq, 0.5, 'Nyquist frequency',
-                         ha='left', size=8, color='gray')
-
-            # MTF %
-            values = self.main.results[self.main.current_test]['values'][rowno]
-            if self.main.current_modality == 'Xray':
-                yvals = [[.5, .5]]
-                xvals = [[0, values[-1]]]
-                yvals.extend([[0, values[i]] for i in range(5)])
-                xvals.extend([[.5, .5], [1, 1], [1.5, 1.5], [2, 2], [2.5, 2.5]])
-                for i in range(len(xvals)):
-                    self.curves.append({
-                        'label': '_nolegend_',
-                        'xvals': xvals[i],
-                        'yvals': yvals[i],
-                        'style': ':k'
-                         })
-
-            else:
-                yvals = [[0, .5], [0, .1], [0, .02]]
-                factor = 10 if mtf_cy_pr_mm is False else 1
-                xvals = [[factor*values[i], factor*values[i]] for i in range(3)]
-                for i in range(len(xvals)):
-                    self.curves.append({
-                        'label': '_nolegend_',
-                        'xvals': xvals[i],
-                        'yvals': yvals[i],
-                        'style': ':k'
-                         })
+                    else:
+                        yvals = [[0, .5], [0, .1], [0, .02]]
+                        factor = 10 if mtf_cy_pr_mm is False else 1
+                        xvals = []
+                        for i in range(3):
+                            try:
+                                val_this = factor*values[i]
+                                xvals.append([val_this, val_this])
+                            except TypeError:
+                                xvals.append(None)
+                        for i in range(len(xvals)):
+                            if xvals[i] is not None:
+                                self.curves.append({
+                                    'label': '_nolegend_',
+                                    'xvals': xvals[i],
+                                    'yvals': yvals[i],
+                                    'style': ':k'
+                                     })
 
         def prepare_plot_LSF():
             self.xtitle = 'pos (mm)'
@@ -710,8 +718,9 @@ class ResultPlotCanvas(PlotCanvas):
             lbl_prefilter = ''
             prefilter = False
             if 'sigma_prefilter' in details_dicts[0]:
-                prefilter = True
-                lbl_prefilter = ' presmoothed'
+                if details_dicts[0]['sigma_prefilter'] > 0:
+                    prefilter = True
+                    lbl_prefilter = ' presmoothed'
             for ddno in range(2):
                 try:
                     dd = details_dicts[ddno]
@@ -817,9 +826,9 @@ class ResultPlotCanvas(PlotCanvas):
                 colors = ['r', 'b', 'g', 'c']
                 dotcolors = ['darksalmon', 'cornflowerblue',
                              'mediumseagreen', 'paleturquoise']  # matching r,b,g,c
-                suffix = [' x', ' y'] if len(sorted_pixels) >= 2 else ['']
-                if len(sorted_pixels) > 3:
-                    suffix = [f' {x}' for x in range(len(sorted_pixels))]
+                #suffix = [' x', ' y'] if len(sorted_pixels) >= 2 else ['']
+                #if len(sorted_pixels) > 3:
+                suffix = [f' {x}' for x in range(len(sorted_pixels))]
                 for no, yvals in enumerate(sorted_pixels):
                     if len(xvals) == len(sorted_pixels):
                         xvals_this = xvals[no]
@@ -854,10 +863,12 @@ class ResultPlotCanvas(PlotCanvas):
                     for no, yvals in enumerate(interpolated):
                         if len(xvals) == len(interpolated):
                             xvals_this = xvals[no]
+                            lbl = f'Interpolated{suffix[no]}'
                         else:
                             xvals_this = xvals[0]
+                            lbl = 'Interpolated'
                         self.curves.append({
-                                'label': f'Interpolated{suffix[no]}',
+                                'label': lbl,
                                 'xvals': xvals_this,
                                 'yvals': yvals,
                                 'style': '-',
@@ -868,7 +879,7 @@ class ResultPlotCanvas(PlotCanvas):
                         yvals = details_dicts[0]['presmoothed']
                         self.curves.append({
                             'label': 'Presmoothed',
-                            'xvals': xvals,
+                            'xvals': xvals[0],
                             'yvals': yvals,
                             'style': '-b'
                              })
@@ -887,8 +898,13 @@ class ResultPlotCanvas(PlotCanvas):
 
         def prepare_plot_centered_profiles():
             proceed = True
-            if self.main.current_modality in ['CT', 'SPECT']:
+            if 'matrix' not in details_dicts[0]:
+                proceed = False
+            elif self.main.current_modality in ['CT', 'SPECT']:
                 if self.main.current_paramset.mtf_type == 1:
+                    proceed = False
+            elif self.main.current_modality == 'NM':
+                if self.main.current_paramset.mtf_type > 0:
                     proceed = False
 
             if proceed:
@@ -906,24 +922,28 @@ class ResultPlotCanvas(PlotCanvas):
 
                 marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
                 pix = self.main.imgs[marked_imgs[0]].pix[0]
+
                 for no, sli in enumerate(submatrix):
-                    if no in marked_imgs:
+                    if self.main.results['MTF']['pr_image'] is False:
+                        if no not in marked_imgs:
+                            proceed = False
+                    if proceed:
                         suffix = f' {no}' if len(submatrix) > 1 else ''
                         szy, szx = sli.shape
-                        xvals = pix * (np.arange(szx) - center_xy[0])
-                        yvals = sli[round(center_xy[0]), :]
+                        xvals1 = pix * (np.arange(szx) - center_xy[0])
+                        yvals1 = sli[round(center_xy[1]), :]
                         self.curves.append({
                             'label': 'x' + suffix,
-                            'xvals': xvals,
-                            'yvals': yvals,
+                            'xvals': xvals1,
+                            'yvals': yvals1,
                             'style': linestyles[0] + colors[no % len(colors)]
                              })
-                        xvals = pix * (np.arange(szy) - center_xy[1])
-                        yvals = sli[:, round(center_xy[1])]
+                        xvals2 = pix * (np.arange(szy) - center_xy[1])
+                        yvals2 = sli[:, round(center_xy[0])]
                         self.curves.append({
                             'label': 'y' + suffix,
-                            'xvals': xvals,
-                            'yvals': yvals,
+                            'xvals': xvals2,
+                            'yvals': yvals2,
                             'style': linestyles[1] + colors[no % len(colors)]
                              })
 
@@ -996,7 +1016,7 @@ class ResultPlotCanvas(PlotCanvas):
             prepare_plot_sorted_pix()
         elif sel_text == 'Centered xy profiles':
             prepare_plot_centered_profiles()
-        elif sel_text == 'Edge position':
+        elif sel_text in ['Edge position', 'Line fit']:
             prepare_plot_edge_position()
         elif 'z-profile' in sel_text:
             prepare_plot_zprofile()

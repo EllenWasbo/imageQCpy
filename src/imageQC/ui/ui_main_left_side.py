@@ -144,11 +144,18 @@ class TreeFileList(QTreeWidget):
         """Handle context menu events (rightclicks)."""
         if event.type() == QEvent.ContextMenu:
             ctx_menu = QMenu(self)
-            act_mark = QAction('Mark selected')
-            act_mark.triggered.connect(self.set_marking)
-            act_remove_mark_sel = QAction('Remove mark from selected')
-            act_remove_mark_sel.triggered.connect(
-                lambda: self.set_marking(remove_mark=True))
+            if self.main.wid_quicktest.gb_quicktest.isChecked():
+                act_edit_mark = QAction('Edit marked tests...')
+                act_edit_mark.triggered.connect(
+                    lambda: self.set_marking(qt_edit=True))
+                ctx_menu.addActions([act_edit_mark])
+            else:
+                act_mark = QAction('Mark selected')
+                act_mark.triggered.connect(self.set_marking)
+                act_remove_mark_sel = QAction('Remove mark from selected')
+                act_remove_mark_sel.triggered.connect(
+                    lambda: self.set_marking(remove_mark=True))
+                ctx_menu.addActions([act_mark, act_remove_mark_sel])
             act_remove_all_marks = QAction('Remove all marks')
             act_remove_all_marks.triggered.connect(self.clear_marking)
             act_select_inverse = QAction('Select inverse')
@@ -156,8 +163,7 @@ class TreeFileList(QTreeWidget):
             act_close_sel = QAction('Close selected')
             act_close_sel.triggered.connect(self.close_selected)
             ctx_menu.addActions(
-                    [act_mark, act_remove_mark_sel, act_remove_all_marks,
-                     act_select_inverse, act_close_sel])
+                    [act_remove_all_marks, act_select_inverse, act_close_sel])
             if self.main.wid_quicktest.gb_quicktest.isChecked():
                 ctx_menu.addSeparator()
                 act_set_image_name = QAction('Set image name...')
@@ -213,31 +219,17 @@ class TreeFileList(QTreeWidget):
         self.main.results = {}
         self.main.refresh_results_display()
 
-    def set_marking(self, remove_mark=False, remove_all=False):
+    def set_marking(self, remove_mark=False, remove_all=False, qt_edit=False):
         """Set or remove mark for testing from selected images."""
         selrows, last_selected = self.get_selected_imgs()
 
-        # warning if none marked with current test - avoid confusing behaviour
-        if self.main.wid_quicktest.gb_quicktest.isChecked() and remove_mark:
-            ids_marked = set(self.get_marked_imgs_current_test())
-            ids_selected = set(selrows)
-            if len(list(ids_marked.intersection(ids_selected))) == 0:
-                QMessageBox.warning(
-                    self, 'Warning',
-                    ('You are trying to remove marking of '
-                     f'current test {self.main.current_test}. '
-                     'None of the selected rows were marked '
-                     'for this test.')
-                    )
-
         proceed = True
         test_codes = []
-        if self.main.wid_quicktest.gb_quicktest.isChecked():
-            txt = 'remove mark from' if remove_mark else 'mark for testing'
-            dlg = uir.SelectTestcodeDialog(
-                label=f'Select tests to {txt}',
+        if qt_edit:
+            dlg = SelectTestcodeDialog(
+                label=f'Select tests to run for selected images',
                 modality=self.main.current_modality,
-                current_test=self.main.current_test)
+                current_tests=self.main.imgs[selrows[0]].marked_quicktest)
             res = dlg.exec()
             if res:
                 test_codes = dlg.get_checked_testcodes()
@@ -246,18 +238,11 @@ class TreeFileList(QTreeWidget):
 
         if proceed:
             for sel in selrows:
-                if self.main.wid_quicktest.gb_quicktest.isChecked():
+                if qt_edit:
                     tests_this = self.main.imgs[sel].marked_quicktest
-                    if remove_mark:
-                        for test in test_codes:
-                            if test in tests_this:
-                                self.main.imgs[sel].marked_quicktest.remove(test)
-                    else:
-                        for test in test_codes:
-                            if test not in tests_this:
-                                self.main.imgs[sel].marked_quicktest.append(test)
+                    self.main.imgs[sel].marked_quicktest = test_codes
                     self.main.wid_quicktest.flag_edit(True)
-                if remove_mark:
+                elif remove_mark:
                     self.main.imgs[sel].marked = False
                 else:
                     self.main.imgs[sel].marked = True
@@ -276,7 +261,7 @@ class TreeFileList(QTreeWidget):
 
     def dbl_click_item(self):
         """If double mouseclick on item - mark item for testing."""
-        self.set_marking()
+        self.set_marking(qt_edit=self.main.wid_quicktest.gb_quicktest.isChecked())
 
     def move_file(self, direction=''):
         """Resort images. Move selected image to...
@@ -328,7 +313,7 @@ class TreeFileList(QTreeWidget):
 class SelectTestcodeDialog(ImageQCDialog):
     """Dialog to select tests."""
 
-    def __init__(self, label='', modality='CT', current_test=''):
+    def __init__(self, label='', modality='CT', current_tests=[]):
         super().__init__()
         self.setWindowTitle('Select tests')
         vLO = QVBoxLayout()
@@ -336,10 +321,11 @@ class SelectTestcodeDialog(ImageQCDialog):
 
         vLO.addWidget(QLabel(label))
         testcodes = QUICKTEST_OPTIONS[modality]
-        idx_current_test = testcodes.index(current_test)
+        idx_current_tests = [
+            testcodes.index(current_test) for current_test in current_tests]
         self.list_widget = uir.ListWidgetCheckable(
             texts=testcodes,
-            set_checked_ids=[idx_current_test]
+            set_checked_ids=idx_current_tests
             )
         vLO.addWidget(self.list_widget)
 

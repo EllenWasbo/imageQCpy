@@ -140,11 +140,17 @@ class StackWidget(QWidget):
     def update_modality(self):
         """Refresh GUI after selecting modality (stack with ModTempSelector."""
         if self.edited:
-            res = messageboxes.QuestionBox(
-                parent=self, title='Save changes?',
-                msg='Save changes before changing modality?')
-            if res.exec():
-                self.wid_mod_temp.save()
+            if hasattr(self, 'current_template'):
+                res = messageboxes.QuestionBox(
+                    parent=self, title='Save changes?',
+                    msg='Save changes before changing modality?')
+                if res.exec():
+                    self.wid_mod_temp.save()
+            else:
+                pass
+                # TODO - quickfix to avoid error when change widget and modality not CT
+                # cbox modality triggered and for some reason self.edited is True....
+                # find better solution some time
 
         self.current_modality = self.wid_mod_temp.cbox_modality.currentText()
 
@@ -490,6 +496,8 @@ class StackWidget(QWidget):
                                          'See details to view changes performed'),
                                     details=log, icon=QMessageBox.Information)
                                 dlg.exec()
+                                if self.fname in ['paramsets', 'quicktest_templates']:
+                                    self.update_from_yaml()
                     self.status_label.setText(
                         f'Changes saved to {path}')
                     self.flag_edit(False)
@@ -1187,6 +1195,48 @@ class QuickTestOutputTreeView(QTreeView):
             code, subno = self.get_testcode_subno(rowno)
             self.parent.current_template.output.tests[code].pop(subno)
             self.update_data(set_selected=rowno - 1)
+            self.parent.flag_edit(True)
+
+    def move_sub(self, move_up=True):
+        """If first in test, move test, else move sub within test."""
+
+        def move_test(testcode):
+            keys = [*self.parent.current_template.output.tests]
+            testno = keys.index(testcode)
+            popped = keys.pop(testno)
+            if move_up:
+                keys.insert(testno - 1, popped)
+            else:
+                keys.insert(testno + 1, popped)
+            new_tests = {}
+            for key in keys:
+                new_tests[key] = self.parent.current_template.output.tests[key]
+            self.parent.current_template.output.tests = new_tests
+
+        sel = self.selectedIndexes()
+        if len(sel) > 0:
+            rowno = sel[0].row()
+            code, subno = self.get_testcode_subno(rowno)
+
+            if move_up:
+                if subno == 0:  # move test if not first
+                    if rowno > 0:
+                        move_test(code)
+                else:
+                    popped = self.parent.current_template.output.tests[code].pop(subno)
+                    self.parent.current_template.output.tests[code].insert(
+                        subno-1, popped)
+            else:
+                n_sub_this = len(self.parent.current_template.output.tests[code])
+                if subno == n_sub_this - 1:  # last in current
+                    if rowno < self.model.rowCount() - n_sub_this:  # not last test
+                        move_test(code)
+                else:
+                    popped = self.parent.current_template.output.tests[code].pop(subno)
+                    self.parent.current_template.output.tests[code].insert(
+                        subno+1, popped)
+
+            self.update_data(set_selected=rowno)
             self.parent.flag_edit(True)
 
 

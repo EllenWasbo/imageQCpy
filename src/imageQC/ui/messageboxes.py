@@ -6,7 +6,7 @@ QMessageBoxes with specific settings for different uses and reuses in ImageQC.
 @author: Ellen Wasbo
 """
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QLabel
 
 # imageQC block start
 # imageQC block end
@@ -76,6 +76,9 @@ class MessageBoxWithDetails(QMessageBox):
         self.setTextFormat(Qt.RichText)
         if details != []:
             self.setDetailedText('\n'.join(details))
+        _qlabels = self.findChildren(QLabel)
+        _qlabels[1].setFixedWidth(msg_width)
+        '''
         self.setStyleSheet(
             f"""
             QPushButton {{
@@ -85,7 +88,7 @@ class MessageBoxWithDetails(QMessageBox):
                 width: {msg_width}px;
                 }}
             """)
-
+        '''
 
 class QuestionBox(QMessageBox):
     """QMessageBox with changed yes no text as options."""

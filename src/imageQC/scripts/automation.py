@@ -626,6 +626,11 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
             proceed = False
             log.append(
                 ('No Paramset linked to the automation template. Template ignored.'))
+        if not any(qt_templates[modality][qt_idx].tests):
+            proceed = False
+            log.append(
+                ('The associatied Quicktest template have no tests specified. '
+                 'Automation template ignored.'))
         if proceed:
             err_exist = False
             p = Path(auto_template.path_input)

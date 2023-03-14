@@ -23,7 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.12alpha'
+VERSION = '3.0.13alpha'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -59,7 +59,7 @@ ALTERNATIVES = {
                 'Avg for each ROI + % difference from avg of all']
         },
     'NM': {
-        'MTF': ['Point', 'One line source', 'Two perpendicular line sources', 'Edge']
+        'MTF': ['Point', 'One line source', 'Two perpendicular line sources']  # 'Edge']
         },
     'SPECT': {
         'MTF': ['Point source', 'Line source']
@@ -149,7 +149,7 @@ HEADERS = {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt1': ['FWHM', 'FWTM'],
             'alt2': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            'alt3': ['FWHM', 'FWTM']
+            # 'alt3': ['FWHM', 'FWTM']
             },
         },
     'SPECT': {
@@ -226,7 +226,7 @@ HEADERS_SUP = {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt1': ['A1', 'sigma1'],
             'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt3': ['A1', 'sigma1']
+            # 'alt3': ['A1', 'sigma1']
             },
         },
     'SPECT': {

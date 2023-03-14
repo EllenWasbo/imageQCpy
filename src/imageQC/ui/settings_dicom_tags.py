@@ -220,6 +220,8 @@ class DicomTagDialog(ImageQCDialog):
         if self.pydict is not None:
             taginfo_this = self.get_tag_info()
             data_element = dcm.get_tag_data(self.pydict, tag_info=taginfo_this)
+            if isinstance(data_element, list):
+                data_element = data_element[0]
             if data_element is not None:
                 self.data_element = data_element
                 if data_element.VM > 1:

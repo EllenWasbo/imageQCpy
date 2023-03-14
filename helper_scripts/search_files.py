@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "breakpoint()"
+search_string = "sum_marked_images"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

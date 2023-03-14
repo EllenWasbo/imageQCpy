@@ -96,11 +96,21 @@ class ParametersOutputWidget(QWidget):
             QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
             'Edit selected row', self)
         act_edit.triggered.connect(self.wid_output_table.edit_row)
+        act_up = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
+            'Move up', self)
+        act_up.triggered.connect(
+            lambda: self.wid_output_table.move_sub(move_up=True))
+        act_down = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}moveDown.png'),
+            'Move down', self)
+        act_down.triggered.connect(
+            lambda: self.wid_output_table.move_sub(move_up=False))
         act_delete = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
             'Delete selected row', self)
         act_delete.triggered.connect(self.wid_output_table.delete_row)
-        self.toolbar.addActions([act_add, act_edit, act_delete])
+        self.toolbar.addActions([act_add, act_edit, act_up, act_down, act_delete])
 
     def edit_group_by(self):
         """Edit parameters to group images by."""
@@ -240,12 +250,18 @@ class ParamSetsWidget(StackWidget):
         for i in range(self.wid_params.table_params.columnCount()):
             self.wid_params.table_params.resizeColumnToContents(i)
 
-        # update used_in
+        self.update_used_in()
+
+    def update_used_in(self):
+        """Update list of auto-templates where this template is used."""
         self.list_used_in.clear()
         if self.current_template.label != '':
-            auto_labels = [
-                temp.label for temp in self.auto_templates[self.current_modality]
-                if temp.paramset_label == self.current_template.label
-                ]
+            try:
+                auto_labels = [
+                    temp.label for temp in self.auto_templates[self.current_modality]
+                    if temp.paramset_label == self.current_template.label
+                    ]
+            except KeyError:
+                auto_labels = []
             if len(auto_labels) > 0:
                 self.list_used_in.addItems(auto_labels)

@@ -335,7 +335,7 @@ class ParamSetNM(ParamSetCommon):
     sni_eye_filter_f: float = 1.3
     sni_eye_filter_c: float = 28.
     sni_eye_filter_r: float = 65.  # in mm
-    mtf_type: int = 1  # [Point, line (default), Two lines, edge]
+    mtf_type: int = 1  # [Point, line (default), Two lines (, edge])
     mtf_roi_size_x: float = 50.
     mtf_roi_size_y: float = 50.
     mtf_plot: int = 4  # xyprofiles, line, sorted, LSF, MTF (default)

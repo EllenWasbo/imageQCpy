@@ -134,14 +134,25 @@ def quicktest_output(input_main):
                     if set_names[i] != '':
                         image_names[i] = set_names[i]
 
-        for test in input_main.results:
-            if test in input_main.current_paramset.output.tests:
-                output_subs = input_main.current_paramset.output.tests[test]
-            else:
-                output_subs = [cfc.QuickTestOutputSub(columns=[])]  # default
+        dm = input_main.current_paramset.output.decimal_mark
+
+        # first all output_sub defined, then defaults where no output defined
+        output_all_actual = {}
+        for test, sublist in input_main.current_paramset.output.tests:
+            if test in input_main.results:
+                output_all_actual[test] = input_main.current_paramset.output.tests[test]
+        for test in input_main.results:  # add defaults if not defined
+            if test not in output_all_actual:
+                output_all_actual[test] = [cfc.QuickTestOutputSub(columns=[])]
+
+        for test in output_all_actual: #input_main.results:
+            #if test in input_main.current_paramset.output.tests:
+            #    output_subs = input_main.current_paramset.output.tests[test]
+            #else:
+            #    output_subs = [cfc.QuickTestOutputSub(columns=[])]  # default
+            output_subs = output_all_actual[test]
 
             res_pr_image = input_main.results[test]['pr_image']
-            dm = input_main.current_paramset.output.decimal_mark
 
             # for each sub-output for current test
             for sub in output_subs:
@@ -490,7 +501,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
                                 prev_roi[test], errmsg = get_rois(
                                     image, i, input_main)
                                 if errmsg is not None:
-                                    errmsgs.append(f'{test} get ROI slice{i}:')
+                                    errmsgs.append(f'{test} get ROI image {i}:')
                                     errmsgs.append(errmsg)
                             if wid_auto is not None:
                                 wid_auto.wid_image_display.canvas.main.current_test = (
@@ -510,7 +521,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
                             if result is not None:
                                 if result.errmsg is not None:
                                     if len(result.errmsg) > 0:
-                                        errmsgs.append(f'{test} slice {i}:')
+                                        errmsgs.append(f'{test} image {i}:')
                                         if isinstance(result.errmsg, str):
                                             errmsgs.append(result.errmsg)
                                         else:
@@ -807,6 +818,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def MTF():
+        errmsg = []
         if modality in ['CT', 'SPECT']:
             # only bead/point method 2d (alt0)
             #TODO round edge option 2d
@@ -819,24 +831,34 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 rows = np.max(roi_array[0], axis=1)
                 cols = np.max(roi_array[0], axis=0)
                 sub = image2d[rows][:, cols]
-                arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[1]))
-                background = np.mean(arr)
-                details, errmsg = calculate_MTF_point(
+                if roi_array[1].any():
+                    arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[1]))
+                    background = np.mean(arr)
+                else:
+                    background = 0
+                    errmsg = ['Warning: width of background too narrow.'
+                              ' Background not corrected.']
+                details, errmsg_calc = calculate_MTF_point(
                     sub - background, image_info, paramset)
-                details[0]['matrix'] = sub
-                prefix = 'g' if paramset.mtf_gaussian else 'd'
-                values = (
-                    details[0][prefix + 'MTF_details']['values']
-                    + details[1][prefix + 'MTF_details']['values']
-                    )
-                values_sup = (
-                    list(details[0]['gMTF_details']['LSF_fit_params'])
-                    + list(details[1]['gMTF_details']['LSF_fit_params'])
-                    )
-                res = Results(
-                    headers=headers, values=values,
-                    headers_sup=headers_sup, values_sup=values_sup,
-                    details_dict=details, alternative=alt, errmsg=errmsg)
+                errmsg.extend(errmsg_calc)
+                if len(details) > 1:
+                    details[0]['matrix'] = sub
+                    prefix = 'g' if paramset.mtf_gaussian else 'd'
+                    values = (
+                        details[0][prefix + 'MTF_details']['values']
+                        + details[1][prefix + 'MTF_details']['values']
+                        )
+                    values_sup = (
+                        list(details[0]['gMTF_details']['LSF_fit_params'])
+                        + list(details[1]['gMTF_details']['LSF_fit_params'])
+                        )
+                    res = Results(
+                        headers=headers, values=values,
+                        headers_sup=headers_sup, values_sup=values_sup,
+                        details_dict=details, alternative=alt, errmsg=errmsg)
+                else:
+                    res = Results(
+                        headers=headers, headers_sup=headers_sup, errmsg=errmsg)
 
         elif modality in ['Xray', 'MR']:
             headers = HEADERS[modality][test_code]['alt0']
@@ -844,8 +866,48 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             if image2d is None:
                 res = Results(headers=headers, headers_sup=headers_sup)
             else:
+                if roi_array is None:
+                    res = Results(
+                        headers=headers, headers_sup=headers_sup,
+                        errmsg='Failed finding ROI')
+                else:
+                    sub = []
+                    if isinstance(roi_array, list):  # auto center
+                        for roi in roi_array:
+                            rows = np.max(roi, axis=1)
+                            cols = np.max(roi, axis=0)
+                            sub.append(image2d[rows][:, cols])
+                        if len(sub) == 2 or len(sub) == 5:
+                            sub.pop()
+                    else:
+                        rows = np.max(roi_array, axis=1)
+                        cols = np.max(roi_array, axis=0)
+                        sub.append(image2d[rows][:, cols])
+
+                    details, errmsg = calculate_MTF_2d_line_edge(
+                        sub, image_info.pix[0], paramset, mode='edge')
+                    prefix = 'g' if paramset.mtf_gaussian else 'd'
+                    try:
+                        values = details[prefix + 'MTF_details']['values']
+                        values_sup = details['gMTF_details']['LSF_fit_params']
+                        res = Results(
+                            headers=headers, values=values,
+                            headers_sup=headers_sup, values_sup=values_sup,
+                            details_dict=details, errmsg=errmsg)
+                    except KeyError:
+                        res = Results(
+                            headers=headers, headers_sup=headers_sup,
+                            errmsg=errmsg)
+
+        elif modality == 'NM':
+            alt = paramset.mtf_type
+            headers = HEADERS[modality][test_code]['alt' + str(alt)]
+            headers_sup = HEADERS_SUP[modality][test_code]['alt' + str(alt)]
+            if image2d is None:
+                res = Results(headers=headers, headers_sup=headers_sup)
+            else:
                 sub = []
-                if isinstance(roi_array, list):
+                if isinstance(roi_array, list):  # auto center
                     for roi in roi_array:
                         rows = np.max(roi, axis=1)
                         cols = np.max(roi, axis=0)
@@ -855,12 +917,29 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     cols = np.max(roi_array, axis=0)
                     sub.append(image2d[rows][:, cols])
 
-                details, errmsg = calculate_MTF_edge(
-                    sub, image_info.pix[0], paramset)
+                if paramset.mtf_type == 0:
+                    details, errmsg = calculate_MTF_point(
+                        sub[0], image_info, paramset)
+                    details[0]['matrix'] = sub[0]
+                elif paramset.mtf_type == 1:
+                    details, errmsg = calculate_MTF_2d_line_edge(
+                        sub, image_info.pix[0], paramset, mode='line')
+                else:  # paramset.mtf_type == 2
+                    details, errmsg = calculate_MTF_2d_line_edge(
+                        sub, image_info.pix[0], paramset, mode='line', pr_roi=True)
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
                 try:
-                    values = details[prefix + 'MTF_details']['values']
-                    values_sup = details['gMTF_details']['LSF_fit_params']
+                    if isinstance(details, list):  # paramset.mtf_type 0 or 2
+                        values = []
+                        values_sup = []
+                        for s_idx in [0, 1]:
+                            values.extend(
+                                details[s_idx][prefix + 'MTF_details']['values'])
+                            values_sup.extend(
+                                list(details[s_idx]['gMTF_details']['LSF_fit_params']))
+                    else:
+                        values = details[prefix + 'MTF_details']['values']
+                        values_sup = list(details['gMTF_details']['LSF_fit_params'])
                     res = Results(
                         headers=headers, values=values,
                         headers_sup=headers_sup, values_sup=values_sup,
@@ -869,18 +948,11 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     res = Results(
                         headers=headers, headers_sup=headers_sup,
                         errmsg=errmsg)
-
-        elif modality == 'NM':
-            alt = paramset.mtf_type
-            headers = HEADERS[modality][test_code]['alt' + str(alt)]
-            headers_sup = HEADERS_SUP[modality][test_code]['alt' + str(alt)]
-            #if image2d is None:
-            res = Results(headers=headers, headers_sup=headers_sup)
-            #else:
-            #    rows = np.max(roi_array[0], axis=1)
-            #    cols = np.max(roi_array[0], axis=0)
-            #    sub = image2d[rows][:, cols]
-
+                except IndexError:
+                    res = Results(
+                        headers=headers, headers_sup=headers_sup,
+                        errmsg='Failed calculating MTF')
+                    # TODO better handle this, seen when NM point input, calc line
         return res
 
     def Rin():
@@ -1793,7 +1865,7 @@ def calculate_MTF_point(matrix, img_info, paramset):
     """
     details = []
     errmsgs = []
-    for ax in [1, 0]:
+    for ax in [0, 1]:
         details_dict = {}
         profile = np.sum(matrix, axis=ax)
         width, center = mmcalc.get_width_center_at_threshold(
@@ -1832,7 +1904,7 @@ def calculate_MTF_point(matrix, img_info, paramset):
             if isinstance(paramset, cfc.ParamSetCT):
                 res['values'] = mmcalc.get_curve_values(
                     res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
-            else:  # SPECT
+            else:  # NM or SPECT
                 fwtm, _ = mmcalc.get_width_center_at_threshold(
                     profile, np.max(profile)/10)
                 if width is not None:
@@ -1845,7 +1917,7 @@ def calculate_MTF_point(matrix, img_info, paramset):
             # Gaussian MTF
             if isinstance(paramset, cfc.ParamSetCT):
                 gaussfit = 'double'
-            else:  # SPECT
+            else:  # NM or SPECT
                 gaussfit = 'single'
             res, err = mmcalc.get_MTF_gauss(
                 profile, dx=img_info.pix[0], gaussfit=gaussfit)
@@ -1855,7 +1927,7 @@ def calculate_MTF_point(matrix, img_info, paramset):
                 if isinstance(paramset, cfc.ParamSetCT):
                     res['values'] = mmcalc.get_curve_values(
                         res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
-                else:  # SPECT
+                else:  # NM or SPECT
                     profile = res['LSF_fit']
                     fwhm, _ = mmcalc.get_width_center_at_threshold(
                         profile, np.max(profile)/2)
@@ -2000,6 +2072,7 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
             sorted_pixels = values_flat[sort_idxs]
             dists_cut = dists[dists < radius]
             values = sorted_pixels[dists < radius]
+            breakpoint()
 
             step_size = .1 * pix
             LSF_x, LSF = mmcalc.resample_by_binning(
@@ -2065,6 +2138,253 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
     return (details_dict, errmsg)
 
 
+def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge', pr_roi=False):
+    """Calculate MTF from straight line.
+
+    Parameters
+    ----------
+    matrix : numpy.2darray or list of numpy.2darray
+        image within roi(s) - result will be combined from all rois
+    pix : float
+        pixelsize in mm
+    paramset : ParamSetXX
+        depending on modality
+    mode : str, optional
+        edge or line. Default is 'edge'
+    pr_roi : bool, Optional
+        MTF pr roi in matrix or average. Default is False.
+
+    Returns
+    -------
+    details_dict: dict
+    errmsg: list
+    """
+    edge = True if mode == 'edge' else False
+    details_dict = []  # {} if only one
+    details_dicts_edge = []  # one for each roi (edge=line)
+    ESF_all = []  # if edge
+    LSF_all = []
+    LSF_no_filt_all = []
+    ESF_x = None  # if edge
+    LSF_x = None
+    errmsg = []
+    step_size = 0.1 * pix
+    if not isinstance(matrix, list):
+        matrix = [matrix]
+
+    def ensure_vertical(sub):
+        """Rotate matrix if edge/line not in y direction."""
+        if edge:
+            x1 = np.mean(sub[:, :2])
+            x2 = np.mean(sub[:, -2:])
+            diff_x = abs(x1 - x2)
+            y1 = np.mean(sub[:2, :])
+            y2 = np.mean(sub[-2:, :])
+            diff_y = abs(y1 - y2)
+            if diff_x < diff_y:
+                sub = np.rot90(sub)
+                halfmax = 0.5 * (y1 + y2)
+            else:
+                halfmax = 0.5 * (x1 + x2)
+        else:  # line
+            prof_y = np.sum(sub, axis=1)
+            prof_x = np.sum(sub, axis=0)
+            if np.max(prof_y) > np.max(prof_x):
+                sub = np.rot90(sub)
+            halfmax = 0.5 * (np.max(sub) + np.min(sub))
+        return (sub, halfmax)
+
+    def get_edge_pos(sub, halfmax, txt_roi=''):
+        """Find position of edge/line for each row in matrix."""
+        edge_pos = []
+        x = np.arange(sub.shape[1])
+        if edge:
+            smoothed = sp.ndimage.gaussian_filter(sub, sigma=3)
+            for i in range(smoothed.shape[0]):
+                res = mmcalc.get_curve_values(x, smoothed[i, :], [halfmax])
+                edge_pos.append(res[0])
+        else:
+            for i in range(sub.shape[0]):
+                _, center = mmcalc.get_width_center_at_threshold(sub[i, :], halfmax)
+                edge_pos.append(center)
+        proceed = True
+        ys = np.arange(sub.shape[0])
+
+        if None in edge_pos:
+            n_found = len(edge_pos) - edge_pos.count(None)
+            txt_mode = 'Edge' if edge else 'Line'
+            if n_found < 0.5 * len(edge_pos):
+                proceed = False
+                errmsg.append(
+                    f'{txt_mode} position found for < 50% of ROI {txt_roi}. '
+                    'Test failed.')
+            else:
+                idx_None = mm.get_all_matches(edge_pos, None)
+                edge_pos = [e for i, e in enumerate(edge_pos) if i not in idx_None]
+                ys = [y for i, y in enumerate(list(ys)) if i not in idx_None]
+            if errmsg == []:
+                errmsg.append(
+                    '{txt_mode} position not found for full ROI. Parts of ROI ignored.')
+        return (edge_pos, x, ys, proceed)
+
+    for m in range(len(matrix)):
+        sub, halfmax = ensure_vertical(matrix[m])
+        txt_roi = f'{m}' if len(matrix) > 1 else ''
+        edge_pos, x, ys, proceed = get_edge_pos(sub, halfmax, txt_roi=txt_roi)
+
+        if proceed:
+            # linear fit of edge positions
+            res = sp.stats.linregress(ys, edge_pos)  # x = ay + b
+            slope = 1./res.slope  # to y = (1/a)x + (-b/a) to avoid error when steep
+            intercept = - res.intercept / res.slope
+            x_fit = np.array([min(edge_pos), max(edge_pos)])
+            y_fit = slope * x_fit + intercept
+            angle = np.abs((180/np.pi) * np.arctan(
+                (x_fit[1]-x_fit[0])/(y_fit[1]-y_fit[0])
+                ))
+
+            # sort pixels by position normal to edge
+            dist_map = mmcalc.get_distance_map_edge(
+                sub.shape, slope=slope, intercept=intercept)
+            dist_map_flat = dist_map.flatten()
+            values_flat = sub.flatten()
+            sort_idxs = np.argsort(dist_map_flat)
+            dists = dist_map_flat[sort_idxs]
+            sorted_values = values_flat[sort_idxs]
+            dists = pix * dists
+
+            details_dicts_edge.append({
+                'edge_pos': edge_pos, 'edge_row': ys,
+                'edge_fit_x': x_fit, 'edge_fit_y': y_fit,
+                'edge_r2': res.rvalue**2, 'angle': angle,
+                'sorted_pixels_x': dists,
+                'sorted_pixels': sorted_values,
+                'edge_or_line': mode
+                })
+
+            new_x, new_y = mmcalc.resample_by_binning(
+                input_y=sorted_values, input_x=dists,
+                step=step_size,
+                first_step=-sub.shape[1]/2 * pix,
+                n_steps=10*sub.shape[1])
+
+            if edge:
+                if ESF_x is None:
+                    ESF_x = new_x
+                ESF_all.append(new_y)
+            else:
+                if LSF_x is None:
+                    LSF_x = new_x
+                LSF_all.append(new_y)
+
+    sigma_f = 0
+    if ESF_all:
+        sigma_f = 3.  # if sigma_f=5 , FWHM ~9 newpix = ~ 1 original pix
+        for ESF in ESF_all:
+            LSF, LSF_no_filt, _ = mmcalc.ESF_to_LSF(ESF, prefilter_sigma=sigma_f)
+            LSF = LSF/np.max(LSF)
+            LSF_no_filt = LSF_no_filt/np.max(LSF_no_filt)
+            LSF_all.append(LSF)
+            LSF_no_filt_all.append(LSF_no_filt)
+
+    if LSF_all:
+        if len(LSF_all) > 1 and pr_roi is False:
+            LSF = [np.mean(np.array(LSF_all), axis=0)]
+            if LSF_no_filt_all:
+                LSF_no_filt = [np.mean(np.array(LSF_no_filt_all), axis=0)]
+        else:
+            LSF = LSF_all
+            if LSF_no_filt_all:
+                LSF_no_filt = LSF_no_filt_all
+        if not LSF_no_filt_all:
+            LSF_no_filt = LSF
+
+        cw = 0
+        try:
+            cut_lsf = paramset.mtf_cut_lsf
+            cut_lsf_fwhm = paramset.mtf_cut_lsf_w
+        except AttributeError:
+            cut_lsf = False
+            cut_lsf_fwhm = None
+
+        if isinstance(paramset, cfc.ParamSetXray):
+            gaussfit_type = 'double_both_positive'
+            lp_vals = [0.5, 1, 1.5, 2, 2.5]
+            mtf_vals = [0.5]
+        else:  # MR, NM
+            gaussfit_type = 'single'  #TODO correct?
+            lp_vals = None
+            mtf_vals = [0.5, 0.1, 0.02]
+
+        for i in range(len(LSF)):
+            width, center = mmcalc.get_width_center_at_threshold(
+                LSF[i], np.max(LSF[i])/2)
+            if width is not None:
+                # Calculate gaussian and discrete MTF
+                if cut_lsf:
+                    LSF_no_filt_this, cw, _ = mmcalc.cut_and_fade_LSF(
+                        LSF_no_filt[i], center=center, fwhm=width,
+                        cut_width=cut_lsf_fwhm)
+                else:
+                    LSF_no_filt_this = LSF_no_filt[i]
+                dMTF_details = mmcalc.get_MTF_discrete(LSF_no_filt_this, dx=step_size)
+                dMTF_details['cut_width'] = cw * step_size
+
+                LSF_x = step_size * (np.arange(LSF[i].size) - center)
+                gMTF_details, err = mmcalc.get_MTF_gauss(
+                    LSF[i], dx=step_size, prefilter_sigma=sigma_f*step_size,
+                    gaussfit=gaussfit_type)
+
+                if err is not None:
+                    errmsg.append(err)
+                else:
+                    if isinstance(paramset, cfc.ParamSetNM):
+                        fwhm, _ = mmcalc.get_width_center_at_threshold(
+                            LSF[i], np.max(LSF[i])/2)
+                        fwtm, _ = mmcalc.get_width_center_at_threshold(
+                            LSF[i], np.max(LSF[i])/10)
+                        dMTF_details['values'] = [step_size*fwhm, step_size*fwtm]
+                        fwhm, _ = mmcalc.get_width_center_at_threshold(
+                            gMTF_details['LSF_fit'], np.max(gMTF_details['LSF_fit'])/2)
+                        fwtm, _ = mmcalc.get_width_center_at_threshold(
+                            gMTF_details['LSF_fit'], np.max(gMTF_details['LSF_fit'])/10)
+                        gMTF_details['values'] = [step_size*fwhm, step_size*fwtm]
+                    else:
+                        if lp_vals is not None:
+                            gMTF_details['values'] = mmcalc.get_curve_values(
+                                    gMTF_details['MTF'], gMTF_details['MTF_freq'],
+                                    lp_vals)
+                            dMTF_details['values'] = mmcalc.get_curve_values(
+                                    dMTF_details['MTF'], dMTF_details['MTF_freq'],
+                                    lp_vals,
+                                    force_first_below=True)
+                        gvals = mmcalc.get_curve_values(
+                                gMTF_details['MTF_freq'], gMTF_details['MTF'], mtf_vals)
+                        dvals = mmcalc.get_curve_values(
+                                dMTF_details['MTF_freq'], dMTF_details['MTF'], mtf_vals,
+                                force_first_below=True)
+                        if lp_vals is not None:
+                            gMTF_details['values'].extend(gvals)
+                            dMTF_details['values'].extend(dvals)
+                        else:
+                            gMTF_details['values'] = gvals
+                            dMTF_details['values'] = dvals
+
+                details_dict.append({
+                    'LSF_x': LSF_x, 'LSF': LSF_no_filt_this, 'ESF_x': ESF_x, 'ESF': ESF_all,
+                    'sigma_prefilter': sigma_f*step_size,
+                    'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details,
+                    'edge_details': details_dicts_edge})
+            else:
+                errmsg = f'Could not find {mode}.'
+
+    if len(details_dict) == 1:
+        details_dict = details_dict[0]
+
+    return (details_dict, errmsg)
+
+#TODO delelte, replaced by calculate_MTF_2d_line_edge
+'''
 def calculate_MTF_edge(matrix, pix, paramset):
     """Calculate MTF from straight edge.
 
@@ -2250,6 +2570,7 @@ def calculate_MTF_edge(matrix, pix, paramset):
             errmsg = 'Could not find edge.'
 
     return (details_dict, errmsg)
+'''
 
 
 def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
@@ -2287,7 +2608,8 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
     errtxt = ''
     for slino, sli in enumerate(matrix):
         if sli is not None:
-            center_this = mmcalc.center_xy_of_disc(sli, roi=roi)
+            center_this = mmcalc.center_xy_of_disc(
+                sli, roi=roi, mode='max_or_min', sigma=1)
             if None not in center_this:
                 center_xy.append(center_this)
             else:
@@ -2301,18 +2623,28 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
         center_x = [vals[0] for vals in center_xy]
         center_y = [vals[1] for vals in center_xy]
         center_xy = [np.mean(np.array(center_x)), np.mean(np.array(center_y))]
-
         # sort pixel values from center
         dist_map = mmcalc.get_distance_map_point(
             matrix[0].shape,
-            center_dx=center_xy[0] - matrix[0].shape[1]/2,
-            center_dy=center_xy[1] - matrix[0].shape[0]/2)
+            center_dx=center_xy[0] - 0.5 * matrix[0].shape[1],
+            center_dy=center_xy[1] - 0.5 * matrix[0].shape[0])
         dists_flat = dist_map.flatten()
         sort_idxs = np.argsort(dists_flat)
         dists = dists_flat[sort_idxs]
+
+        #test remove
+        '''
+        masked_img = np.copy(matrix[0])
+        masked_img[dist_map > 0.3 * matrix[0].shape[0]] = 0
+        prof_x = matrix[0][round(center_xy[1]), :]
+        x_prof = (np.arange(len(prof_x)) - center_xy[0])
+        prof_y = matrix[0][:, round(center_xy[0])]
+        y_prof = (np.arange(len(prof_y)) - center_xy[1])
+        breakpoint()
+        '''
+
         dists = pix * dists
         values_all = []
-        values_sum = np.zeros(dists.shape)
         nsum = 0
         total_imgs = None
         for sli in matrix:
@@ -2323,7 +2655,6 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
                     total_imgs = total_imgs + sli
                 values_all.append(sli.flatten()[sort_idxs])
                 nsum += 1
-        #values_avg = 1/nsum * values_sum
         img_avg = 1/nsum * total_imgs
         img_avg_flat = img_avg.flatten()
         values_avg = img_avg_flat[sort_idxs]
@@ -2336,7 +2667,6 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
         step_size = .1 * pix
         new_x, new_y = mmcalc.resample_by_binning(
             input_y=values, input_x=dists_cut, step=step_size)
-
         sigma_f = 5.
         LSF, LSF_no_filt, ESF_filtered = mmcalc.ESF_to_LSF(
             new_y, prefilter_sigma=sigma_f)

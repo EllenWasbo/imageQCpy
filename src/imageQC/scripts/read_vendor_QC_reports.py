@@ -173,7 +173,10 @@ def read_Siemens_PET_dailyQC(txt):
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno].split(' ')
-            calib_factor = float(split_txt[-1])
+            try:
+                calib_factor = float(split_txt[-1])
+            except ValueError:
+                pass
 
         # Block Noise 3 [crystal] 0 [crystal] 0 Blocks
         n_blocks_noise = None
@@ -181,7 +184,10 @@ def read_Siemens_PET_dailyQC(txt):
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno-1].split(' ')
-            n_blocks_noise = int(split_txt[0])
+            try:
+                n_blocks_noise = int(split_txt[0])
+            except ValueError:
+                pass
 
         # Block Efficiency 120 [%] 80 [%] 0 Blocks
         n_blocks_efficiency = None
@@ -189,7 +195,10 @@ def read_Siemens_PET_dailyQC(txt):
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno-1].split(' ')
-            n_blocks_efficiency = int(split_txt[0])
+            try:
+                n_blocks_efficiency = int(split_txt[0])
+            except ValueError:
+                pass
 
         # Randoms 115 [%] 85 [%] 103.8 [%] Passed
         measured_randoms = None
@@ -198,7 +207,10 @@ def read_Siemens_PET_dailyQC(txt):
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno-1].split(' ')
             split_txt = [x for x in split_txt if x != '']
-            measured_randoms = float(split_txt[-3])
+            try:
+                measured_randoms = float(split_txt[-3])
+            except ValueError:
+                pass
 
         # Scanner Efficiency
         scanner_efficiency = None
@@ -208,10 +220,14 @@ def read_Siemens_PET_dailyQC(txt):
             split_txt = txt[rowno].split(' ')
             if len(split_txt) == 3:  # version VG80B or similar
                 split_txt = txt[rowno-1].split(' ')
-                scanner_efficiency = split_txt[-2]
+                scanner_efficiency_txt = split_txt[-2]
             else:  # assume VG60A or similiar
                 split_txt = [x for x in split_txt if x != '']
-                scanner_efficiency = float(split_txt[-3])
+                scanner_efficiency_txt = split_txt[-3]
+            try:
+                scanner_efficiency = float(scanner_efficiency_txt)
+            except ValueError:
+                pass
 
         # Scatter Ratio 35.2 [%] 28.8 [%] 30.7 [%] Passed
         scatter_ratio = None
@@ -220,7 +236,10 @@ def read_Siemens_PET_dailyQC(txt):
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno].split(' ')
             split_txt = [x for x in split_txt if x != '']
-            scatter_ratio = float(split_txt[-3])
+            try:
+                scatter_ratio = float(split_txt[-3])
+            except ValueError:
+                pass
 
         # ECF
         ECF = None
@@ -229,7 +248,15 @@ def read_Siemens_PET_dailyQC(txt):
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno].split(' ')
             split_txt = [x for x in split_txt if x != '']
-            ECF = float(split_txt[-1])
+            try:
+                ECF = float(split_txt[-1])
+            except ValueError:  # seen when split in 2, not 3 lines
+                split_txt = txt[rowno + 1].split(' ')
+                split_txt = [x for x in split_txt if x != '']
+                try:
+                    ECF = float(split_txt[-2])
+                except ValueError:
+                    pass
 
         # Image Plane Efficiency
         n_img_efficiency = None
@@ -238,7 +265,10 @@ def read_Siemens_PET_dailyQC(txt):
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno].split(' ')
             split_txt = [x for x in split_txt if x != '']
-            n_img_efficiency = int(split_txt[2])
+            try:
+                n_img_efficiency = int(split_txt[2])
+            except ValueError:
+                pass
 
         # Block Timing
         '''
@@ -292,9 +322,12 @@ def read_Siemens_PET_dailyQC(txt):
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno+1].split(' ')
-            phantom_pos_x = float(split_txt[-1])
-            split_txt = txt[rowno+2].split(' ')
-            phantom_pos_y = float(split_txt[-1])
+            try:
+                phantom_pos_x = float(split_txt[-1])
+                split_txt = txt[rowno+2].split(' ')
+                phantom_pos_y = float(split_txt[-1])
+            except ValueError:
+                pass
         else:
             search_txt = 'Phantom P'
             if search_txt in short_txt:
@@ -304,10 +337,13 @@ def read_Siemens_PET_dailyQC(txt):
                 if len(indexes) == 4:
                     split_txt = txt[indexes[1]+1].split(' ')
                     split_txt = [x for x in split_txt if x != '']
-                    phantom_pos_x = float(split_txt[4])
-                    split_txt = txt[indexes[2]+1].split(' ')
-                    split_txt = [x for x in split_txt if x != '']
-                    phantom_pos_y = float(split_txt[4])
+                    try:
+                        phantom_pos_x = float(split_txt[4])
+                        split_txt = txt[indexes[2]+1].split(' ')
+                        split_txt = [x for x in split_txt if x != '']
+                        phantom_pos_y = float(split_txt[4])
+                    except ValueError:
+                        pass
 
         values = [date, ics_name, partial, full, timealign,
                   calib_factor, measured_randoms,
@@ -392,26 +428,26 @@ def read_Siemens_PET_dailyQC_xml(root):
                 scatter_ratio = def_err_text
                 errmsg = def_err_msg
             try:
-                ECF = details.find('fECF').find('cBlkValue').find(
-                    'aValue').text
+                ECF = float(details.find('fECF').find('cBlkValue').find(
+                    'aValue').text)
             except AttributeError:
                 ECF = def_err_text
                 errmsg = def_err_msg
             try:
-                n_blocks_noise = details.find('aBlockNoise').find(
-                    'cBlkValue').find('aValue').text
+                n_blocks_noise = int(details.find('aBlockNoise').find(
+                    'cBlkValue').find('aValue').text)
             except AttributeError:
                 n_blocks_noise = def_err_text
                 errmsg = def_err_msg
             try:
-                n_blocks_efficiency = details.find('bBlockEfficiency').find(
-                    'cBlkValue').find('aValue').text
+                n_blocks_efficiency = int(details.find('bBlockEfficiency').find(
+                    'cBlkValue').find('aValue').text)
             except AttributeError:
                 n_blocks_efficiency = def_err_text
                 errmsg = def_err_msg
             try:
-                n_img_efficiency = details.find('gPlaneEff').find(
-                    'cBlkValue').find('aValue').text
+                n_img_efficiency = int(details.find('gPlaneEff').find(
+                    'cBlkValue').find('aValue').text)
             except AttributeError:
                 n_img_efficiency = def_err_text
                 errmsg = def_err_msg

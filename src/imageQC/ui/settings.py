@@ -248,24 +248,35 @@ class SettingsDialog(ImageQCDialog):
 
     def closeEvent(self, event):
         """Test if unsaved changes before closing."""
-        prevtxtitem = self.current_selected_txt
-        _, prev_widget = self.get_item_widget_from_txt(prevtxtitem)
-        edited = False
-        try:
-            edited = getattr(prev_widget, 'edited')
-        except AttributeError:
-            pass
-        if edited:
+        if self.import_review_mode:
             reply = QMessageBox.question(
-                self, 'Unsaved changes',
-                'Close and loose unsaved changes?',
+                self, 'Cancel import?',
+                'To finish import go to first page (Settings for import) and make '
+                'select what to include in the import. Proceed cancel import?',
                 QMessageBox.Yes, QMessageBox.No)
             if reply == QMessageBox.Yes:
                 event.accept()
             else:
                 event.ignore()
         else:
-            event.accept()
+            prevtxtitem = self.current_selected_txt
+            _, prev_widget = self.get_item_widget_from_txt(prevtxtitem)
+            edited = False
+            try:
+                edited = getattr(prev_widget, 'edited')
+            except AttributeError:
+                pass
+            if edited:
+                reply = QMessageBox.question(
+                    self, 'Unsaved changes',
+                    'Close and loose unsaved changes?',
+                    QMessageBox.Yes, QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    event.accept()
+                else:
+                    event.ignore()
+            else:
+                event.accept()
 
     def import_from_yaml(self):
         """Import settings from another config folder."""
@@ -312,7 +323,7 @@ class SettingsDialog(ImageQCDialog):
                         self, 'No template files found',
                         'No template file found in the selected folder.')
                 else:
-                    filenames = self.select_yaml_files_for_import(filenames)
+                    filenames = select_yaml_files_for_import(filenames)
 
         if len(filenames) > 0:
             paramsets = {}
@@ -326,7 +337,6 @@ class SettingsDialog(ImageQCDialog):
                     tag_infos_new = cff.tag_infos_difference(
                         tag_infos_import, tag_infos)
                     import_main = ImportMain(tag_infos=tag_infos_new)
-
                 else:
                     _, _, temps = cff.load_settings(
                         fname=fname, temp_config_folder=import_folder)
@@ -356,6 +366,7 @@ class SettingsDialog(ImageQCDialog):
                 _, widget = self.get_item_widget_from_txt(
                     self.previous_selected_txt)
                 widget.update_from_yaml()
+                self.widget_shared_settings.verify_config_files()
 
     def update_import_main(self):
         """Update templates of all widgets according to import_main (on initiate)."""
@@ -484,6 +495,11 @@ class SettingsDialog(ImageQCDialog):
                         else:
                             if marked:
                                 temps_new[mod] = []
+                            else:
+                                if mod in temps:
+                                    temps_new[mod] = temps[mod]
+                                else:
+                                    temps_new[mod] = []
                     setattr(import_main, snake, temps_new)
                 except AttributeError:
                     if marked:
@@ -769,8 +785,12 @@ class SharedSettingsWidget(StackWidget):
                 _, _, self.tag_infos = cff.load_settings(fname='tag_infos')
                 config_idl = ConfigIdl2Py(fname[0], self.tag_infos)
                 if len(config_idl.errmsg) > 0:
-                    QMessageBox.warning(
-                        self, 'Warnings', '\n'.join(config_idl.errmsg))
+                    dlg = messageboxes.MessageBoxWithDetails(
+                        parent=self, title='Information',
+                        msg='Imported parameters will now be presented for review.',
+                        info='See details for warnings regarding the imported config file',
+                        details=config_idl.errmsg)
+                    dlg.exec()
                 import_main = ImportMain(
                     tag_infos=config_idl.tag_infos_new,
                     rename_patterns=config_idl.rename_patterns,
@@ -887,7 +907,10 @@ class QuickTestTemplatesWidget(StackWidget):
         """Update GUI with selected template."""
         self.wid_test_table.update_data()
         self.lbl_nimgs.setText(f'{len(self.current_template.tests)}')
-        # update used_in
+        self.update_used_in()
+
+    def update_used_in(self):
+        """Update list of auto-templates where this template is used."""
         self.list_used_in.clear()
         if self.current_template.label != '':
             if self.current_modality in self.auto_templates:

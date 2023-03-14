@@ -230,17 +230,6 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                         modality=mod)
                 for frame in range(frames):
                     attrib.update({'frame_number': frame})
-                    #TODO Delete?
-                    '''
-                    if seq is not None:
-                        try:
-                            zpos = seq[frame][
-                                'PlanePositionSequence'][0][
-                                    'ImagePositionPatient'].value[2]
-                            attrib['zpos'] = zpos
-                        except (IndexError, KeyError):
-                            pass
-                    '''
                     if attrib['slice_thickness'] is not None:
                         try:
                             info_this = info_extract_frame(
@@ -611,20 +600,38 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
             pass
 
         if pixarr is not None:
+            slope, intercept = get_dcm_info_list(
+                pd, TagPatternFormat(list_tags=['RescaleSlope', 'RescaleIntercept']),
+                tag_infos)
+            if frame_number == -1:
+                slope_this = slope
+                intercept_this = intercept
+            else:
+                try:
+                    slope_this = slope[1][frame_number]
+                    intercept_this = intercept[1][frame_number]
+                except IndexError:
+                    try:
+                        slope_this = slope[1]
+                        intercept_this = intercept[1]
+                    except IndexError:
+                        slope_this = slope
+                        intercept_this = intercept
             try:
-                if frame_number == -1:
-                    npout = pd.pixel_array * pd.get('RescaleSlope', 1.) \
-                        + pd.get('RescaleIntercept', 0.)
-                else:
-                    ndim = pd.pixel_array.ndim
-                    if ndim == 3:
-                        pixarr = pd.pixel_array[frame_number, :, :]
+                slope = float(slope_this)
+                intercept = float(intercept_this)
+            except ValueError:
+                slope = 1.
+                intercept = 0.
 
-                    if pixarr is not None:
-                        npout = pixarr * pd.get('RescaleSlope', 1.) \
-                            + pd.get('RescaleIntercept', 0.)
-            except AttributeError:
-                npout = pixarr
+            if frame_number > -1:
+                ndim = pd.pixel_array.ndim
+                if ndim == 3:
+                    pixarr = pd.pixel_array[frame_number, :, :]
+            else:
+                pixarr = pd.pixel_array
+            if pixarr is not None:
+                npout = pixarr * slope + intercept
 
         if overlay is not None:
             if pixarr is not None:
@@ -635,6 +642,10 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
                     # overlay_offset at 0x6000, 0x0050
             else:
                 npout = overlay
+
+        orient = pd.get('PatientPosition', '')
+        if orient == 'FFS':
+            npout = np.fliplr(npout)
 
         if len(tag_patterns) > 0 and tag_infos is not None:
             tag_strings = read_tag_patterns(
@@ -791,7 +802,7 @@ def get_tag_data(pd, tag_info=None):
 
 
 def get_special_tag_data(pd, tag_info=None):
-    """Get DICOM information for data not specified as tag. tag_info.tag = ['...', '']
+    """Get DICOM information for data not specified as tag. tag_info.tag = ['...', ''].
 
     Parameters
     ----------
@@ -808,9 +819,7 @@ def get_special_tag_data(pd, tag_info=None):
         if frames > -1:
             data_element = pydicom.DataElement(
                 0xffffffff, 'LO', list(np.arange(frames)))
-    elif tag_info.attribute_name == 'CountsAccumulated':
-        # in get_img, correct if None
-        pass
+    # elif tag_info.attribute_name == 'CountsAccumulated':# in get_img
 
     return data_element
 
@@ -1013,7 +1022,7 @@ def get_all_tags_name_number(pd, sequence_list=['']):
     return {'tags': tags, 'attribute_names': attribute_names}
 
 
-def sum_marked_images(img_infos, included_ids):
+def sum_marked_images(img_infos, included_ids, tag_infos):
     """Calculate sum of marked images.
 
     Parameters
@@ -1022,6 +1031,7 @@ def sum_marked_images(img_infos, included_ids):
         as defined in scripts/dcm.py
     included_ids : list of int
         image ids to include in sum
+    tag_infos : list of TagInfos
 
     Returns
     -------
@@ -1036,7 +1046,7 @@ def sum_marked_images(img_infos, included_ids):
         if idx in included_ids:
             image, tags = get_img(
                 img_info.filepath,
-                frame_number=img_info.frame_number
+                frame_number=img_info.frame_number, tag_infos=tag_infos
                 )
             if summed_img is None:
                 summed_img = image

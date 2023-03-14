@@ -88,14 +88,26 @@ class SelectTemplateWidget(QWidget):
                         copy.deepcopy(self.current_template))
                 self.save(new_added=True)
 
-    def save_current_template(self):
+    def save_current_template(self, before_select_new=False):
         """Overwrite selected Paramset or QuickTest Template if any, else add new."""
         if self.modality_dict[self.main.current_modality][0].label == '':
             self.add_current_template()
         else:
-            template_id = self.cbox_template.currentIndex()
+            if before_select_new:
+                # id corresponding to label of current_template (previous selected)
+                if self.fname == 'quicktest_templates':
+                    label = self.current_template.label
+                else:  # self.fname == 'paramsets':
+                    label = self.main.current_paramset.label
+                labels = [
+                    temp.label for temp
+                    in self.modality_dict[self.main.current_modality]]
+                template_id = labels.index(label)
+            else:
+                template_id = self.cbox_template.currentIndex()
             if self.fname == 'quicktest_templates':
-                template_id -= 1  # first is empty
+                if not before_select_new:
+                    template_id -= 1  # first is empty
                 self.get_current_template()
             elif 'paramsets' in self.fname:
                 self.current_template = self.main.current_paramset
@@ -131,14 +143,14 @@ class SelectTemplateWidget(QWidget):
                     QMessageBox.warning(
                         self, 'Failed saving', f'Failed saving to {path}')
 
-    def ask_to_save_changes(self):
+    def ask_to_save_changes(self, before_select_new=False):
         """Ask user if changes to current parameter set should be saved."""
         reply = QMessageBox.question(
             self, 'Unsaved changes',
             f'Save changes to {self.fname}?',
             QMessageBox.Yes, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            self.save_current_template()
+            self.save_current_template(before_select_new=before_select_new)
         else:
             self.flag_edit(False)
 
@@ -214,6 +226,9 @@ class SelectQuickTestWidget(SelectTemplateWidget):
 
     def update_current_template(self):
         """Set current_template according to selected label."""
+        if self.edited and self.current_template.label != '':
+            self.ask_to_save_changes(before_select_new=True)
+
         template_id = self.cbox_template.currentIndex()
         if template_id == 0:
             self.current_template = cfc.QuickTestTemplate()
@@ -259,8 +274,14 @@ class SelectQuickTestWidget(SelectTemplateWidget):
     def run_quicktest(self):
         """Run quicktest with current settings."""
         self.get_current_template()
-        self.main.current_quicktest = self.current_template
-        calculate_qc(self.main)
+        if any(self.current_template.tests):
+            self.main.current_quicktest = self.current_template
+            calculate_qc(self.main)
+        else:
+            QMessageBox.information(
+                self, 'No test specified',
+                ('No image marked for testing. Double- or right-click images in file '
+                 'list to mark for testing.'))
 
     def extract_results(self, skip_questions=False):
         """Extract result values according to paramset.output to clipboard."""
@@ -314,8 +335,7 @@ class SelectParamsetWidget(SelectTemplateWidget):
 
         h_lo.addWidget(QLabel('Parameter set:'))
         self.cbox_template.setMinimumWidth(150)
-        self.cbox_template.currentIndexChanged.connect(
-            self.main.update_paramset)
+        self.cbox_template.currentIndexChanged.connect(self.update_current_template)
         h_lo.addWidget(self.cbox_template)
         h_lo.addWidget(self.lbl_edit)
 
@@ -345,3 +365,10 @@ class SelectParamsetWidget(SelectTemplateWidget):
 
         self.lastload = time()
         self.fill_template_list()
+
+    def update_current_template(self):
+        """Set current_template according to selected label."""
+        if self.edited:
+            self.ask_to_save_changes(before_select_new=True)
+
+        self.main.update_paramset()

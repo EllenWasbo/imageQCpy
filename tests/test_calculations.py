@@ -176,17 +176,16 @@ def test_CT_MTF_bead():
     calculate_qc.calculate_qc(input_main)
     assert len(input_main.results['MTF']['values'][0]) == 6
     values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
-    assert np.array_equal(values10, np.array([11., 15., 18., 11., 15., 19.]))
+    assert np.array_equal(values10, np.array([11., 15., 19., 11., 15., 18.]))
 
 
-def test_CT_Teflon_MTF_circular_edge():
+def test_CT_Teflon_MTF_circular_edge_autocenter():
     """Test MTF from circular edge on highest density (Teflon)."""
     input_main = InputMain(
         current_modality='CT',
         current_test='MTF',
         current_paramset=cfc.ParamSetCT(
             mtf_auto_center=True,
-            mtf_offset_xy=[-105, 175],
             ),
         current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]),
         tag_infos=tag_infos,
@@ -202,6 +201,42 @@ def test_CT_Teflon_MTF_circular_edge():
     calculate_qc.calculate_qc(input_main)
     values100 = np.round(100.*np.array(input_main.results['MTF']['values'][0]))
     assert np.array_equal(values100, np.array([36., 66., 86.]))
+
+
+def test_CT_MTF_circular_edge_not_optimal_offset():
+    """Test MTF from circular edge on highest density (Teflon)."""
+    file_path = (path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' /
+                 'CTP404_FOV150_001.dcm')
+    dists = []
+    vals = []
+
+    centers = [[-105, 173], [-103, -173]]  # Teflon, Acrylic
+    centerish = centers[1]
+    diffs = [[0, 0], [6, 0], [4, 0], [2, 0], [0, 6], [0, 4], [0, 2], [6, 6]]
+    offsets = [[centerish[0] + diff[0], centerish[1] + diff[1]] for diff in diffs]
+    for offset in offsets:
+        input_main = InputMain(
+            current_modality='CT',
+            current_test='MTF',
+            current_paramset=cfc.ParamSetCT(
+                mtf_auto_center=False,
+                mtf_offset_xy=offset,
+                ),
+            current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]),
+            tag_infos=tag_infos,
+            automation_active=False,
+            )
+        img_infos, ignored_files = dcm.read_dcm_info(
+            [file_path], GUI=False, tag_infos=input_main.tag_infos)
+        input_main.imgs = img_infos
+        calculate_qc.calculate_qc(input_main)
+
+        dists.append(input_main.results['MTF']['details_dict'][0]['sorted_pixels_x'])
+        vals.append(input_main.results['MTF']['details_dict'][0]['sorted_pixels'][0])
+
+    # plt.plot(dists[0], vals[0], '.', markersize=2, color='red')
+    values100 = np.round(100.*np.array(input_main.results['MTF']['values'][0]))
+    assert values100[0] == 36.
 
 
 def test_CT_Acrylic_MTF_circular_edge():
@@ -341,19 +376,27 @@ def test_Xray_Var():
 
 def test_NM_uniformity():
 
+    input_main = InputMain(
+        current_modality='NM',
+        current_test='Uni',
+        current_paramset=cfc.ParamSetNM(
+            uni_correct=True,
+            uni_correct_pos_x=True,
+            uni_correct_pos_y=True
+            ),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Uni'],['Uni']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
     file_path = path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist.dcm'
     img_infos, ignored_files = dcm.read_dcm_info(
-        [file_path], GUI=False, tag_infos=tag_infos)
-    image, tags = dcm.get_img(file_path, frame_number=0)
-    image_dict = img_infos[0]
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
 
-    roi_array = calculate_roi.get_ratio_NM(
-        image, image_dict, ufov_ratio=0.95, cfov_ratio=0.75)
-    res, errmsg = calculate_qc.get_corrections_point_source(
-            image, image_dict, roi_array[0],
-            fit_x=True, fit_y=True, lock_z=-1.)
-
-    assert res['distance'] > 0
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(np.array(input_main.results['Uni']['values'][0]))
+    assert np.array_equal(values, np.array([3., 2., 2., 1.]))
 
 
 def test_NM_uniformity_sum():
@@ -378,13 +421,38 @@ def test_NM_uniformity_sum():
 
     assert round(input_main.results['Uni']['values'][0][0]) == 6
 
-'''
+
+def test_NM_MTF_pointsource():
+    tests = [[]] * 77
+    tests[10] = ['MTF']
+    input_main = InputMain(
+        current_modality='NM',
+        current_test='MTF',
+        current_paramset=cfc.ParamSetNM(
+            mtf_type=0, mtf_auto_center=True),
+        current_quicktest=cfc.QuickTestTemplate(tests=tests),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = path_tests / 'test_inputs' / 'SPECT' / 'linesource_tomo_recon.dcm'
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(10*np.array(input_main.results['MTF']['values'][10]))
+    assert np.array_equal(values, np.array([92., 169., 95., 174.]))
+
+
 def test_NM_MTF_2_linesources():
 
     input_main = InputMain(
         current_modality='NM',
         current_test='MTF',
-        current_paramset=cfc.ParamSetNM(mtf_type=2, mtf_auto_center=True),
+        current_paramset=cfc.ParamSetNM(
+            mtf_type=2, mtf_auto_center=True,
+            mtf_roi_size_x=40, mtf_roi_size_y=20),
         current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]),
         tag_infos=tag_infos,
         automation_active=False
@@ -396,11 +464,8 @@ def test_NM_MTF_2_linesources():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    breakpoint()
-
-    print(input_main.results['MTF']['values'])
-    assert round(input_main.results['Uni']['values'][0][0]) == 6
-'''
+    values = np.round(10*np.array(input_main.results['MTF']['values'][0]))
+    assert np.array_equal(values, np.array([73., 134.,  74., 135.]))
 
 
 def test_SPECT_MTF_linesource():
@@ -475,7 +540,7 @@ def test_MR_SNR():
     calculate_qc.calculate_qc(input_main)
     values = np.round(np.array(input_main.results['SNR']['values'][2]))
     assert np.array_equal(
-        values, np.array([289., 290., 290.,   8.,  50.]))
+        values, np.array([1795., 1803., 1799., 52., 49.]))
 
 
 def test_MR_Geo():

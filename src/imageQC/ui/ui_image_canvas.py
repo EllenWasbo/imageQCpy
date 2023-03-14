@@ -397,6 +397,8 @@ class ImageCanvas(GenericImageCanvas):
                 self.add_contours_to_all_rois(roi_indexes=[1])
             else:
                 self.add_contours_to_all_rois(roi_indexes=[0])
+        elif self.main.current_modality == 'NM':
+            self.add_contours_to_all_rois(colors=['red', 'blue'])
         else:
             if isinstance(self.main.current_roi, list):
                 roi_indexes = list(range(len(self.main.current_roi) - 1))

@@ -249,6 +249,20 @@ class AutoCommonWidget(StackWidget):
         hlo_ignore_since.addWidget(self.chk_ignore_since)
         hlo_ignore_since.addWidget(self.ignore_since)
         hlo_ignore_since.addWidget(QLabel(' days old'))
+        vlo_left.addSpacing(20)
+
+        vlo_left.addWidget(uir.LabelHeader(
+            'Default appearance if Automation run with GUI', 4))
+        self.chk_pause_between = QCheckBox(
+            'Pause between each template (option to cancel)')
+        self.chk_pause_between.stateChanged.connect(
+            lambda: self.flag_edit(True))
+        self.chk_display_images = QCheckBox(
+            'Display images/rois while tests are run')
+        self.chk_display_images.stateChanged.connect(
+            lambda: self.flag_edit(True))
+        vlo_left.addWidget(self.chk_pause_between)
+        vlo_left.addWidget(self.chk_display_images)
 
         hlo.addWidget(uir.VLine())
         vlo_right = QVBoxLayout()
@@ -295,6 +309,8 @@ class AutoCommonWidget(StackWidget):
         self.cbox_log.setCurrentIndex(['w', 'a'].index(self.templates.log_mode))
         self.ignore_since.setValue(self.templates.ignore_since)
         self.chk_ignore_since.setChecked(self.templates.ignore_since > 0)
+        self.chk_display_images.setChecked(self.templates.display_images)
+        self.chk_pause_between.setChecked(not self.templates.auto_continue)
         self.fill_auto_delete_list()
 
     def save_auto_common(self):
@@ -310,7 +326,8 @@ class AutoCommonWidget(StackWidget):
             self.templates.ignore_since = 0
         self.templates.auto_delete_empty_folders = (
             self.chk_auto_delete_empty_folders.isChecked())
-
+        self.templates.display_images = self.chk_display_images.isChecked()
+        self.templates.auto_continue = not self.chk_pause_between.isChecked()
         self.save()
 
     def fill_auto_delete_list(self):

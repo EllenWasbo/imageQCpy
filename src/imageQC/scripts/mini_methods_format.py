@@ -242,7 +242,8 @@ def convert_lists_to_numbers(taglists, ignore_columns=[]):
     return taglists
 
 
-def val_2_str(val_list, decimal_mark='.', format_same=True):
+def val_2_str(val_list, decimal_mark='.', format_same=True, lock_format=False,
+              format_strings=None):
     """Convert value to string with some rules of precision.
 
     Parameters
@@ -254,6 +255,13 @@ def val_2_str(val_list, decimal_mark='.', format_same=True):
     format_same : bool, optional
         Set same number of decimals to all numbers in list depending on content.
         Default is True.
+    lock_format : bool, optional
+        Lock input format to avoid re-format already set format
+    format_strings : list of str
+        assumed to be all '' if None
+        if len(format_strings) == len(val_list),
+        lock_format=True if format_strings != ''
+
     Returns
     -------
     string_list : list of strings
@@ -280,14 +288,17 @@ def val_2_str(val_list, decimal_mark='.', format_same=True):
     if type_list.count('str') == len(actual_vals):
         string_list = val_list
     elif type_list.count('float') == len(actual_vals):
-        if format_same:
-            max_val = max(actual_vals)
-            format_string = get_dynamic_formatstring(max_val)
-        else:
-            format_string = None
-        for val in val_list:
+        format_string = ''
+        if lock_format is False:
+            if format_same:
+                max_val = max(actual_vals)
+                format_string = get_dynamic_formatstring(max_val)
+        for idx, val in enumerate(val_list):
+            if isinstance(format_strings, list):
+                if len(format_strings) == len(val_list):
+                    lock_format = True if format_strings[idx] != '' else False
             if val != '':
-                if format_same is False:
+                if format_same is False and lock_format is False:
                     format_string = get_dynamic_formatstring(val)
                 string_list.append(f'{val:{format_string}}')
             else:
@@ -297,9 +308,12 @@ def val_2_str(val_list, decimal_mark='.', format_same=True):
     elif type_list.count('int') == len(val_list):
         string_list = [str(val) for val in val_list]
     else:  # mix or other
-        for i, val in enumerate(val_list):
-            if type_list[i] == 'float':
-                format_string = get_dynamic_formatstring(val)
+        for idx, val in enumerate(val_list):
+            if type_list[idx] == 'float':
+                if isinstance(format_strings, list):
+                    if len(format_strings) == len(val_list):
+                        lock_format = True if format_strings[idx] != '' else False
+                format_string = '' if lock_format else get_dynamic_formatstring(val)
                 str_this = f'{val:{format_string}}'
                 if decimal_mark != '.':
                     str_this = str_this.replace('.', ',')
@@ -308,6 +322,7 @@ def val_2_str(val_list, decimal_mark='.', format_same=True):
                 string_list.append(str(val))
 
     return string_list
+
 
 def valid_template_name(text):
     """No slash or space in template names (confuse automation)."""

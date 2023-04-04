@@ -126,12 +126,12 @@ def test_quicktest_CT_13imgs(qtbot):
     main.wid_quicktest.extract_results(skip_questions=True)
     res = read_clipboard()
     expected_res = [
-        ['MTFx 50%_img2', '1,116'],
-        ['MTFx 10%_img2', '1,517'],
-        ['max_diff_group0', '1,665'],
-        ['max_diff_group1', '0,988'],
-        ['max_noise_group0', '4,080'],
-        ['max_noise_group1', '3,657']]
+        ['max_diff_group0', '0,988'],
+        ['max_diff_group1', '1,665'],
+        ['MTFx 50%_img2', '1,142'],
+        ['MTFx 10%_img2', '1,544'],
+        ['max_noise_group0', '3,657'],
+        ['max_noise_group1', '4,080']]
     assert expected_res == res.values.tolist()
 
 

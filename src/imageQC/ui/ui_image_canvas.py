@@ -260,7 +260,7 @@ class ImageCanvas(GenericImageCanvas):
             sleep(.2)
 
     def add_contours_to_all_rois(self, colors=None, reset_contours=True,
-                                 roi_indexes=None, filled=False):
+                                 roi_indexes=None, filled=False, hatches=None):
         """Draw all ROIs in self.main.current_roi (list) with specific colors.
 
         Parameters
@@ -273,6 +273,8 @@ class ImageCanvas(GenericImageCanvas):
             roi indexes to draw. Default is None = all
         filled : bool
             if true used contourf (filled) instead
+        hatches : list of str, optional
+            Used if filled is True. Default is None.
         """
         this_roi = self.main.current_roi
         if not isinstance(self.main.current_roi, list):
@@ -288,13 +290,24 @@ class ImageCanvas(GenericImageCanvas):
         for color_no, roi_no in enumerate(roi_indexes):
             mask = np.where(this_roi[roi_no], 0, 1)
             if filled:
-                contour = self.ax.contourf(
-                    mask, levels=[0, 0.5], colors=colors[color_no], alpha=0.3)
+                if hatches is None:
+                    contour = self.ax.contourf(
+                        mask, levels=[0, 0.5], colors=colors[color_no], alpha=0.3)
+                else:
+                    #TODO handle IndexError on hatches[color_no]
+                    contour = self.ax.contourf(
+                        mask, levels=[0, 0.5], colors='none',
+                        hatches=hatches[color_no])
+                    contour.collections[0].set_edgecolor(colors[color_no])
             else:
                 contour = self.ax.contour(
                     mask, levels=[0.9],
                     colors=colors[color_no], alpha=0.5, linewidths=self.linewidth)
             self.contours.append(contour)
+
+        #if hatches is not None:
+         #   for i, collection in enumerate(self.contours.collections):
+          #      collection.set_edgecolor(colors[i % len(colors)])
 
     def Hom(self):
         """Draw Hom ROI."""
@@ -469,10 +482,12 @@ class ImageCanvas(GenericImageCanvas):
     def SNI(self):
         """Draw NM uniformity ROI."""
         self.add_contours_to_all_rois(
-            colors=['red', 'blue'], roi_indexes=[1, 2])  # 2 large
+            colors=['red', 'blue'], roi_indexes=[1, 2],
+            filled=True, hatches=['//', '\\'])  # 2 large
         self.add_contours_to_all_rois(
-            colors=['green', 'cyan'], reset_contours=False,
-            roi_indexes=[3, 4])  # 2 first small, else only label
+            colors=['lime', 'cyan'], reset_contours=False,
+            roi_indexes=[3, 4],
+            filled=True, hatches=['|||', '---'])  # 2 first small, else only label
 
         for i in range(6):
             mask = np.where(self.main.current_roi[i+3], 0, 1)

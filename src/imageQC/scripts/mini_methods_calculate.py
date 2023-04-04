@@ -36,7 +36,7 @@ def get_distance_map_point(shape, center_dx=0., center_dy=0.):
     return distance_map
 
 
-def get_distance_map_edge(shape, slope=0., intercept=0.):
+def get_distance_map_edge(shape, slope=0., intercept=0., vertical_positions=None):
     """Calculate distances from edge defined by y = ax + b.
 
     distance from x0,y0 normal to line = (b + a*x0 - y0)/sqrt(1+a^2)
@@ -50,6 +50,8 @@ def get_distance_map_edge(shape, slope=0., intercept=0.):
         a in y = ax + b. The default is 0.
     intercept : float, optional
         b in y = ax + b. The default is 0.
+    vertical_positions : list of float, optional
+        y-pos in unit x-pix. If None assume y pix = x pix. Default is None.
 
     Returns
     -------
@@ -57,7 +59,11 @@ def get_distance_map_edge(shape, slope=0., intercept=0.):
         of shape equal to input shape
     """
     sz_y, sz_x = shape
-    xs, ys = np.meshgrid(np.arange(sz_x), np.arange(sz_y))
+    y_array = np.arange(sz_y)
+    if isinstance(vertical_positions, list):
+        if sz_y == len(vertical_positions):
+            y_array = np.array(vertical_positions)
+    xs, ys = np.meshgrid(np.arange(sz_x), y_array)
     distance_map = (ys - intercept - slope*xs) / np.sqrt(1 + slope**2)
 
     return distance_map
@@ -443,14 +449,20 @@ def point_source_func(x, C, D):
     return C * D / ((x**2 + D**2)**(1.5))
 
 
-def point_source_func_fit(x, y, center_value=0., avg_radius=0.):
+def point_source_func_fit(x, y, center_value=0., avg_radius=0., lock_radius=False):
     """Fit foton fluence from point source at detector."""
     C = center_value*avg_radius**2
-    try:
-        popt, pcov = curve_fit(point_source_func, x, y,
-                               p0=[C, avg_radius])
-    except RuntimeError:
-        popt = None
+    if lock_radius:
+        popt, pcov = curve_fit(gauss, x, y,
+                               p0=[C, avg_radius],
+                               bounds=([0.5*C, avg_radius], [1.5*C, avg_radius+0.01])
+                               )
+    else:
+        try:
+            popt, pcov = curve_fit(point_source_func, x, y,
+                                   p0=[C, avg_radius])
+        except RuntimeError:
+            popt = None
     return popt
 
 
@@ -504,10 +516,6 @@ def center_xy_of_disc(matrix2d, threshold=None, roi=None, mode='mean', sigma=5.)
         width, center = get_width_center_at_threshold(
             prof1, threshold, get_widest=True)
         center_xy.append(center)
-        #for testing precision:
-        #xs = np.arange(prof1.shape[0])-center
-        #plt.plot(xs, prof1)
-        #plt.plot(-np.flip(xs), np.flip(prof1))
 
     return center_xy
 
@@ -828,7 +836,7 @@ def resample(input_y, input_x, step, first_step=0, n_steps=None):
     return (new_x, new_y)
 
 
-def resample_by_binning(input_y, input_x, step, bin_size=None, 
+def resample_by_binning(input_y, input_x, step, bin_size=None,
                         first_step=0, n_steps=None):
     """Resample input_y with regular step.
 

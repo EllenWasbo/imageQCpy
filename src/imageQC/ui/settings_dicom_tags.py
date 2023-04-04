@@ -91,7 +91,7 @@ class DicomTagDialog(ImageQCDialog):
         tb_sequence.addAction(self.act_level_up)
         hlo_taglist.addWidget(tb_sequence)
         vlo.addWidget(uir.LabelItalic(
-            'Click tags named with Sequence to list the elements '
+            'Click tags named with Sequence (blue) to list the elements '
             'within the sequence.'))
         vlo.addWidget(uir.HLine())
 
@@ -679,9 +679,10 @@ class DicomTagsWidget(StackWidget):
     def add_tag(self):
         """Open Dialog to add tag."""
         dlg = DicomTagDialog()
-        dlg.exec()
-        newtag = dlg.get_tag_info()
-        self.update_tag_info(newtag)
+        res = dlg.exec()
+        if res:
+            newtag = dlg.get_tag_info()
+            self.update_tag_info(newtag)
 
     def duplicate_tag(self):
         """Open Dialog to add tag with current tag settings."""
@@ -689,9 +690,10 @@ class DicomTagsWidget(StackWidget):
         selrow = sel[0].row()
         idx = self.indexes[selrow]
         dlg = DicomTagDialog(tag_input=self.templates[idx])
-        dlg.exec()
-        newtag = dlg.get_tag_info()
-        self.update_tag_info(newtag)
+        res = dlg.exec()
+        if res:
+            newtag = dlg.get_tag_info()
+            self.update_tag_info(newtag)
 
     def edit_tag(self):
         """Open Dialog to edit tag."""

@@ -15,6 +15,14 @@ from imageQC.ui import messageboxes
 # imageQC block end
 
 
+def get_uniq_ordered(input_list):
+    """Get uniq elements of a group in same order as first appearance."""
+    output_list = []
+    for elem in input_list:
+        if elem not in output_list:
+            output_list.append(elem)
+    return output_list
+
 def get_all_matches(input_list, value, wildcards=False):
     """Get all matches of value in input_list.
 

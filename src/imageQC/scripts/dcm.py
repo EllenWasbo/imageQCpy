@@ -6,6 +6,7 @@ Scripts dealing with pydicom.
 @author: Ellen Wasbo
 """
 from __future__ import annotations
+import warnings
 import os
 import pydicom
 import numpy as np
@@ -25,6 +26,9 @@ from imageQC.config.config_classes import TagPatternFormat
 # imageQC block end
 
 pydicom.config.future_behavior(True)
+
+warnings.filterwarnings(action='ignore', category=UserWarning)
+# avoid not important DICOM warnings
 
 
 @dataclass
@@ -121,7 +125,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         if file_verified:
             modalityDCM = pd.get('Modality', '')
             mod = get_modality(modalityDCM)['key']
-            frames = pd.get('NumberOfFrames', -1)
+            frames = pd.get('NumberOfFrames', None)
             attrib = {
                 'filepath': str(file),
                 'modality': mod,
@@ -185,14 +189,12 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                         tag_infos,
                         prefix_separator='', suffix_separator='',
                         )
-                if len(nm_radius) == 1:
+                if nm_radius:
                     nm_radius = nm_radius[0]
-                try:
-                    if '[' in nm_radius[0]:
-                        nm_radius = nm_radius[1:-1]
-                        nm_radius = nm_radius.split(',')
-                except IndexError:
-                    pass
+                    if isinstance(nm_radius, str):
+                        if '[' in nm_radius:
+                            nm_radius = nm_radius[1:-1]
+                            nm_radius = nm_radius.split(',')
 
             if GUI:
                 ww = pd.get('WindowWidth', -1)
@@ -206,9 +208,13 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 attrib['window_width'] = ww
                 attrib['window_center'] = wc
 
-            if frames == -1:
+            if frames is None:
                 if attrib['slice_thickness'] is not None:
                     attrib['zpos'] = float(slice_location)  # try?
+                try:
+                    attrib['nm_radius'] = float(nm_radius)
+                except TypeError:
+                    pass
                 if GUI:
                     attrib.update(get_dcm_gui_info_lists(
                         pd,
@@ -217,17 +223,15 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                         modality=mod))
                     dcm_obj = DcmInfoGui(**attrib)
                 else:
-                    if len(nm_radius) > 0:
-                        attrib['nm_radius'] = float(nm_radius)
                     dcm_obj = DcmInfo(**attrib)
                 list_of_DcmInfo.append(dcm_obj)
             else:  # multiframe
-                #TODO delete? seq = pd.get('PerFrameFunctionalGroupsSequence', None)
                 if GUI:
                     gui_info = get_dcm_gui_info_lists(
                         pd, tag_infos=tag_infos,
                         tag_patterns_special=tag_patterns_special,
                         modality=mod)
+                frames = int(frames)
                 for frame in range(frames):
                     attrib.update({'frame_number': frame})
                     if attrib['slice_thickness'] is not None:
@@ -237,17 +241,17 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                             attrib['zpos'] = float(info_this['zpos'][0])
                         except (IndexError, ValueError):
                             attrib['zpos'] = frame * attrib['slice_thickness']
+                    try:
+                        info_this = info_extract_frame(
+                            frame, {'nm_radius': [nm_radius]})
+                        attrib['nm_radius'] = float(info_this['nm_radius'][0])
+                    except IndexError:
+                        pass
                     if GUI:
                         gui_info_this = info_extract_frame(frame, gui_info)
                         attrib.update(gui_info_this)
                         dcm_obj = DcmInfoGui(**attrib)
                     else:
-                        try:
-                            info_this = info_extract_frame(
-                                frame, {'nm_radius': [nm_radius]})
-                            attrib['nm_radius'] = float(info_this['nm_radius'][0])
-                        except IndexError:
-                            pass
                         dcm_obj = DcmInfo(**attrib)
                     list_of_DcmInfo.append(dcm_obj)
         else:
@@ -741,6 +745,62 @@ def read_tag_patterns(pd, tag_patterns, tag_infos, frame_number=-1):
     return tag_string_lists
 
 
+def private_seq_str_to_tag(txt):
+    """Convert string 'Private (GGGG,EEEE)' to tag [0xGGGG, 0xEEEE]."""
+    txt_sub = txt.split('(')
+    tag = None
+    if len(txt_sub) > 1:
+        txt = txt_sub[1]
+        try:
+            group = hex(int('0x' + txt[0:4], 16))
+            elem = hex(int('0x' + txt[6:10], 16))
+            tag = [group, elem]
+        except ValueError:
+            pass
+
+    return tag
+
+
+def get_element_in_sequence(dataset, sequence_string,
+                            element_number=0, return_sequence=False):
+    """Get element from sequence given a sequence as Key or 'Privat (GGGG,EEEE)'.
+
+    Parameters
+    ----------
+    dataset : pydicom dict
+    sequence_string : str
+    element_number : int
+        Default is 0
+    return_sequence : bool
+        True = do not extract element number but full sequence. Default is False
+
+    Returns
+    -------
+    pydicom.DataElement or pydicom DataSet
+    """
+    seq = []
+    elem = None
+    if 'Private' in sequence_string:
+        tag = private_seq_str_to_tag(sequence_string)
+        if tag is not None:
+            seq = dataset[tag]
+    else:
+        try:
+            seq = dataset[sequence_string]
+        except KeyError:
+            pass
+
+    if return_sequence:
+        elem = seq
+    else:
+        try:
+            elem = seq[element_number]
+        except IndexError:
+            pass
+
+    return elem
+
+
 def get_tag_data(pd, tag_info=None):
     """Read content of specific Dicom tag from file pydicom dictionary.
 
@@ -762,23 +822,27 @@ def get_tag_data(pd, tag_info=None):
 
         try:
             if seq[0] != '':
-                pd_sub = pd[seq[0]][0]
+                pd_sub = get_element_in_sequence(pd, seq[0])
                 if len(seq) > 1:
                     if seq[0] == 'PerFrameFunctionalGroupsSequence' and nframes > 1:
                         data_element = []
                         for f in range(nframes):
-                            pd_sub = pd[seq[0]][f]
+                            pd_sub = get_element_in_sequence(
+                                pd, seq[0], element_number=f)
                             for i in range(1, len(seq)):
-                                pd_sub = pd_sub[seq[i]][0]
+                                pd_sub = get_element_in_sequence(pd_sub, seq[i])
                             data_element.append(pd_sub[gr, el])
                     else:
-                        pd_sub = pd[seq[0]][0]
-                        pd_sub_final = pd[seq[0]]
+                        pd_sub_final = get_element_in_sequence(
+                            pd, seq[0], return_sequence=True)
+                        pd_sub = pd_sub_final[0]
                         for i in range(1, len(seq)):
-                            pd_sub_final = pd_sub[seq[i]]
-                            pd_sub = pd_sub[seq[i]][0]
+                            pd_sub_final = get_element_in_sequence(
+                                pd_sub, seq[i], return_sequence=True)
+                            pd_sub = pd_sub_final[0]
                 else:
-                    pd_sub_final = pd[seq[0]]
+                    pd_sub_final = get_element_in_sequence(
+                        pd, seq[0], return_sequence=True)
 
                 if data_element is None:
                     if tag_info.value_id == -3:  # combine data from all sequences
@@ -793,9 +857,7 @@ def get_tag_data(pd, tag_info=None):
                         data_element = pd_sub[gr, el]
             else:
                 data_element = pd[gr, el]
-        except KeyError:
-            data_element = None
-        except IndexError:
+        except (KeyError, IndexError, TypeError):
             data_element = None
 
     return data_element
@@ -994,30 +1056,42 @@ def get_all_tags_name_number(pd, sequence_list=['']):
         {tags: [BaseTag],
          attribute_names: ['']}
     """
-    tags = []
-    attribute_names = []
-    if sequence_list[0] == '':
-        attributes = pd.dir()
+    def get_tags_also_private(dataset):
+        list_name_tag = []
+        attributes = dataset.dir()
         for attr in attributes:
             try:
-                data_element = pd[attr]
-                attribute_names.append(attr)
-                tags.append(data_element.tag)
+                data_element = dataset[attr]
+                list_name_tag.append((attr, data_element.tag))
             except KeyError:
                 pass
+        if len(attributes) != len(dataset):
+            for elem in dataset:
+                if elem.is_private:
+                    seq_txt = 'Sequence' if 'SQ' in elem.VR else ''
+                    list_name_tag.append(
+                        (f'Private{seq_txt} {elem.tag}', elem.tag))
+        return list_name_tag
+
+    list_name_tag = []
+    if sequence_list[0] == '':
+        list_name_tag = get_tags_also_private(pd)
     else:
-        try:
-            pd_sub = pd[sequence_list[0]][0]
-            if len(sequence_list) > 1:
+        pd_sub = get_element_in_sequence(pd, sequence_list[0])
+        if pd_sub is not None:
+            if len(sequence_list) == 1:
+                list_name_tag = get_tags_also_private(pd_sub)
+            else:
                 for i in range(1, len(sequence_list)):
-                    pd_sub = pd_sub[sequence_list[i]][0]
-            attributes = pd_sub.dir()
-            for attr in attributes:
-                data_element = pd_sub[attr]
-                attribute_names.append(attr)
-                tags.append(data_element.tag)
-        except IndexError:
-            pass  # e.g. SQ with zero elements
+                    pd_sub = get_element_in_sequence(pd_sub, sequence_list[i])
+                    if pd_sub is not None:
+                        list_name_tag = get_tags_also_private(pd_sub)
+                    else:
+                        list_name_tag = []
+                    breakpoint()
+
+    attribute_names = [tup[0] for tup in list_name_tag]
+    tags = [tup[1] for tup in list_name_tag]
 
     return {'tags': tags, 'attribute_names': attribute_names}
 

@@ -64,6 +64,12 @@ class ResultTableWidget(QWidget):
         vlo_table.addWidget(self.result_table)
         hlo.addLayout(vlo_table)
 
+        toolb = QToolBar()
+        self.tool_resultsize = ToolMaximizeResults(self.main)
+        toolb.addWidget(self.tool_resultsize)
+        toolb.setOrientation(Qt.Vertical)
+        hlo.addWidget(toolb)
+
     def copy_table(self):
         """Copy contents of table to clipboard."""
         decimal_mark = '.'
@@ -213,8 +219,13 @@ class ResultTable(QTableWidget):
                 if vendor:
                     this_col = values_cols[c]  # formatted above
                 else:
-                    this_col = mmf.val_2_str(values_cols[c],
-                                             decimal_mark=decimal_mark)
+                    lock_format = False
+                    if self.main.current_test == 'DCM':
+                        if self.main.current_paramset.dcm_tagpattern.list_format[c] != '':
+                            lock_format = True
+                    this_col = mmf.val_2_str(
+                        values_cols[c], decimal_mark=decimal_mark,
+                        lock_format=lock_format)
                 for r in range(len(this_col)):
                     twi = QTableWidgetItem(this_col[r])
                     twi.setTextAlignment(4)
@@ -791,26 +802,54 @@ class ResultPlotCanvas(PlotCanvas):
                 proceed = True
             except KeyError:
                 proceed = False
-            use_edge_data = False
-            edge_details_dicts = None
+            sorted_pixels = []
+            xvals = []
             if proceed is False:
-                if 'edge_details' in details_dicts[0]:  # from straight edge
-                    edge_details_dicts = details_dicts[0]['edge_details']
+                edge_details_dicts = []
+                for i in range(len(details_dicts)):
+                    if 'edge_details' in details_dicts[i]:
+                        edge_details_dicts.append(details_dicts[i]['edge_details'])
+                if len(edge_details_dicts) == 1:
                     try:
-                        xvals = [ed['sorted_pixels_x'] for ed in edge_details_dicts]
+                        if isinstance(edge_details_dicts[0], list):
+                            for i in range(len(edge_details_dicts[0])):
+                                sorted_pixels.append(
+                                    edge_details_dicts[0][i]['sorted_pixels'])
+                                xvals.append(
+                                    edge_details_dicts[0][i]['sorted_pixels_x'])
+                        else:
+                            sorted_pixels = edge_details_dicts[0]['sorted_pixels']
+                            xvals = edge_details_dicts[0]['sorted_pixels_x']
                         proceed = True
-                        use_edge_data = True
                     except KeyError:
                         proceed = False
+                elif len(edge_details_dicts) > 1:
+                    for i in range(len(edge_details_dicts)):
+                        if 'sorted_pixels' in edge_details_dicts[i][0]:
+                            try:
+                                xvals.append(
+                                    edge_details_dicts[i][0]['sorted_pixels_x'])
+                                sorted_pixels.append(
+                                    edge_details_dicts[i][0]['sorted_pixels'])
+                                proceed = True
+                            except KeyError:
+                                proceed = False
+
             if proceed:
                 self.xtitle = 'pos (mm)'
                 self.ytitle = 'Pixel value'
-                if use_edge_data:
-                    sorted_pixels = [ed['sorted_pixels'] for ed in edge_details_dicts]
-                else:
+                xy_labels = False
+                lsf_is_interp = False
+                try:
+                    mtf_type = self.main.current_paramset.mtf_type
+                    if self.main.current_modality in ['CT', 'SPECT'] and mtf_type == 1:
+                        self.ytitle = 'Summed pixel values'
+                        xy_labels = True
+                        lsf_is_interp = True
+                except AttributeError:
+                    pass
+                if len(sorted_pixels) == 0:
                     if len(details_dicts) > 1:
-                        sorted_pixels = []
-                        xvals = []
                         for i in range(len(details_dicts)):
                             if 'sorted_pixels' in details_dicts[i]:
                                 sorted_pixels.append(details_dicts[i]['sorted_pixels'])
@@ -818,17 +857,18 @@ class ResultPlotCanvas(PlotCanvas):
                     else:
                         sorted_pixels = details_dicts[0]['sorted_pixels']
                         xvals = details_dicts[0]['sorted_pixels_x']
-                        if not isinstance(sorted_pixels, list):
-                            sorted_pixels = [sorted_pixels]
-                        if not isinstance(xvals, list):
-                            xvals = [xvals]
+                if not isinstance(sorted_pixels, list):
+                    sorted_pixels = [sorted_pixels]
+                if not isinstance(xvals, list):
+                    xvals = [xvals]
 
                 colors = ['r', 'b', 'g', 'c']
                 dotcolors = ['darksalmon', 'cornflowerblue',
                              'mediumseagreen', 'paleturquoise']  # matching r,b,g,c
-                #suffix = [' x', ' y'] if len(sorted_pixels) >= 2 else ['']
-                #if len(sorted_pixels) > 3:
-                suffix = [f' {x}' for x in range(len(sorted_pixels))]
+                if xy_labels:
+                    suffix = [' x', ' y']
+                else:
+                    suffix = [f' {x}' for x in range(len(sorted_pixels))]
                 for no, yvals in enumerate(sorted_pixels):
                     if len(xvals) == len(sorted_pixels):
                         xvals_this = xvals[no]
@@ -893,6 +933,16 @@ class ResultPlotCanvas(PlotCanvas):
                                 'label': f'ESF{lbl}',
                                 'xvals': xvals,
                                 'yvals': ESF,
+                                'style': f'-{colors[no]}'
+                                 })
+
+                if lsf_is_interp:
+                    for no in range(len(details_dicts)):
+                        if 'LSF' in details_dicts[no]:
+                            self.curves.append({
+                                'label': f'Interpolated{suffix[no]}',
+                                'xvals': details_dicts[no]['LSF_x'],
+                                'yvals': details_dicts[no]['LSF'],
                                 'style': f'-{colors[no]}'
                                  })
 
@@ -1050,7 +1100,7 @@ class ResultPlotCanvas(PlotCanvas):
             pass
 
     def NPS(self):
-        """Prepare plot for test Rin."""
+        """Prepare plot for test NPS."""
         imgno = self.main.gui.active_img_no
         self.title = 'Noise Power Spectrum'
         self.ytitle = r'NPS ($\mathregular{mm^{2}}$)'
@@ -1323,6 +1373,28 @@ class ResultPlotCanvas(PlotCanvas):
                               color='red'),
                     frameon=False, loc='upper left')
                 self.ax.add_artist(at)
+
+    def SNI(self):
+        """Prepare plot for test NM SNI test."""
+        self.title = 'Scan speed profile'
+        self.xtitle = 'Position (mm)'
+        self.ytitle = 'Difference from mean %'
+        imgno = self.main.gui.active_img_no
+        details_dict = self.main.results['SNI']['details_dict'][imgno]
+        styles = ['-r', '-b', '-lime', '-cyan', '-m', '--lime', '--cyan', '--m']
+        for i in range(8):
+            self.curves.append(
+                {'label': 'profile', 'xvals': details_dict['freq'][i],
+                 'yvals': details_dict['rNPS'][i], 'style': styles[i]
+                 })
+
+        # display eye filter
+        #self.curves.append(
+        #    {'label': 'Eye filter', 'xvals': details_dict['freq'][i],
+        #     'yvals': details_dict['rNPS'][i], 'style': '.k'}
+        #    )
+        
+        # quantum noise for L1
 
     def Spe(self):
         """Prepare plot for test NM Speed test."""

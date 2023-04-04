@@ -422,6 +422,31 @@ def test_NM_uniformity_sum():
     assert round(input_main.results['Uni']['values'][0][0]) == 6
 
 
+def test_NM_SNI():
+    input_main = InputMain(
+        current_modality='NM',
+        current_test='SNI',
+        current_paramset=cfc.ParamSetNM(
+            sni_correct=True,
+            sni_correct_pos_x=True,
+            sni_correct_pos_y=True
+            ),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['SNI'],['SNI']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist.dcm'
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(np.array(input_main.results['SNI']['values'][0]))
+    breakpoint()
+    assert np.array_equal(values, np.array([3., 2., 2., 1.]))
+
+
 def test_NM_MTF_pointsource():
     tests = [[]] * 77
     tests[10] = ['MTF']
@@ -475,6 +500,7 @@ def test_SPECT_MTF_linesource():
         current_test='MTF',
         current_paramset=cfc.ParamSetSPECT(
             mtf_type=1,
+            mtf_line_tolerance=5,
             mtf_auto_center=True
             ),
         current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]*77),
@@ -487,10 +513,11 @@ def test_SPECT_MTF_linesource():
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
+    breakpoint()
     calculate_qc.calculate_qc(input_main)
     assert len(input_main.results['MTF']['values'][0]) == 4
     values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
-    assert np.array_equal(values10, np.array([93., 169.,  93., 170.]))
+    assert np.array_equal(values10, np.array([92., 168.,  93., 170.]))
 
 
 def test_PET_Cro():

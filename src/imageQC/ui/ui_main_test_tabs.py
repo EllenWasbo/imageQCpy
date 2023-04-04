@@ -730,8 +730,6 @@ class ParamsTabCT(ParamsTabCommon):
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
-        self.tab_mtf.vlo_top.addWidget(uir.UnderConstruction(
-            txt='NB Method Wire not finished yet'))
 
         self.mtf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.mtf_roi_size.valueChanged.connect(
@@ -1120,7 +1118,6 @@ class ParamsTabNM(ParamsTabCommon):
     def create_tab_uni(self):
         """GUI of tab Uniformity."""
         self.tab_uni = ParamsWidget(self, run_txt='Calculate uniformity')
-        self.tab_uni.vlo_top.addWidget(uir.UnderConstruction())
 
         self.uni_ufov_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
@@ -1192,6 +1189,16 @@ class ParamsTabNM(ParamsTabCommon):
         """GUI of tab SNI."""
         self.tab_sni = ParamsWidget(self, run_txt='Calculate SNI')
 
+        self.tab_sni.vlo_top.addWidget(uir.UnderConstruction())
+        self.tab_sni.hlo_top.addWidget(QLabel('SNI = Structured Noise Index'))
+        info_txt = '''
+        Based on Nelson et al, J Nucl Med 2014; 55:169-174<br>
+        SNI is a measure attempting to quantify the amount of structured noise in <br>
+        the image. Noise Power Spectrum (NPS) is calculated for each ROI and the <br>
+        expected quantum noise NPS is subtracted. A human eye filter is applied.
+        '''
+        self.tab_sni.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
         self.sni_area_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.sni_area_ratio.valueChanged.connect(
@@ -1237,10 +1244,6 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_result_image.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
 
-        self.tab_sni.vlo_top.addWidget(uir.UnderConstruction())
-        self.tab_sni.vlo_top.addWidget(QLabel(
-            'SNI = Structured Noise Index (J Nucl Med 2014; 55:169-174)'))
-
         vlo_left = QVBoxLayout()
         self.tab_sni.hlo.addLayout(vlo_left)
         self.tab_sni.hlo.addWidget(uir.VLine())
@@ -1253,12 +1256,12 @@ class ParamsTabNM(ParamsTabCommon):
         vlo_left.addLayout(flo)
 
         vlo_eye = QVBoxLayout()
-        vlo_eye.addWidget(QLabel('filter = r<sup>f</sup> exp[-cr<sup>2</sup> ]'))
+        vlo_eye.addWidget(QLabel('V(r) = r<sup>F</sup> exp[-Cr<sup>2</sup> ]'))
         hlo_eye = QHBoxLayout()
         vlo_eye.addLayout(hlo_eye)
-        hlo_eye.addWidget(QLabel('f'))
+        hlo_eye.addWidget(QLabel('F'))
         hlo_eye.addWidget(self.sni_eye_filter_f)
-        hlo_eye.addWidget(QLabel('c'))
+        hlo_eye.addWidget(QLabel('C'))
         hlo_eye.addWidget(self.sni_eye_filter_c)
         hlo_eye.addWidget(QLabel('display (mm)'))
         hlo_eye.addWidget(self.sni_eye_filter_r)
@@ -1421,8 +1424,6 @@ class ParamsTabSPECT(ParamsTabCommon):
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
-        self.tab_mtf.vlo_top.addWidget(uir.UnderConstruction(
-            txt='NB Method line source not finished yet'))
 
         self.mtf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.mtf_roi_size.valueChanged.connect(

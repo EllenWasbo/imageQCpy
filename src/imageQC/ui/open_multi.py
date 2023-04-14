@@ -50,6 +50,12 @@ class OpenMultiDialog(ImageQCDialog):
         toolb = uir.ToolBarBrowse('Browse to folder with DICOM images')
         toolb.act_browse.triggered.connect(self.browse)
         hlo_browse.addWidget(toolb)
+
+        self.status_label = uir.StatusLabel(self)
+        hlo_status = QHBoxLayout()
+        hlo_status.addWidget(self.status_label)
+        vlo.addLayout(hlo_status)
+
         info_text = (
             'All DICOM files in the selected folder listed as series '
             'according to series number + series description.<br>'
@@ -96,12 +102,13 @@ class OpenMultiDialog(ImageQCDialog):
         vlo_images.addWidget(gb_select_pattern)
         vlo_gb = QVBoxLayout()
         gb_select_pattern.setLayout(vlo_gb)
-        self.bgrSelPattern = QButtonGroup()
+        self.bgr_sel_pattern = QButtonGroup()
         lbls = ['Select all', 'Select the ', 'Select the ']
         rb_select_pattern = []
         for i, lbl in enumerate(lbls):
             rb_select_pattern.append(QRadioButton(lbl))
-            self.bgrSelPattern.addButton(rb_select_pattern[i], i)
+            self.bgr_sel_pattern.addButton(rb_select_pattern[i], i)
+        rb_select_pattern[0].setChecked(True)
         vlo_gb.addWidget(rb_select_pattern[0])
         hlo_sel1 = QHBoxLayout()
         hlo_sel1.addWidget(rb_select_pattern[1])
@@ -118,16 +125,17 @@ class OpenMultiDialog(ImageQCDialog):
 
         hlo_sel2 = QHBoxLayout()
         hlo_sel2.addWidget(rb_select_pattern[2])
-        self.spin_n_pos = QSpinBox()#TODO not in use?
+        self.spin_n_pos = QSpinBox()
         self.spin_n_pos.setMinimum(1)
         hlo_sel2.addWidget(self.spin_n_pos)
-        self.bgr_select_pos = QButtonGroup()#TODO not in use?
+        self.bgr_select_pos = QButtonGroup()
         lbls = ['first', 'mid', 'last']
         rb_select_pos = []
         for i, lbl in enumerate(lbls):
             rb_select_pos.append(QRadioButton(lbl))
             self.bgr_select_pos.addButton(rb_select_pos[i], i)
             hlo_sel2.addWidget(rb_select_pos[i])
+        rb_select_pos[0].setChecked(True)
         hlo_sel2.addWidget(QLabel('image(s)'))
         vlo_gb.addLayout(hlo_sel2)
 
@@ -194,31 +202,35 @@ class OpenMultiDialog(ImageQCDialog):
         """Find all DICOM files and list these according to the pattern."""
         path = self.path.text()
         if path != '':
+            self.main.start_wait_cursor()
             self.imgs = []
             self.open_imgs = []
+            self.status_label.showMessage('Finding valid dicom images in folder...')
             dcm_dict = find_all_valid_dcm_files(
                 path, parent_widget=self, grouped=False)
+            self.status_label.showMessage(
+                f'Reading header of {len(dcm_dict["files"])} dicom files...')
             if len(dcm_dict['files']) > 0:
                 dcm_files = dcm_dict['files']
                 img_infos, ignored_files = read_dcm_info(
                     dcm_files, tag_infos=self.main.tag_infos,
                     tag_patterns_special=self.main.tag_patterns_special)
-                series_nmb_name = []
-                self.imgs = []
+                series_nmb_name = [' '.join(img.series_list_strings)
+                                   for img in img_infos]
+                series_nmb_name = list(set(series_nmb_name))
+                series_nmb_name.sort()
+                self.imgs = [[] for i in range(len(series_nmb_name))]
                 for img in img_infos:
                     ser = ' '.join(img.series_list_strings)
-                    if ser in series_nmb_name:
-                        serno = series_nmb_name.index(ser)
-                    else:
-                        serno = len(series_nmb_name)
-                        series_nmb_name.append(ser)
-                        self.imgs.append([])
+                    serno = series_nmb_name.index(ser)
                     self.imgs[serno].append(img)
 
                 self.list_series.clear()
                 self.list_series.addItems(series_nmb_name)
                 self.list_series.setCurrentRow(0)
                 self.update_list_images(0)
+            self.status_label.clearMessage()
+            self.main.stop_wait_cursor()
 
     def update_list_images(self, serno):
         """Fill list_images with all images in selected series."""
@@ -245,7 +257,9 @@ class OpenMultiDialog(ImageQCDialog):
             push images to open_images. The default is False.
         """
         sel_series = self.list_series.selectedIndexes()
-        btn_id = self.bgrSelPattern.checkedId()
+        if len(sel_series) > 1 and push is False:
+            sel_series = [sel_series[-1]]  # show only list of last selected
+        btn_id = self.bgr_sel_pattern.checkedId()
         set_selected_ids = []
         if btn_id == 0:  # select all
             if push:
@@ -253,25 +267,48 @@ class OpenMultiDialog(ImageQCDialog):
                     self.open_imgs.extend(self.imgs[sel.row()])
             set_selected_ids = list(range(self.list_images.count()))
         elif btn_id == 1:  # select n images closest to zpos
-            first = True
             for sel in sel_series:
-                if first or push:
-                    try:
-                        zpos_arr = []
-                        for img in self.imgs[sel.row()]:
-                            zpos_arr.append(img.zpos)
-                        if None not in zpos_arr:
-                            n_img = self.spin_n_close.value()
-                            zpos = self.spin_z_close.value()
-                            diff = np.abs(np.asarray(zpos_arr) - zpos)
-                            n_lowest = np.argsort(diff)[:n_img]
-                            if push:
-                                self.open_imgs.extend(
-                                    self.imgs[sel.row()][n_lowest])
-                            set_selected_ids = n_lowest
-                    except AttributeError:
-                        pass
-                first = False
+                try:
+                    zpos_arr = []
+                    for img in self.imgs[sel.row()]:
+                        zpos_arr.append(img.zpos)
+                    if None not in zpos_arr:
+                        n_img = self.spin_n_close.value()
+                        zpos = self.spin_z_close.value()
+                        diff = np.abs(np.asarray(zpos_arr) - zpos)
+                        n_lowest = np.argsort(diff)[:n_img]
+                        n_lowest = np.sort(n_lowest)
+                        if push:
+                            for i in n_lowest:
+                                self.open_imgs.append(
+                                    self.imgs[sel.row()][i])
+                        set_selected_ids = n_lowest
+                except AttributeError:
+                    pass
+                if push is False:
+                    break
+        elif btn_id == 2:  # select n first/mid/last
+            n_img = self.spin_n_pos.value()
+            pos = self.bgr_select_pos.checkedId()
+            for sel in sel_series:
+                n_img_this = len(self.imgs[sel.row()])
+                if n_img_this <= n_img:
+                    sel_this = np.arange(n_img_this)
+                else:
+                    sel_this = np.arange(n_img)  # first images
+                    if pos == 1:  # mid images
+                        skew = (n_img_this - n_img) // 2
+                    elif pos == 2:  # last images
+                        skew = n_img_this - n_img
+                    else:
+                        skew = 0
+                    sel_this = sel_this + skew
+                set_selected_ids = sel_this
+                if push:
+                    for i in sel_this:
+                        self.open_imgs.append(self.imgs[sel.row()][i])
+                else:
+                    break
         else:
             pass
         for i in range(self.list_images.count()):
@@ -279,6 +316,7 @@ class OpenMultiDialog(ImageQCDialog):
                 self.list_images.item(i).setSelected(True)
             else:
                 self.list_images.item(i).setSelected(False)
+
         if push:
             self.update_list_open_images()
 
@@ -304,7 +342,7 @@ class OpenMultiDialog(ImageQCDialog):
 
     def remove_selected(self):
         """Remove the selected images of list_open_images."""
-        sels = self.list_images.selectedIndexes()
+        sels = self.list_open_images.selectedIndexes()
         if len(sels) > 0:
             img_nmbs = [sel.row() for sel in sels]
             img_nmbs.sort(reverse=True)

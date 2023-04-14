@@ -537,3 +537,32 @@ class StatusBar(QStatusBar):
             "QStatusBar{background:" + self.default_color + ";}")
         self.message.setText('')
         qApp.processEvents()
+
+
+class StatusLabel(QWidget):
+    """Widget with QLabel - to make it look like StatusBar."""
+
+    def __init__(self, parent):
+        super().__init__()
+        self.main = parent
+        self.default_color = self.palette().window().color().name()
+        self.setStyleSheet("QWidget{background-color:" + self.default_color + ";}")
+        lo = QHBoxLayout()
+        self.message = QLabel('')
+        self.message.setStyleSheet("QLabel{padding-left: 8px;}")
+        self.message.setAlignment(Qt.AlignCenter)
+        self.setLayout(lo)
+        lo.addWidget(self.message)
+
+    def showMessage(self, txt):
+        """Set background color when message is shown."""
+        self.setStyleSheet("QWidget{background-color:#6e94c0;}")
+        self.message.setText(txt)
+        qApp.processEvents()
+
+    def clearMessage(self):
+        """Reset background and clear message."""
+        self.setStyleSheet(
+            "QWidget{background-color:" + self.default_color + ";}")
+        self.message.setText('')
+        qApp.processEvents()

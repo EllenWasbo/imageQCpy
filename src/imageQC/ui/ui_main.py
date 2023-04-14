@@ -97,6 +97,7 @@ class MainWindow(QMainWindow):
 
         self.current_paramset = copy.deepcopy(self.paramsets[0])
         self.current_quicktest = cfc.QuickTestTemplate()
+        self.current_sort_pattern = None
         self.clear_all_images()
         self.current_group_indicators = []
         # string for each image if output set pr group with quicktest (paramset.output)
@@ -255,29 +256,7 @@ class MainWindow(QMainWindow):
                     details=ignored_files, icon=QMessageBox.Information)
                 dlg.exec()
             if len(new_img_infos) > 0:
-                n_img_before = len(self.imgs)
-                if self.chk_append.isChecked():
-                    self.imgs = self.imgs + new_img_infos
-                    self.update_results(n_added_imgs=len(new_img_infos))
-                else:
-                    self.imgs = new_img_infos
-                    self.results = {}
-
-                if self.chk_append.isChecked() is False or n_img_before == 0:
-                    self.gui.active_img_no = 0
-                    # update GUI according to first image
-                    if self.current_modality != self.imgs[0].modality:
-                        self.current_modality = self.imgs[0].modality
-                        self.update_mode()
-                    if self.wid_window_level.chk_wl_update.isChecked() is False:
-                        self.wid_window_level.set_window_level('dcm')
-
-                if self.wid_quicktest.gb_quicktest.isChecked():
-                    self.wid_quicktest.set_current_template_to_imgs()
-
-                if self.summed_img is not None:
-                    self.reset_summed_img()
-                self.tree_file_list.update_file_list()
+                self.update_on_new_images(new_img_infos)
 
     def open_multi(self):
         """Start open advanced dialog."""
@@ -285,15 +264,34 @@ class MainWindow(QMainWindow):
         res = dlg.exec()
         if res:
             if len(dlg.open_imgs) > 0:
-                self.imgs.extend(dlg.open_imgs)
+                self.update_on_new_images(dlg.open_imgs)
 
-                if self.wid_quicktest.gb_quicktest.isChecked():
-                    self.wid_quicktest.set_current_template_to_imgs()
+    def update_on_new_images(self, new_img_info_list):
+        """Update GUI on new images."""
+        n_img_before = len(self.imgs)
+        if self.chk_append.isChecked():
+            self.imgs = self.imgs + new_img_info_list
+            self.update_results(n_added_imgs=len(new_img_info_list))
+        else:
+            self.imgs = new_img_info_list
+            self.results = {}
 
-                if self.summed_img is not None:
-                    self.reset_summed_img()
+        if self.chk_append.isChecked() is False or n_img_before == 0:
+            self.gui.active_img_no = 0
+            # update GUI according to first image
+            if self.current_modality != self.imgs[0].modality:
+                self.current_modality = self.imgs[0].modality
+                self.update_mode()
+            if self.wid_window_level.chk_wl_update.isChecked() is False:
+                self.wid_window_level.set_window_level('dcm')
 
-                self.tree_file_list.update_file_list()
+        if self.wid_quicktest.gb_quicktest.isChecked():
+            self.wid_quicktest.set_current_template_to_imgs()
+
+        if self.summed_img is not None:
+            self.reset_summed_img()
+        self.tree_file_list.update_file_list()
+        self.current_sort_pattern = None
 
     def read_header(self):
         """View file as header."""
@@ -526,6 +524,9 @@ class MainWindow(QMainWindow):
                                 del res_dict['values_sup'][idx]
                             if 'details_dict' in res_dict:
                                 del res_dict['details_dict'][idx]
+                        if self.current_modality == 'CT' and test == 'Noi':
+                            for row in range(len(res_dict['values'])):
+                                res_dict['values'][row][2:3] = ['NA', 'NA']
                     else:
                         del_keys.append(test)
                 else:
@@ -640,11 +641,12 @@ class MainWindow(QMainWindow):
             accept_text='Sort',
             reject_text='Cancel',
             save_blocked=self.save_blocked)
-        res = dlg.exec()  # returing TagPatternSort
+        res = dlg.exec()  # returning TagPatternSort
         if res:
             sort_template = dlg.get_pattern()
             self.imgs = dcm.sort_imgs(self.imgs, sort_template, self.tag_infos)
             self.tree_file_list.update_file_list()
+            self.current_sort_pattern = sort_template
 
     def reset_split_sizes(self):
         """Set and reset QSplitter sizes."""
@@ -872,8 +874,10 @@ class MainWindow(QMainWindow):
         self.cbox_file_list_display = QComboBox()
         self.cbox_file_list_display.addItems(
             ['File path', 'Format pattern'])
+        self.cbox_file_list_display.setCurrentIndex(1)
         self.cbox_file_list_display.setToolTip(
-            'Format pattern = Special tag pattern as defined in settings')
+            '''Display file path or header info in file list.
+            Format pattern = Special tag pattern as defined in settings.''')
         self.cbox_file_list_display.currentIndexChanged.connect(
             self.tree_file_list.update_file_list)
 

@@ -26,6 +26,8 @@
 		<file alias="fileDCM.png">icons\fileDCM.png</file>
 		<file alias="filePDF.png">icons\filePDF.png</file>
 		<file alias="fileTXT.png">icons\fileTXT.png</file>
+		<file alias="flag_missing.png">icons\flag_missing.png</file>
+		<file alias="flag_ok.png">icons\flag_ok.png</file>
 		<file alias="format.png">icons\format.png</file>
 		<file alias="gather.png">icons\gather.png</file>
 		<file alias="gears.png">icons\gears.png</file>
@@ -98,6 +100,8 @@
 		<file alias="fileDCM.png">icons\darkmode\fileDCM.png</file>
 		<file alias="filePDF.png">icons\darkmode\filePDF.png</file>
 		<file alias="fileTXT.png">icons\darkmode\fileTXT.png</file>
+		<file alias="flag_missing.png">icons\flag_missing.png</file>
+		<file alias="flag_ok.png">icons\flag_ok.png</file>
 		<file alias="format.png">icons\darkmode\format.png</file>
 		<file alias="gather.png">icons\darkmode\gather.png</file>
 		<file alias="gears.png">icons\darkmode\gears.png</file>

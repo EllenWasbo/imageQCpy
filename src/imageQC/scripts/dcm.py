@@ -213,7 +213,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     attrib['zpos'] = float(slice_location)  # try?
                 try:
                     attrib['nm_radius'] = float(nm_radius)
-                except TypeError:
+                except (TypeError, ValueError):
                     pass
                 if GUI:
                     attrib.update(get_dcm_gui_info_lists(
@@ -846,13 +846,16 @@ def get_tag_data(pd, tag_info=None):
 
                 if data_element is None:
                     if tag_info.value_id == -3:  # combine data from all sequences
-                        if len(pd_sub_final.value) > 1:
-                            data_element = []
-                            for i in range(len(pd_sub_final.value)):
-                                sub = pd_sub_final[i]
-                                data_element.append(sub[gr, el])
-                        else:
-                            data_element = pd_sub[gr, el]
+                        try:
+                            if len(pd_sub_final.value) > 1:
+                                data_element = []
+                                for i in range(len(pd_sub_final.value)):
+                                    sub = pd_sub_final[i]
+                                    data_element.append(sub[gr, el])
+                            else:
+                                data_element = pd_sub[gr, el]
+                        except AttributeError:
+                            data_element = None
                     else:
                         data_element = pd_sub[gr, el]
             else:
@@ -1088,7 +1091,6 @@ def get_all_tags_name_number(pd, sequence_list=['']):
                         list_name_tag = get_tags_also_private(pd_sub)
                     else:
                         list_name_tag = []
-                    breakpoint()
 
     attribute_names = [tup[0] for tup in list_name_tag]
     tags = [tup[1] for tup in list_name_tag]

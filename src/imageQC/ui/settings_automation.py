@@ -856,14 +856,14 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                     txt = read_vendor_QC_reports.get_pdf_txt(fname[0])
                     res = read_vendor_QC_reports.read_Siemens_CT_QC(txt)
                     if res['status']:
-                        if len(res['values_txt']) > 3:
-                            statname = res['values_txt'][3]
+                        if len(res['values']) > 3:
+                            statname = res['values'][3]
                 elif self.current_modality == 'PET' and 'pdf' in file_type:
                     txt = read_vendor_QC_reports.get_pdf_txt(fname[0])
                     res = read_vendor_QC_reports.read_Siemens_PET_dailyQC(txt)
                     if res['status']:
-                        if len(res['values_txt']) > 1:
-                            statname = res['values_txt'][1]
+                        if len(res['values']) > 1:
+                            statname = res['values'][1]
                 QApplication.restoreOverrideCursor()
                 self.status_label.setText(old_status)
 

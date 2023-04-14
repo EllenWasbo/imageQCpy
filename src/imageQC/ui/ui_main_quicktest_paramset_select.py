@@ -229,6 +229,7 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         if self.edited and self.current_template.label != '':
             self.ask_to_save_changes(before_select_new=True)
 
+        self.main.start_wait_cursor()
         template_id = self.cbox_template.currentIndex()
         if template_id == 0:
             self.current_template = cfc.QuickTestTemplate()
@@ -238,6 +239,7 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         self.set_current_template_to_imgs()
         self.main.tree_file_list.update_file_list()
         self.flag_edit(False)
+        self.main.stop_wait_cursor()
 
     def set_current_template_to_imgs(self):
         """Set image-dict values according to current template."""

@@ -776,17 +776,25 @@ class ConfigIdl2Py():
         c : dict
             loadtemp (automation templates) in config.dat converted from IDL
         """
-        def get_filetype(vendor_alt):
+        def get_filetype(vendor_alt, mod):
+            filetype = ''
+            suffix = ''
             if len(vendor_alt) > 2:
                 filetype = ''
                 if vendor_alt[:3] == 'PDF':
-                    filetype = 'pdf'
+                    if mod == 'CT':
+                        filetype = 'Siemens CT Constancy/Daily Reports (.pdf)'
+                    elif mod == 'PET':
+                        filetype == 'Siemens PET-CT DailyQC Reports (.pdf)'
+                    suffix = '.pdf'
                 elif vendor_alt[:3] == 'XML':
-                    filetype = 'xml'
+                    filetype = 'Siemens PET-MR DailyQC Reports (.xml)'
+                    suffix = '.xml'
                 else:
-                    filetype = 'txt'  # GE_QAP
+                    filetype = 'GE QAP (.txt)'  # GE_QAP
+                    suffix = '.txt'
 
-            return filetype
+            return (filetype, suffix)
         auto_temps_mod = {}
         auto_temps_vendor_mod = {}
         n_unknown = 0
@@ -824,7 +832,9 @@ class ConfigIdl2Py():
                                 #elif aut == 'ARCHIVE':
                                 #    auto_temp.archive = bool(autv[0])
                                 elif aut == 'ALTERNATIVE':
-                                    auto_temp.file_type = get_filetype(vendor_alt)
+                                    file_type, suffix = get_filetype(vendor_alt, mod_py(m))
+                                    auto_temp.file_type = file_type
+                                    auto_temp.file_suffix = suffix
                                 else:
                                     pass
 

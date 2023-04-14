@@ -154,6 +154,7 @@ class StackWidget(QWidget):
 
         self.current_modality = self.wid_mod_temp.cbox_modality.currentText()
 
+        self.dlg_settings.main.start_wait_cursor()
         if 'patterns' in self.fname:
             avoid_special_tags = (self.fname == 'rename_patterns')
             try:
@@ -171,6 +172,7 @@ class StackWidget(QWidget):
             self.fill_lists()
 
         self.refresh_templist()
+        self.dlg_settings.main.stop_wait_cursor()
 
     def refresh_templist(self, selected_id=0, selected_label=''):
         """Update the list of templates, and self.current...

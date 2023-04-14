@@ -118,20 +118,32 @@ def quicktest_output(input_main):
     """
     string_list = []
     header_list = []
-    n_imgs = len(input_main.imgs)
-    image_names = [f'img{i}' for i in range(n_imgs)]
-    if len(input_main.current_quicktest.group_names) == 0:
-        group_names = ['' for i in range(n_imgs)]
-    else:
-        group_names = input_main.current_quicktest.group_names
+
     if input_main.results != {}:
-        # image_names to headers?
+        n_imgs = len(input_main.imgs)
+        # get set names of images or generate default names (indexed names)
+        image_names = [f'img{i}' for i in range(n_imgs)]
         if len(input_main.current_quicktest.image_names) > 0:
             set_names = input_main.current_quicktest.image_names
             if any(set_names):
                 for i in range(n_imgs):
                     if set_names[i] != '':
                         image_names[i] = set_names[i]
+        uniq_group_ids_all = mm.get_uniq_ordered(input_main.current_group_indicators)
+        group_names = []
+        for i in range(n_imgs):
+            group_idx = uniq_group_ids_all.index(input_main.current_group_indicators[i])
+            group_names.append(f'group{group_idx}')
+        if len(input_main.current_quicktest.group_names) > 0:
+            for uniq_id in uniq_group_ids_all:
+                idxs_this_group = mm.get_all_matches(
+                    input_main.current_group_indicators, uniq_id)
+                set_names = [input_main.current_quicktest.group_names[idx]
+                             for idx in idxs_this_group]
+                if any(set_names):
+                    name = next(s for s in set_names if s)
+                    for idx in idxs_this_group:
+                        group_names[idx] = name
 
         dm = input_main.current_paramset.output.decimal_mark
 
@@ -139,16 +151,15 @@ def quicktest_output(input_main):
         output_all_actual = {}
         for test, sublist in input_main.current_paramset.output.tests.items():
             if test in input_main.results:
-                output_all_actual[test] = input_main.current_paramset.output.tests[test]
+                if input_main.results[test] is not None:
+                    output_all_actual[test] = input_main.current_paramset.output.tests[
+                        test]
         for test in input_main.results:  # add defaults if not defined
-            if test not in output_all_actual:
-                output_all_actual[test] = [cfc.QuickTestOutputSub(columns=[])]
+            if input_main.results[test] is not None:
+                if test not in output_all_actual:
+                    output_all_actual[test] = [cfc.QuickTestOutputSub(columns=[])]
 
-        for test in output_all_actual: #input_main.results:
-            #if test in input_main.current_paramset.output.tests:
-            #    output_subs = input_main.current_paramset.output.tests[test]
-            #else:
-            #    output_subs = [cfc.QuickTestOutputSub(columns=[])]  # default
+        for test in output_all_actual:
             output_subs = output_all_actual[test]
 
             res_pr_image = input_main.results[test]['pr_image']
@@ -167,35 +178,30 @@ def quicktest_output(input_main):
                     suffixes = []  # _imgno/name or _groupno/name
                     if sub.per_group:
                         # for each group where len(values[i]) > 0
-                        actual_group_ids = []
                         actual_values = []
                         actual_group_names = []
                         actual_image_names = []
                         for rowno, row in enumerate(values):
                             if test in input_main.current_quicktest.tests[rowno]:
-                            #if row != []:
                                 if row is None:
                                     row = [None] * len(headers)
                                 actual_values.append(row)
-                                actual_group_ids.append(
-                                    input_main.current_group_indicators[rowno])
                                 actual_image_names.append(image_names[rowno])
                                 actual_group_names.append(group_names[rowno])
 
-                        uniq_group_ids = mm.get_uniq_ordered(actual_group_ids)
+                        uniq_group_ids = mm.get_uniq_ordered(actual_group_names)
                         for g, group_id in enumerate(uniq_group_ids):
                             values_this = []
                             group_names_this = []
                             image_names_this = []
                             proceed = True
                             while proceed:
-                                if group_id in actual_group_ids:
-                                    idx = actual_group_ids.index(group_id)
+                                if group_id in actual_group_names:
+                                    idx = actual_group_names.index(group_id)
                                     values_this.append(actual_values[idx])
                                     group_names_this.append(actual_group_names[idx])
                                     image_names_this.append(actual_image_names[idx])
                                     del actual_values[idx]
-                                    del actual_group_ids[idx]
                                     del actual_group_names[idx]
                                     del actual_image_names[idx]
                                 else:
@@ -212,16 +218,7 @@ def quicktest_output(input_main):
                             if len(out_values) > 1:
                                 suffixes.append(image_names_this)
                             else:
-                                if any(group_names_this):
-                                    all_group_names = list(set(group_names_this))
-                                    try:
-                                        idx_empty = all_group_names.index('')
-                                        del all_group_names[idx_empty]
-                                    except ValueError:
-                                        pass
-                                    suffixes.append(all_group_names[0])
-                                else:
-                                    suffixes.append(f'group{g}')
+                                suffixes.append(group_names_this[0])
 
                     else:  # each image individually (or 3d res)
                         for r, row in enumerate(values):
@@ -331,18 +328,16 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
     current_test_before = input_main.current_test
     delta_xya = [0, 0, 0.0]  # only for GUI version
     modality = input_main.current_modality
-    pre_msg = ''
     errmsgs = []
     if 'MainWindow' in str(type(input_main)):
-        if input_main.automation_active:
-            pre_msg = input_main.status_bar.text()
-        else:
-            input_main.start_wait_cursor()
-            input_main.status_bar.showMessage('Calculating...')
+        input_main.start_wait_cursor()
+        input_main.status_bar.showMessage('Calculating...')
         delta_xya = [
             input_main.gui.delta_x,
             input_main.gui.delta_y,
             input_main.gui.delta_a]
+    elif wid_auto is not None:
+        wid_auto.status_label.showMessage(f'{auto_template_label}: Preparing...')
 
     paramset = input_main.current_paramset
     if wid_auto is not None:
@@ -438,7 +433,10 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
             for i in range(n_img):
                 if 'MainWindow' in str(type(input_main)):
                     input_main.status_bar.showMessage(
-                        f'{pre_msg} Reading image data {i} of {n_img}')
+                        f'Reading image data {i} of {n_img}')
+                elif wid_auto is not None:
+                    wid_auto.status_label.showMessage(
+                        f'{auto_template_label}: Reading image data {i} of {n_img}')
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
                 image = None
@@ -526,8 +524,8 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
                                 wid_auto.wid_image_display.canvas.main.current_roi = (
                                     prev_roi[test])
                                 wid_auto.wid_image_display.canvas.roi_draw()
-                                wid_auto.main.status_bar.showMessage((
-                                    f'Executing template {auto_template_label} '
+                                wid_auto.status_label.showMessage((
+                                    f'{auto_template_label}: Calculating '
                                     f'img {i+1}/{n_img}'
                                     ))
                                 qApp.processEvents()
@@ -570,7 +568,6 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
             # post processing - where values depend on all images
             if modality == 'CT':
                 if 'Noi' in flattened_marked:
-                    input_main.results['Noi']['pr_image'] = False
                     try:
                         noise = [
                             row[1] for row in input_main.results['Noi']['values']]
@@ -579,6 +576,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
                             # diff from avg (%)
                             row[2] = 100.0 * (row[1] - avg_noise) / avg_noise
                             row[3] = avg_noise
+                        # removed if closed images in ui_main update results
                     except IndexError:
                         # average and diff from avg ignored if not all tested
                         for row in input_main.results['Noi']['values']:
@@ -634,6 +632,8 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
         if 'MainWindow' in str(type(input_main)):
             if input_main.automation_active is False:
                 input_main.status_bar.showMessage('Finished', 1000)
+            elif wid_auto is not None:
+                wid_auto.status_label.showMessage(f'{auto_template_label}: Finished')
 
     if 'MainWindow' in str(type(input_main)):
         if input_main.automation_active is False:
@@ -916,7 +916,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                             headers=headers, values=values,
                             headers_sup=headers_sup, values_sup=values_sup,
                             details_dict=details, errmsg=errmsg)
-                    except KeyError:
+                    except (KeyError, TypeError):
                         res = Results(
                             headers=headers, headers_sup=headers_sup,
                             errmsg=errmsg)

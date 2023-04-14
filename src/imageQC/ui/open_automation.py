@@ -227,8 +227,10 @@ class OpenAutomationDialog(ImageQCDialog):
 
         hlo.addWidget(self.wid_image_display)
 
-        self.status_bar = uir.StatusBar(self)
-        vlo.addWidget(self.status_bar)
+        self.status_label = uir.StatusLabel(self)
+        hlo_status = QHBoxLayout()
+        hlo_status.addWidget(self.status_label)
+        vlo.addLayout(hlo_status)
 
         self.refresh_list()
 
@@ -285,7 +287,7 @@ class OpenAutomationDialog(ImageQCDialog):
                 self.auto_common, self.templates, self.tag_infos, parent_widget=self,
                 ignore_since=ignore_since)
             self.stop_wait_cursor()
-            self.status_bar.showMessage('Finished reading images', 2000)
+            self.status_label.showMessage('Finished reading images', 2000)
             if len(log_import) > 0:
                 dlg = TextDisplay(
                     self, '\n'.join(log_import),
@@ -341,18 +343,19 @@ class OpenAutomationDialog(ImageQCDialog):
         for mod in modalities:
             arr = []
             for temp in self.templates[mod]:
-                if temp.label != '':
+                if temp.label != '' and temp.active:
                     arr.append(mod + ' - ' + temp.label)
                     if count:
                         if temp.path_input != '':
                             n_files, err = self.count_files(temp.path_input)
                             if n_files > 0:
-                                arr[-1] = arr[-1] + '(' + str(n_files) + ')'
+                                arr[-1] = arr[-1] + ' (' + str(n_files) + ')'
                             else:
                                 if err is not None:
                                     errormsgs.append(f'{err}')
                         else:
-                            arr[-1] = arr[-1] + '(input path unknown)'
+                            arr[-1] = arr[-1] + ' (input path unknown)'
+
             if len(arr) > 0:
                 self.templates_mod.extend([mod] * len(arr))
                 self.templates_is_vendor.extend([False] * len(arr))
@@ -361,18 +364,19 @@ class OpenAutomationDialog(ImageQCDialog):
                 template_list.extend(arr)
             arr = []
             for temp in self.templates_vendor[mod]:
-                if temp.label != '':
+                if temp.label != '' and temp.active:
                     arr.append(mod + ' - (vendor file) ' + temp.label)
                     if count:
                         if temp.path_input != '':
                             n_files, err = self.count_files(temp.path_input)
                             if n_files > 0:
-                                arr[-1] = arr[-1] + '(' + str(n_files) + ')'
+                                arr[-1] = arr[-1] + ' (' + str(n_files) + ')'
                             else:
                                 if err is not None:
                                     errormsgs.append(f'{err}')
                         else:
-                            arr[-1] = arr[-1] + '(input path unknown)'
+                            arr[-1] = arr[-1] + ' (input path unknown)'
+
             if len(arr) > 0:
                 self.templates_mod.extend([mod] * len(arr))
                 self.templates_is_vendor.extend([True] * len(arr))
@@ -391,10 +395,12 @@ class OpenAutomationDialog(ImageQCDialog):
 
     def refresh_list(self):
         """Refresh list of templates with count = True."""
+        self.main.start_wait_cursor()
         templist = self.get_template_list(count=True)
         self.list_templates.clear()
         if len(templist) > 0:
             self.list_templates.addItems(templist)
+        self.main.stop_wait_cursor()
 
     def open_result_file(self):
         """Display result file."""
@@ -540,9 +546,9 @@ class OpenAutomationDialog(ImageQCDialog):
                     temp_this = self.templates[mod][self.templates_id[tempno]]
 
                 if self.templates_is_vendor[tempno]:
-                    pre_msg = self.main.status_bar.text()
-                    self.main.status_bar.showMessage(
-                        f'{pre_msg} Extracting data from vendor report'
+                    pre_msg = f'Template {mod}/{temp_this.label}:'
+                    self.status_label.showMessage(
+                        f'{pre_msg} Extracting data from vendor report...'
                         )
                     msgs, not_written = automation.run_template_vendor(temp_this, mod)
                 else:
@@ -556,16 +562,11 @@ class OpenAutomationDialog(ImageQCDialog):
                         log.append(msg)
                 if len(not_written) > 0:
                     #TODO offer to clipboard
-                    proceed = messageboxes.proceed_question(
-                        self,
-                        'Breakpoint to programmer... results not written. Ignore?')
-                    if proceed is False:
-                        breakpoint()
-                        pass
+                    pass
+            self.status_label.clearMessage()
 
             self.automation_active = False
             self.main.refresh_results_display()
-            self.main.status_bar.showMessage('Finished', 1000)
             self.main.stop_wait_cursor()
 
             if len(log) > 0:
@@ -573,3 +574,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     log = '\n'.join(log)
                 QMessageBox.warning(
                     self, 'Automation log', log)
+            else:
+                QMessageBox.information(
+                    self, 'Automation finished',
+                    'Automation finished successfully.')

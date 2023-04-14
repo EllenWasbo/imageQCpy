@@ -22,7 +22,7 @@ from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
 import imageQC.scripts.read_vendor_QC_reports as read_vendor_QC_reports
 import imageQC.scripts.dcm as dcm
 from imageQC.scripts.mini_methods import get_all_matches
-from imageQC.scripts.mini_methods_format import valid_path
+from imageQC.scripts.mini_methods_format import valid_path, val_2_str
 import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
 # imageQC block end
@@ -431,8 +431,10 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
             if parent_widget is None:
                 print_progress('Reading DICOM header of files:', f_id + 1, len(files))
             else:
-                parent_widget.statusBar.showMessage(
+                parent_widget.status_label.showMessage(
                     f'Reading DICOM header of file {f_id + 1} / {len(files)}')
+        if parent_widget is not None:
+            parent_widget.status_label.clearMessage()
 
         # ensure uniq new file names
         fullpaths = [
@@ -614,123 +616,133 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
     log = []
     not_written = []
     log_pre = f'Template {modality}/{auto_template.label}:'
-    if os.path.exists(auto_template.path_input) and auto_template.quicktemp_label != '':
-        qt_labels = [temp.label for temp in qt_templates[modality]]
-        qt_idx = qt_labels.index(auto_template.quicktemp_label)
-        param_labels = [temp.label for temp in paramsets[modality]]
-        proceed = True
-        try:
-            param_idx = param_labels.index(auto_template.paramset_label)
-            paramset = paramsets[modality][param_idx]
-        except ValueError:
+    if auto_template.active is False:
+        log.append('Deactivated template')
+    else:
+        proceed = os.path.exists(auto_template.path_input)
+        if auto_template.quicktemp_label == '':
             proceed = False
-            log.append(
-                ('No Paramset linked to the automation template. Template ignored.'))
-        if not any(qt_templates[modality][qt_idx].tests):
-            proceed = False
-            log.append(
-                ('The associatied Quicktest template have no tests specified. '
-                 'Automation template ignored.'))
         if proceed:
-            err_exist = False
-            p = Path(auto_template.path_input)
-            if p.exists():
-                files = [x for x in p.glob('*') if x.is_file()]
-            else:
-                files = []
-                err_exist = True
-            if len(files) == 0:
-                if err_exist:
-                    err_txt = (f'{modality}/{auto_template.label}: '
-                               f'Input path do not exist ({auto_template.path_input})')
+            qt_labels = [temp.label for temp in qt_templates[modality]]
+            qt_idx = qt_labels.index(auto_template.quicktemp_label)
+            param_labels = [temp.label for temp in paramsets[modality]]
+            proceed = True
+            try:
+                param_idx = param_labels.index(auto_template.paramset_label)
+                paramset = paramsets[modality][param_idx]
+            except ValueError:
+                proceed = False
+                log.append(
+                    'No Paramset linked to the automation template. Template ignored.'
+                    )
+            if not any(qt_templates[modality][qt_idx].tests):
+                proceed = False
+                log.append(
+                    ('The associatied Quicktest template have no tests specified. '
+                     'Automation template ignored.'))
+            if proceed:
+                err_exist = False
+                p = Path(auto_template.path_input)
+                if p.exists():
+                    files = [x for x in p.glob('*') if x.is_file()]
+                else:
+                    files = []
+                    err_exist = True
+                if len(files) == 0:
+                    if err_exist:
+                        err_txt = (
+                            f'{modality}/{auto_template.label}: '
+                            f'Input path do not exist ({auto_template.path_input})')
+                        if parent_widget is None:
+                            print(err_txt)
+                        else:
+                            log.append(err_txt)
+                else:
                     if parent_widget is None:
-                        print(err_txt)
-                    else:
-                        log.append(err_txt)
-            else:
-                if parent_widget is None:
-                    print(f'Reading {len(files)} new files for template ',
-                          f'{modality}/{auto_template.label} ...',
-                          sep='', end='', flush=True)
-                img_infos, ignored_files = dcm.read_dcm_info(
-                    files, GUI=False, tag_infos=tag_infos)
-
-                if len(img_infos) > 0:
-                    input_main_this = InputMain(
-                        current_modality=modality,
-                        current_paramset=paramset,
-                        current_quicktest=qt_templates[modality][qt_idx],
-                        tag_infos=tag_infos
-                        )
-
-                    if parent_widget is None:
-                        print(f'\rSorting {len(img_infos)} files for template ',
+                        print(f'Reading {len(files)} new files for template ',
                               f'{modality}/{auto_template.label} ...',
                               sep='', end='', flush=True)
+                    img_infos, ignored_files = dcm.read_dcm_info(
+                        files, GUI=False, tag_infos=tag_infos)
 
-                    # sort into groups of same acq_date, study uid
-                    date_uid_list = ['_'.join([info.acq_date, info.studyUID]) for
-                                     info in img_infos]
-                    uniq_date_uids = list(set(date_uid_list))
-                    uniq_date_uids.sort()
-                    write_ok = os.access(auto_template.path_output, os.W_OK)
-                    if write_ok is False:
-                        log.append(
-                            f'\t No write permission to {auto_template.path_output}')
+                    if len(img_infos) > 0:
+                        input_main_this = InputMain(
+                            current_modality=modality,
+                            current_paramset=paramset,
+                            current_quicktest=qt_templates[modality][qt_idx],
+                            tag_infos=tag_infos
+                            )
 
-                    nd = len(uniq_date_uids)
-                    for d, uniq_date_uid in enumerate(uniq_date_uids):
                         if parent_widget is None:
-                            print(f'\rAnalysing image set {d}/{nd} for template ',
+                            print(f'\rSorting {len(img_infos)} files for template ',
                                   f'{modality}/{auto_template.label} ...',
                                   sep='', end='', flush=True)
-                        date_str = (
-                            uniq_date_uid[6:8] + '.'
-                            + uniq_date_uid[4:6] + '.'
-                            + uniq_date_uid[0:4]
-                            )
-                        img_infos_this = []
-                        for i, img_info in enumerate(img_infos):
-                            if uniq_date_uid == date_uid_list[i]:
-                                img_infos_this.append(img_info)
 
-                        if len(auto_template.sort_pattern.list_tags) > 0:
-                            img_infos_this = dcm.sort_imgs(
-                                img_infos_this, auto_template.sort_pattern, tag_infos)
-
-                        input_main_this.imgs = img_infos_this
-                        # reset
-                        input_main_this.results = {}
-                        input_main_this.current_group_indicators = []
-
-                        calculate_qc(input_main_this, wid_auto=parent_widget,
-                                     auto_template_label=auto_template.label)
-                        value_list, header_list = quicktest_output(input_main_this)
-                        header_list = ['Date'] + header_list
-                        value_list = [date_str] + value_list
-
-                        status, print_array = append_auto_res(
-                            auto_template, header_list, value_list,
-                            to_file=write_ok
-                            )
+                        # sort into groups of same acq_date, study uid
+                        date_uid_list = ['_'.join([info.acq_date, info.studyUID]) for
+                                         info in img_infos]
+                        uniq_date_uids = list(set(date_uid_list))
+                        uniq_date_uids.sort()
+                        write_ok = os.access(auto_template.path_output, os.W_OK)
                         if write_ok is False:
-                            not_written.append(print_array)
-                        else:
-                            if auto_template.archive:
-                                archive_files(input_main_this.imgs)
-                    print(
-                        '\rFinished analysing template                              ',
-                        '                                                           ')
-                    log.append(
-                        f'Finished analysing template ({nd} sessions)'
-                        )
-    else:
-        if os.path.exists(auto_template.path_input) is False:
-            log.append(f'Input path not found ({auto_template.path_input})')
-        if auto_template.quicktemp_label == '':
-            log.append(
-                ('No QuickTest template was linked to the automation template. '
-                 'Template ignored'))
+                            log.append(
+                                f'\t No write permission to {auto_template.path_output}'
+                                )
+
+                        nd = len(uniq_date_uids)
+                        for d, uniq_date_uid in enumerate(uniq_date_uids):
+                            if parent_widget is None:
+                                print(f'\rAnalysing image set {d}/{nd} for template ',
+                                      f'{modality}/{auto_template.label} ...',
+                                      sep='', end='', flush=True)
+                            date_str = (
+                                uniq_date_uid[6:8] + '.'
+                                + uniq_date_uid[4:6] + '.'
+                                + uniq_date_uid[0:4]
+                                )
+                            img_infos_this = []
+                            for i, img_info in enumerate(img_infos):
+                                if uniq_date_uid == date_uid_list[i]:
+                                    img_infos_this.append(img_info)
+
+                            if len(auto_template.sort_pattern.list_tags) > 0:
+                                img_infos_this = dcm.sort_imgs(
+                                    img_infos_this, auto_template.sort_pattern,
+                                    tag_infos)
+
+                            input_main_this.imgs = img_infos_this
+                            # reset
+                            input_main_this.results = {}
+                            input_main_this.current_group_indicators = []
+
+                            calculate_qc(input_main_this, wid_auto=parent_widget,
+                                         auto_template_label=auto_template.label)
+                            value_list, header_list = quicktest_output(input_main_this)
+                            header_list = ['Date'] + header_list
+                            value_list = [date_str] + value_list
+
+                            status, print_array = append_auto_res(
+                                auto_template, header_list, value_list,
+                                to_file=write_ok
+                                )
+                            if write_ok is False:
+                                not_written.append(print_array)
+                            else:
+                                if auto_template.archive:
+                                    archive_files(input_main_imgs=input_main_this.imgs)
+                        print(
+                            '\rFinished analysing template                            ',
+                            '                                                         ')
+                        log.append(
+                            f'Finished analysing template ({nd} sessions)'
+                            )
+        else:
+            if os.path.exists(auto_template.path_input) is False:
+                log.append(f'Input path not found ({auto_template.path_input})')
+            if auto_template.quicktemp_label == '':
+                log.append(
+                    ('No QuickTest template was linked to the automation template. '
+                     'Template ignored'))
     if len(log) > 0:
         log.insert(0, log_pre)
     return (log, not_written)
@@ -741,58 +753,54 @@ def run_template_vendor(auto_template, modality, parent_widget=None):
     log = []
     not_written = []
     log_pre = f'Template {modality}/{auto_template.label}:'
+    files = []
 
-    if auto_template.file_type == '':
-        log.append('\t File type not specified. Failed to proceed.')
+    if auto_template.active is False:
+        log.append('Deactivated template')
     else:
-        err_exist = False
-        if auto_template.path_input == '':
-            log.append('\t Input path not defined.')
-        else:
-            files = []
+        proceed = os.path.exists(auto_template.path_input)
+        if proceed is False:
+            log.append('\t Input path not defined or do not exist.')
+        if auto_template.file_type == '':
+            proceed = False
+            log.append('\t File type not specified. Failed to proceed.')
+        if proceed:
             p = Path(auto_template.path_input)
-            if p.exists():
-                if p.is_dir():
-                    #glob_string = '**/*' if search_subfolders else '*'
-                    #TODO - if GE QAP - search subfolder but not Archive
-                    glob_string = '*'
-                    files = [
-                        x for x in p.glob(glob_string)
-                        if x.suffix == auto_template.file_suffix
-                        ]
-            else:
-                err_exist = True
-
-        if len(files) == 0:
-            if err_exist:
-                err_txt = (f'{modality}/{auto_template.label}: '
-                           f'Input path do not exist ({auto_template.path_input})')
-                if parent_widget is None:
-                    print(err_txt)
-                else:
-                    log.append(err_txt)
-        else:
+            if p.is_dir():
+                #glob_string = '**/*' if search_subfolders else '*'
+                #TODO - if GE QAP - search subfolder but not Archive
+                glob_string = '*'
+                files = [
+                    x for x in p.glob(glob_string)
+                    if x.suffix == auto_template.file_suffix
+                    ]
+                files.sort(key=lambda t: t.stat().st_mtime)
+        if len(files) > 0:
             write_ok = os.access(auto_template.path_output, os.W_OK)
             if write_ok is False:
                 log.append(
                     f'''\t Failed to write to output path
                     {auto_template.path_output}''')
             for file in files:
-                txt = read_vendor_QC_reports.get_pdf_txt(file)
-                res = read_vendor_QC_reports.read_Siemens_CT_QC(txt)
-
-                status, print_array = append_auto_res_vendor(
-                    auto_template.path_output,
-                    res, to_file=write_ok
-                    )
-                if write_ok is False:
-                    if len(not_written) == 0:
-                        not_written.append(print_array)
-                    else:
-                        if len(not_written[-1]) == len(print_array[0]):
-                            not_written.append(print_array[-1])  # ignore headers
-                        else:
+                res = read_vendor_QC_reports.read_vendor_template(auto_template, file)
+                if res is None:
+                    log.append(f'\t Found no expected content in {file}')
+                else:
+                    status, print_array = append_auto_res_vendor(
+                        auto_template.path_output,
+                        res, to_file=write_ok
+                        )
+                    if write_ok is False:
+                        if len(not_written) == 0:
                             not_written.append(print_array)
+                        else:
+                            if len(not_written[-1]) == len(print_array[0]):
+                                not_written.append(print_array[-1])  # ignore headers
+                            else:
+                                not_written.append(print_array)
+                    else:
+                        if auto_template.archive:
+                            archive_files(filepath=file)
 
     if len(log) > 0:
         log.insert(0, log_pre)
@@ -835,13 +843,12 @@ def append_auto_res(auto_template, headers, values, to_file=False):
     return (status, print_list)
 
 
-def append_auto_res_vendor(auto_template, result_dict, to_file=False):
+def append_auto_res_vendor(output_path, result_dict, to_file=False):
     """Append test results to output path.
 
     Parameters
     ----------
-    auto_template : AutoVendorTemplate
-    output_template : QuickTestOutputTemplate
+    output_path : str
     result_dict : dict
         {<testcode>: {'headers': [], 'values': []}}
     to_file: bool
@@ -858,23 +865,36 @@ def append_auto_res_vendor(auto_template, result_dict, to_file=False):
     print_list = [result_dict['headers']] + [result_dict['values']]
 
     if to_file:
-        filesize = os.path.getsize(auto_template.path_output)
+        filesize = os.path.getsize(output_path)
         if filesize > 0:
-            print_list = print_list[1]
-        with open(auto_template.path_output, "a") as f:
+            print_list = [print_list[1]]  # ignore header
+        with open(output_path, "a") as f:
             for row in print_list:
-                f.write('\t'.join(row))
+                row_strings = val_2_str(row, lock_format=True)
+                f.write('\t'.join(row_strings) + '\n')
         status = True
         print_list = []
 
     return (status, print_list)
 
 
-def archive_files(input_main_imgs):
-    """Move files into Archive folder."""
-    all_files = [info.filepath for info in input_main_imgs]
-    all_files = list(set(all_files))  # uniq filepaths if multiframe images
-    first_file = Path(all_files[0])
+def archive_files(input_main_imgs=None, filepath=None):
+    """Move files into Archive folder.
+
+    Parameters
+    ----------
+    input_main_imgs : list of DcmInfo, optional
+        The default is None.
+    filepath : Path, optional
+        file (vendor type file).The default is None.
+    """
+    if input_main_imgs is not None:
+        all_files = [info.filepath for info in input_main_imgs]
+        all_files = list(set(all_files))  # uniq filepaths if multiframe images
+        first_file = Path(all_files[0])
+    if filepath is not None:
+        all_files = [filepath]
+        first_file = filepath
     parent_path = first_file.parent
     archive_path = parent_path / 'Archive'
     archive_path.mkdir(exist_ok=True)
@@ -882,7 +902,7 @@ def archive_files(input_main_imgs):
         # move file directly to Archive
         first_file.rename(archive_path / first_file.name)
     else:
-        # move files to Archive/yyyymmdd
+        # move files to Archive/yyyymmdd - only if dicom
         archive_path = archive_path / input_main_imgs[0].acq_date
         proceed = False
         try:

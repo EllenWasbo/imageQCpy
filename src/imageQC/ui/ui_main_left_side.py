@@ -227,7 +227,7 @@ class TreeFileList(QTreeWidget):
         test_codes = []
         if qt_edit:
             dlg = SelectTestcodeDialog(
-                label=f'Select tests to run for selected images',
+                label='Select tests to run for selected images',
                 modality=self.main.current_modality,
                 current_tests=self.main.imgs[selrows[0]].marked_quicktest)
             res = dlg.exec()
@@ -239,7 +239,7 @@ class TreeFileList(QTreeWidget):
         if proceed:
             for sel in selrows:
                 if qt_edit:
-                    tests_this = self.main.imgs[sel].marked_quicktest
+                    #tests_this = self.main.imgs[sel].marked_quicktest
                     self.main.imgs[sel].marked_quicktest = test_codes
                     self.main.wid_quicktest.flag_edit(True)
                 elif remove_mark:
@@ -654,6 +654,7 @@ class CenterWidget(QGroupBox):
         self.val_delta_a.setValue(0)
         self.update_delta()
 
+
 class WindowLevelEditDialog(ImageQCDialog):
     """Dialog to set window level by numbers."""
 
@@ -846,8 +847,9 @@ class WindowLevelWidget(QGroupBox):
             self.tool_min_max_wl.setCheckable(True)
             self.tool_range_wl.setCheckable(True)
             self.tool_dcm_wl.setCheckable(True)
-            self.tool_dcm_wl.setChecked(True)
-            self.set_window_level('dcm')
+            # default
+            self.tool_range_wl.setChecked(True)
+            self.set_window_level('mean_stdev')
 
     def get_min_max(self):
         """Get lower and upper window level based on image.

@@ -169,6 +169,8 @@ class AutoCommonWidget(StackWidget):
 
         self.import_path = QLineEdit()
         self.import_path.setMinimumWidth(500)
+        self.import_path.textChanged.connect(lambda: self.flag_edit(True))
+
         hlo_import_path = QHBoxLayout()
         hlo_import_path.addWidget(QLabel('Image pool path:'))
         hlo_import_path.addWidget(self.import_path)
@@ -285,7 +287,7 @@ class AutoCommonWidget(StackWidget):
         self.vlo.addWidget(uir.HLine())
         self.vlo.addWidget(self.status_label)
 
-    def update_from_yaml(self):
+    def update_from_yaml(self, initial_template_label=''):
         """Refresh settings from yaml file.
 
         Using self.templates as auto_common single template and
@@ -655,20 +657,23 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         self.list_same_input.clear()
         self.list_same_output.clear()
         if self.current_template.label != '':
-            auto_labels = [
-                temp.label for temp in self.templates[self.current_modality]
-                if temp.path_input == self.current_template.path_input
-                ]
-            if len(auto_labels) > 1:
-                auto_labels.remove(self.current_template.label)
-                self.list_same_input.addItems(auto_labels)
-            auto_labels = [
-                temp.label for temp in self.templates[self.current_modality]
-                if temp.path_output == self.current_template.path_output
-                ]
-            if len(auto_labels) > 1:
-                auto_labels.remove(self.current_template.label)
-                self.list_same_output.addItems(auto_labels)
+            if self.current_template.path_input != '':
+                auto_labels = [
+                    temp.label for temp in self.templates[self.current_modality]
+                    if temp.path_input == self.current_template.path_input
+                    ]
+                if len(auto_labels) > 1:
+                    auto_labels.remove(self.current_template.label)
+                    self.list_same_input.addItems(auto_labels)
+
+            if self.current_template.path_output != '':
+                auto_labels = [
+                    temp.label for temp in self.templates[self.current_modality]
+                    if temp.path_output == self.current_template.path_output
+                    ]
+                if len(auto_labels) > 1:
+                    auto_labels.remove(self.current_template.label)
+                    self.list_same_output.addItems(auto_labels)
 
     def get_current_template(self):
         """Get self.current_template where not dynamically set."""
@@ -800,7 +805,7 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         self.vlo.addWidget(uir.HLine())
         self.vlo.addWidget(self.status_label)
 
-    def update_from_yaml(self):
+    def update_from_yaml(self, initial_template_label=''):
         """Refresh settings from yaml file."""
         super().update_from_yaml()
         self.update_file_types()

@@ -12,7 +12,7 @@ from pathlib import Path
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QToolBar,
+    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAbstractItemView,
     QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox, QListWidget,
     QFileDialog, QMessageBox
     )
@@ -173,6 +173,7 @@ class OpenAutomationDialog(ImageQCDialog):
             'Run automation templates', 4))
 
         self.list_templates = QListWidget()
+        self.list_templates.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.templates_mod = []
         self.templates_is_vendor = []
         self.templates_id = []
@@ -287,8 +288,9 @@ class OpenAutomationDialog(ImageQCDialog):
                 self.auto_common, self.templates, self.tag_infos, parent_widget=self,
                 ignore_since=ignore_since)
             self.stop_wait_cursor()
-            self.status_label.showMessage('Finished reading images', 2000)
+
             if len(log_import) > 0:
+                self.status_label.showMessage('Finished reading images')
                 dlg = TextDisplay(
                     self, '\n'.join(log_import),
                     title='Information',
@@ -296,6 +298,7 @@ class OpenAutomationDialog(ImageQCDialog):
                 res = dlg.exec()
                 if res:
                     pass  # just to wait for user to close message
+            self.status_label.clearMessage()
         else:
             QMessageBox.information(
                 self, 'Warning', 'Import path not defined or do not exist.')
@@ -440,8 +443,12 @@ class OpenAutomationDialog(ImageQCDialog):
             tempno = sel[0].row()
             if self.templates_is_vendor[tempno]:
                 view = 'Templates vendor files'
+        mod = self.templates_mod[tempno]
+        temp_this = self.templates[mod][self.templates_id[tempno]]
         dlg = settings.SettingsDialog(
-            self.main, initial_view=view)
+            self.main, initial_view=view, initial_modality=mod,
+            initial_template_label=temp_this.label
+            )
         dlg.exec()
 
     def run_all(self):

@@ -10,6 +10,7 @@ import copy
 from dataclasses import dataclass
 from time import time, ctime
 import numpy as np
+import pandas as pd
 
 from PyQt5.QtGui import QIcon, QScreen
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -763,13 +764,14 @@ class MainWindow(QMainWindow):
         dlg = rename_dicom.RenameDicomDialog(self)
         dlg.exec()
 
-    def run_settings(self, initial_view=''):
+    def run_settings(self, initial_view='', initial_template_label=''):
         """Display settings dialog."""
         if initial_view == '':
             dlg = settings.SettingsDialog(self)
         else:
             dlg = settings.SettingsDialog(
-                self, initial_view=initial_view)
+                self, initial_view=initial_view,
+                initial_template_label=initial_template_label)
         dlg.exec()
         self.update_settings()
 
@@ -797,6 +799,26 @@ class MainWindow(QMainWindow):
             self.wid_paramset.fill_template_list(set_label=prev_label)
         except AttributeError:
             pass
+
+    def display_clipboard(self, title='Clipboard content'):
+        """Display clipboard content e.g. when testing QuickTest output."""
+        dataf = pd.read_clipboard()
+        nrows, ncols = dataf.shape
+        txt = ''
+        if nrows == 0:
+            row_list = [*dataf.to_dict()]
+            txt = '\t'.join(row_list)
+        else:
+            row_list = [[*dataf.to_dict()]]
+            for row in range(nrows):
+                row_list.append([dataf.iat[row, col] for col in range(ncols)])
+            txt = '\n'.join(['\t'.join(row_list[row]) for row in range(nrows)])
+        dlg = TextDisplay(
+            self, txt, title=title,
+            min_width=1000, min_height=300)
+        res = dlg.exec()
+        if res:
+            pass  # just to wait for user to close message
 
     def display_errmsg(self, errmsg):
         """Display error ees in statusbar or as popup if long."""

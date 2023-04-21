@@ -46,11 +46,16 @@ class SettingsDialog(ImageQCDialog):
     """GUI setup for the settings dialog window."""
 
     def __init__(
-            self, main, initial_view='User local settings',
+            self, main, initial_view='User local settings', initial_template_label='',
+            initial_modality=None,
             width1=200, width2=800,
             import_review_mode=False):
         super().__init__()
         self.main = main
+        if initial_modality is None:
+            self.initial_modality = self.main.current_modality
+        else:
+            self.initial_modality = initial_modality
         self.import_review_mode = import_review_mode
         if import_review_mode is False:
             self.setWindowTitle('Settings manager')
@@ -191,10 +196,9 @@ class SettingsDialog(ImageQCDialog):
         self.stacked_widget.setCurrentWidget(widget)
         self.previous_selected_txt = initial_view
         self.current_selected_txt = initial_view
-        self.initial_modality = self.main.current_modality
 
         if import_review_mode is False:
-            widget.update_from_yaml()
+            widget.update_from_yaml(initial_template_label=initial_template_label)
         else:
             self.update_import_main()
 
@@ -605,7 +609,7 @@ class UserSettingsWidget(StackWidget):
         self.vlo.addWidget(uir.HLine())
         self.vlo.addWidget(self.status_label)
 
-    def update_from_yaml(self):
+    def update_from_yaml(self, initial_template_label=''):
         """Load settings from yaml and fill form."""
         _, path, self.user_prefs = cff.load_user_prefs()
         self.lbl_yaml_path = path
@@ -677,7 +681,7 @@ class SharedSettingsWidget(StackWidget):
 
         self.vlo.addWidget(self.list_files)
 
-    def update_from_yaml(self):
+    def update_from_yaml(self, initial_template_label=''):
         """Update settings from yaml file."""
         self.list_files.clear()
 

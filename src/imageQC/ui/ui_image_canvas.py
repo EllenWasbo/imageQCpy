@@ -649,3 +649,35 @@ class ResultImageCanvas(GenericImageCanvas):
             self.title = 'Summed image'
             if 'sum_image' in details_dict:
                 self.current_image = details_dict['sum_image']
+
+    def SNI(self):
+        """Prepare result image for test SNI."""
+        if self.main.current_paramset.sni_sum_first:
+            try:
+                details_dict = self.main.results['SNI']['details_dict'][0]
+            except KeyError:
+                details_dict = {}
+        else:
+            try:
+                details_dict = self.main.results['SNI']['details_dict'][
+                    self.main.gui.active_img_no]
+            except KeyError:
+                details_dict = {}
+        self.cmap = 'viridis'
+        type_img = self.main.tab_nm.sni_result_image.currentIndex()
+        if type_img == 0:
+            self.title = 'Curvature corrected image'
+            if 'corrected_image' in details_dict:
+                self.current_image = details_dict['corrected_image']
+        elif type_img == 1:
+            self.title = 'Summed image'
+            if 'sum_image' in details_dict:
+                self.current_image = details_dict['sum_image']
+        elif type_img > 1:
+            sel_text = self.main.tab_nm.sni_result_image.currentText()
+            roi_txt = sel_text[-2:]
+            self.title = f'2d NPS for {roi_txt}'
+            roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+            roi_no = roi_names.index(roi_txt)
+            details_this = details_dict['pr_roi'][roi_no]
+            self.current_image = details_this['NPS']

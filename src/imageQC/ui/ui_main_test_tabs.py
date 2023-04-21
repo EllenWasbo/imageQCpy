@@ -1189,7 +1189,6 @@ class ParamsTabNM(ParamsTabCommon):
         """GUI of tab SNI."""
         self.tab_sni = ParamsWidget(self, run_txt='Calculate SNI')
 
-        self.tab_sni.vlo_top.addWidget(uir.UnderConstruction())
         self.tab_sni.hlo_top.addWidget(QLabel('SNI = Structured Noise Index'))
         info_txt = '''
         Based on Nelson et al, J Nucl Med 2014; 55:169-174<br>
@@ -1215,18 +1214,10 @@ class ParamsTabNM(ParamsTabCommon):
             chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_correct_radius)
 
         gb_eye_filter = QGroupBox('Human visual respose filter')
-        self.sni_eye_filter_f = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=10, singleStep=0.1)
-        self.sni_eye_filter_f.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='sni_eye_filter_f'))
         self.sni_eye_filter_c = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=100, singleStep=1)
         self.sni_eye_filter_c.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sni_eye_filter_c'))
-        self.sni_eye_filter_r = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=500, singleStep=1)
-        self.sni_eye_filter_r.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='sni_eye_filter_r'))
 
         self.sni_sum_first = QCheckBox('Sum marked images before analysing sum')
         self.sni_sum_first.toggled.connect(
@@ -1234,15 +1225,22 @@ class ParamsTabNM(ParamsTabCommon):
 
         self.sni_plot = QComboBox()
         self.sni_plot.addItems(['SNI values',
-                                'Power spectrums used to calculate SNI'])
+                                'NPS all ROIs + human visual filter'])
+        roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+        pre_txt = 'Filtered NPS and NPS structure ROI'
+        plot_txt = [f'{pre_txt} {name}' for name in roi_names]
+        self.sni_plot.addItems(plot_txt)
         self.sni_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
 
         self.sni_result_image = QComboBox()
         self.sni_result_image.addItems(
-            ['2d NPS', 'Curvature corrected image', 'Summed image (if sum marked)'])
+            ['Curvature corrected image', 'Summed image (if sum marked)'])
+        pre_txt = '2d NPS for ROI'
+        img_txts = [f'{pre_txt} {name}' for name in roi_names]
+        self.sni_result_image.addItems(img_txts)
         self.sni_result_image.currentIndexChanged.connect(
-            self.main.wid_res_plot.plotcanvas.plot)
+            self.main.wid_res_image.canvas.result_image_draw)
 
         vlo_left = QVBoxLayout()
         self.tab_sni.hlo.addLayout(vlo_left)
@@ -1256,15 +1254,11 @@ class ParamsTabNM(ParamsTabCommon):
         vlo_left.addLayout(flo)
 
         vlo_eye = QVBoxLayout()
-        vlo_eye.addWidget(QLabel('V(r) = r<sup>F</sup> exp[-Cr<sup>2</sup> ]'))
+        vlo_eye.addWidget(QLabel('V(r) = r<sup>1.3</sup> exp[-Cr<sup>2</sup> ]'))
         hlo_eye = QHBoxLayout()
         vlo_eye.addLayout(hlo_eye)
-        hlo_eye.addWidget(QLabel('F'))
-        hlo_eye.addWidget(self.sni_eye_filter_f)
         hlo_eye.addWidget(QLabel('C'))
         hlo_eye.addWidget(self.sni_eye_filter_c)
-        hlo_eye.addWidget(QLabel('display (mm)'))
-        hlo_eye.addWidget(self.sni_eye_filter_r)
         gb_eye_filter.setLayout(vlo_eye)
         vlo_left.addWidget(gb_eye_filter)
         vlo_left.addWidget(self.sni_sum_first)
@@ -1279,7 +1273,6 @@ class ParamsTabNM(ParamsTabCommon):
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
-        self.tab_mtf.vlo_top.addWidget(uir.UnderConstruction())
 
         self.mtf_type.addItems(ALTERNATIVES['NM']['MTF'])
         self.mtf_roi_size_x = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)

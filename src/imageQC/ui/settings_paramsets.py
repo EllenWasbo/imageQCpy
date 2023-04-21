@@ -7,13 +7,15 @@
 from __future__ import annotations
 
 import os
+import copy
 from dataclasses import asdict
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QBrush, QColor, QFont
 from PyQt5.QtWidgets import (
     QWidget, QTreeWidget, QTreeWidgetItem, QTabWidget,
-    QVBoxLayout, QHBoxLayout, QToolBar, QLabel, QAction, QListWidget
+    QVBoxLayout, QHBoxLayout, QToolBar, QLabel, QAction, QListWidget, QPushButton,
+    QMessageBox
     )
 
 # imageQC block start
@@ -22,6 +24,8 @@ from imageQC.config import config_classes as cfc
 from imageQC.ui.settings_reusables import StackWidget, QuickTestOutputTreeView
 from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
+from imageQC.ui.ui_dialogs import TextDisplay
+from imageQC.ui import messageboxes
 # imageQC block end
 
 
@@ -112,6 +116,11 @@ class ParametersOutputWidget(QWidget):
         act_delete.triggered.connect(self.wid_output_table.delete_row)
         self.toolbar.addActions([act_add, act_edit, act_up, act_down, act_delete])
 
+        btn_test_output = QPushButton(
+            'Test output with currently loaded images and QuickTest template.')
+        btn_test_output.clicked.connect(self.test_output)
+        vlo_table.addWidget(btn_test_output)
+
     def edit_group_by(self):
         """Edit parameters to group images by."""
         dlg = TagPatternEditDialog(
@@ -130,6 +139,56 @@ class ParametersOutputWidget(QWidget):
             self.parent.flag_edit(True)
             self.list_group_by.clear()
             self.list_group_by.addItems(pattern.list_tags)
+
+    def test_output(self):
+        """Run QuickTest if set in main and current_paramset == selected paramset."""
+        main = self.parent.dlg_settings.main
+        if len(main.imgs) > 0:
+            ok_param = False
+            if main.current_paramset.label == self.parent.current_template.label:
+                if main.current_modality == self.parent.current_modality:
+                    ok_param = True
+
+            ok_qt = False
+            if main.wid_quicktest.gb_quicktest.isChecked():
+                main.wid_quicktest.get_current_template()
+                current_qt = main.wid_quicktest.current_template
+                if current_qt is not None:
+                    if any(current_qt.tests):
+                        set_qt_tests = set(sum(current_qt.tests, []))
+                        set_res = set([*main.results])
+                        if len(set_res.difference(set_qt_tests)) == 0:
+                            ok_qt = True
+            if ok_qt and ok_param:
+                # temporary set test output to main.current_paramset.output
+                curr_output = copy.deepcopy(main.current_paramset.output)
+                test_output = copy.deepcopy(self.parent.current_template.output)
+                if not all([test_output.include_header, test_output.transpose_table]):
+                    dlg = messageboxes.QuestionBox(
+                        parent=self, title='Recommended test settings',
+                        msg=('To better understand the output, the recommended settings'
+                             ' for testing is with headers and transposed table.'),
+                        yes_text='Use recommended settings for testing',
+                        no_text='Keep settings for testing of parameter set as is')
+                    res = dlg.exec()
+                    if res:
+                        test_output.include_header = True
+                        test_output.transpose_table = True
+                main.current_paramset.output = test_output
+                main.wid_quicktest.extract_results(silent=True)
+                main.current_paramset.output = curr_output
+                # display output (extract from clipboard and display)
+                main.display_clipboard(title='Export of current results in main window')
+            else:
+                msg = ('' if ok_param else
+                       'The parameter set in main window need to be the same as here.')
+                if ok_qt is False:
+                    msg = msg + ' No QuickTest results available in main window.'
+                QMessageBox.warning(self, 'No QuickTest defined ', msg)
+        else:
+            QMessageBox.warning(
+                self, 'No images loaded',
+                'No images loaded and calculated with QuickTest in main window.')
 
 
 class ParamSetsWidget(StackWidget):

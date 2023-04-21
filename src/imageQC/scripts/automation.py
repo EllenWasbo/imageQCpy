@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from fnmatch import fnmatch
 import logging
+from datetime import date
 
 import pydicom
 
@@ -321,6 +322,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                     print_progress('Extracting template settings.', m, nmod)
 
         not_dicom_files = []  # index list of files not valid dicom
+        too_old_files = []  # older than ignore since if set
+        no_date_files = []  # files without acq_date
         no_template_match = []  # index list of files without template match
         multiple_match = []  # index list of file matching more than one templ
         no_input_path = []
@@ -331,6 +334,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
         delete_files = []  # filenames to auto delete
         delete_pattern = cfc.TagPatternFormat(
             list_tags=auto_common.auto_delete_criterion_attributenames)
+
+        today = date.today()
 
         for f_id, file in enumerate(files):
             pd = {}
@@ -345,6 +350,14 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                 modalityDCM = pd.get('Modality', '')
                 mod = dcm.get_modality(modalityDCM)['key']
 
+                # generate new name
+                name_parts = dcm.get_dcm_info_list(
+                    pd, auto_common.filename_pattern, tag_infos,
+                    prefix_separator='', suffix_separator='',
+                    not_found_text='')
+                new_name = "_".join(name_parts)
+                new_name = valid_path(new_name)  # + '.dcm'
+
                 # check for auto delete
                 match_strings = dcm.get_dcm_info_list(
                     pd, delete_pattern, tag_infos,
@@ -353,23 +366,40 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                 delete_this = False
                 for i, val in enumerate(auto_common.auto_delete_criterion_values):
                     if match_strings[i] == val:
-                        delete_files.append(file)
+                        match_rule = (
+                            f'{auto_common.auto_delete_criterion_attributenames} = '
+                            f'{auto_common.auto_delete_criterion_values}')
+                        delete_files.append(match_rule)
                         delete_this = True
                         break
 
                 if delete_this is False:
-                    # generate new name
-                    name_parts = dcm.get_dcm_info_list(
-                        pd, auto_common.filename_pattern, tag_infos,
-                        prefix_separator='', suffix_separator='',
-                        not_found_text='')
-                    new_name = "_".join(name_parts)
-                    new_name = valid_path(new_name)  # + '.dcm'
                     file_renames[f_id] = new_name
 
+                    # older than ignore since?
+                    proceed = True
+                    if ignore_since > -1:
+                        img_infos, _ = dcm.read_dcm_info(
+                            [file], GUI=False, tag_infos=tag_infos)
+                        try:
+                            datestr = img_infos[0].acq_date
+                            year = int(datestr[0:4])
+                            month = int(datestr[4:6])
+                            day = int(datestr[6:8])
+                            acq_date = date(year, month, day)
+                            diff = today - acq_date
+                            if diff.days > ignore_since:
+                                too_old_files.append(new_name)
+                                proceed = False
+                        except (IndexError, AttributeError, ValueError):
+                            no_date_files.append(new_name)
+                            proceed = False
+
                     # if station_name (+ dicom crit) - look for match
-                    if mod in station_names:
-                        if station_name in station_names[mod]:
+                    if proceed and mod in station_names:
+                        if (
+                                station_name in station_names[mod]
+                                or '' in station_names[mod]):
                             match_idx = []
                             dcm_crit_only = False
                             idxs = get_all_matches(station_names[mod], station_name)
@@ -426,7 +456,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                         else:
                             no_template_match.append(f_id)
                     else:
-                        no_template_match.append(f_id)
+                        if proceed:
+                            no_template_match.append(f_id)
 
             if parent_widget is None:
                 print_progress('Reading DICOM header of files:', f_id + 1, len(files))
@@ -462,19 +493,38 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
 
         if templates is not None:
             import_log.append('\n')
+            tot_found = 0
             for mod, temps in templates.items():
                 temp_no = 0
                 for temp in temps:
                     n_found = n_files_template[mod][temp_no]
                     if n_found > 0:
                         import_log.append(f'\t{mod}/{temp.label}: {n_found} new files')
+                        tot_found += n_found
                     temp_no += 1
+            import_log.append(
+                f'\t In total {tot_found}/{len(files)} files matching templates')
             import_log.append('\n')
 
         if len(not_dicom_files) > 0:
             import_log.append(
                 f'{len(not_dicom_files)} files not valid DICOM.'
             )
+        if len(too_old_files) > 0:
+            import_log.append(
+                f'{len(too_old_files)} files older than specified limit. Left renamed '
+                'in import path.'
+            )
+        if len(no_date_files) > 0:
+            import_log.append(
+                f'{len(no_date_files)} files without image content or acquisition date.'
+                ' Left renamed in import path.'
+            )
+            import_log.append(
+                '\t Consider adding autodelete rules for these in import settings.'
+            )
+            for filename in no_date_files:
+                import_log.append(f'\t {filename}')
         if len(no_template_match) > 0:
             import_log.append(
                 f'{len(no_template_match)} files without match on any '
@@ -493,13 +543,20 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
             )
         if len(delete_files) > 0:
             ndel = len(delete_files)
+            del_files = []
             for file in delete_files:
                 try:
                     os.remove(file)
+                    del_files.append(file)
                 except (PermissionError, OSError) as e:
-                    import_log.append(f'Failed to delete {file}\n{e}')
+                    import_log.appfend(f'Failed to autodelete {file}\n{e}')
                     ndel -= 1
-            import_log.append(f'{len(delete_files)} files auto deleted.')
+            import_log.append(
+                f'{len(delete_files)} files auto deleted according to import settings.')
+            rules = list(set(delete_files))
+            for rule in rules:
+                delete_files.count(rule)
+                import_log.append(f'\t {delete_files.count(rule)} files where {rule}')
 
         if auto_common.auto_delete_empty_folders:
             dirs = [str(x) for x in p.glob('**/*') if x.is_dir()]

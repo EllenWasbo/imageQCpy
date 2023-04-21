@@ -442,11 +442,11 @@ class ConfigIdl2Py():
                 sni_correct_pos = list(cp.SNICORRPOS[0])
                 paramset.NM.sni_correct_pos_x = not bool(sni_correct_pos[0])
                 paramset.NM.sni_correct_pos_y = not bool(sni_correct_pos[1])
-            if 'SNI_FCD' in param_names:
-                fcr = list(cp.SNI_FCD[0])
-                paramset.NM.sni_eye_filter_f = fcr[0]
-                paramset.NM.sni_eye_filter_c = fcr[1]
-                paramset.NM.sni_eye_filter_r = fcr[2]
+            #if 'SNI_FCD' in param_names:
+            #    fcr = list(cp.SNI_FCD[0])
+            #    paramset.NM.sni_eye_filter_f = fcr[0]
+            #    paramset.NM.sni_eye_filter_c = fcr[1]
+            #    paramset.NM.sni_eye_filter_r = fcr[2]
             # if 'PLOTSNI' in param_names:
             #     paramset.NM.sni_plot = cp.PLOTSNI[0]
             if 'MTFTYPENM' in param_names:
@@ -821,7 +821,12 @@ class ConfigIdl2Py():
                                         pass
                                 elif aut == 'STATNAME':
                                     try:
-                                        auto_temp.station_name = try_decode(autv[0][0])
+                                        name = try_decode(autv[0][0])
+                                        if len(name) > 0:
+                                            if name[-1] == ' ':
+                                                name = name[:-1]
+                                                # IDL and Python seem to get these diffently
+                                        auto_temp.station_name = name
                                     except IndexError:
                                         pass
                                 elif aut == 'PATHAPP':
@@ -862,9 +867,12 @@ class ConfigIdl2Py():
                                             n_unknown += 1
                                         auto_temp.dicom_crit_attributenames = (
                                             tag_pattern.list_tags)
-                                        auto_temp.dicom_crit_values = [
-                                            try_decode(autv[0][2])
-                                            ]
+                                        val = try_decode(autv[0][2])
+                                        if len(val) > 0:
+                                            if val[-1] == ' ':
+                                                val = val[:-1]
+                                                # IDL and Python seem to get these diffently
+                                        auto_temp.dicom_crit_values = [val]
                                 elif aut == 'SORTBY':
                                     if isinstance(autv[0], np.ndarray):
                                         sort_list = list(autv[0])
@@ -1014,7 +1022,11 @@ class ConfigIdl2Py():
                         # EXMODTYPE
                         if modality == 'XRAY':
                             idx = idx + 1
-                    sort_tags.append(py_attr[idx])
+                            sort_tags.append(py_attr[idx])
+                            if idl_tag_name == 'EXMODTYPE':
+                                sort_tags.append('ExposureControlModeDescription')
+                    else:
+                        sort_tags.append(py_attr[idx])
                 except ValueError:
                     try:
                         tag_uppercase = [

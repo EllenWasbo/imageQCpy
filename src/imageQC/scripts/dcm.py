@@ -134,10 +134,11 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 'studyUID': (pd.get('StudyInstanceUID', ''))
                 }
 
-            slice_thickness, pix, slice_location = get_dcm_info_list(
+            slice_thickness, pix, slice_location, acq_date = get_dcm_info_list(
                     pd,
                     TagPatternFormat(list_tags=[
-                        'SliceThickness', 'PixelSpacing', 'SliceLocation']),
+                        'SliceThickness', 'PixelSpacing', 'SliceLocation',
+                        'AcquisitionDate']),
                     tag_infos,
                     prefix_separator='', suffix_separator='',
                     )
@@ -172,10 +173,8 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 except ValueError:
                     pass
 
-            acq_date = pd.get('AcquisitionDate', '')
-            if acq_date == '':
-                acq_date = pd.get('AcquisitionDateTime', '')
-                if acq_date == '':
+            if isinstance(acq_date, str):
+                if len(acq_date) > 8:  # if AcquisitionDateTime is used
                     acq_date = acq_date[0:9]
             attrib['acq_date'] = acq_date
 
@@ -1019,6 +1018,7 @@ def dump_dicom(parent_widget, filename=''):
     if filename != '':
         try:
             ds = pydicom.dcmread(filename)
+            #TODO consider using TextDisplay from ui_dialogs
             dlg = QDialog(parent_widget)
             dlg.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
             dlg.setWindowFlags(dlg.windowFlags() | Qt.CustomizeWindowHint)

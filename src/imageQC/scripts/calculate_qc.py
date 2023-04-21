@@ -1185,9 +1185,10 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             else:
                 image_input = image2d
 
-            values, details_dict = calculate_NM_SNI(
+            values, details_dict2 = calculate_NM_SNI(
                 image_input, roi_array, image_info.pix[0], paramset,
                 uncorr_image=uncorr_image)
+            details_dict.update(details_dict2)
 
             res = Results(
                 headers=headers, values=values,
@@ -2793,22 +2794,18 @@ def calculate_NM_SNI(image2d, roi_array, pix, paramset, uncorr_image=None):
     details_dict : dict
     """
 
-    def get_eye_filter(roi_size, pix, f, c, d):
-        """Get eye filter V(r)=r^f*exp(-cr^2).
+    def get_eye_filter(roi_size, pix, c):
+        """Get eye filter V(r)=r^1.3*exp(-cr^2).
 
         Parameters
         ----------
         roi_size : int
             size of roi or image in pix
         pix : float
-            pixelsize
-        f : float
-            TODO - describe
+            mm pr pix in image
         c : float
-            adjusted to have V(r) max @ some cy/degree
-                (Nelson et al uses c=28 = viewing distance 1.5m)
-        d : float
-            displaysize (mm on screen) -- Nelson et al uses 65 mm
+            adjusted to have V(r) max 4 cy/degree
+                (Nelson et al uses c=28 = display size 65mm, viewing distance 1.5m)
 
         Returns
         -------
@@ -2816,69 +2813,74 @@ def calculate_NM_SNI(image2d, roi_array, pix, paramset, uncorr_image=None):
             filter 2d : np.ndarray quadratic with size roi_height
             curve: dict of r and V
         """
-        def eye_filter_func(r, f, c):
-            return r**f * np.exp(-c*r**2)
+        def eye_filter_func(r, c):
+            return r**1.3 * np.exp(-c*r**2)
 
-        r = (1/d) * np.arange(roi_size/2)  # /2 because from center
-        V = eye_filter_func(r, f, c)
-        eye_filter_1d = {'r': r, 'V': 1/np.max(V) * V}
+        freq = np.fft.fftfreq(roi_size, d=pix)
+        freq = freq[:freq.size//2]  # from center
+        V = eye_filter_func(freq, c)
+        eye_filter_1d = {'r': freq, 'V': 1/np.max(V) * V}
 
+        unit = freq[1] - freq[0]
         dists = mmcalc.get_distance_map_point((roi_size, roi_size))
-        eye_filter_2d = eye_filter_func((1/d)*dists, f, c)
+        eye_filter_2d = eye_filter_func(unit*dists, c)
         eye_filter_2d = 1/np.max(eye_filter_2d) * eye_filter_2d
 
-        return {'filter_2d': eye_filter_2d, 'curve': eye_filter_1d}
+        return {'filter_2d': eye_filter_2d, 'curve': eye_filter_1d, 'unit': unit}
 
-    def calculate_SNI_this(roi_array_this, eye_filter):
+    def calculate_SNI_this(roi_array_this, eye_filter, unit):
         rows = np.max(roi_array_this, axis=1)
         cols = np.max(roi_array_this, axis=0)
         quantum_noise = np.mean(uncorr_image[rows][:, cols]) * pix**2
-        # Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
-        # Total(NPS)=NPSvalue*ROIsz^2
-        # NPSvalue = Meancount/(pixNPS^2*ROIsz^2)=MeanCount*pix^2
+        """ explained how quantum noise is found above
+        Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
+        Total(NPS)=NPSvalue*ROIsz^2
+        NPSvalue = Meancount/(pixNPS^2*ROIsz^2)=MeanCount*pix^2
+        """
         subarray = image2d[rows][:, cols]
         NPS = mmcalc.get_2d_NPS(subarray - np.mean(subarray), pix)
         NPS_struct = NPS - quantum_noise
-        breakpoint()
         NPS_filt = NPS * eye_filter
         NPS_struct_filt = NPS_struct * eye_filter
         SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
-        unit = 1/(pix*subarray.shape[0])
-        freq, radial_profile = mmcalc.get_radial_profile(NPS, pix=unit, step_size=0.01)
-        breakpoint()
-        return (NPS_filt, quantum_noise, SNI, freq, radial_profile)
+        freq, rNPS = mmcalc.get_radial_profile(NPS, pix=unit, step_size=0.01)
+        _, rNPS_filt = mmcalc.get_radial_profile(NPS_filt, pix=unit, step_size=0.01)
+        _, rNPS_struct_filt = mmcalc.get_radial_profile(
+            NPS_struct_filt, pix=unit, step_size=0.01)
+        
+        # set central axis of NPS array to 0
+        line = NPS.shape[0] // 2
+        NPS[line] = 0
+        NPS[:, line] =0
+
+        details_dict_roi = {
+            'NPS': NPS, 'quantum_noise': quantum_noise,
+            'freq': freq, 'rNPS': rNPS, 'rNPS_filt': rNPS_filt,
+            'rNPS_struct_filt': rNPS_struct_filt
+            }
+        return (SNI, details_dict_roi)
 
     SNI_values = []
-    details_dict = {
-        'NPS': [], 'quantum_noise': [], 'freq': [], 'rNPS': []
-        }
+    details_dict = {'pr_roi': []}
 
     rows = np.max(roi_array[1], axis=1)
     eye_filter = get_eye_filter(
-        np.count_nonzero(rows), pix,
-        paramset.sni_eye_filter_f, paramset.sni_eye_filter_c, paramset.sni_eye_filter_d)
+        np.count_nonzero(rows), pix, paramset.sni_eye_filter_c)
     details_dict['eye_filter_large'] = eye_filter['curve']
     for i in [1, 2]:
-        NPS, quantum_noise, SNI, freq, rNPS = calculate_SNI_this(
-            roi_array[i], eye_filter['filter_2d'])
-        details_dict['NPS'].append(NPS)
-        details_dict['quantum_noise'].append(quantum_noise)
-        details_dict['freq'].append(freq)
-        details_dict['rNPS'].append(rNPS)
+        SNI, details_dict_roi = calculate_SNI_this(
+            roi_array[i], eye_filter['filter_2d'], unit=eye_filter['unit'])
+        details_dict['pr_roi'].append(details_dict_roi)
         SNI_values.append(SNI)
 
     rows = np.max(roi_array[3], axis=1)
     eye_filter = get_eye_filter(
-        np.count_nonzero(rows), pix,
-        paramset.sni_eye_filter_f, paramset.sni_eye_filter_c, paramset.sni_eye_filter_d)
+        np.count_nonzero(rows), pix, paramset.sni_eye_filter_c)
     details_dict['eye_filter_small'] = eye_filter['curve']
     for i in range(3, 9):
-        NPS, quantum_noise, SNI, freq, rNPS = calculate_SNI_this(
-            roi_array[i], eye_filter['filter_2d'])
-        details_dict['NPS'].append(NPS)
-        details_dict['quantum_noise'].append(quantum_noise)
-        details_dict['freq'].append(freq)
-        details_dict['rNPS'].append(rNPS)
+        SNI, details_dict_roi = calculate_SNI_this(
+            roi_array[i], eye_filter['filter_2d'], unit=eye_filter['unit'])
+        details_dict['pr_roi'].append(details_dict_roi)
         SNI_values.append(SNI)
 
     values = [np.max(SNI_values)] + SNI_values

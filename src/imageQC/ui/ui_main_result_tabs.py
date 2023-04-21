@@ -279,6 +279,7 @@ class ResultPlotCanvas(PlotCanvas):
         self.default_range_x = [None, None]
         self.default_range_y = [None, None]
         self.legend_location = 'upper right'
+        self.bars = []
         self.curves = []
         if self.main.current_test == 'vendor':
             try:
@@ -319,24 +320,35 @@ class ResultPlotCanvas(PlotCanvas):
                     xx = list(curve['xvals'])
                     if not isinstance(xx[0], int):
                         x_only_int = False
+            if self.main.current_test == 'SNI':
+                self.ax.fill_between(
+                    self.curves[0]['xvals'],
+                    self.curves[0]['yvals'],
+                    self.curves[1]['yvals'],
+                    hatch='X', edgecolor='b')
             if x_only_int:
                 self.ax.xaxis.set_major_locator(
                     matplotlib.ticker.MaxNLocator(integer=True))
             if len(self.curves) > 1:
                 self.ax.legend(loc=self.legend_location)
+            if None not in self.default_range_x:
+                self.ax.set_xlim(self.default_range_x)
+            if None not in self.default_range_y:
+                self.ax.set_ylim(self.default_range_y)
+        elif len(self.bars) > 0:
+            for bar in self.bars:
+                self.ax.bar(bar['names'], bar['values'])
+        else:
+            self.ax.axis('off')
+
+        if len(self.curves) + len(self.bars) > 0:
+            self.ax.set_xlabel(self.xtitle)
+            self.ax.set_ylabel(self.ytitle)
             if len(self.title) > 0:
                 self.ax.set_title(self.title)
                 self.fig.subplots_adjust(0.15, 0.25, 0.95, 0.85)
             else:
                 self.fig.subplots_adjust(0.15, 0.2, 0.95, .95)
-            self.ax.set_xlabel(self.xtitle)
-            self.ax.set_ylabel(self.ytitle)
-            if None not in self.default_range_x:
-                self.ax.set_xlim(self.default_range_x)
-            if None not in self.default_range_y:
-                self.ax.set_ylim(self.default_range_y)
-        else:
-            self.ax.axis('off')
 
         self.draw()
 
@@ -1376,25 +1388,75 @@ class ResultPlotCanvas(PlotCanvas):
 
     def SNI(self):
         """Prepare plot for test NM SNI test."""
-        self.title = 'Scan speed profile'
-        self.xtitle = 'Position (mm)'
-        self.ytitle = 'Difference from mean %'
         imgno = self.main.gui.active_img_no
+        self.title = 'Calculations to get Structured Noise Index'
+        self.ytitle = r'NPS ($\mathregular{mm^{2}}$)'
+        self.xtitle = 'frequency (pr mm)'
         details_dict = self.main.results['SNI']['details_dict'][imgno]
-        styles = ['-r', '-b', '-lime', '-cyan', '-m', '--lime', '--cyan', '--m']
-        for i in range(8):
-            self.curves.append(
-                {'label': 'profile', 'xvals': details_dict['freq'][i],
-                 'yvals': details_dict['rNPS'][i], 'style': styles[i]
-                 })
+        roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
 
-        # display eye filter
-        #self.curves.append(
-        #    {'label': 'Eye filter', 'xvals': details_dict['freq'][i],
-        #     'yvals': details_dict['rNPS'][i], 'style': '.k'}
-        #    )
-        
-        # quantum noise for L1
+        def plot_SNI_values():
+            """Plot SNI values as columns pr ROI."""
+            self.bars.append({'names': roi_names,
+                              'values': self.main.results['SNI']['values'][imgno][1:]})
+            self.title = 'Structured Noise Index pr ROI'
+            self.ytitle = 'SNI'
+            self.xtitle = 'ROI'
+
+        def plot_filtered_NPS(roi_name='L1'):
+            """Plot filtered NPS + NPS structure for selected ROI +quantum noise txt."""
+            roi_no = roi_names.index(roi_name)
+            details_dict_roi = details_dict['pr_roi'][roi_no]
+            yvals = details_dict_roi['rNPS_filt']
+            xvals = details_dict_roi['freq']
+            self.curves.append(
+                {'label': 'radial NPS with eye filter',
+                 'xvals': xvals, 'yvals': yvals, 'style': '-b'})
+            self.default_range_y = [0, 1.1 * np.max(yvals[10:])]
+            yvals = details_dict_roi['rNPS_struct_filt']
+            self.curves.append(
+                {'label': '(radial NPS - quantum noise) with eye filter',
+                 'xvals': xvals, 'yvals': yvals, 'style': '-r'})
+
+            txt_quantum_noise = (
+                f'Quantum noise = {details_dict_roi["quantum_noise"]:.2f}')
+            at = matplotlib.offsetbox.AnchoredText(txt_quantum_noise, loc='lower right')
+            self.ax.add_artist(at)
+
+        def plot_all_NPS():
+            """Plot NPS for all ROIs + hum vis filter (normalized to NPS in max)."""
+            colors = ['red', 'blue', 'green', 'cyan', 'k', 'k', 'k', 'k']
+            styles = ['-', '-', '-', '-', '-', '--', ':', '-.']
+            for roi_no in range(8):
+                details_dict_roi = details_dict['pr_roi'][roi_no]
+                yvals = details_dict_roi['rNPS']
+                if roi_no == 0:
+                    self.default_range_y = [0, 1.3 * np.max(yvals[10:])]
+                xvals = details_dict_roi['freq']
+                self.curves.append(
+                    {'label': f'NPS ROI {roi_names[roi_no]}',
+                     'xvals': xvals, 'yvals': yvals,
+                     'color': colors[roi_no], 'style': styles[roi_no]})
+
+            eye_filter_curve = details_dict['eye_filter_large']
+            yvals = eye_filter_curve['V'] * np.median(details_dict['pr_roi'][0]['rNPS'])
+            self.curves.append(
+                {'label': 'Visual filter',
+                 'xvals': eye_filter_curve['r'], 'yvals': yvals,
+                 'color': 'darkgray', 'style': '-'})
+
+        test_widget = self.main.stack_test_tabs.currentWidget()
+        try:
+            sel_text = test_widget.sni_plot.currentText()
+        except AttributeError:
+            sel_text = ''
+        if 'SNI' in sel_text:
+            plot_SNI_values()
+        elif 'Filtered' in sel_text:
+            plot_filtered_NPS(roi_name=sel_text[-2:])
+        elif 'all' in sel_text:
+            plot_all_NPS()
+
 
     def Spe(self):
         """Prepare plot for test NM Speed test."""

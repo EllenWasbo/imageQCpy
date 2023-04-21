@@ -72,7 +72,7 @@ class StackWidget(QWidget):
         except AttributeError:
             self.import_review_mode = False
             self.save_blocked = False
-        self.current_modality = 'CT'  # default get from latest selection
+        self.current_modality = self.dlg_settings.initial_modality
         self.status_label = QLabel('')
 
         self.vlo = QVBoxLayout()
@@ -102,7 +102,7 @@ class StackWidget(QWidget):
             self.edited = False
             self.status_label.setText('')
 
-    def update_from_yaml(self):
+    def update_from_yaml(self, initial_template_label=''):
         """Refresh settings from yaml file."""
         self.lastload = time()
 
@@ -133,7 +133,7 @@ class StackWidget(QWidget):
                         pass  # ignore if editable == False
 
             if self.mod_temp:
-                self.refresh_templist()
+                self.refresh_templist(selected_label=initial_template_label)
             else:
                 self.update_data()
 
@@ -664,22 +664,36 @@ class ModTempSelector(QWidget):
                 self, 'Empty list',
                 'No template to rename.')
         else:
-            sel = self.list_temps.currentItem()
-            if sel is not None:
-                current_text = sel.text()
+            proceed = True
+            if self.parent.edited:
+                res = messageboxes.QuestionBox(
+                    parent=self, title='Rename edited?',
+                    msg='''Selected template has changed.
+                    Save changes before rename?''',
+                    yes_text='Yes',
+                    no_text='Cancel')
+                if res.exec():
+                    self.save()
+                else:
+                    proceed = False
 
-                text, proceed = QInputDialog.getText(
-                    self, 'New label',
-                    'Rename ' + self.parent.typestr + '                      ',
-                    text=current_text)
-                text = valid_template_name(text)
-                if proceed and text != '' and current_text != text:
-                    if text in self.parent.current_labels:
-                        QMessageBox.warning(
-                            self, 'Label already in use',
-                            'This label is already in use.')
-                    else:
-                        self.parent.rename(text)
+            if proceed:
+                sel = self.list_temps.currentItem()
+                if sel is not None:
+                    current_text = sel.text()
+
+                    text, proceed = QInputDialog.getText(
+                        self, 'New label',
+                        'Rename ' + self.parent.typestr + '                      ',
+                        text=current_text)
+                    text = valid_template_name(text)
+                    if proceed and text != '' and current_text != text:
+                        if text in self.parent.current_labels:
+                            QMessageBox.warning(
+                                self, 'Label already in use',
+                                'This label is already in use.')
+                        else:
+                            self.parent.rename(text)
 
     def duplicate(self):
         """Duplicate template."""

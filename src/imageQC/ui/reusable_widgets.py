@@ -43,11 +43,23 @@ class UnderConstruction(QWidget):
 class LabelItalic(QLabel):
     """Label with preset italic font."""
 
-    def __init__(self, txt):
+    def __init__(self, txt, color=None):
+        self.color = color
+        html_txt = self.convert_to_html(txt)
+        super().__init__(html_txt)
+        self.setStyleSheet(f'QLabel {{color:{self.color}}}')
+
+    def convert_to_html(self, txt):
+        """Add html code to input text."""
         html_txt = f"""<html><head/><body>
         <p><i>{txt}</i></p>
         </body></html>"""
-        super().__init__(html_txt)
+        return html_txt
+
+    def setText(self, txt):
+        """Override setText to include formatting."""
+        html_txt = self.convert_to_html(txt)
+        super().setText(html_txt)
 
 
 class LabelMultiline(QLabel):

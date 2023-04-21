@@ -198,7 +198,9 @@ class SelectQuickTestWidget(SelectTemplateWidget):
             QIcon(f'{os.environ[ENV_ICON_PATH]}gears.png'),
             'Edit/manage QuickTest templates', self)
         act_settings_qt.triggered.connect(
-            lambda: self.main.run_settings(initial_view='QuickTest templates'))
+            lambda: self.main.run_settings(
+                initial_view='QuickTest templates',
+                initial_template_label=self.current_template.label))
 
         act_exec_qt = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}play.png'),
@@ -285,10 +287,10 @@ class SelectQuickTestWidget(SelectTemplateWidget):
                 ('No image marked for testing. Double- or right-click images in file '
                  'list to mark for testing.'))
 
-    def extract_results(self, skip_questions=False):
+    def extract_results(self, skip_questions=False, silent=False):
         """Extract result values according to paramset.output to clipboard."""
         proceed = True
-        if skip_questions:  # for testing
+        if skip_questions or silent:  # skip_questions for testing
             include_headers = self.main.current_paramset.output.include_header
             transpose_table = self.main.current_paramset.output.transpose_table
         else:
@@ -319,7 +321,8 @@ class SelectQuickTestWidget(SelectTemplateWidget):
                 if transpose_table:
                     df = df.transpose()
                 df.to_clipboard(index=False, excel=True, sep=None, header=None)
-            self.main.status_bar.showMessage('Values in clipboard', 2000)
+            if not silent:
+                self.main.status_bar.showMessage('Values in clipboard', 2000)
 
 
 class SelectParamsetWidget(SelectTemplateWidget):
@@ -357,7 +360,9 @@ class SelectParamsetWidget(SelectTemplateWidget):
             QIcon(f'{os.environ[ENV_ICON_PATH]}gears.png'),
             'Manage parameter sets', self)
         act_settings_param.triggered.connect(
-            lambda: self.main.run_settings(initial_view='Parameter sets'))
+            lambda: self.main.run_settings(
+                initial_view='Parameter sets / output',
+                initial_template_label=self.main.current_paramset.label))
 
         toolb = QToolBar()
         toolb.addActions([act_add_param, act_save_param, act_settings_param])

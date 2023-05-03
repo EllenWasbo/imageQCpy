@@ -81,7 +81,9 @@ def get_rois(image, image_number, input_main):
                 offcenter_xy=off_center_xy)
             if paramset.roi_type == 2:  # rotated ROI
                 roi_this = ndimage.rotate(
-                    roi_array, paramset.roi_a, reshape=False)
+                    roi_this.astype(float), -paramset.roi_a, reshape=False)
+                roi_this = np.round(roi_this)
+                roi_this = np.array(roi_this, dtype=bool)
 
         return roi_this
 
@@ -381,6 +383,9 @@ def get_rois(image, image_number, input_main):
     def Cro():
         roi_size_in_pix = paramset.cro_roi_size / image_info.pix[0]
         return get_roi_circle(img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
+
+    def Rec():
+        return get_roi_recovery_curve(image, image_info, paramset)
 
     def SNR():
         return get_roi_circle_MR(
@@ -864,7 +869,7 @@ def get_roi_NM_bar(image, image_info, test_params):
     image_info : DcmInfo
         as defined in scripts/dcm.py
     test_params : ParamSetNM
-        for given modality as defined in config/config_classes.py
+        as defined in config/config_classes.py
 
     Returns
     -------
@@ -896,6 +901,38 @@ def get_roi_NM_bar(image, image_info, test_params):
     for i in range(4):
         roi_array.append(roi_temp[order_var[i]])
 
+    return roi_array
+
+
+def get_roi_recovery_curve(image, image_info, test_params):
+    """Generate background and sphere rois based on image content.
+
+    Parameters
+    ----------
+    image : nparr
+    image_info : DcmInfo
+        as defined in scripts/dcm.py
+    test_params : ParamSetPET
+        as defined in config/config_classes.py
+
+
+    Returns
+    -------
+    roi_array : ndarray
+        list of 7 2d arrays (background and 6 spheres) with type bool. Default is None
+    errmsg : list of str. Default is []
+    """
+    roi_array = None
+
+    search_radius_mm = 50.
+    roi_central_cylinder = get_roi_circle(
+        image.shape, (0, 0), search_radius_mm/image_info.pix[0])
+    cx, cy = mmcalc.center_xy_of_disc(image, roi=roi_central_cylinder)
+
+    #TODO
+    '''
+    search lung insert center of image
+    '''
     return roi_array
 
 

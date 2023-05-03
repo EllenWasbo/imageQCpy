@@ -354,7 +354,7 @@ class ParamsTabCommon(QTabWidget):
                                     singleStep=0.1)
         self.roi_y.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_y'))
-        self.roi_a = QDoubleSpinBox(decimals=1, minimum=0,  maximum=359.9,
+        self.roi_a = QDoubleSpinBox(decimals=1, minimum=-359.9, maximum=359.9,
                                     singleStep=0.1)
         self.roi_a.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_a'))
@@ -1048,7 +1048,7 @@ class ParamsTabXray(ParamsTabCommon):
         hlo_roi_size.addWidget(QLabel('if less than 3 pix, 3 pix will be used'))
         hlo_roi_size.addStretch()
         hlo_percent = QHBoxLayout()
-        hlo_percent.addWidget(QLabel('ROI width and height (% of image)'))
+        hlo_percent.addWidget(QLabel('Include % of image'))
         hlo_percent.addWidget(self.var_percent)
         hlo_percent.addStretch()
         self.tab_var.vlo.addLayout(hlo_roi_size)
@@ -1396,7 +1396,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.tab_bar.hlo.addStretch()
 
         hlo_roi = QHBoxLayout()
-        hlo_roi.addWidget(QLabel('ROI size (mm)'))
+        hlo_roi.addWidget(QLabel('ROI radius (mm)'))
         hlo_roi.addWidget(self.bar_roi_size)
         hlo_roi.addStretch()
         self.tab_bar.vlo.addLayout(hlo_roi)
@@ -1485,9 +1485,11 @@ class ParamsTabPET(ParamsTabCommon):
 
         self.create_tab_hom()
         self.create_tab_cro()
+        self.create_tab_rec()
 
         self.addTab(self.tab_hom, "Homogeneity")
         self.addTab(self.tab_cro, "Cross Calibration")
+        self.addTab(self.tab_rec, "Recovery Curve")
 
     def create_tab_hom(self):
         """GUI of tab Homogeneity."""
@@ -1565,6 +1567,24 @@ class ParamsTabPET(ParamsTabCommon):
         hlo_auto_select.addWidget(self.cro_percent_slices)
         hlo_auto_select.addWidget(QLabel('%'))
         self.tab_cro.vlo.addWidget(self.cro_auto_select_slices)
+
+    def create_tab_rec(self):
+        """GUI of tab Recovery Curve."""
+        self.tab_rec = ParamsWidget(self, run_txt='Calculate recovery curve')
+        self.tab_rec.vlo_top.addWidget(QLabel(
+            'Assuming NEMA NU2 phantom. Autofind phantom and spheres.'))
+        self.tab_rec.vlo_top.addWidget(uir.UnderConstruction())
+        self.rec_roi_size_bkg = QDoubleSpinBox(decimals=1, minimum=0.1, maximum=100)
+        self.rec_table_widget = PositionTableWidget(
+                self, self.main, table_attribute_name='rec_table')
+        self.rec_table_widget.table.update_table()
+
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('ROI radius background (mm)'), self.rec_roi_size_bkg)
+
+        self.tab_rec.hlo.addLayout(flo1)
+        self.tab_rec.hlo.addWidget(uir.VLine())
+        self.tab_rec.hlo.addWidget(self.rec_table_widget)
 
 
 class ParamsTabMR(ParamsTabCommon):
@@ -1861,7 +1881,260 @@ class BoolSelectTests(uir.BoolSelect):
             )
 
 
-class CTnTableWidget(QWidget):
+class PositionTableWidget(QWidget):
+    """Reusable table widget to hold user defined roi positions."""
+
+    def __init__(self, parent, main, table_attribute_name='', headers=None):
+        """Initialize PositionTableWidget.
+
+        Parameters
+        ----------
+        parent : widget
+            test widget containing this widget and param_changed
+        main : MainWindow
+        table_attribute_name : str
+            attribute name of PositionTable or variants of this
+        headers : list of str
+            if None ['Label', 'pos x [mm]', 'pos y [mm]']
+        """
+        super().__init__()
+        self.parent = parent
+        self.main = main
+        self.table = PositionTable(self.parent, self.main,
+                                   table_attribute_name, headers=headers)
+        self.ncols = len(self.table.headers)
+
+        hlo = QHBoxLayout()
+        self.setLayout(hlo)
+
+        act_import = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
+            'Import table from clipboard or predefined tables', self)
+        act_import.triggered.connect(self.import_table)
+        act_copy = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}copy.png'),
+            'Copy table to clipboard', self)
+        act_copy.triggered.connect(self.copy_table)
+        act_add = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+            'Add row', self)
+        act_add.triggered.connect(self.add_row)
+        act_delete = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+            'Delete row', self)
+        act_delete.triggered.connect(self.delete_row)
+        act_get_pos = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}selectArrow.png'),
+            'Get position from last mouseclick in image', self)
+        act_get_pos.triggered.connect(self.get_pos_mouse)
+        toolb = QToolBar()
+        toolb.addActions([act_import, act_copy, act_add, act_delete, act_get_pos])
+        toolb.setOrientation(Qt.Vertical)
+        hlo.addWidget(toolb)
+        hlo.addWidget(self.table)
+
+    def import_table(self):
+        """Import contents to table from clipboard or from predefined."""
+        dlg = messageboxes.QuestionBox(
+            parent=self.main, title='Import table',
+            msg='Import table from...',
+            yes_text='Clipboard',
+            no_text='Predefined tables')
+        res = dlg.exec()
+        input_table = None
+        if res:
+            dataf = pd.read_clipboard()
+            _, ncols = dataf.shape
+            if ncols != self.ncols:
+                pass #TODO ask for separator / decimal or guess?
+                errmsg = [
+                    'Failed reading table from clipboard.',
+                    f'Expected {self.ncols} columns of data that are',
+                    'separated by tabs or as copied from Excel.'
+                    ]
+                dlg = messageboxes.MessageBoxWithDetails(
+                    self, title='Failed reading table',
+                    msg='Failed reading table. See details.',
+                    details=errmsg, icon=QMessageBox.Warning)
+                dlg.exec()
+            else:
+                input_table = self.validate_input_dataframe(dataf)
+                '''
+                ctn_table = cfc.HUnumberTable()
+                ctn_table.materials = [
+                    str(dataf.iat[row, 1]) for row in range(nrows)]
+                ctn_table.pos_x = [
+                    float(dataf.iat[row, 2]) for row in range(nrows)]
+                ctn_table.pos_y = [
+                    float(dataf.iat[row, 3]) for row in range(nrows)]
+                ctn_table.relative_mass_density = [
+                    float(dataf.iat[row, 4]) for row in range(nrows)]
+                '''
+        else:
+            input_table = self.get_predefined_table()
+            '''
+            table_dict = cff.load_default_ct_number_tables()
+            if len(table_dict) > 0:
+                labels = [*table_dict]
+                label, ok = QInputDialog.getItem(
+                    self.main, "Select predefined table",
+                    "Predefined tables:", labels, 0, False)
+                if ok and label:
+                    ctn_table = table_dict[label]
+            '''
+
+        if input_table is not None:
+            self.table.current_table = input_table
+            self.parent.flag_edit(True)
+            self.table.update_table()
+
+    def validate_input_table(self, input_df):
+        """Convert the input pandas dataframe to the current_table format."""
+        table = cfc.PositionTable()
+        nrows, ncols = input_df.shape
+        if nrows > 0:
+            table = []
+            table.labels = [str(input_df.iat[row, 1]) for row in range(nrows)]
+            table.pos_x = [float(input_df.iat[row, 2]) for row in range(nrows)]
+            table.pos_y = [float(input_df.iat[row, 3]) for row in range(nrows)]
+
+        return table
+
+    def copy_table(self):
+        """Copy contents of table to clipboard."""
+        dict_2_pd = {
+            'labels': self.table.current_table.labels,
+            'pos_x': self.table.current_table.pos_x,
+            'pos_y': self.table.current_table.pos_y
+            }
+        dataf = pd.DataFrame(dict_2_pd)
+        dataf.to_clipboard(index=False)
+        self.main.status_bar.showMessage('Values in clipboard', 2000)
+
+    def add_row(self):
+        """Add row to table."""
+        rowno = 0
+        if self.table.current_table is None:
+            self.table.current_table = cfc.PositionTable()
+        else:
+            sel = self.table.selectedIndexes()
+            if len(sel) > 0:
+                rowno = sel[0].row()
+            else:
+                rowno = self.table.rowCount()
+        self.table.current_table.add_pos(index=rowno)
+        self.parent.flag_edit(True)
+        self.table.update_table()
+
+    def delete_row(self):
+        """Delete row from table."""
+        sel = self.table.selectedIndexes()
+        if len(sel) > 0:
+            rowno = sel[0].row()
+            self.table.current_table.delete_pos(rowno)
+            self.parent.flag_edit(True)
+            self.table.update_table()
+
+    def get_pos_mouse(self):
+        """Get position from last mouseclick in i mage."""
+        sel = self.table.selectedIndexes()
+        if len(sel) > 0:
+            rowno = sel[0].row()
+            sz_acty, sz_actx = np.shape(self.main.active_img)
+            image_info = self.main.imgs[self.main.gui.active_img_no]
+            dx_pix = self.main.gui.last_clicked_pos[0] - 0.5 * sz_actx
+            dxmm = round(dx_pix * image_info.pix[0], 1)
+            dy_pix = self.main.gui.last_clicked_pos[1] - 0.5 * sz_acty
+            dymm = round(dy_pix * image_info.pix[1], 1)
+            self.table.current_table.pos_x[rowno] = dxmm
+            self.table.current_table.pos_y[rowno] = dymm
+            #TODO Needed? mutable? setattr(self.main.current_paramset, self.table_attribute_name,
+                    #self.table.current_table)
+            self.parent.flag_edit(True)
+            self.table.update_table()
+
+
+class PositionTable(QTableWidget):
+    """Reusable table widget displaying positions ++."""
+
+    def __init__(self, parent, main, table_attribute_name, headers):
+        """Initiate PositionTable.
+
+        Parameters
+        ----------
+        parent : same parent as PositionTableWidget
+        main : MainWindow
+        table_attribute_name : str
+            attribute name in main.current_paramset
+        headers : list of str
+            holding headers for each tuple parameter
+        """
+        super().__init__()
+        self.main = main
+        self.parent = parent
+        self.current_table = getattr(
+            self.main.current_paramset, table_attribute_name, None)
+        if headers is not None:
+            self.headers = headers
+        else:
+            self.headers = ['Label', 'pos x [mm]', 'pos y [mm]']
+        self.cellChanged.connect(self.edit_current_table)
+
+    def edit_current_table(self, row, col):
+        """Update PositionTable when cell edited."""
+        val = self.item(row, col).text()
+        if col > 0:
+            val = float(val)
+        if col == 0:
+            self.current_table.labels[row] = val
+        elif col == 1:
+            self.current_table.pos_x[row] = val
+        elif col == 2:
+            self.current_table.pos_y[row] = val
+        self.parent.flag_edit(True)
+        self.parent.main.update_roi(clear_results_test=True)
+
+    def update_table(self):
+        """Populate table with current table."""
+        self.blockSignals(True)
+        self.clear()
+        self.setColumnCount(len(self.headers))
+        values = None
+        n_rows = 0
+        try:
+            n_rows = len(self.current_table.labels)
+            values = self.get_prepared_fill_values()
+        except AttributeError:
+            pass
+        self.setRowCount(n_rows)
+        self.setHorizontalHeaderLabels(self.headers)
+        self.verticalHeader().setVisible(False)
+
+        if values is not None:
+            for col in range(len(self.headers)):
+                this_col = values[col]
+                for row in range(n_rows):
+                    twi = QTableWidgetItem(str(this_col[row]))
+                    if col > 0:
+                        twi.setTextAlignment(4)
+                    self.setItem(row, col, twi)
+
+            self.resizeColumnsToContents()
+            self.resizeRowsToContents()
+        self.blockSignals(False)
+        self.parent.main.update_roi(clear_results_test=True)
+
+    def get_prepared_fill_values(self):
+        """Fill table with values in self.current_table."""
+        values = [
+            self.current_table.labels,
+            self.current_table.pos_x,
+            self.current_table.pos_y
+            ]
+        return values
+
+
+class CTnTableWidget(QWidget):#TODO PositionTableWidget
     """CT numbers table widget."""
 
     def __init__(self, parent, main):

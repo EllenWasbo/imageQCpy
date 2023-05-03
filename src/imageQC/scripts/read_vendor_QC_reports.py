@@ -49,6 +49,75 @@ def read_vendor_template(template, filepath):
     return results
 
 
+def read_pdf_dummy(txt):
+    """Framework to read specific structured pdf files. Copy this and edit.
+
+    Parameters
+    ----------
+    txt : list of str
+        text from pdf
+
+    Returns
+    -------
+    data : dict
+        'status': bool
+        'errmsg': list of str
+        'values': list of str,
+        'headers': list of str}
+    """
+    values = []
+    headers = []
+    errmsg = []
+    status = False
+
+    '''Explained:
+        txt is a list where each element is one line of text from the pdf
+        Start with some code to identify that the content is as expected.
+        Fx for PET daily QC:
+            if txt[0] == 'System Quality Report': ....
+        To search for specific strings indicating start of text of interest:
+            short_txt = [x[0:9] for x in txt] (to search start of lines only)
+            search_txt = 'Scan Date' (replace Scan Date with your text)
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                split_txt = txt[rowno].split(' ')
+                some_value = None
+                some_value = split_txt[1]
+                or
+                try:
+                    some_value = float(split_txt[1])
+                except (ValueError, IndexError):
+                    pass ( orr errmsg.append('...could not be found...'))
+
+        ... more values
+
+        values = [some_value, ...]
+        headers = ['description of some value', ...]
+
+        status = True
+        '''
+
+    '''
+    To use this:
+        config/iQCconstants.py
+            Add option in VENDOR_FILE_OPTIONS
+            option text should end with (.pdf)
+        scripts/read_vendor_QC_reports.py
+            in function open_vendor_files:
+                add option text (same as above) to list implemented_types
+        function read_vendor_template (first in the current file)
+            add
+            elif template.file_type == option text as above:
+                txt = get_pdf_txt(filepath)
+                results = read_xxxxthenewfunctionxxx(txt)
+        test...
+    '''
+
+    data = {'status': status, 'errmsg': errmsg,
+            'values': values, 'headers': headers}
+    return data
+
+
 def read_energy_spectrum_Siemens_gamma_camera(filepath):
     """Read energy spectrum copy to clipboard .txt from Analyser."""
     lines = []

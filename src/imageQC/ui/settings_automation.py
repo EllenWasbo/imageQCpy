@@ -144,7 +144,7 @@ class AutoCommonWidget(StackWidget):
         header = 'Import settings for automation'
         subtxt = (
             'Define general settings for the process of importing and sorting'
-            ' incoming files from the image pool.<br>'
+            ' incoming DICOM files from the image pool.<br>'
             'If no matching automation template is found, the import'
             ' process will simply rename the files according to the naming'
             ' template defined here.'

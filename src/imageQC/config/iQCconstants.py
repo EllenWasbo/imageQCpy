@@ -23,7 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.16alpha'
+VERSION = '3.0.17alpha'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -41,7 +41,7 @@ QUICKTEST_OPTIONS = {
     'Xray': ['DCM', 'ROI', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
     'NM': ['DCM', 'ROI', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
     'SPECT': ['DCM', 'ROI', 'MTF', 'Con'],
-    'PET': ['DCM', 'ROI', 'Hom', 'Cro'],
+    'PET': ['DCM', 'ROI', 'Hom', 'Cro', 'Rec'],
     'MR': ['DCM', 'ROI', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF']}
 """dict: with lists defining modalities and their corresponding
 list of tests with QuickTest as option."""
@@ -173,6 +173,10 @@ HEADERS = {
                 'Activity at scan (MBq)', 'Bq/ml',
                 'Bq/ml from images', 'SUV',
                 'New calibration factor']
+            },
+        'Rec': {
+            'alt0': [f'A50 {i+1}' for i in range(6)] + ['background'],
+            'alt1': [f'Max {i+1}' for i in range(6)] + ['background']
             }
         },
     'MR': {

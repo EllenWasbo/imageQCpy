@@ -548,8 +548,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                 try:
                     os.remove(file)
                     del_files.append(file)
-                except (PermissionError, OSError) as e:
-                    import_log.appfend(f'Failed to autodelete {file}\n{e}')
+                except (PermissionError, OSError, FileNotFoundError) as e:
+                    import_log.append(f'Failed to autodelete {file}\n{e}')
                     ndel -= 1
             import_log.append(
                 f'{len(delete_files)} files auto deleted according to import settings.')
@@ -786,7 +786,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                                 not_written.append(print_array)
                             else:
                                 if auto_template.archive:
-                                    archive_files(input_main_imgs=input_main_this.imgs)
+                                    errmsg = archive_files(
+                                        input_main_imgs=input_main_this.imgs)
+                                    if errmsg is not None:
+                                        log.append(errmsg)
                         print(
                             '\rFinished analysing template                            ',
                             '                                                         ')
@@ -944,7 +947,12 @@ def archive_files(input_main_imgs=None, filepath=None):
         The default is None.
     filepath : Path, optional
         file (vendor type file).The default is None.
+
+    Returns
+    -------
+    errmsg : string or None
     """
+    errmsg = None
     if input_main_imgs is not None:
         all_files = [info.filepath for info in input_main_imgs]
         all_files = list(set(all_files))  # uniq filepaths if multiframe images
@@ -961,16 +969,22 @@ def archive_files(input_main_imgs=None, filepath=None):
     else:
         # move files to Archive/yyyymmdd - only if dicom
         archive_path = archive_path / input_main_imgs[0].acq_date
-        proceed = False
-        try:
-            archive_path.mkdir()
-            proceed = True
-        except FileExistsError:
-            pass  # ignore if files already exists
-        if proceed:
-            for p in all_files:
-                this_file = Path(p)
+        archive_path.mkdir(exist_ok=True)
+
+        n_fail = 0
+        for p in all_files:
+            this_file = Path(p)
+            try:
                 this_file.rename(archive_path / this_file.name)
+            except FileExistsError:
+                n_fail += 1
+                pass  # ignore if files already exists
+        if n_fail > 0:
+            errmsg = (
+                f'\t{n_fail} files failed to archive, name already exist.'
+                'Left in input path.')
+
+    return errmsg
 
 
 def print_progress(pretext, value, maxvalue, width=40):

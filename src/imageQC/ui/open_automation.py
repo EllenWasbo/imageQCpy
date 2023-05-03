@@ -215,7 +215,7 @@ class OpenAutomationDialog(ImageQCDialog):
             'Pause between each template (option to cancel)')
         self.chk_pause_between.setChecked(not self.auto_common.auto_continue)
         self.chk_display_images = QCheckBox(
-            'Display images/rois while tests are run')
+            'Display images/ROIs while tests are run')
         self.chk_display_images.setChecked(self.auto_common.display_images)
         vlo_buttons.addWidget(btn_run_all)
         vlo_buttons.addWidget(btn_run_selected)
@@ -399,11 +399,13 @@ class OpenAutomationDialog(ImageQCDialog):
     def refresh_list(self):
         """Refresh list of templates with count = True."""
         self.main.start_wait_cursor()
+        self.status_label.showMessage('Refreshing list with number of files...')
         templist = self.get_template_list(count=True)
         self.list_templates.clear()
         if len(templist) > 0:
             self.list_templates.addItems(templist)
         self.main.stop_wait_cursor()
+        self.status_label.clearMessage()
 
     def open_result_file(self):
         """Display result file."""
@@ -568,12 +570,13 @@ class OpenAutomationDialog(ImageQCDialog):
                     for msg in msgs:
                         log.append(msg)
                 if len(not_written) > 0:
+                    log.append('Results failed to be written to output file.')
                     #TODO offer to clipboard
                     pass
             self.status_label.clearMessage()
 
             self.automation_active = False
-            self.main.refresh_results_display()
+            self.main.refresh_results_display() # TODO only when manually selected files?
             self.main.stop_wait_cursor()
 
             if len(log) > 0:
@@ -585,3 +588,4 @@ class OpenAutomationDialog(ImageQCDialog):
                 QMessageBox.information(
                     self, 'Automation finished',
                     'Automation finished successfully.')
+            self.refresh_list()

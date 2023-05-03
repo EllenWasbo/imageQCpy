@@ -171,6 +171,35 @@ class RenamePattern:
 
 
 @dataclass
+class PositionTable:
+    """Set of parameters regarding CT tests."""
+
+    labels: list[str] = field(default_factory=list)
+    pos_x: list[float] = field(default_factory=list)
+    pos_y: list[float] = field(default_factory=list)
+
+    def add_pos(self, label='', pos_x=0, pos_y=0, index=-1):
+        """Add element in each list at given index or append."""
+        if index == -1:
+            self.labels.append(label)
+            self.pos_x.append(pos_x)
+            self.pos_y.append(pos_y)
+        else:
+            self.labels.insert(index, label)
+            self.pos_x.insert(index, pos_x)
+            self.pos_y.insert(index, pos_y)
+
+    def delete_pos(self, index):
+        """Delete element."""
+        try:
+            self.labels.pop(index)
+            self.pos_x.pop(index)
+            self.pos_y.pop(index)
+        except IndexError:
+            print(f'Failed deleting tag idx {index} from {self}')
+
+
+@dataclass
 class HUnumberTable:
     """Set of parameters regarding CT tests."""
 
@@ -382,7 +411,8 @@ class ParamSetPET(ParamSetCommon):
     cro_roi_size: float = 60.
     cro_volume: float = 6283.
     cro_auto_select_slices: bool = False
-    cro_percent_slices: float = 75  # percentage within fwhm of signal profile to include
+    cro_percent_slices: float = 75  # % within fwhm of signal profile to include
+    rec_table: list = field(default_factory=list)  # list[(posx, posy, label)]
 
 
 @dataclass

@@ -244,7 +244,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                         info_this = info_extract_frame(
                             frame, {'nm_radius': [nm_radius]})
                         attrib['nm_radius'] = float(info_this['nm_radius'][0])
-                    except IndexError:
+                    except (ValueError, IndexError):
                         pass
                     if GUI:
                         gui_info_this = info_extract_frame(frame, gui_info)
@@ -589,6 +589,8 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
         pd = pydicom.dcmread(filepath)
     except pydicom.errors.InvalidDicomError:
         pass
+    except FileNotFoundError:
+        pass  # TODO show errormessage
     if pd is not None:
         pixarr = None
         try:
@@ -974,33 +976,36 @@ def sort_imgs(img_infos, tag_pattern_sort, tag_infos):
     sorted_img_infos : list of dict
 
     """
-    infos = []
-    for i in range(len(img_infos)):
-        info = get_tags(img_infos[i].filepath,
-                        frame_number=img_infos[i].frame_number,
-                        tag_patterns=[tag_pattern_sort],
-                        tag_infos=tag_infos)
-        if isinstance(info[0], dict):
-            infos.append(info[0]['dummy'])
-        else:
-            infos.append(info[0])
-
-    df = {}
-    for c, attr in enumerate(tag_pattern_sort.list_tags):
-        col = [row[c] for row in infos]
-        try:
-            col = [float(row[c]) for row in infos]
-        except ValueError:
-            pass
-        df[attr] = col
-    df = pd.DataFrame(df)
-    sorted_infos = df.sort_values(
-        by=tag_pattern_sort.list_tags,
-        ascending=tag_pattern_sort.list_sort)
-
-    sorted_img_infos = []
-    for idx in sorted_infos.index:
-        sorted_img_infos.append(img_infos[idx])
+    if len(tag_pattern_sort.list_tags) == 0:
+        sorted_img_infos = img_infos
+    else:
+        infos = []
+        for i in range(len(img_infos)):
+            info = get_tags(img_infos[i].filepath,
+                            frame_number=img_infos[i].frame_number,
+                            tag_patterns=[tag_pattern_sort],
+                            tag_infos=tag_infos)
+            if isinstance(info[0], dict):
+                infos.append(info[0]['dummy'])
+            else:
+                infos.append(info[0])
+    
+        df = {}
+        for c, attr in enumerate(tag_pattern_sort.list_tags):
+            col = [row[c] for row in infos]
+            try:
+                col = [float(row[c]) for row in infos]
+            except ValueError:
+                pass
+            df[attr] = col
+        df = pd.DataFrame(df)
+        sorted_infos = df.sort_values(
+            by=tag_pattern_sort.list_tags,
+            ascending=tag_pattern_sort.list_sort)
+    
+        sorted_img_infos = []
+        for idx in sorted_infos.index:
+            sorted_img_infos.append(img_infos[idx])
 
     return sorted_img_infos
 

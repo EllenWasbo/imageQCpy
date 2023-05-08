@@ -233,7 +233,10 @@ class SettingsDialog(ImageQCDialog):
                 self, 'Proceed and loose unsaved changes?')
 
         if proceed:
-            self.main.start_wait_cursor()
+            try:
+                self.main.start_wait_cursor()
+            except AttributeError:
+                pass  # if ImportMain not MainWindow
             self.previous_selected_txt = self.current_selected_txt
             self.current_selected_txt = txtitem
             _, new_widget = self.get_item_widget_from_txt(txtitem)
@@ -246,7 +249,10 @@ class SettingsDialog(ImageQCDialog):
                     new_widget.update_modality()
             else:
                 new_widget.update_from_yaml()
-            self.main.stop_wait_cursor()
+            try:
+                self.main.stop_wait_cursor()
+            except AttributeError:
+                pass  # if ImportMain not MainWindow
         else:
             item, _ = self.get_item_widget_from_txt(
                 self.previous_selected_txt)

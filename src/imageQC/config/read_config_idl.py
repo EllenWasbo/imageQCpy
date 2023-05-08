@@ -328,7 +328,7 @@ class ConfigIdl2Py():
             if 'TABLEMTF' in param_names:
                 paramset.CT.mtf_gaussian = bool(cp.TABLEMTF[0])
             if 'CYCLMTF' in param_names:
-                paramset.CT.mtf_cy_pr_mm = bool(cp.CYCLMTF[0])
+                paramset.CT.mtf_cy_pr_mm = not bool(cp.CYCLMTF[0])
             if 'CUTLSF' in param_names:
                 paramset.CT.mtf_cut_lsf = bool(cp.CUTLSF[0])
             if 'CUTLSF1' in param_names:
@@ -340,7 +340,7 @@ class ConfigIdl2Py():
             if 'OFFXYMTF_UNIT' in param_names:
                 paramset.CT.mtf_offset_mm = bool(cp.OFFXYMTF_UNIT[0])
             if 'SEARCHMAXMTF_ROI' in param_names:
-                paramset.CT.mtf_search_max = bool(cp.SEARCHMAXMTF_ROI[0])
+                paramset.CT.mtf_auto_center = bool(cp.SEARCHMAXMTF_ROI[0])
             if 'LINROIRAD' in param_names:
                 paramset.CT.ctn_roi_size = cp.LINROIRAD[0]
             if 'LINROIRADS' in param_names:
@@ -728,7 +728,7 @@ class ConfigIdl2Py():
                         if tstv[0] is not None:  # modified scipy.io._idl
                             if tstv[0].dtype != 'int16':
                                 outputs = self.as_dict(tstv[0])
-                                outputsThisTest = []
+                                outputs_this_test = []
                                 for key, v in outputs.items():
                                     if int(v[0].ALT[0]) == -1:
                                         try:
@@ -744,19 +744,23 @@ class ConfigIdl2Py():
                                     else:
                                         if v[0].COLUMNS[0].size == 1:
                                             col = [int(v[0].COLUMNS[0])]
+                                            if col[0] == -1:
+                                                col = []
                                         else:
                                             col = [int(x)
                                                    for x in list(v[0].COLUMNS[0])]
-                                        outputsThisTest.append(
-                                            cfc.QuickTestOutputSub(
-                                                label=key,
-                                                alternative=int(v[0].ALT[0]),
-                                                columns=col,
-                                                calculation=calc_str(int(v[0].CALC[0])),
-                                                per_group=bool(v[0].PER_SERIES[0])
-                                                )
+                                        alt = int(v[0].ALT[0])
+                                        if alt > 0 and m in ['NM', 'MR']:
+                                            alt = 10  # supplement starting with 10
+                                        this_sub = cfc.QuickTestOutputSub(
+                                            label=key,
+                                            alternative=alt,
+                                            columns=col,
+                                            calculation=calc_str(int(v[0].CALC[0])),
+                                            per_group=bool(v[0].PER_SERIES[0])
                                             )
-                                testsThis[upd_test_key[0]] = outputsThisTest
+                                        outputs_this_test.append(this_sub)
+                                testsThis[upd_test_key[0]] = outputs_this_test
                             else:
                                 testsThis[upd_test_key[0]] = [cfc.QuickTestOutputSub()]
                     else:
@@ -785,7 +789,7 @@ class ConfigIdl2Py():
                     if mod == 'CT':
                         filetype = 'Siemens CT Constancy/Daily Reports (.pdf)'
                     elif mod == 'PET':
-                        filetype == 'Siemens PET-CT DailyQC Reports (.pdf)'
+                        filetype = 'Siemens PET-CT DailyQC Reports (.pdf)'
                     suffix = '.pdf'
                 elif vendor_alt[:3] == 'XML':
                     filetype = 'Siemens PET-MR DailyQC Reports (.xml)'
@@ -853,7 +857,12 @@ class ConfigIdl2Py():
                                     auto_temp.path_input = try_decode(autv[0][0])
                                 elif aut == 'STATNAME':
                                     try:
-                                        auto_temp.station_name = try_decode(autv[0][0])
+                                        name = try_decode(autv[0][0])
+                                        if len(name) > 0:
+                                            if name[-1] == ' ':
+                                                name = name[:-1]
+                                                # IDL and Python seem to get these diffently
+                                        auto_temp.station_name = name
                                     except IndexError:
                                         pass
                                 elif aut == 'DCMCRIT' and autv[0].dtype != 'int16':

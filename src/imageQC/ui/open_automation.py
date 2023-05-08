@@ -298,6 +298,7 @@ class OpenAutomationDialog(ImageQCDialog):
                 res = dlg.exec()
                 if res:
                     pass  # just to wait for user to close message
+                self.refresh_list()
             self.status_label.clearMessage()
         else:
             QMessageBox.information(
@@ -436,6 +437,7 @@ class OpenAutomationDialog(ImageQCDialog):
                 id_this = self.templates_id[tempno]
                 temp = self.templates[mod][id_this]
                 reset_auto_template(auto_template=temp, parent_widget=self)
+                self.refresh_list()
 
     def edit_template(self):
         """Run settings with current template selected."""

@@ -412,7 +412,8 @@ class ParamSetPET(ParamSetCommon):
     cro_volume: float = 6283.
     cro_auto_select_slices: bool = False
     cro_percent_slices: float = 75  # % within fwhm of signal profile to include
-    rec_table: list = field(default_factory=list)  # list[(posx, posy, label)]
+    rec_roi_size: float = 20.
+    rec_table: PositionTable = field(default_factory=PositionTable)
 
 
 @dataclass

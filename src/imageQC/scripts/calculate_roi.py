@@ -922,17 +922,26 @@ def get_roi_recovery_curve(image, image_info, test_params):
         list of 7 2d arrays (background and 6 spheres) with type bool. Default is None
     errmsg : list of str. Default is []
     """
-    roi_array = None
+    roi_array = []
 
+    # search lung insert center of image
+    dx, dy = (0, 0)
+    '''
     search_radius_mm = 50.
     roi_central_cylinder = get_roi_circle(
         image.shape, (0, 0), search_radius_mm/image_info.pix[0])
     cx, cy = mmcalc.center_xy_of_disc(image, roi=roi_central_cylinder)
+    dx, dy = (cx - image.shape[1] // 2, cy - image.shape[0] // 2)
 
-    #TODO
+    roi_array.append(roi_central_cylinder)
     '''
-    search lung insert center of image
-    '''
+    radius = test_params.rec_roi_size / image_info.pix[0]
+    for i in range(len(test_params.rec_table.pos_x)):
+        pos_x = test_params.rec_table.pos_x[i] / image_info.pix[0]
+        pos_y = test_params.rec_table.pos_y[i] / image_info.pix[1]
+        roi_array.append(get_roi_circle(
+            image.shape, (dx + pos_x, dy + pos_y), radius))
+
     return roi_array
 
 

@@ -1574,13 +1574,15 @@ class ParamsTabPET(ParamsTabCommon):
         self.tab_rec.vlo_top.addWidget(QLabel(
             'Assuming NEMA NU2 phantom. Autofind phantom and spheres.'))
         self.tab_rec.vlo_top.addWidget(uir.UnderConstruction())
-        self.rec_roi_size_bkg = QDoubleSpinBox(decimals=1, minimum=0.1, maximum=100)
-        self.rec_table_widget = PositionTableWidget(
+        self.rec_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, maximum=100)
+        self.rec_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rec_roi_size'))
+        self.rec_table_widget = PositionWidget(
                 self, self.main, table_attribute_name='rec_table')
         self.rec_table_widget.table.update_table()
 
         flo1 = QFormLayout()
-        flo1.addRow(QLabel('ROI radius background (mm)'), self.rec_roi_size_bkg)
+        flo1.addRow(QLabel('ROI radius background (mm)'), self.rec_roi_size)
 
         self.tab_rec.hlo.addLayout(flo1)
         self.tab_rec.hlo.addWidget(uir.VLine())
@@ -1881,11 +1883,11 @@ class BoolSelectTests(uir.BoolSelect):
             )
 
 
-class PositionTableWidget(QWidget):
+class PositionWidget(QWidget):
     """Reusable table widget to hold user defined roi positions."""
 
     def __init__(self, parent, main, table_attribute_name='', headers=None):
-        """Initialize PositionTableWidget.
+        """Initialize PositionWidget.
 
         Parameters
         ----------
@@ -1900,7 +1902,7 @@ class PositionTableWidget(QWidget):
         super().__init__()
         self.parent = parent
         self.main = main
-        self.table = PositionTable(self.parent, self.main,
+        self.table = PositionTableWidget(self.parent, self.main,
                                    table_attribute_name, headers=headers)
         self.ncols = len(self.table.headers)
 
@@ -2048,21 +2050,19 @@ class PositionTableWidget(QWidget):
             dymm = round(dy_pix * image_info.pix[1], 1)
             self.table.current_table.pos_x[rowno] = dxmm
             self.table.current_table.pos_y[rowno] = dymm
-            #TODO Needed? mutable? setattr(self.main.current_paramset, self.table_attribute_name,
-                    #self.table.current_table)
             self.parent.flag_edit(True)
             self.table.update_table()
 
 
-class PositionTable(QTableWidget):
+class PositionTableWidget(QTableWidget):
     """Reusable table widget displaying positions ++."""
 
     def __init__(self, parent, main, table_attribute_name, headers):
-        """Initiate PositionTable.
+        """Initiate PositionTableWidget.
 
         Parameters
         ----------
-        parent : same parent as PositionTableWidget
+        parent : same parent as PositionWidget
         main : MainWindow
         table_attribute_name : str
             attribute name in main.current_paramset
@@ -2072,8 +2072,9 @@ class PositionTable(QTableWidget):
         super().__init__()
         self.main = main
         self.parent = parent
+        self.table_attribute_name = table_attribute_name
         self.current_table = getattr(
-            self.main.current_paramset, table_attribute_name, None)
+            self.main.current_paramset, self.table_attribute_name, None)
         if headers is not None:
             self.headers = headers
         else:
@@ -2092,10 +2093,14 @@ class PositionTable(QTableWidget):
         elif col == 2:
             self.current_table.pos_y[row] = val
         self.parent.flag_edit(True)
+        setattr(self.main.current_paramset, self.table_attribute_name,
+                self.current_table)
         self.parent.main.update_roi(clear_results_test=True)
 
     def update_table(self):
         """Populate table with current table."""
+        setattr(self.main.current_paramset, self.table_attribute_name,
+                self.current_table)
         self.blockSignals(True)
         self.clear()
         self.setColumnCount(len(self.headers))
@@ -2134,7 +2139,7 @@ class PositionTable(QTableWidget):
         return values
 
 
-class CTnTableWidget(QWidget):#TODO PositionTableWidget
+class CTnTableWidget(QWidget):#TODO PositionWidget
     """CT numbers table widget."""
 
     def __init__(self, parent, main):

@@ -1106,9 +1106,11 @@ class QuickTestOutputTreeView(QTreeView):
                         # supplement table starting from 10
                         text_alt = ALTERNATIVES[
                             self.parent.current_modality][
-                                testcode][sub.alternative - 10]
+                                testcode][sub.alternative - 10] + '(Sup. table)'
                     except KeyError:
                         text_alt = '-'
+                        if sub.alternative >= 10:
+                            text_alt = '(Sup. table)'
                     self.model.setData(self.model.index(row, 1), text_alt)
                     if len(sub.columns) > 0:
                         text_col = str(sub.columns)

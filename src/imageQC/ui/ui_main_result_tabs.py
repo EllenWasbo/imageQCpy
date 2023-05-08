@@ -167,6 +167,7 @@ class ResultTable(QTableWidget):
         if self.parent.tb_copy.tool_decimal.isChecked():
             decimal_mark = ','
 
+        values_rows_copy = copy.deepcopy(values_rows)
         if vendor:
             try:
                 row_labels = self.main.results['vendor']['headers']
@@ -182,13 +183,21 @@ class ResultTable(QTableWidget):
                 linked_image_list = False
             except KeyError:
                 pass
+        elif self.main.current_test == 'MTF' and self.main.current_modality == 'CT':
+            if self.main.current_paramset.mtf_cy_pr_mm is False:
+                # factor 10 to get /cm instead of /mm
+                for i in range(len(values_rows_copy)):
+                    try:
+                        values_rows_copy[i] = list(10 * np.array(values_rows_copy[i]))
+                    except TypeError:
+                        pass
 
         if len(row_labels) != 0:
             n_cols = len(values_cols)
             n_rows = len(row_labels)
         else:
             n_cols = len(col_labels)
-            n_rows = len(values_rows)
+            n_rows = len(values_rows_copy)
         self.setColumnCount(n_cols)
         self.setRowCount(n_rows)
 
@@ -209,11 +218,11 @@ class ResultTable(QTableWidget):
         if len(col_labels) > 0:
             # convert rows to columns for better formatting -columns similar numbers
             for r in range(n_rows):
-                if len(values_rows[r]) == 0:
-                    values_rows[r] = [None] * n_cols
+                if len(values_rows_copy[r]) == 0:
+                    values_rows_copy[r] = [None] * n_cols
             values_cols = []
             for c in range(n_cols):
-                values_cols.append([row[c] for row in values_rows])
+                values_cols.append([row[c] for row in values_rows_copy])
         if len(values_cols[0]) > 0:
             for c in range(len(values_cols)):
                 if vendor:

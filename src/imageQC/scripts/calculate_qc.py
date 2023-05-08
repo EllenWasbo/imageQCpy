@@ -182,12 +182,20 @@ def quicktest_output(input_main):
                         actual_group_names = []
                         actual_image_names = []
                         for rowno, row in enumerate(values):
-                            if test in input_main.current_quicktest.tests[rowno]:
-                                if row is None:
-                                    row = [None] * len(headers)
-                                actual_values.append(row)
-                                actual_image_names.append(image_names[rowno])
-                                actual_group_names.append(group_names[rowno])
+                            try:
+                                if test in input_main.current_quicktest.tests[rowno]:
+                                    if row is None:
+                                        row = [None] * len(headers)
+                                    elif all([
+                                            test == 'MTF',
+                                            input_main.current_modality == 'CT']):
+                                        if not input_main.current_paramset.mtf_cy_pr_mm:
+                                            row = list(10 * np.array(row))
+                                    actual_values.append(row)
+                                    actual_image_names.append(image_names[rowno])
+                                    actual_group_names.append(group_names[rowno])
+                            except IndexError:
+                                pass  # if more images than rows in quicktests values
 
                         uniq_group_ids = mm.get_uniq_ordered(actual_group_names)
                         for g, group_id in enumerate(uniq_group_ids):
@@ -357,6 +365,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
         # if any 3d tests - keep loaded images to build 3d arrays
         n_img = len(img_infos)
         marked = quicktest.tests
+        n_analyse = min([n_img, len(marked)])
 
         # get list of images to read (either as tags or image)
         flattened_marked = [elem for sublist in marked for elem in sublist]
@@ -365,7 +374,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
             extra_tag_pattern = None
             read_image = [False] * n_img
             NM_count = [False] * n_img
-            for i in range(n_img):
+            for i in range(n_analyse):
                 if len(marked[i]) > 0:
                     if 'DCM' in marked[i]:
                         read_tags[i] = True
@@ -390,7 +399,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
             extra_tag_list = None
             marked_3d = []
             input_main.current_group_indicators = ['' for i in range(n_img)]
-            for i in range(n_img):
+            for i in range(n_analyse):
                 marked_3d.append([])
                 if modality == 'CT':
                     if 'MTF' in marked[i]:
@@ -430,7 +439,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
 
             prev_image_xypix = {}
             prev_roi = {}
-            for i in range(n_img):
+            for i in range(n_analyse):
                 if 'MainWindow' in str(type(input_main)):
                     input_main.status_bar.showMessage(
                         f'Reading image data {i} of {n_img}')
@@ -1887,6 +1896,7 @@ def calculate_MTF_point(matrix, img_info, paramset):
         gMTF_details: dict
             as returned by mmcalc.get_MTF_gauss
             + values [MTF 50%, 10%, 2%]
+    errmsgs : list of str
     """
     details = []
     errmsgs = []
@@ -1895,7 +1905,9 @@ def calculate_MTF_point(matrix, img_info, paramset):
         profile = np.sum(matrix, axis=ax)
         width, center = mmcalc.get_width_center_at_threshold(
             profile, np.max(profile)/2)
-        if center is not None:
+        if center is None:
+            errmsgs.append('Could not find center of point in ROI.')
+        else:
             pos = (np.arange(len(profile)) - center) * img_info.pix[0]
 
             # modality specific settings

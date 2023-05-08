@@ -292,7 +292,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
             parent_widget.start_wait_cursor()
         import_log.append(
             f'Found {len(files)} files in import path {p}')
-        if ignore_since != -1:
+        if ignore_since == -1:
             ignore_since = auto_common.ignore_since
 
         # get all station_names/dicom crits/input paths of automation_templates
@@ -332,6 +332,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
 
         # prepare auto delete
         delete_files = []  # filenames to auto delete
+        delete_rules = []  # auto delete rules used
         delete_pattern = cfc.TagPatternFormat(
             list_tags=auto_common.auto_delete_criterion_attributenames)
 
@@ -369,7 +370,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                         match_rule = (
                             f'{auto_common.auto_delete_criterion_attributenames} = '
                             f'{auto_common.auto_delete_criterion_values}')
-                        delete_files.append(match_rule)
+                        delete_files.append(file)
+                        delete_rules.append(match_rule)
                         delete_this = True
                         break
 
@@ -553,10 +555,10 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                     ndel -= 1
             import_log.append(
                 f'{len(delete_files)} files auto deleted according to import settings.')
-            rules = list(set(delete_files))
+            rules = list(set(delete_rules))
             for rule in rules:
-                delete_files.count(rule)
-                import_log.append(f'\t {delete_files.count(rule)} files where {rule}')
+                delete_rules.count(rule)
+                import_log.append(f'\t {delete_rules.count(rule)} files where {rule}')
 
         if auto_common.auto_delete_empty_folders:
             dirs = [str(x) for x in p.glob('**/*') if x.is_dir()]

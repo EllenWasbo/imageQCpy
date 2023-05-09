@@ -634,8 +634,8 @@ class ConfigIdl2Py():
             modality string to use in the convertion (modality as in imageQC)
         test_nums : list of int
                 list with test integer indicatiors
-        test_name : str
-                idl test name
+        test_names : list of str
+                idl test names
 
         Returns
         -------
@@ -644,7 +644,7 @@ class ConfigIdl2Py():
             empty string if conversion failed
 
         """
-        # order of tests in ImageQC v2
+        # order of tests in ImageQC v2 (IDL)
         test_strings = [  # CT
             'Hom', 'Noi', 'Sli', 'MTF', 'CTn', 'HUw', 'DCM', 'ROI', 'Rin']
         if modality.upper() == 'XRAY':
@@ -664,6 +664,11 @@ class ConfigIdl2Py():
                     list_out.append(test_strings[num])
                 except IndexError:
                     pass
+            if len(list_out) > 1:
+                if modality == 'XRAY':
+                    list_out.sort(key = lambda i: QUICKTEST_OPTIONS['Xray'].index(i))
+                else:
+                    list_out.sort(key = lambda i: QUICKTEST_OPTIONS[modality].index(i))
 
         if len(test_names) > 0:
             old_test_strings = [

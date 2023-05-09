@@ -7,6 +7,7 @@ User interface for dialog Rename Dicom.
 """
 import os
 from time import time
+from datetime import datetime
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
@@ -56,8 +57,11 @@ def reset_auto_template(auto_template=None, parent_widget=None):
         else:
             files = [x for x in archive_path.glob('*') if x.is_file()]
             if len(files) > 0:
-                dlg = ResetAutoTemplateDialog(files=files)
-                move_files = [files[idx] for idx in idxs]
+                dlg = ResetAutoTemplateDialog(parent_widget, files=files)
+                res = dlg.exec()
+                if res:
+                    idxs = dlg.get_idxs()
+                    move_files = [files[idx] for idx in idxs]
             else:
                 QMessageBox.information(
                     parent_widget, 'Found no files in Archive',
@@ -284,10 +288,21 @@ class OpenAutomationDialog(ImageQCDialog):
             ignore_since = 0
             if self.chk_ignore_since.isChecked():
                 ignore_since = self.spin_ignore_since.value()
-            log_import = automation.import_incoming(
+            import_status, log_import = automation.import_incoming(
                 self.auto_common, self.templates, self.tag_infos, parent_widget=self,
                 ignore_since=ignore_since)
             self.stop_wait_cursor()
+
+            if import_status:
+                fname = 'auto_common'
+                proceed_save, errmsg = cff.check_save_conflict(
+                    fname, self.lastload_auto_common)
+                if proceed_save:
+                    # save today as last import date to auto_common
+                    self.auto_common.last_import_date = datetime.now().strftime(
+                        "%d.%m.%Y %I:%M")
+                    ok_save, path = cff.save_settings(
+                        self.auto_common, fname=fname)
 
             if len(log_import) > 0:
                 self.status_label.showMessage('Finished reading images')

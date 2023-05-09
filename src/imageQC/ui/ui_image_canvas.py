@@ -497,7 +497,7 @@ class ImageCanvas(GenericImageCanvas):
             ypos = np.mean(mask_pos[0])
             if np.isfinite(xpos) and np.isfinite(ypos):
                 self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
-                             f'S{i}',
+                             f'S{i+1}',
                              fontsize=self.fontsize, color=color)
 
     def PIU(self):

@@ -448,6 +448,31 @@ def test_NM_SNI():
         [61., 49., 49., 61., 36., 61., 58., 34., 58.]))
 
 
+def test_NM_SNI_sum():
+    input_main = InputMain(
+        current_modality='NM',
+        current_test='SNI',
+        current_paramset=cfc.ParamSetNM(sni_sum_first=True, sni_area_ratio=0.9),
+        current_quicktest=cfc.QuickTestTemplate(
+            tests=[['']] + [['SNI']]*65 + [['']] *66,
+            ),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = path_tests / 'test_inputs' / 'NM' / 'sweep.dcm'
+    img_infos, ignored_files = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
+
+    breakpoint()
+    assert np.array_equal(values, np.array(
+        [61., 49., 49., 61., 36., 61., 58., 34., 58.]))
+
+
 def test_NM_MTF_pointsource():
     tests = [[]] * 77
     tests[10] = ['MTF']

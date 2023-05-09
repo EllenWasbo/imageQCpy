@@ -330,11 +330,17 @@ class ResultPlotCanvas(PlotCanvas):
                     if not isinstance(xx[0], int):
                         x_only_int = False
             if self.main.current_test == 'SNI':
-                self.ax.fill_between(
-                    self.curves[0]['xvals'],
-                    self.curves[0]['yvals'],
-                    self.curves[1]['yvals'],
-                    hatch='X', edgecolor='b')
+                test_widget = self.main.stack_test_tabs.currentWidget()
+                try:
+                    sel_text = test_widget.sni_plot.currentText()
+                except AttributeError:
+                    sel_text = ''
+                if 'Filtered' in sel_text:
+                    self.ax.fill_between(
+                        self.curves[0]['xvals'],
+                        self.curves[0]['yvals'],
+                        self.curves[1]['yvals'],
+                        hatch='X', edgecolor='b')
             if x_only_int:
                 self.ax.xaxis.set_major_locator(
                     matplotlib.ticker.MaxNLocator(integer=True))
@@ -1398,11 +1404,14 @@ class ResultPlotCanvas(PlotCanvas):
     def SNI(self):
         """Prepare plot for test NM SNI test."""
         imgno = self.main.gui.active_img_no
+        if self.main.current_paramset.sni_sum_first:
+            imgno = 0
         self.title = 'Calculations to get Structured Noise Index'
         self.ytitle = r'NPS ($\mathregular{mm^{2}}$)'
         self.xtitle = 'frequency (pr mm)'
         details_dict = self.main.results['SNI']['details_dict'][imgno]
         roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+        nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
 
         def plot_SNI_values():
             """Plot SNI values as columns pr ROI."""
@@ -1426,6 +1435,7 @@ class ResultPlotCanvas(PlotCanvas):
             self.curves.append(
                 {'label': '(radial NPS - quantum noise) with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': '-r'})
+            self.default_range_x = [0, nyquist_freq]
 
             txt_quantum_noise = (
                 f'Quantum noise = {details_dict_roi["quantum_noise"]:.2f}')
@@ -1453,6 +1463,45 @@ class ResultPlotCanvas(PlotCanvas):
                 {'label': 'Visual filter',
                  'xvals': eye_filter_curve['r'], 'yvals': yvals,
                  'color': 'darkgray', 'style': '-'})
+            self.default_range_x = [0, nyquist_freq]
+
+        def plot_curve_corr_check():
+            self.title = 'Curvature correction check'
+            details_dict = self.main.results['SNI']['details_dict'][imgno]
+            if 'correction_matrix' in details_dict:
+                # averaging central 10% rows/cols
+                temp_img = self.main.active_img
+                corrected_img = details_dict['corrected_image']
+                sz_y, sz_x = corrected_img.shape
+                nx = round(0.05 * sz_x)
+                ny = round(0.05 * sz_y)
+                xhalf = round(sz_x/2)
+                yhalf = round(sz_y/2)
+                prof_y = np.mean(temp_img[:, xhalf-nx:xhalf+nx], axis=1)
+                prof_x = np.mean(temp_img[yhalf-ny:yhalf+ny, :], axis=0)
+                corr_prof_y = np.mean(
+                    corrected_img[:, xhalf-nx:xhalf+nx], axis=1)
+                corr_prof_x = np.mean(
+                    corrected_img[yhalf-ny:yhalf+ny, :], axis=0)
+                self.curves.append({'label': 'Central 10% rows corrected',
+                                    'xvals': np.arange(len(corr_prof_x)),
+                                    'yvals': corr_prof_x,
+                                    'style': 'r'})
+                self.curves.append({'label': 'Central 10% rows original',
+                                    'xvals': np.arange(len(prof_x)),
+                                    'yvals': prof_x,
+                                    'style': ':r'})
+                self.curves.append({'label': 'Central 10% columns corrected',
+                                    'xvals': np.arange(len(corr_prof_y)),
+                                    'yvals': corr_prof_y,
+                                    'style': 'b'})
+                self.curves.append({'label': 'Central 10% columns original',
+                                    'xvals': np.arange(len(prof_y)),
+                                    'yvals': prof_y,
+                                    'style': ':b'})
+                self.xtitle = 'pixel number'
+                self.ytitle = 'Average pixel value'
+                self.legend_location = 'lower center'
 
         test_widget = self.main.stack_test_tabs.currentWidget()
         try:
@@ -1465,6 +1514,8 @@ class ResultPlotCanvas(PlotCanvas):
             plot_filtered_NPS(roi_name=sel_text[-2:])
         elif 'all' in sel_text:
             plot_all_NPS()
+        elif'correction' in sel_text:
+            plot_curve_corr_check()
 
 
     def Spe(self):

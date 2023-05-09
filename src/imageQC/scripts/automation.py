@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from fnmatch import fnmatch
 import logging
-from datetime import date
+from datetime import date, datetime
 
 import pydicom
 
@@ -53,6 +53,7 @@ def run_automation_non_gui(sysargv):
         auto_vendor_templates = None
         run_auto = False
         run_auto_vendor = False
+        lastload_auto_common = time()
         if '-i' in args or '-d' in args or '-a' in args:
             ok_common, path, auto_common = cff.load_settings(
                 fname='auto_common')
@@ -74,7 +75,7 @@ def run_automation_non_gui(sysargv):
             logger.info(f'Could not find or read import settings from {path}')
         elif '-i' in args and auto_common is not None:
             if os.path.isdir(auto_common.import_path):
-                log_import = import_incoming(
+                import_status, log_import = import_incoming(
                     auto_common,
                     auto_templates,
                     tag_infos,
@@ -82,6 +83,16 @@ def run_automation_non_gui(sysargv):
                     ignore_since=ndays
                 )
                 append_log(log_import)
+                if import_status:
+                    fname = 'auto_common'
+                    proceed_save, errmsg = cff.check_save_conflict(
+                        fname, lastload_auto_common)
+                    if proceed_save:
+                        # save today as last import date to auto_common
+                        auto_common.last_import_date = datetime.now().strftime(
+                            "%d.%m.%Y %I:%M")
+                        ok_save, path = cff.save_settings(
+                            auto_common, fname=fname)
             else:
                 logger.error('Path defined as image pool in import settings'
                              f'not valid dir: {auto_common.import_path}')
@@ -265,6 +276,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
 
     Returns
     -------
+    status : bool
+        proceeded to import
     import_log : list of str
         log messages
     """
@@ -368,8 +381,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                 for i, val in enumerate(auto_common.auto_delete_criterion_values):
                     if match_strings[i] == val:
                         match_rule = (
-                            f'{auto_common.auto_delete_criterion_attributenames} = '
-                            f'{auto_common.auto_delete_criterion_values}')
+                            f'{auto_common.auto_delete_criterion_attributenames[i]} = '
+                            f'{val}')
                         delete_files.append(file)
                         delete_rules.append(match_rule)
                         delete_this = True
@@ -775,7 +788,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                             input_main_this.current_group_indicators = []
 
                             calculate_qc(input_main_this, wid_auto=parent_widget,
-                                         auto_template_label=auto_template.label)
+                                         auto_template_label=auto_template.label,
+                                         auto_template_session=f'Session {d+1}/{nd}')
                             value_list, header_list = quicktest_output(input_main_this)
                             header_list = ['Date'] + header_list
                             value_list = [date_str] + value_list

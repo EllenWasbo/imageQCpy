@@ -313,7 +313,8 @@ def convert_taglists_to_numbers(taglists):
     return taglists
 
 
-def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
+def calculate_qc(input_main,
+                 wid_auto=None, auto_template_label='', auto_template_session=''):
     """Calculate tests according to current info in main.
 
     Parameters
@@ -332,6 +333,8 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
         if not None - draw image on OpenAutomationDialog canvas when test finished
     auto_template_label : str, optional
         AutoTemplate.label if automation - to display if wid_auto
+    auto_template_session : str
+        String representing session number if more than one image set found
     """
     current_test_before = input_main.current_test
     delta_xya = [0, 0, 0.0]  # only for GUI version
@@ -535,7 +538,7 @@ def calculate_qc(input_main, wid_auto=None, auto_template_label=''):
                                 wid_auto.wid_image_display.canvas.roi_draw()
                                 wid_auto.status_label.showMessage((
                                     f'{auto_template_label}: Calculating '
-                                    f'img {i+1}/{n_img}'
+                                    f'img {i+1}/{n_img} ({auto_template_session})'
                                     ))
                                 qApp.processEvents()
 
@@ -1179,7 +1182,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             details_dict = {}
             errmsg = None
             values_sup = [None] * 3
-            uncorr_image = image2d
+            uncorr_image = np.copy(image2d)
             if paramset.sni_correct:
                 lock_z = paramset.sni_radius if paramset.sni_lock_radius else None
                 res, errmsg = get_corrections_point_source(
@@ -1599,11 +1602,13 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
     def Uni(images_to_test):
         headers = HEADERS[modality][test_code]['alt0']
+        errmsgs = []
         if len(images_to_test) == 0:
             res = Results(headers=headers)
         else:
             image_input = sum_matrix(images_to_test)  # always if 3d option
-            #TODO warning that corrections are ignored, makes no sence in 3d option
+            if paramset.uni_correct:
+                errmsgs.append('Point source correction ignored when image sum used.')
             roi_array, errmsg = get_rois(
                 image_input, images_to_test[0], input_main)
             res = calculate_NM_uniformity(
@@ -1618,26 +1623,28 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             res = Results(
                 headers=headers, values=[values],
                 details_dict=[details_dict],
-                errmsg=errmsg, pr_image=False)
+                errmsg=errmsgs, pr_image=False)
 
         return res
 
     def SNI(images_to_test):
         headers = HEADERS[modality][test_code]['alt0']
+        errmsgs = []
         if len(images_to_test) == 0:
             res = Results(headers=headers)
         else:
             image_input = sum_matrix(images_to_test)  # always if 3d option
-            #TODO warning that corrections are ignored, makes no sence in 3d option
+            if paramset.sni_correct:
+                errmsgs.append('Point source correction ignored when image sum used.')
             roi_array, errmsg = get_rois(
                 image_input, images_to_test[0], input_main)
-            res = calculate_NM_SNI(
-                image_input, roi_array, img_infos.pix[0])
             details_dict = {'sum_image': image_input}
-            values = res['values']
+            values, details_dict2 = calculate_NM_SNI(
+                image_input, roi_array, img_infos[0].pix[0], paramset)
+            details_dict.update(details_dict2)
 
             res = Results(headers=headers, values=[values],
-                          details_dict=[details_dict], errmsg=errmsg, pr_image=False)
+                          details_dict=[details_dict], errmsg=errmsgs, pr_image=False)
 
         return res
 
@@ -2253,7 +2260,7 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
             lp_vals = None
             mtf_vals = [0.5, 0.1, 0.02]
         else:  # MR, NM, SPECT 3d linesource
-            gaussfit_type = 'single'  #TODO correct?
+            gaussfit_type = 'single'
             lp_vals = None
             mtf_vals = [0.5, 0.1, 0.02]
 
@@ -2279,8 +2286,9 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                 if err is not None:
                     errmsg.append(err)
                 else:
-                    if (isinstance(paramset, cfc.ParamSetNM)
-                        or isinstance(paramset, cfc.ParamSetSPECT)):
+                    if (
+                            isinstance(paramset, cfc.ParamSetNM)
+                            or isinstance(paramset, cfc.ParamSetSPECT)):
                         fwhm, _ = mmcalc.get_width_center_at_threshold(
                             LSF[i], np.max(LSF[i])/2)
                         fwtm, _ = mmcalc.get_width_center_at_threshold(
@@ -2313,7 +2321,8 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                             dMTF_details['values'] = dvals
 
                 details_dict.append({
-                    'LSF_x': LSF_x, 'LSF': LSF_no_filt_this, 'ESF_x': ESF_x, 'ESF': ESF_all,
+                    'LSF_x': LSF_x, 'LSF': LSF_no_filt_this,
+                    'ESF_x': ESF_x, 'ESF': ESF_all,
                     'sigma_prefilter': sigma_f*step_size,
                     'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details,
                     'edge_details': details_dicts_edge})
@@ -2681,7 +2690,8 @@ def get_corrections_point_source(
         lock_radius = True
 
     if nm_radius is None:
-        errmsg = 'Failed fitting matrix to point source. nm_radius is None. Report error.'
+        errmsg = (
+            'Failed fitting matrix to point source. nm_radius is None. Report error.')
     else:
         popt = mmcalc.point_source_func_fit(
             dists, values,
@@ -2699,8 +2709,8 @@ def get_corrections_point_source(
             errmsg = 'Failed fitting matrix to point source.'
 
     return ({'corrected_image': corrected_image,
-            'correction_matrix': correction_matrix,
-            'dx': dx, 'dy': dy, 'distance': distance}, errmsg)
+             'correction_matrix': correction_matrix,
+             'dx': dx, 'dy': dy, 'distance': distance}, errmsg)
 
 
 def calculate_NM_uniformity(image2d, roi_array, pix):
@@ -2797,7 +2807,7 @@ def calculate_NM_SNI(image2d, roi_array, pix, paramset, uncorr_image=None):
         pixel size of image2d
     paramset : cfc.ParamsetNM
     uncorr_image : numpy.ndarray
-        image with origianal counts
+        image with original counts
 
     Returns
     -------
@@ -2843,7 +2853,6 @@ def calculate_NM_SNI(image2d, roi_array, pix, paramset, uncorr_image=None):
     def calculate_SNI_this(roi_array_this, eye_filter, unit):
         rows = np.max(roi_array_this, axis=1)
         cols = np.max(roi_array_this, axis=0)
-        quantum_noise = np.mean(uncorr_image[rows][:, cols]) * pix**2
         """ explained how quantum noise is found above
         Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
         Total(NPS)=NPSvalue*ROIsz^2
@@ -2851,19 +2860,29 @@ def calculate_NM_SNI(image2d, roi_array, pix, paramset, uncorr_image=None):
         """
         subarray = image2d[rows][:, cols]
         NPS = mmcalc.get_2d_NPS(subarray - np.mean(subarray), pix)
+        freq, rNPS = mmcalc.get_radial_profile(NPS, pix=unit, step_size=0.01)
+        if paramset.sni_correct is False:
+            quantum_noise = np.mean(image2d[rows][:, cols]) * pix**2
+            """ explained how quantum noise is found above
+            Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
+            Total(NPS)=NPSvalue*ROIsz^2
+            NPSvalue = Meancount/(pixNPS^2*ROIsz^2)=MeanCount*pix^2
+            """
+        else:
+            # point source - varying quantum noise
+            quantum_noise = np.min(rNPS[2:])  #TODO set this more theoretially correct?
         NPS_struct = NPS - quantum_noise
         NPS_filt = NPS * eye_filter
         NPS_struct_filt = NPS_struct * eye_filter
         SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
-        freq, rNPS = mmcalc.get_radial_profile(NPS, pix=unit, step_size=0.01)
         _, rNPS_filt = mmcalc.get_radial_profile(NPS_filt, pix=unit, step_size=0.01)
         _, rNPS_struct_filt = mmcalc.get_radial_profile(
             NPS_struct_filt, pix=unit, step_size=0.01)
-        
+
         # set central axis of NPS array to 0
         line = NPS.shape[0] // 2
         NPS[line] = 0
-        NPS[:, line] =0
+        NPS[:, line] = 0
 
         details_dict_roi = {
             'NPS': NPS, 'quantum_noise': quantum_noise,

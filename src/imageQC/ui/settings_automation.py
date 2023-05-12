@@ -768,7 +768,9 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
     def __init__(self, dlg_settings):
         header = 'Automation templates vendor files'
         subtxt = '''The automation templates hold information on how to
-         perform automated reading of vendor report files.<br>'''
+         perform automated reading of vendor report files.<br>
+         NB - decimal mark found from the default (first) parameterset of the
+         same modality.'''
         super().__init__(dlg_settings, header, subtxt)
         self.fname = 'auto_vendor_templates'
         self.empty_template = cfc.AutoVendorTemplate()

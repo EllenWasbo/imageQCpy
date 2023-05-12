@@ -329,6 +329,7 @@ class ResultPlotCanvas(PlotCanvas):
                     xx = list(curve['xvals'])
                     if not isinstance(xx[0], int):
                         x_only_int = False
+            '''
             if self.main.current_test == 'SNI':
                 test_widget = self.main.stack_test_tabs.currentWidget()
                 try:
@@ -341,6 +342,7 @@ class ResultPlotCanvas(PlotCanvas):
                         self.curves[0]['yvals'],
                         self.curves[1]['yvals'],
                         hatch='X', edgecolor='b')
+                    '''
             if x_only_int:
                 self.ax.xaxis.set_major_locator(
                     matplotlib.ticker.MaxNLocator(integer=True))
@@ -1423,24 +1425,45 @@ class ResultPlotCanvas(PlotCanvas):
 
         def plot_filtered_NPS(roi_name='L1'):
             """Plot filtered NPS + NPS structure for selected ROI +quantum noise txt."""
+            self.default_range_x = [0, nyquist_freq]
             roi_no = roi_names.index(roi_name)
             details_dict_roi = details_dict['pr_roi'][roi_no]
             yvals = details_dict_roi['rNPS_filt']
             xvals = details_dict_roi['freq']
             self.curves.append(
-                {'label': 'radial NPS with eye filter',
+                {'label': 'NPS with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': '-b'})
             self.default_range_y = [0, 1.1 * np.max(yvals[10:])]
-            yvals = details_dict_roi['rNPS_struct_filt']
-            self.curves.append(
-                {'label': '(radial NPS - quantum noise) with eye filter',
-                 'xvals': xvals, 'yvals': yvals, 'style': '-r'})
-            self.default_range_x = [0, nyquist_freq]
 
-            txt_quantum_noise = (
-                f'Quantum noise = {details_dict_roi["quantum_noise"]:.2f}')
-            at = matplotlib.offsetbox.AnchoredText(txt_quantum_noise, loc='lower right')
-            self.ax.add_artist(at)
+            self.curves.append(
+                {'label': 'NPS',
+                 'xvals': xvals, 'yvals': details_dict_roi['rNPS'],
+                 'style': ':b'})
+            self.curves.append(
+                {'label': 'NPS structured noise with eye filter',
+                 'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct_filt'],
+                 'style': '-r'})
+            self.curves.append(
+                {'label': 'NPS structured noise',
+                 'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct'],
+                 'style': ':r'})
+
+            if isinstance(details_dict_roi['quantum_noise'], float):
+                yvals = [details_dict_roi['quantum_noise']] * len(xvals)
+                self.curves.append(
+                    {'label': 'NPS estimated quantum noise',
+                     'xvals': xvals, 'yvals': yvals, 'style': ':k'})
+                '''
+                txt_quantum_noise = (
+                    f'Quantum noise = {details_dict_roi["quantum_noise"]:.2f}')
+                at = matplotlib.offsetbox.AnchoredText(txt_quantum_noise, loc='lower right')
+                self.ax.add_artist(at)
+                '''
+            else:
+                yvals = details_dict_roi['rNPS_quantum_noise']
+                self.curves.append(
+                    {'label': 'NPS estimated quantum noise',
+                     'xvals': xvals, 'yvals': yvals, 'style': ':k'})
 
         def plot_all_NPS():
             """Plot NPS for all ROIs + hum vis filter (normalized to NPS in max)."""

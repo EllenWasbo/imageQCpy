@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import QMessageBox, QDialog, QTextEdit
 # imageQC block start
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS, ENV_ICON_PATH
 import imageQC.scripts.mini_methods_format as mmf
+from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.config.config_classes import TagPatternFormat
 # imageQC block end
 
@@ -989,20 +990,31 @@ def sort_imgs(img_infos, tag_pattern_sort, tag_infos):
                 infos.append(info[0]['dummy'])
             else:
                 infos.append(info[0])
-    
+
         df = {}
         for c, attr in enumerate(tag_pattern_sort.list_tags):
             col = [row[c] for row in infos]
-            try:
-                col = [float(row[c]) for row in infos]
-            except ValueError:
-                pass
+            col_nmb = []
+            types = []
+            for val in col:
+                try:
+                    col_nmb.append(float(val))
+                    types.append('float')
+                except ValueError:
+                    col_nmb.append(val)
+                    types.append('str')
+            if 'float' in types:
+                if '' in col_nmb:  # i.e. mix of str and float #TODO more general fix
+                    idxs = get_all_matches(col_nmb, '')
+                    for idx in idxs:
+                        col_nmb[idx] = -10000
+            col = col_nmb
             df[attr] = col
         df = pd.DataFrame(df)
         sorted_infos = df.sort_values(
             by=tag_pattern_sort.list_tags,
             ascending=tag_pattern_sort.list_sort)
-    
+
         sorted_img_infos = []
         for idx in sorted_infos.index:
             sorted_img_infos.append(img_infos[idx])

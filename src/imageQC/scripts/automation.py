@@ -12,6 +12,8 @@ from pathlib import Path
 from fnmatch import fnmatch
 import logging
 from datetime import date, datetime
+from time import time
+import shutil
 
 import pydicom
 
@@ -100,6 +102,11 @@ def run_automation_non_gui(sysargv):
         # run templates
         modalities = [*QUICKTEST_OPTIONS]
         vendor = True  # first vendor templates if any
+        ok_params, path, paramsets = cff.load_settings(
+            fname='paramsets')
+        ok_qt, path, qt_templates = cff.load_settings(
+            fname='quicktest_templates')
+        decimal_mark = '.'
         for templates in [auto_vendor_templates, auto_templates]:
             run_this = run_auto_vendor if vendor else run_auto
             if run_this:
@@ -110,24 +117,17 @@ def run_automation_non_gui(sysargv):
                         arr.append(temp.label)
                     labels[mod] = arr
 
-                if vendor is False:
-                    ok_params, path, paramsets = cff.load_settings(
-                        fname='paramsets')
-                    ok_qt, path, qt_templates = cff.load_settings(
-                        fname='quicktest_templates')
-                else:
-                    paramsets = None
-                    qt_templates = None
-
                 if len(temps) > 0:
                     for t_id, mod_temp in enumerate(temps):
                         mod, templabel = mod_temp
+                        if vendor:
+                            decimal_mark = paramsets[mod][0].output.decimal_mark
                         if templabel in labels[mod]:
                             tempno = labels[mod].index(templabel)
                             template = templates[mod][tempno]
                             if vendor:
                                 log_this, not_written = run_template_vendor(
-                                    template, mod)
+                                    template, mod, decimal_mark=decimal_mark)
                             else:
                                 log_this, not_written = run_template(
                                     template,
@@ -262,7 +262,7 @@ def validate_args(sysargv):
 
 
 def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
-                    ignore_since=-1):
+                    override_path=None, ignore_since=-1):
     """Import (rename and move) DICOM images if any in import_path of AutoCommon.
 
     Parameters
@@ -271,6 +271,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
     tag_infos : list of TagInfo
     parent_widget : widget or None
         Default is None
+    override_path : str
+        temporary import path if GUI
     ignore_since: int
         Override saved AutoCommon.ignore_since. Default is -1 (=not override)
 
@@ -283,8 +285,9 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
     """
     import_log = []
     proceed = False
-    if os.path.exists(auto_common.import_path):
-        p = Path(auto_common.import_path)
+    import_path = auto_common.import_path if override_path is None else override_path
+    if os.path.exists(import_path):
+        p = Path(import_path)
         files = [x for x in p.glob('**/*') if x.is_file()]
         if len(files) > 0:
             proceed = True
@@ -341,7 +344,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
         multiple_match = []  # index list of file matching more than one templ
         no_input_path = []
         file_renames = [''] * len(files)  # new filenames generated from dicom
-        file_new_folder = [auto_common.import_path] * len(files)  # input folder if set
+        file_new_folder = [import_path] * len(files)  # input folder if set
 
         # prepare auto delete
         delete_files = []  # filenames to auto delete
@@ -582,7 +585,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                 except OSError:  # error if folder not empty
                     pass  # not empty
 
-    return import_log
+    return (proceed, import_log)
 
 
 def verify_automation_possible(templates, templates_vendor):
@@ -650,7 +653,11 @@ def move_rename_file(filepath_orig, filepath_new):
             filepath_orig.rename(filepath_new)
             status = True
         except (PermissionError, OSError) as e:
-            errmsg = f'Failed to rename\n{filepath_orig}\nto {filepath_new}\n{e}'
+            if 'WinError 17' in str(e):
+                shutil.move(filepath_orig, filepath_new)
+                status = True
+            else:
+                errmsg = f'Failed to rename\n{filepath_orig}\nto {filepath_new}\n{e}'
 
     return (status, errmsg)
 
@@ -824,7 +831,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
     return (log, not_written)
 
 
-def run_template_vendor(auto_template, modality, parent_widget=None):
+def run_template_vendor(auto_template, modality, decimal_mark='.',
+                        parent_widget=None):
     """Find new files and read."""
     log = []
     not_written = []
@@ -834,6 +842,9 @@ def run_template_vendor(auto_template, modality, parent_widget=None):
     if auto_template.active is False:
         log.append('Deactivated template')
     else:
+        if parent_widget is not None:
+            parent_widget.status_label.showMessage(
+                f'{log_pre} Finding files...')
         proceed = os.path.exists(auto_template.path_input)
         if proceed is False:
             log.append('\t Input path not defined or do not exist.')
@@ -857,14 +868,17 @@ def run_template_vendor(auto_template, modality, parent_widget=None):
                 log.append(
                     f'''\t Failed to write to output path
                     {auto_template.path_output}''')
-            for file in files:
+            for fileno, file in enumerate(files):
+                if parent_widget is not None:
+                    parent_widget.status_label.showMessage(
+                        f'{log_pre} Extracting data from file {fileno}/{len(files)}...')
                 res = read_vendor_QC_reports.read_vendor_template(auto_template, file)
                 if res is None:
                     log.append(f'\t Found no expected content in {file}')
                 else:
                     status, print_array = append_auto_res_vendor(
                         auto_template.path_output,
-                        res, to_file=write_ok
+                        res, to_file=write_ok, decimal_mark=decimal_mark
                         )
                     if write_ok is False:
                         if len(not_written) == 0:
@@ -919,7 +933,7 @@ def append_auto_res(auto_template, headers, values, to_file=False):
     return (status, print_list)
 
 
-def append_auto_res_vendor(output_path, result_dict, to_file=False):
+def append_auto_res_vendor(output_path, result_dict, to_file=False, decimal_mark='.'):
     """Append test results to output path.
 
     Parameters
@@ -929,6 +943,7 @@ def append_auto_res_vendor(output_path, result_dict, to_file=False):
         {<testcode>: {'headers': [], 'values': []}}
     to_file: bool
         True if output file verified. Default is False
+    decimal_mark : str
 
     Returns
     -------
@@ -946,7 +961,8 @@ def append_auto_res_vendor(output_path, result_dict, to_file=False):
             print_list = [print_list[1]]  # ignore header
         with open(output_path, "a") as f:
             for row in print_list:
-                row_strings = val_2_str(row, lock_format=True)
+                row_strings = val_2_str(
+                    row, lock_format=True, decimal_mark=decimal_mark)
                 f.write('\t'.join(row_strings) + '\n')
         status = True
         print_list = []

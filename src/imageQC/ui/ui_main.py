@@ -325,6 +325,8 @@ class MainWindow(QMainWindow):
             if current is not None:
                 self.gui.active_img_no = self.tree_file_list.indexOfTopLevelItem(
                     current)
+            else:
+                self.gui.active_img_no = -1 if len(self.imgs) == 0 else 0
             read_img = True
             if self.wid_image_display.tool_sum.isChecked():
                 marked_idxs = self.tree_file_list.get_marked_imgs_current_test()

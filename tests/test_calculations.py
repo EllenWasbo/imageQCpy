@@ -436,15 +436,21 @@ def test_NM_SNI():
         automation_active=False
         )
 
-    file_path = path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist.dcm'
+    file_paths = [
+        path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist.dcm',
+        path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist_artifacts.dcm']
     img_infos, ignored_files = dcm.read_dcm_info(
-        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+        file_paths, GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
-
-    assert np.array_equal(values, np.array(
+    values0 = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
+    breakpoint()
+    assert np.array_equal(values0, np.array(
+        [61., 49., 49., 61., 36., 61., 58., 34., 58.]))
+    values3 = np.round(100 * np.array(input_main.results['SNI']['values'][3]))
+    breakpoint()
+    assert np.array_equal(values3, np.array(
         [61., 49., 49., 61., 36., 61., 58., 34., 58.]))
 
 
@@ -465,6 +471,15 @@ def test_NM_SNI_sum():
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
+
+    breakpoint()
+    assert np.array_equal(values, np.array(
+        [61., 49., 49., 61., 36., 61., 58., 34., 58.]))
+
+    # include first image to simulate central stripe as (strange) artifact
+    input_main.current_quictest.tests[0] = ['SNI']
     calculate_qc.calculate_qc(input_main)
     values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
 

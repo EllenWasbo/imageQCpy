@@ -1179,33 +1179,13 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         if image2d is None:
             res = Results(headers=headers, headers_sup=headers_sup)
         else:
-            details_dict = {}
-            errmsg = None
-            values_sup = [None] * 3
-            uncorr_image = np.copy(image2d)
-            if paramset.sni_correct:
-                lock_z = paramset.sni_radius if paramset.sni_lock_radius else None
-                res, errmsg = get_corrections_point_source(
-                    image2d, image_info, roi_array[0],
-                    fit_x=paramset.sni_correct_pos_x,
-                    fit_y=paramset.sni_correct_pos_y,
-                    lock_z=lock_z
-                    )
-                image_input = res['corrected_image']
-                values_sup = [res['dx'], res['dy'], res['distance']]
-                details_dict = res
-            else:
-                image_input = image2d
-
-            values, details_dict2 = calculate_NM_SNI(
-                image_input, roi_array, image_info.pix[0], paramset,
-                uncorr_image=uncorr_image)
-            details_dict.update(details_dict2)
+            values, values_sup, details_dict, errmsg = calculate_NM_SNI(
+                image2d, roi_array, image_info, paramset)
 
             res = Results(
                 headers=headers, values=values,
                 headers_sup=headers_sup, values_sup=values_sup,
-                details_dict=details_dict, errmsg=[errmsg])
+                details_dict=details_dict, errmsg=errmsg)
 
         return res
 
@@ -1639,8 +1619,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             roi_array, errmsg = get_rois(
                 image_input, images_to_test[0], input_main)
             details_dict = {'sum_image': image_input}
-            values, details_dict2 = calculate_NM_SNI(
-                image_input, roi_array, img_infos[0].pix[0], paramset)
+            values, _, details_dict2, _ = calculate_NM_SNI(
+                image_input, roi_array, img_infos[0], paramset)
             details_dict.update(details_dict2)
 
             res = Results(headers=headers, values=[values],
@@ -2611,7 +2591,7 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
 
 def get_corrections_point_source(
         image2d, img_info, roi_array,
-        fit_x=False, fit_y=False, lock_z=None):
+        fit_x=False, fit_y=False, lock_z=None, estimate_noise=False):
     """Estimate xyz of point source and generate correction matrix.
 
     Parameters
@@ -2628,13 +2608,19 @@ def get_corrections_point_source(
         Fit in y direction. The default is False.
     lock_z : float, optional
         Use locked distance to source when fitting. The default is None.
+    estimate_noise : bool
+        if True estimate poisson noise for fitted image
 
     Returns
     -------
     dict
-        corrected_image : numpy.ndarray
-        correction_matrix : numpy.ndarray
+        corrected_image : numpy.2darray
+        correction_matrix : numpy.2darray
             subtract this matrix to obtain corrected image2d
+        fit_matrix : numpy.2darray
+            fitted image
+        estimated_noise_image : numpy.2darray
+            fitted_image with estimated poisson noise
         dx : corrected x position (mm)
         dy : corrected y position (mm)
         distance : corrected distance (mm)
@@ -2643,6 +2629,7 @@ def get_corrections_point_source(
     """
     corrected_image = image2d
     correction_matrix = np.ones(image2d.shape)
+    fit_matrix = None
     distance = 0.
     errmsg = None
 
@@ -2700,6 +2687,13 @@ def get_corrections_point_source(
         if popt is not None:
             C, distance = popt
             fit = mmcalc.point_source_func(dists_inplane.flatten(), C, distance)
+
+            # estimate noise
+            fit_matrix = fit.reshape(image2d.shape)
+            rng = np.random.default_rng()
+            estimated_noise_image = rng.poisson(fit_matrix)
+
+            # correct input image
             corr_sub = fit - fit[0]
             corr_sub = (1./np.max(fit)) * fit  # matrix to subtract
             corr_sub = 1./corr_sub
@@ -2710,6 +2704,8 @@ def get_corrections_point_source(
 
     return ({'corrected_image': corrected_image,
              'correction_matrix': correction_matrix,
+             'fit_matrix': fit_matrix,
+             'estimated_noise_image': estimated_noise_image,
              'dx': dx, 'dy': dy, 'distance': distance}, errmsg)
 
 
@@ -2795,125 +2791,189 @@ def calculate_NM_uniformity(image2d, roi_array, pix):
             'values': [iu_ufov, du_ufov, iu_cfov, du_cfov]}
 
 
-def calculate_NM_SNI(image2d, roi_array, pix, paramset, uncorr_image=None):
-    """Calculate uniformity parameters.
+def get_eye_filter(roi_size, pix, c):
+    """Get eye filter V(r)=r^1.3*exp(-cr^2).
 
     Parameters
     ----------
-    image2d : numpy.ndarray
-    roi_array : list of numpy.ndarray
-        2d mask for ufov [0] and cfov [1]
+    roi_size : int
+        size of roi or image in pix
     pix : float
-        pixel size of image2d
-    paramset : cfc.ParamsetNM
-    uncorr_image : numpy.ndarray
-        image with original counts
+        mm pr pix in image
+    c : float
+        adjusted to have V(r) max 4 cy/degree
+            (Nelson et al uses c=28 = display size 65mm, viewing distance 1.5m)
+
+    Returns
+    -------
+    eye_filter : dict
+        filter 2d : np.ndarray quadratic with size roi_height
+        curve: dict of r and V
+    """
+    def eye_filter_func(r, c):
+        return r**1.3 * np.exp(-c*r**2)
+
+    freq = np.fft.fftfreq(roi_size, d=pix)
+    freq = freq[:freq.size//2]  # from center
+    V = eye_filter_func(freq, c)
+    eye_filter_1d = {'r': freq, 'V': 1/np.max(V) * V}
+
+    unit = freq[1] - freq[0]
+    dists = mmcalc.get_distance_map_point((roi_size, roi_size))
+    eye_filter_2d = eye_filter_func(unit*dists, c)
+    eye_filter_2d = 1/np.max(eye_filter_2d) * eye_filter_2d
+
+    return {'filter_2d': eye_filter_2d, 'curve': eye_filter_1d, 'unit': unit}
+
+
+def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
+                      pix=1., fit_dict=None):
+    """Calculate SNI for one ROI.
+
+    Parameters
+    ----------
+    image2d : numpy.2darray
+        if fit_matrix is not None, this is a flattened matrix
+        (corrected for point source curvature)
+    roi_array : numpy.2darray
+        2d mask for the current ROI
+    eye_filter : numpy.2darray
+    unit : float
+        unit of NPS and eye_filter
+    pix : float
+    fit_dict : dict
+        dictionary from get_corrections_point_source (if corrections else None)
 
     Returns
     -------
     values : list of float
         ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', .. 'SNI S6']
     details_dict : dict
+        NPS : numpy.2darray NPS in ROI
+        quantum_noise : constant or numpy.2darray (NPS of estimated noise)
+        freq : numpy.1darray - frequencies of radial NPS curve
+        rNPS : radial NPS curve
+        rNPS_filt
+        rNPS_struct
+        rNPS_struct_filt
+    errmsgs : list of str
     """
-
-    def get_eye_filter(roi_size, pix, c):
-        """Get eye filter V(r)=r^1.3*exp(-cr^2).
-
-        Parameters
-        ----------
-        roi_size : int
-            size of roi or image in pix
-        pix : float
-            mm pr pix in image
-        c : float
-            adjusted to have V(r) max 4 cy/degree
-                (Nelson et al uses c=28 = display size 65mm, viewing distance 1.5m)
-
-        Returns
-        -------
-        eye_filter : dict
-            filter 2d : np.ndarray quadratic with size roi_height
-            curve: dict of r and V
-        """
-        def eye_filter_func(r, c):
-            return r**1.3 * np.exp(-c*r**2)
-
-        freq = np.fft.fftfreq(roi_size, d=pix)
-        freq = freq[:freq.size//2]  # from center
-        V = eye_filter_func(freq, c)
-        eye_filter_1d = {'r': freq, 'V': 1/np.max(V) * V}
-
-        unit = freq[1] - freq[0]
-        dists = mmcalc.get_distance_map_point((roi_size, roi_size))
-        eye_filter_2d = eye_filter_func(unit*dists, c)
-        eye_filter_2d = 1/np.max(eye_filter_2d) * eye_filter_2d
-
-        return {'filter_2d': eye_filter_2d, 'curve': eye_filter_1d, 'unit': unit}
-
-    def calculate_SNI_this(roi_array_this, eye_filter, unit):
-        rows = np.max(roi_array_this, axis=1)
-        cols = np.max(roi_array_this, axis=0)
+    rows = np.max(roi_array_this, axis=1)
+    cols = np.max(roi_array_this, axis=0)
+    subarray = image2d[rows][:, cols]
+    NPS = mmcalc.get_2d_NPS(subarray, pix)
+    # set central axis of NPS array to 0
+    #  to avoid issues with this high and not important value
+    line = NPS.shape[0] // 2
+    #NPS[line] = 0
+    #NPS[:, line] = 0
+    NPS[line, line] = 0
+    rNPS_quantum_noise = None
+    if fit_dict is None:  # uncorrected image
+        quantum_noise = np.mean(image2d[rows][:, cols]) * pix**2
         """ explained how quantum noise is found above
         Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
         Total(NPS)=NPSvalue*ROIsz^2
         NPSvalue = Meancount/(pixNPS^2*ROIsz^2)=MeanCount*pix^2
         """
-        subarray = image2d[rows][:, cols]
-        NPS = mmcalc.get_2d_NPS(subarray - np.mean(subarray), pix)
-        freq, rNPS = mmcalc.get_radial_profile(NPS, pix=unit, step_size=0.01)
-        if paramset.sni_correct is False:
-            quantum_noise = np.mean(image2d[rows][:, cols]) * pix**2
-            """ explained how quantum noise is found above
-            Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
-            Total(NPS)=NPSvalue*ROIsz^2
-            NPSvalue = Meancount/(pixNPS^2*ROIsz^2)=MeanCount*pix^2
-            """
-        else:
-            # point source - varying quantum noise
-            quantum_noise = np.min(rNPS[2:])  #TODO set this more theoretially correct?
         NPS_struct = NPS - quantum_noise
-        NPS_filt = NPS * eye_filter
-        NPS_struct_filt = NPS_struct * eye_filter
-        SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
-        _, rNPS_filt = mmcalc.get_radial_profile(NPS_filt, pix=unit, step_size=0.01)
-        _, rNPS_struct_filt = mmcalc.get_radial_profile(
-            NPS_struct_filt, pix=unit, step_size=0.01)
-
+    else:
+        # point source - varying quantum noise
+        sub_estimated_noise = fit_dict['estimated_noise_image'][rows][:, cols]
+        quantum_noise = mmcalc.get_2d_NPS(sub_estimated_noise, pix)
         # set central axis of NPS array to 0
-        line = NPS.shape[0] // 2
-        NPS[line] = 0
-        NPS[:, line] = 0
+        #quantum_noise[line] = 0
+        #quantum_noise[:, line] = 0
+        quantum_noise[line, line] = 0
+        _, rNPS_quantum_noise = mmcalc.get_radial_profile(
+            quantum_noise, pix=unit, step_size=0.01)
+        NPS_struct = np.subtract(NPS, quantum_noise)
+    NPS_filt = NPS * eye_filter
+    NPS_struct_filt = NPS_struct * eye_filter
+    SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
 
-        details_dict_roi = {
-            'NPS': NPS, 'quantum_noise': quantum_noise,
-            'freq': freq, 'rNPS': rNPS, 'rNPS_filt': rNPS_filt,
-            'rNPS_struct_filt': rNPS_struct_filt
-            }
-        return (SNI, details_dict_roi)
+    # radial NPS curves
+    freq, rNPS = mmcalc.get_radial_profile(NPS, pix=unit, step_size=0.01)
+    _, rNPS_filt = mmcalc.get_radial_profile(NPS_filt, pix=unit, step_size=0.01)
+    _, rNPS_struct = mmcalc.get_radial_profile(NPS_struct, pix=unit, step_size=0.01)
+    _, rNPS_struct_filt = mmcalc.get_radial_profile(
+        NPS_struct_filt, pix=unit, step_size=0.01)
 
+    details_dict_roi = {
+        'NPS': NPS, 'quantum_noise': quantum_noise,
+        'freq': freq, 'rNPS': rNPS, 'rNPS_filt': rNPS_filt,
+        'rNPS_struct': rNPS_struct, 'rNPS_struct_filt': rNPS_struct_filt,
+        'rNPS_quantum_noise': rNPS_quantum_noise
+        }
+    return (SNI, details_dict_roi)
+
+def calculate_NM_SNI(image2d, roi_array, image_info, paramset):
+    """Calculate uniformity parameters.
+
+    Parameters
+    ----------
+    image2d : numpy.ndarray
+    roi_array : list of numpy.ndarray
+        list of 2d masks for all_rois, L1, L2, S1 ... S6
+    image_info :  DcmInfo
+        as defined in scripts/dcm.py
+    paramset : cfc.ParamsetNM
+
+    Returns
+    -------
+    values : list of float
+        ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', .. 'SNI S6']
+    details_dict : dict
+    errmsgs : list of str
+    """
+    values_sup = [None] * 3
+    details_dict = {}
     SNI_values = []
-    details_dict = {'pr_roi': []}
+    errmsgs = []
 
+    # point source correction
+    fit_dict = None
+    if paramset.sni_correct:
+        lock_z = paramset.sni_radius if paramset.sni_lock_radius else None
+        fit_dict, errmsg = get_corrections_point_source(
+            image2d, image_info, roi_array[0],
+            fit_x=paramset.sni_correct_pos_x,
+            fit_y=paramset.sni_correct_pos_y,
+            lock_z=lock_z
+            )
+        if errmsg is not None:
+            errmsgs.append(errmsg)
+        values_sup = [fit_dict['dx'], fit_dict['dy'], fit_dict['distance']]
+        details_dict = fit_dict
+
+    details_dict['pr_roi'] = []
+
+    # large ROIs
     rows = np.max(roi_array[1], axis=1)
     eye_filter = get_eye_filter(
-        np.count_nonzero(rows), pix, paramset.sni_eye_filter_c)
+        np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c)
     details_dict['eye_filter_large'] = eye_filter['curve']
     for i in [1, 2]:
-        SNI, details_dict_roi = calculate_SNI_this(
-            roi_array[i], eye_filter['filter_2d'], unit=eye_filter['unit'])
+        SNI, details_dict_roi = calculate_SNI_ROI(
+            image2d, roi_array[i],
+            eye_filter=eye_filter['filter_2d'], unit=eye_filter['unit'],
+            pix=image_info.pix[0], fit_dict=fit_dict)
         details_dict['pr_roi'].append(details_dict_roi)
         SNI_values.append(SNI)
 
+    # small ROIs
     rows = np.max(roi_array[3], axis=1)
     eye_filter = get_eye_filter(
-        np.count_nonzero(rows), pix, paramset.sni_eye_filter_c)
+        np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c)
     details_dict['eye_filter_small'] = eye_filter['curve']
     for i in range(3, 9):
-        SNI, details_dict_roi = calculate_SNI_this(
-            roi_array[i], eye_filter['filter_2d'], unit=eye_filter['unit'])
+        SNI, details_dict_roi = calculate_SNI_ROI(
+            image2d, roi_array[i],
+            eye_filter['filter_2d'], unit=eye_filter['unit'],
+            pix=image_info.pix[0], fit_dict=fit_dict)
         details_dict['pr_roi'].append(details_dict_roi)
         SNI_values.append(SNI)
 
     values = [np.max(SNI_values)] + SNI_values
 
-    return (values, details_dict)
+    return (values, values_sup, details_dict, errmsgs)

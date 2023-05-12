@@ -114,6 +114,11 @@ class OpenAutomationDialog(ImageQCDialog):
         self.quicktest_templates = self.main.quicktest_templates
         self.tag_infos = self.main.tag_infos
         self.lastload_auto_common = time()
+        self.templates_mod = []  # list of modality for all templates in list (all)
+        self.templates_is_vendor = []  # bool type vendor for all templ in list (all)
+        self.templates_id = []  # id within each template list for (all)
+        self.templates_displayed_names_all = []  # name without count in list all
+        self.templates_displayed_ids = []  # currently displayed ids (index in all)
 
         self.wid_image_display = ImageWidget()
 
@@ -141,8 +146,10 @@ class OpenAutomationDialog(ImageQCDialog):
         vlo.addLayout(hlo_import_path)
 
         hlo_last_import = QHBoxLayout()
-        hlo_last_import.addWidget(QLabel('Last import date: '))
+        hlo_last_import.addWidget(QLabel('Last import date/time: '))
         self.last_import = QLabel(self.auto_common.last_import_date)
+        hlo_last_import.addWidget(self.last_import)
+        hlo_last_import.addStretch()
         vlo.addLayout(hlo_last_import)
 
         self.chk_ignore_since = QCheckBox('Leave unsorted if image more than ')
@@ -178,10 +185,7 @@ class OpenAutomationDialog(ImageQCDialog):
 
         self.list_templates = QListWidget()
         self.list_templates.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.templates_mod = []
-        self.templates_is_vendor = []
-        self.templates_id = []
-        self.list_templates.addItems(self.get_template_list())
+        #self.list_templates.addItems(self.get_template_list(set_all=True)) - refresh list later
 
         hlo_temps = QHBoxLayout()
         vlo.addLayout(hlo_temps)
@@ -209,7 +213,10 @@ class OpenAutomationDialog(ImageQCDialog):
         tb_temps.addActions(
             [act_refresh, act_open_result_file, act_reset_template, act_settings])
 
-        hlo_temps.addWidget(self.list_templates)
+        vlo_list = QVBoxLayout()
+        #TODO some filter option (text?)
+        vlo_list.addWidget(self.list_templates)
+        hlo_temps.addLayout(vlo_list)
         vlo_buttons = QVBoxLayout()
         hlo_temps.addLayout(vlo_buttons)
         btn_run_all = QPushButton('Run all')
@@ -290,7 +297,7 @@ class OpenAutomationDialog(ImageQCDialog):
                 ignore_since = self.spin_ignore_since.value()
             import_status, log_import = automation.import_incoming(
                 self.auto_common, self.templates, self.tag_infos, parent_widget=self,
-                ignore_since=ignore_since)
+                override_path=path, ignore_since=ignore_since)
             self.stop_wait_cursor()
 
             if import_status:
@@ -303,6 +310,7 @@ class OpenAutomationDialog(ImageQCDialog):
                         "%d.%m.%Y %I:%M")
                     ok_save, path = cff.save_settings(
                         self.auto_common, fname=fname)
+                    self.last_import.setText(self.auto_common.last_import_date)
 
             if len(log_import) > 0:
                 self.status_label.showMessage('Finished reading images')
@@ -343,13 +351,41 @@ class OpenAutomationDialog(ImageQCDialog):
 
         return (n_files, error_ex)
 
-    def get_template_list(self, count=False):
+    def get_selected_templates_mod_id(self):
+        """Get selected templates modalities and ids.
+
+        Returns
+        -------
+        mods : list of str
+            modalities for selected templates
+        is_vendor : list of bool
+            is_vendor? for selected templates
+        ids : list of int
+            id within template list for selected templates
+        """
+        sel = self.list_templates.selectedIndexes()
+        mods = []
+        is_vendor = []
+        ids = []
+        if len(sel) > 0:
+            for idx in sel:
+                tempno_displayed = idx.row()
+                tempno = self.templates_displayed_ids[tempno_displayed]
+                mods.append(self.templates_mod[tempno])
+                is_vendor.append(self.templates_is_vendor[tempno])
+                ids.append(self.templates_id[tempno])
+        return (mods, is_vendor, ids)
+
+    def get_template_list(self, count=False, set_all=False):
         """Get list of templates (modality - (vendor file) - label).
 
         Parameters
         ----------
         count : bool, optional
             Count and list number of incoming files. The default is False.
+        set_all : bool
+            set self.templates_displayed_id_all + self.templates_displayed_names
+            (first time)
 
         Returns
         -------
@@ -359,11 +395,15 @@ class OpenAutomationDialog(ImageQCDialog):
         template_list = []
         modalities = [*QUICKTEST_OPTIONS]
         errormsgs = []
+        if set_all:
+            self.templates_displayed_names_all = []
         for mod in modalities:
             arr = []
             for temp in self.templates[mod]:
                 if temp.label != '' and temp.active:
-                    arr.append(mod + ' - ' + temp.label)
+                    name = mod + ' - ' + temp.label
+                    self.templates_displayed_names_all.append(name)
+                    arr.append(name)
                     if count:
                         if temp.path_input != '':
                             n_files, err = self.count_files(temp.path_input)
@@ -384,7 +424,9 @@ class OpenAutomationDialog(ImageQCDialog):
             arr = []
             for temp in self.templates_vendor[mod]:
                 if temp.label != '' and temp.active:
-                    arr.append(mod + ' - (vendor file) ' + temp.label)
+                    name = mod + ' - (vendor file) ' + temp.label
+                    self.templates_displayed_names_all.append(name)
+                    arr.append(name)
                     if count:
                         if temp.path_input != '':
                             n_files, err = self.count_files(temp.path_input)
@@ -419,6 +461,8 @@ class OpenAutomationDialog(ImageQCDialog):
         templist = self.get_template_list(count=True)
         self.list_templates.clear()
         if len(templist) > 0:
+            #TODO search text to select templates from self.templates_displayed_names
+            # and set self.templates_displayed_ids
             self.list_templates.addItems(templist)
         self.main.stop_wait_cursor()
         self.status_label.clearMessage()
@@ -576,7 +620,10 @@ class OpenAutomationDialog(ImageQCDialog):
                     self.status_label.showMessage(
                         f'{pre_msg} Extracting data from vendor report...'
                         )
-                    msgs, not_written = automation.run_template_vendor(temp_this, mod)
+                    msgs, not_written = automation.run_template_vendor(
+                        temp_this, mod,
+                        decimal_mark=self.paramsets[mod].output.decimal_mark,
+                        parent_widget=self)
                 else:
                     msgs, not_written = automation.run_template(
                         temp_this, mod,

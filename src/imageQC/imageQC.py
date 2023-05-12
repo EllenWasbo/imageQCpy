@@ -28,12 +28,22 @@ import imageQC.scripts.automation as automation
 
 def prepare_debug():
     """Set a tracepoint in PDB that works with Qt."""
+    # https://stackoverflow.com/questions/1736015/debugging-a-pyqt4-app
     from PyQt5.QtCore import pyqtRemoveInputHook
+    import pdb
+    import sys
     pyqtRemoveInputHook()
+    # set up the debugger
+    debugger = pdb.Pdb()
+    debugger.reset()
+    # custom next to get outside of function scope
+    debugger.do_next(None)  # run the next command
+    users_frame = sys._getframe().f_back  # frame where user invoked `pyqt_set_trace()`
+    debugger.interaction(users_frame, None)
 
 
 if __name__ == '__main__':
-    prepare_debug()  # not needen when not debugging
+    # prepare_debug()  # TODO - activate (not needen when not debugging)
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     # verify that config_folder exists
     if user_prefs.config_folder != '':

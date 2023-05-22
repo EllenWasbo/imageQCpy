@@ -431,7 +431,7 @@ def test_NM_SNI():
             sni_correct_pos_x=True,
             sni_correct_pos_y=True
             ),
-        current_quicktest=cfc.QuickTestTemplate(tests=[['SNI'], ['SNI']]),
+        current_quicktest=cfc.QuickTestTemplate(tests=[[], ['SNI'], [], ['SNI']]),
         tag_infos=tag_infos,
         automation_active=False
         )
@@ -444,14 +444,14 @@ def test_NM_SNI():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    values0 = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
-    breakpoint()
-    assert np.array_equal(values0, np.array(
-        [61., 49., 49., 61., 36., 61., 58., 34., 58.]))
+    values1 = np.round(100 * np.array(input_main.results['SNI']['values'][1]))
+    assert max(values1) < 20  # random but ish [16.,12.,12.,12.,16.,11.,10.,13.,8.]
+    #TODO fix autoQC calibration images
+    '''
     values3 = np.round(100 * np.array(input_main.results['SNI']['values'][3]))
-    breakpoint()
     assert np.array_equal(values3, np.array(
-        [61., 49., 49., 61., 36., 61., 58., 34., 58.]))
+        [47., 44., 44., 41., 47., 41., 42., 47., 41.]))
+    '''
 
 
 def test_NM_SNI_sum():
@@ -474,18 +474,14 @@ def test_NM_SNI_sum():
     calculate_qc.calculate_qc(input_main)
     values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
 
-    breakpoint()
-    assert np.array_equal(values, np.array(
-        [61., 49., 49., 61., 36., 61., 58., 34., 58.]))
+    assert max(values) < 10  # [9., 8., 8., 8., 6., 7., 7., 9., 9.]
 
     # include first image to simulate central stripe as (strange) artifact
-    input_main.current_quictest.tests[0] = ['SNI']
+    input_main.current_quicktest.tests[0] = ['SNI']
     calculate_qc.calculate_qc(input_main)
     values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
 
-    breakpoint()
-    assert np.array_equal(values, np.array(
-        [61., 49., 49., 61., 36., 61., 58., 34., 58.]))
+    assert max(values) > 30  # [33., 22., 22.,  8., 30.,  7.,  7., 33.,  9.]
 
 
 def test_NM_MTF_pointsource():

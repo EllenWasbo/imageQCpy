@@ -445,10 +445,10 @@ def calculate_qc(input_main,
             for i in range(n_analyse):
                 if 'MainWindow' in str(type(input_main)):
                     input_main.status_bar.showMessage(
-                        f'Reading image data {i} of {n_img}')
+                        f'Reading/calculating image {i}/{n_img}')
                 elif wid_auto is not None:
                     wid_auto.status_label.showMessage(
-                        f'{auto_template_label}: Reading image data {i} of {n_img}')
+                        f'{auto_template_label}: Reading/calculating image {i}/{n_img}')
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
                 image = None
@@ -2616,7 +2616,7 @@ def get_corrections_point_source(
     dict
         corrected_image : numpy.2darray
         correction_matrix : numpy.2darray
-            subtract this matrix to obtain corrected image2d
+            multiply by this matrix to obtain corrected image2d
         fit_matrix : numpy.2darray
             fitted image
         estimated_noise_image : numpy.2darray
@@ -2861,30 +2861,31 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
     rows = np.max(roi_array_this, axis=1)
     cols = np.max(roi_array_this, axis=0)
     subarray = image2d[rows][:, cols]
-    NPS = mmcalc.get_2d_NPS(subarray, pix)
-    # set central axis of NPS array to 0
-    #  to avoid issues with this high and not important value
-    line = NPS.shape[0] // 2
-    #NPS[line] = 0
-    #NPS[:, line] = 0
-    NPS[line, line] = 0
+    line = subarray.shape[0] // 2  # position of 0 frequency (set to 0 to ignore)
     rNPS_quantum_noise = None
     if fit_dict is None:  # uncorrected image
+        NPS = mmcalc.get_2d_NPS(subarray, pix)
         quantum_noise = np.mean(image2d[rows][:, cols]) * pix**2
         """ explained how quantum noise is found above
         Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
         Total(NPS)=NPSvalue*ROIsz^2
         NPSvalue = Meancount/(pixNPS^2*ROIsz^2)=MeanCount*pix^2
         """
+        NPS[line, line] = 0
         NPS_struct = NPS - quantum_noise
     else:
         # point source - varying quantum noise
         sub_estimated_noise = fit_dict['estimated_noise_image'][rows][:, cols]
+        # curve correct both subarray and quantum noise
+        corr_matrix = fit_dict['correction_matrix'][rows][:, cols]
+        subarray = subarray * corr_matrix
+        sub_estimated_noise = sub_estimated_noise * corr_matrix
+        # 2d NPS
+        NPS = mmcalc.get_2d_NPS(subarray, pix)
         quantum_noise = mmcalc.get_2d_NPS(sub_estimated_noise, pix)
-        # set central axis of NPS array to 0
-        #quantum_noise[line] = 0
-        #quantum_noise[:, line] = 0
+        # set lowest frequencies to 0 as these are extreme due to curvature
         quantum_noise[line, line] = 0
+        NPS[line, line] = 0
         _, rNPS_quantum_noise = mmcalc.get_radial_profile(
             quantum_noise, pix=unit, step_size=0.01)
         NPS_struct = np.subtract(NPS, quantum_noise)

@@ -514,6 +514,17 @@ class MainWindow(QMainWindow):
             if del_keys:
                 for key in del_keys:
                     del self.results[key]
+            # if results and none marked - set all old imgs to marked
+            if self.wid_quicktest.gb_quicktest.isChecked() is False:
+                if self.results:
+                    marked_img_ids = [
+                        i for i, im in enumerate(self.imgs) if im.marked]
+                    if len(marked_img_ids) == 0:
+                        for i, im in enumerate(self.imgs):
+                            if i < len(self.imgs) - n_added_imgs:
+                                im.marked = True
+                            else:
+                                break
 
         if deleted_idxs:
             deleted_idxs.sort(reverse=True)

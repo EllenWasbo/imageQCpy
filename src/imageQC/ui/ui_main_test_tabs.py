@@ -1065,7 +1065,7 @@ class GroupBoxCorrectPointSource(QGroupBox):
 
     def __init__(self, parent, testcode='Uni',
                  chk_pos_x=None, chk_pos_y=None,
-                 chk_radius=None, wid_radius=None):
+                 chk_radius=None, wid_radius=None, wid_ref_image=None):
         super().__init__('Correct for point source curvature')
         testcode = testcode.lower()
         self.setCheckable(True)
@@ -1084,6 +1084,10 @@ class GroupBoxCorrectPointSource(QGroupBox):
         wid_radius.valueChanged.connect(
             lambda: parent.param_changed_from_gui(
                 attribute=f'{testcode}_radius'))
+        if wid_ref_image is not None:
+            wid_ref_image.valueChanged.connect(
+                lambda: parent.param_changed_from_gui(
+                    attribute=f'{testcode}_ref_image'))
 
         vlo_gb = QVBoxLayout()
         self.setLayout(vlo_gb)
@@ -1097,6 +1101,9 @@ class GroupBoxCorrectPointSource(QGroupBox):
         hlo_lock_dist.addWidget(chk_radius)
         hlo_lock_dist.addWidget(wid_radius)
         hlo_lock_dist.addWidget(QLabel('mm'))
+        if wid_ref_image is not None:
+            hlo_ref_image = QHBoxLayout()
+            vlo_gb.addLayout(hlo_ref_image)
 
 
 class ParamsTabNM(ParamsTabCommon):
@@ -1197,6 +1204,8 @@ class ParamsTabNM(ParamsTabCommon):
         expected quantum noise NPS is subtracted. A human eye filter is applied.
         '''
         self.tab_sni.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+        self.tab_sni.hlo_top.addWidget(uir.UnderConstruction(
+            txt='NB for AutoQC calibration images - working to optimize this'))
 
         self.sni_area_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)

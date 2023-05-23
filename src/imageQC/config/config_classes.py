@@ -433,11 +433,13 @@ class ParamSetMR(ParamSetCommon):
     gho_roi_cut_top: int = 0
     geo_actual_size: float = 190.
     geo_mask_outer: float = 10.
-    sli_tan_a: float = 0.1  # currently not in use
+    sli_type: int = 0  # 0 = ramp, 1 = wedge
+    sli_tan_a: float = 0.1  # tan(angle), default as ACR phantom
+    sli_sigma: int = 0  # gaussian blur of profile
     sli_ramp_length: float = 100.
     sli_background_width: float = 5.
-    sli_search_width: int = 2
-    sli_average_width: int = 0  # currently not in use
+    # sli_search_width: int = 0  # currently not in use
+    sli_average_width: int = 0
     sli_dist_lower: float = -2.5
     sli_dist_upper: float = 2.5
     sli_optimize_center: bool = True
@@ -545,7 +547,7 @@ class AutoCommon:
     auto_continue: bool = True  # ignored if without GUI
     display_images: bool = True  # ignored if without GUI
     last_import_date: str = ''  # yyyymmdd
-    ignore_since: int = 0  # ignore importing images older than X days
+    ignore_since: int = -1  # ignore importing images older than X days, -1 if not used
     auto_delete_criterion_attributenames: list[
         str] = field(default_factory=lambda: ['Modality'])
     auto_delete_criterion_values: list[

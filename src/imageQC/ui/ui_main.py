@@ -825,7 +825,8 @@ class MainWindow(QMainWindow):
             row_list = [[*dataf.to_dict()]]
             for row in range(nrows):
                 row_list.append([dataf.iat[row, col] for col in range(ncols)])
-            txt = '\n'.join(['\t'.join(row_list[row]) for row in range(nrows)])
+            lines_list = ['\t'.join(row) for row in row_list]
+            txt = '\n'.join(lines_list)
         dlg = TextDisplay(
             self, txt, title=title,
             min_width=1000, min_height=300)

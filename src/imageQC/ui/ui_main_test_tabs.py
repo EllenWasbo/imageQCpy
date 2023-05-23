@@ -1780,27 +1780,22 @@ class ParamsTabMR(ParamsTabCommon):
 
         info_txt = '''
         Based on NEMA MS-5 2018 and ACR MR Quality Control Manual, 2015<br><br>
-        Slice thickness ACR = 1/10 * harmonic mean of FWHM upper and lower =
-        0.2 * upper * lower / (upper + lower)<br><br>
+        Slice thickness = tan(angle) * harmonic mean of FWHM upper and lower<br><br>
+        (ACR phantom: tan(angle) = 1/10, i.e. 5.71 degrees)
         FWHM will be calculated for the averaged profile within each ROI,
         max from medianfiltered profile.<br><br>
         If optimized, center of phantom will be found from maximum profiles.
         '''
-        # alt: Slice thickness = tan (wedge angle) * FWHM<br><br>
-        '''
-        self.sli_tan_a = QDoubleSpinBox(decimals=3, minimum=0.)
-        self.sli_tan_a.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='sli_tan_a'))
-        '''
+
         self.tab_sli.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         self.sli_ramp_length = QDoubleSpinBox(
             decimals=1, minimum=0., maximum=200., singleStep=0.1)
         self.sli_ramp_length.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_ramp_length'))
-        self.sli_search_width = QDoubleSpinBox(decimals=0, minimum=0)
-        self.sli_search_width.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='sli_search_width'))
+        self.sli_average_width = QDoubleSpinBox(decimals=0, minimum=0)
+        self.sli_average_width.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_average_width'))
         self.sli_dist_lower = QDoubleSpinBox(
             decimals=1, minimum=-100, singleStep=0.1)
         self.sli_dist_lower.valueChanged.connect(
@@ -1813,6 +1808,21 @@ class ParamsTabMR(ParamsTabCommon):
         self.sli_optimize_center.toggled.connect(
             lambda: self.param_changed_from_gui(
                 attribute='sli_optimize_center'))
+        self.sli_type = QComboBox()
+        self.sli_type.addItems(ALTERNATIVES['MR']['Sli'])
+        self.sli_type.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_type'))
+        self.sli_tan_a = QDoubleSpinBox(decimals=3, minimum=0., maximum=1.)
+        self.sli_tan_a.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_tan_a'))
+        self.sli_sigma = QDoubleSpinBox(decimals=1, minimum=0)
+        self.sli_sigma.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_sigma'))
+        self.sli_background_width = QDoubleSpinBox(
+            decimals=1, minimum=0.1, singleStep=0.1)
+        self.sli_background_width.valueChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='sli_background_width'))
 
         hlo_dist = QHBoxLayout()
         hlo_dist.addWidget(QLabel(
@@ -1824,9 +1834,9 @@ class ParamsTabMR(ParamsTabCommon):
         self.tab_sli.vlo.addLayout(hlo_dist)
 
         flo1 = QFormLayout()
+        flo1.addRow(QLabel('Profile from'), self.sli_type)
         flo1.addRow(QLabel('Profile length (mm)'), self.sli_ramp_length)
-        flo1.addRow(QLabel('Profile search margin (pix)'), self.sli_search_width)
-        # flo1.addRow(QLabel('Tangens of wedge angle'), self.sli_tan_a)
+        flo1.addRow(QLabel('Tangens of ramp/wedge angle'), self.sli_tan_a)
         flo1.addRow(QLabel('Optimize center'), self.sli_optimize_center)
         self.tab_sli.hlo.addLayout(flo1)
         self.tab_sli.hlo.addWidget(uir.VLine())
@@ -1836,7 +1846,12 @@ class ParamsTabMR(ParamsTabCommon):
         self.sli_plot.addItems(['both', 'upper', 'lower'])
         self.sli_plot.currentIndexChanged.connect(self.main.refresh_results_display)
         flo2 = QFormLayout()
-        flo2.addRow(QLabel('Plot image profiles'), self.sli_plot)
+        flo2.addRow(QLabel('Average neighbour profiles (+/- #)'),
+                    self.sli_average_width)
+        flo2.addRow(QLabel('Gaussian smooth profile (sigma in pix)'), self.sli_sigma)
+        flo2.addRow(QLabel('Background from profile outer (mm)'),
+                    self.sli_background_width)
+        flo2.addRow(QLabel('Plot profiles used to find FWHM'), self.sli_plot)
         vlo_right.addLayout(flo2)
         self.tab_sli.hlo.addLayout(vlo_right)
 

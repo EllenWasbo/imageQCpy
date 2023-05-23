@@ -241,7 +241,11 @@ class ImageCanvas(GenericImageCanvas):
                 for i in range(n_lines - 2):
                     self.ax.lines[-1].remove()
 
-        self.ax.texts.clear()
+        try:
+            self.ax.texts.clear()
+        except AttributeError:  # matplotlib 3.7+
+            for txt in self.ax.tests:
+                txt.remove()
 
         if self.main.current_roi is not None:
             try:
@@ -345,7 +349,10 @@ class ImageCanvas(GenericImageCanvas):
         """Draw Slicethickness search lines."""
         h_colors = ['b', 'lime']
         v_colors = ['c', 'r', 'm', 'darkorange']
-        search_margin = self.main.current_paramset.sli_search_width
+        if self.main.current_modality == 'MR':
+            search_margin = self.main.current_paramset.sli_average_width
+        else:
+            search_margin = self.main.current_paramset.sli_search_width
         background_length = self.main.current_paramset.sli_background_width
         pix = self.main.imgs[self.main.gui.active_img_no].pix
         background_length = background_length / pix[0]

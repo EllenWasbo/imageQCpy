@@ -59,6 +59,8 @@ def run_automation_non_gui(sysargv):
         if '-i' in args or '-d' in args or '-a' in args:
             ok_common, path, auto_common = cff.load_settings(
                 fname='auto_common')
+            if ndays == -2:
+                ndays = auto_common.ignore_since
             ok_tags, path, tag_infos = cff.load_settings(
                 fname='tag_infos')
             ok_temps, path, auto_templates = cff.load_settings(
@@ -178,7 +180,7 @@ def validate_args(sysargv):
     args : list of str
         List of arguments starting with -
     ndays : int
-        Int after -ndays if present
+        Int after -ndays if present, -2 = not given
     mods : list of str
         list of valid <modality> arguments
     temps : list of str
@@ -187,7 +189,7 @@ def validate_args(sysargv):
         Error/warnings
     """
     args = []
-    ndays = -1
+    ndays = -2
     mods = []
     temps = []
 
@@ -208,7 +210,7 @@ def validate_args(sysargv):
                         try:
                             ndays = int(argsplit[1])
                         except ValueError:
-                            logger.error('-ndays=XX could not convert XX to in.')
+                            logger.error('-ndays=XX could not convert XX to integer.')
                             status = False
                 else:
                     args.append(arg[0:2])   # keep short form only (-i not -import)
@@ -308,8 +310,6 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
             parent_widget.start_wait_cursor()
         import_log.append(
             f'Found {len(files)} files in import path {p}')
-        if ignore_since == -1:
-            ignore_since = auto_common.ignore_since
 
         # get all station_names/dicom crits/input paths of automation_templates
         station_names = {}

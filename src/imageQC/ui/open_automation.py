@@ -268,7 +268,10 @@ class OpenAutomationDialog(ImageQCDialog):
 
     def save_ignore_since(self):
         """Save ignore since setting to AutoCommon."""
-        self.auto_common.ignore_since = self.spin_ignore_since.value()
+        if self.chk_ignore_since.isChecked():
+            self.auto_common.ignore_since = self.spin_ignore_since.value()
+        else:
+            self.auto_common.ignore_since = -1
         self.save_auto_common()
 
     def save_auto_common(self):
@@ -292,7 +295,7 @@ class OpenAutomationDialog(ImageQCDialog):
         """Import and sort images from image pool."""
         path = self.txt_import_path.text()
         if Path(path).exists():
-            ignore_since = 0
+            ignore_since = -1
             if self.chk_ignore_since.isChecked():
                 ignore_since = self.spin_ignore_since.value()
             import_status, log_import = automation.import_incoming(

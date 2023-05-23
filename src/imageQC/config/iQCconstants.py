@@ -63,6 +63,9 @@ ALTERNATIVES = {
         },
     'SPECT': {
         'MTF': ['Point source', 'Line source']
+        },
+    'MR': {
+        'Sli': ['Ramp', 'Wedge']
         }
     }
 """dict: with lists defining the alternative methods/table displays

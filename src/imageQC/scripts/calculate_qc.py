@@ -263,7 +263,7 @@ def quicktest_output(input_main):
                                     suffixes.append(image_names[r])
 
                     # output label or table header + image_name or group_name
-                    if len(out_values) > 1:  # as is or group/calculation failed
+                    if len(out_values) > 1:  # as is (=) or group/calculation failed
                         if sub.columns == []:
                             headers_this = headers
                         else:
@@ -271,7 +271,15 @@ def quicktest_output(input_main):
                                 header for c, header in enumerate(headers)
                                 if c in sub.columns]
                     else:
-                        headers_this = [sub.label]
+                        if sub.label != '':
+                            headers_this = sub.label
+                        else:
+                            if len(sub.columns) == 1:
+                                headers_this = headers[sub.columns[0]]
+                            else:
+                                headers_this = headers[0]
+                        headers_this = [headers_this]
+
                     all_headers_this = []
                     if suffixes != []:
                         for suffix in suffixes:
@@ -279,6 +287,7 @@ def quicktest_output(input_main):
                                 all_headers_this.append(header + '_' + suffix)
                     else:
                         all_headers_this = headers_this
+
                     header_list.extend(all_headers_this)
 
     return (string_list, header_list)
@@ -833,7 +842,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 values_sup = values[1:3]
                 try:
                     fwhm = values[1:3]
-                    slice_thickness = 0.2 * (fwhm[0] * fwhm[1])/(fwhm[0] + fwhm[1])
+                    harmonic_mean = 2 * (fwhm[0] * fwhm[1])/(fwhm[0] + fwhm[1])
+                    slice_thickness = paramset.sli_tan_a * harmonic_mean
                     values[1] = slice_thickness
                     values[2] = values[1] - values[0]
                     values.append(100. * values[2] / values[0])
@@ -1663,6 +1673,8 @@ def calculate_slicethickness(
         calculate_roi.py, get_slicethickness_start_stop
     delta_xya : list
         center and angle offset from gui
+    modality : str
+        as used in imageQC
 
     Returns
     -------
@@ -1687,7 +1699,7 @@ def calculate_slicethickness(
         elif paramset.sli_type == 2:
             details_dict['labels'] = ['left', 'right']
             sli_signal_low_density = True
-    else:
+    else:  # MR
         details_dict['labels'] = ['upper', 'lower']
 
     pno = 0
@@ -1813,12 +1825,13 @@ def get_profile_sli(image, paramset, line, direction='h'):
     """
     profile = None
     errmsg = None
-    n_search = round(paramset.sli_search_width)
     n_avg = paramset.sli_average_width
-    if hasattr(paramset, 'sli_type'):
+    if isinstance(paramset, cfc.ParamSetCT):
         sli_signal_low_density = True if paramset.sli_type == 2 else False
+        n_search = round(paramset.sli_search_width)
     else:
         sli_signal_low_density = False
+        n_search = n_avg
 
     r0, c0, r1, c1 = line
     if n_search > 0:
@@ -1840,14 +1853,19 @@ def get_profile_sli(image, paramset, line, direction='h'):
 
         profile = profiles[max_i]
         if n_avg > 0:
-            if max_i-n_avg > 0 and max_i+n_avg+1 < len(profile_sums):
-                profile = np.mean(profiles[max_i-n_avg:max_i+n_avg+1],
-                                  axis=0)
-            else:
+            try:
+                profile = np.mean(profiles[max_i-n_avg:max_i+n_avg+1], axis=0)
+            except IndexError:
                 errmsg = 'Profile too close to border to be averaged.'
     else:
         rr, cc = skimage.draw.line(r0, c0, r1, c1)
         profile = image[rr, cc]
+
+    if isinstance(paramset, cfc.ParamSetMR):
+        if paramset.sli_type == 1:  # wedge
+            profile = np.diff(profile)
+        if paramset.sli_sigma > 0:
+            profile = sp.ndimage.gaussian_filter(profile, sigma=paramset.sli_sigma)
 
     return (profile, errmsg)
 

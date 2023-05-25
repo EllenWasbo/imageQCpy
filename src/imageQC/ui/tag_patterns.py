@@ -691,8 +691,11 @@ class TagPatternEditDialog(ImageQCDialog):
             else:
                 idx = self.current_labels.index(label)
 
-            self.templates[self.current_modality][idx] = \
-                copy.deepcopy(self.current_template)
+            try:
+                self.templates[self.current_modality][idx] = \
+                    copy.deepcopy(self.current_template)
+            except IndexError:
+                pass
 
             proceed = cff.verify_config_folder(self)
             if proceed:

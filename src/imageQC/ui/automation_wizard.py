@@ -35,10 +35,11 @@ from imageQC.scripts.mini_methods import create_empty_file
 class StartupPage(QWizardPage):
     """Page with list of tasks to fulfill to proceed."""
 
-    def __init__(self, main, ok_config=False, ok_img=False, ok_paramset=False,
+    def __init__(self, main, wizard, ok_config=False, ok_img=False, ok_paramset=False,
                  ok_quicktest=False, ok_results=False):
         super().__init__()
         self.main = main
+        self.wizard = wizard
 
         self.setTitle('A walk-through to set automation templates')
         self.setSubTitle(
@@ -80,44 +81,35 @@ class StartupPage(QWizardPage):
                 ('Set which test to perform on which image i.e. activate QuickTest, '
                  'select an existing QuickTest template or create a new template by'),
                 ('selecting images in the file list and right-click to set which tests '
-                 'to perform. Save and ame the new QuickTest template.')
+                 'to perform. Save and name the new QuickTest template.')
                 ]
             )
         vlo.addWidget(gb_qt)
 
-        def test_output():
-            test_output = copy.deepcopy(self.main.current_paramset.output)
-            curr_output = copy.deepcopy(self.main.current_paramset.output)
-            if not all([test_output.include_header, test_output.transpose_table]):
-                QMessageBox.warning(
-                    self, 'Warning',
-                    ('Exported parameters will be shown with header and as a column'
-                     f' even though parameterset {self.main.current_paramset.label} '
-                     'sets this differently. With header and as a column is easier for '
-                     'verification.'))
-            test_output.include_header = True
-            test_output.transpose_table = True
-            self.main.current_paramset.output = test_output
-            self.main.wid_quicktest.extract_results(silent=True)
-            self.main.current_paramset.output = curr_output
-            self.main.display_clipboard(
-                title='Export values of current data in main window')
-
-        gb_res = OkGroupBox(
+        self.gb_res = OkGroupBox(
             'Optionally Run the QuickTest template', ok=ok_results,
             txts=[
-                'Run the QuickTest template in the main window to get results.',
-                'Proof-testing of the output paramters may then be available.'
+                'Run the QuickTest template to get results and make possible '
+                'output testing.'
                 ]
             )
-        btn_test_output = QPushButton('Test output')
-        btn_test_output.setEnabled(ok_results)
-        btn_test_output.clicked.connect(test_output)
-        gb_res.vlo.addWidget(btn_test_output)
-        gb_res.vlo.addWidget(LabelItalic(
-            ('You may change and further test the output settings from the Settings '
-             'manager.')))
-        vlo.addWidget(gb_res)
+        if ok_quicktest and not ok_results:
+            btn_run_quicktest = QPushButton('Run QuickTest')
+            btn_run_quicktest.setIcon(QIcon(
+                f'{os.environ[ENV_ICON_PATH]}play.png'))
+            btn_run_quicktest.clicked.connect(self.run_quicktest)
+            self.gb_res.vlo.addWidget(btn_run_quicktest)
+        self.btn_test_output = QPushButton('Test output')
+        self.btn_test_output.setEnabled(ok_results)
+        self.btn_test_output.clicked.connect(self.test_output)
+        self.gb_res.vlo.addWidget(self.btn_test_output)
+        self.btn_settings_output = QPushButton('Test output')
+        self.btn_settings_output.setIcon(QIcon(
+            f'{os.environ[ENV_ICON_PATH]}gears.png'))
+        self.btn_settings_output.setEnabled(ok_results)
+        self.btn_settings_output.clicked.connect(self.settings_output)
+        self.gb_res.vlo.addWidget(self.btn_settings_output)
+        vlo.addWidget(self.gb_res)
 
         if all([ok_img, ok_quicktest, ok_paramset]):
             vlo.addWidget(QLabel(
@@ -126,6 +118,55 @@ class StartupPage(QWizardPage):
             vlo.addWidget(QLabel((
                 'Cancel and come back to the wizard when all mandatory steps are '
                 'fulfilled.')))
+
+    def run_quicktest(self):
+        """Run QuickTest and update flag."""
+        self.main.wid_quicktest.run_quicktest()
+        if self.main.results:
+            self.btn_test_output.setEnabled(True)
+            self.btn_settings_output.setEnabled(True)
+            url_icon = f'{os.environ[ENV_ICON_PATH]}flag_ok.png'
+            self.gb_res.setStyleSheet(
+                f"""
+                QGroupBox {{
+                    margin-top: 10px;
+                    }}
+                QGroupBox::title {{
+                    padding-top: 0px;
+                    font-style: italic;
+                    }}
+                QGroupBox::indicator:checked {{
+                    image: url({url_icon});
+                    }}
+                """
+                )
+
+    def test_output(self):
+        """Display output with current settings."""
+        test_output = copy.deepcopy(self.main.current_paramset.output)
+        curr_output = copy.deepcopy(self.main.current_paramset.output)
+        if not all([test_output.include_header, test_output.transpose_table]):
+            QMessageBox.warning(
+                self, 'Warning',
+                ('Exported parameters will be shown with header and as a column'
+                 f' even though parameterset {self.main.current_paramset.label} '
+                 'sets this differently. With header and as a column is easier for '
+                 'verification.'))
+        test_output.include_header = True
+        test_output.transpose_table = True
+        self.main.current_paramset.output = test_output
+        self.main.wid_quicktest.extract_results(silent=True)
+        self.main.current_paramset.output = curr_output
+        self.main.display_clipboard(
+            title='Export values of current data in main window')
+
+    def settings_output(self):
+        """Open settings dialog with current paramset in output tab."""
+        self.wizard.reject()
+        self.main.run_settings(
+            initial_view='Parameter sets / output',
+            paramset_output=True,
+            initial_template_label=self.main.current_paramset.label)
 
 
 class OkGroupBox(QGroupBox):
@@ -427,7 +468,7 @@ class AutomationWizard(QWizard):
                     ok_results = True
 
         self.addPage(StartupPage(
-            self.main, ok_config=ok_config_folder, ok_img=ok_img,
+            self.main, self, ok_config=ok_config_folder, ok_img=ok_img,
             ok_paramset=ok_paramset,
             ok_quicktest=ok_quicktest, ok_results=ok_results))
         if all([ok_config_folder, ok_img, ok_quicktest, ok_paramset]):
@@ -458,6 +499,7 @@ class AutomationWizard(QWizard):
             elif select_id == 1:  # edit paramset in Settings manager
                 self.main.run_settings(
                     initial_view='Parameter sets / output',
+                    paramset_output=True,
                     initial_template_label=self.main.current_paramset.label)
             elif select_id == 2:  # edit import settings in Settings manager
                 self.main.run_settings(

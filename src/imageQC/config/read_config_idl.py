@@ -285,7 +285,7 @@ class ConfigIdl2Py():
                         cp.AUTOIMPORTPATH[0])
 
             if 'LINTAB' in param_names:
-                paramset.CT.ctn_table.materials = \
+                paramset.CT.ctn_table.labels = \
                     [elem.decode('UTF-8')
                      for elem in cp.LINTAB[0].MATERIALS[0]]
                 paramset.CT.ctn_table.relative_mass_density = \

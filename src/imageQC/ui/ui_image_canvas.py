@@ -175,15 +175,19 @@ class ImageCanvas(GenericImageCanvas):
             annotate = False
         self.ax.axis('off')
         if annotate:
+            try:
+                linewidth = self.main.gui.annotations_line_thick
+            except AttributeError:
+                linewidth = 1.
             # central crosshair
             szy, szx = np.shape(nparr)
             if self.main.gui.delta_a == 0:
                 self.ax.axhline(
                     y=szy*0.5 + self.main.gui.delta_y,
-                    color='red', linewidth=1., linestyle='--')
+                    color='red', linewidth=linewidth, linestyle='--')
                 self.ax.axvline(
                     x=szx*0.5 + self.main.gui.delta_x,
-                    color='red', linewidth=1., linestyle='--')
+                    color='red', linewidth=linewidth, linestyle='--')
             else:
                 x1, x2, y1, y2 = get_rotated_crosshair(
                     szx, szy,
@@ -194,11 +198,11 @@ class ImageCanvas(GenericImageCanvas):
                 # NB keep these two lines as first and second in ax.lines
                 self.ax.add_artist(matplotlib.lines.Line2D(
                     [0, szx], [y1, y2],
-                    color='red', linewidth=1., linestyle='--',
+                    color='red', linewidth=linewidth, linestyle='--',
                     gid='axis1'))
                 self.ax.add_artist(matplotlib.lines.Line2D(
                     [x1, x2], [szy, 0],
-                    color='red', linewidth=1., linestyle='--',
+                    color='red', linewidth=linewidth, linestyle='--',
                     gid='axis2'))
             # DICOM annotations
             marked_idxs = self.main.tree_file_list.get_marked_imgs_current_test()
@@ -264,7 +268,8 @@ class ImageCanvas(GenericImageCanvas):
             sleep(.2)
 
     def add_contours_to_all_rois(self, colors=None, reset_contours=True,
-                                 roi_indexes=None, filled=False, hatches=None):
+                                 roi_indexes=None, filled=False,
+                                 labels=None, hatches=None):
         """Draw all ROIs in self.main.current_roi (list) with specific colors.
 
         Parameters
@@ -307,6 +312,17 @@ class ImageCanvas(GenericImageCanvas):
                 contour = self.ax.contour(
                     mask, levels=[0.9],
                     colors=colors[color_no], alpha=0.5, linewidths=self.linewidth)
+            if labels:
+                try:
+                    label = labels[color_no]
+                    mask_pos = np.where(mask == 0)
+                    xpos = np.mean(mask_pos[1])
+                    ypos = np.mean(mask_pos[0])
+                    if np.isfinite(xpos) and np.isfinite(ypos):
+                        self.ax.text(xpos-self.fontsize, ypos+self.fontsize, label,
+                                     fontsize=self.fontsize, color=colors[color_no])
+                except IndexError:
+                    pass
             self.contours.append(contour)
 
         #if hatches is not None:
@@ -322,28 +338,19 @@ class ImageCanvas(GenericImageCanvas):
         """Draw CTn ROI."""
         self.contours = []
         ctn_table = self.main.current_paramset.ctn_table
-        for i in range(len(ctn_table.materials)):
-            mask = np.where(self.main.current_roi[i], 0, 1)
-            contour = self.ax.contour(
-                mask, levels=[0.9],
-                colors='red', alpha=0.5, linewidths=self.linewidth)
-            self.contours.append(contour)
-            mask_pos = np.where(mask == 0)
-            xpos = np.mean(mask_pos[1])
-            ypos = np.mean(mask_pos[0])
-            if np.isfinite(xpos) and np.isfinite(ypos):
-                self.ax.text(xpos, ypos, ctn_table.materials[i],
-                             fontsize=self.fontsize, color='red')
+        nroi = len(ctn_table.labels)
+        self.add_contours_to_all_rois(
+            labels=ctn_table.labels,
+            roi_indexes=[i for i in range(nroi)]
+            )
 
-        if len(self.main.current_roi) == 2 * len(ctn_table.materials):
+        if len(self.main.current_roi) == 2 * len(ctn_table.labels):
             # draw search rois
-            nroi = len(ctn_table.materials)
-            for i in range(nroi, 2 * nroi):
-                mask = np.where(self.main.current_roi[i], 0, 1)
-                contour = self.ax.contour(
-                    mask, levels=[0.9],
-                    colors='blue', alpha=0.5, linewidths=self.linewidth)
-                self.contours.append(contour)
+            self.add_contours_to_all_rois(
+                colors=['blue' for i in range(nroi)],
+                roi_indexes=[i for i in range(nroi, 2 * nroi)],
+                reset_contours=False
+                )
 
     def Sli(self):
         """Draw Slicethickness search lines."""
@@ -470,21 +477,10 @@ class ImageCanvas(GenericImageCanvas):
 
     def Bar(self):
         """Draw Bar ROIs."""
-        self.contours = []
-        labels = [str(i+1) for i in range(4)]
-        colors = ['red', 'blue', 'green', 'cyan']
-        for i in range(4):
-            mask = np.where(self.main.current_roi[i], 0, 1)
-            contour = self.ax.contour(
-                mask, levels=[0.9],
-                colors=colors[i], alpha=0.5, linewidths=self.linewidth)
-            self.contours.append(contour)
-            mask_pos = np.where(mask == 0)
-            xpos = np.mean(mask_pos[1])
-            ypos = np.mean(mask_pos[0])
-            if np.isfinite(xpos) and np.isfinite(ypos):
-                self.ax.text(xpos, ypos, labels[i],
-                             fontsize=self.fontsize, color=colors[i])
+        self.add_contours_to_all_rois(
+            colors=['red', 'blue', 'lime', 'cyan'],
+            labels=[str(i+1) for i in range(4)]
+            )
 
     def SNI(self):
         """Draw NM uniformity ROI."""
@@ -506,6 +502,11 @@ class ImageCanvas(GenericImageCanvas):
                 self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
                              f'S{i+1}',
                              fontsize=self.fontsize, color=color)
+
+    def Rec(self):
+        """Draw PET Rec ROI."""
+        self.add_contours_to_all_rois(
+            labels=self.main.current_paramset.rec_table.labels)
 
     def PIU(self):
         """Draw MR PIU ROI."""

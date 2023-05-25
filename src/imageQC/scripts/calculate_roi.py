@@ -936,11 +936,14 @@ def get_roi_recovery_curve(image, image_info, test_params):
     roi_array.append(roi_central_cylinder)
     '''
     radius = test_params.rec_roi_size / image_info.pix[0]
-    for i in range(len(test_params.rec_table.pos_x)):
-        pos_x = test_params.rec_table.pos_x[i] / image_info.pix[0]
-        pos_y = test_params.rec_table.pos_y[i] / image_info.pix[1]
-        roi_array.append(get_roi_circle(
-            image.shape, (dx + pos_x, dy + pos_y), radius))
+    try:
+        for i in range(len(test_params.rec_table.pos_x)):
+            pos_x = test_params.rec_table.pos_x[i] / image_info.pix[0]
+            pos_y = test_params.rec_table.pos_y[i] / image_info.pix[1]
+            roi_array.append(get_roi_circle(
+                image.shape, (dx + pos_x, dy + pos_y), radius))
+    except AttributeError:
+        pass
 
     return roi_array
 

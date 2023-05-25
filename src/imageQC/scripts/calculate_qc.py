@@ -782,11 +782,11 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def CTn():
-        headers = paramset.ctn_table.materials
+        headers = paramset.ctn_table.labels
         headers_sup = HEADERS_SUP[modality][test_code]['altAll']
         if image2d is not None:
             values = []
-            for i in range(len(paramset.ctn_table.materials)):
+            for i in range(len(paramset.ctn_table.labels)):
                 arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
                 values.append(np.mean(arr))
             res = sp.stats.linregress(

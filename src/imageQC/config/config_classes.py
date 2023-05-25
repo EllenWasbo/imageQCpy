@@ -81,7 +81,7 @@ class TagPatternSort:
     list_sort: list = field(default_factory=list)  # list[bool]
 
     def __post_init__(self):
-        """Add empty list_format if not defined."""
+        """Add empty list_sort if not defined."""
         if len(self.list_tags) > len(self.list_sort):
             diff = len(self.list_tags) - len(self.list_sort)
             self.list_sort.extend([''] * diff)
@@ -172,7 +172,7 @@ class RenamePattern:
 
 @dataclass
 class PositionTable:
-    """Set of parameters regarding CT tests."""
+    """Set of labels and positions used for different test ROIs."""
 
     labels: list[str] = field(default_factory=list)
     pos_x: list[float] = field(default_factory=list)
@@ -201,9 +201,9 @@ class PositionTable:
 
 @dataclass
 class HUnumberTable:
-    """Set of parameters regarding CT tests."""
+    """Set of default materials and positions for CT test on HUnumbers."""
 
-    materials: list[str] = field(
+    labels: list[str] = field(
         default_factory=lambda:
         ['Teflon', 'Delrin', 'Acrylic', 'Water', 'Polystyrene',
          'LDPE', 'PMP', 'Air'])
@@ -216,6 +216,17 @@ class HUnumberTable:
     pos_y: list[float] = field(
         default_factory=lambda:
         [50., 0., -50., -58., -50., 0., 50., 58.])
+
+
+@dataclass
+class RecTable(PositionTable):
+    """Set of default background roi positions with test PET Recovery Curves."""
+
+    def __post_init__(self):
+        """Set default values."""
+        self.labels = [str(i) for i in range(6)]
+        self.pos_x = [-55, -110, -100, 100, 110, 55]
+        self.pos_y = [75, 40, -25, -25, 40, 75]
 
 
 @dataclass
@@ -414,7 +425,7 @@ class ParamSetPET(ParamSetCommon):
     cro_auto_select_slices: bool = False
     cro_percent_slices: float = 75  # % within fwhm of signal profile to include
     rec_roi_size: float = 20.
-    rec_table: PositionTable = field(default_factory=PositionTable)
+    rec_table: RecTable = field(default_factory=RecTable)
 
 
 @dataclass

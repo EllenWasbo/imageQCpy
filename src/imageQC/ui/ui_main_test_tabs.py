@@ -126,6 +126,11 @@ class ParamsTabCommon(QTabWidget):
                     else:  # info to programmer
                         print(f'Warning: Parameter {field.name} not set ',
                               '(ui_main_test_tabs.update_displayed_params)')
+            else:
+                if field.name == 'ctn_table':
+                    self.ctn_table_widget.table.update_table()
+                elif field.name == 'rec_table':
+                    self.rec_table_widget.table.update_table()
 
         if self.main.current_modality == 'Xray':
             self.update_NPS_independent_pixels()
@@ -1589,7 +1594,7 @@ class ParamsTabPET(ParamsTabCommon):
             lambda: self.param_changed_from_gui(attribute='rec_roi_size'))
         self.rec_table_widget = PositionWidget(
                 self, self.main, table_attribute_name='rec_table')
-        self.rec_table_widget.table.update_table()
+        # self.rec_table_widget.table.update_table() # first mode always CT so no use
 
         flo1 = QFormLayout()
         flo1.addRow(QLabel('ROI radius background (mm)'), self.rec_roi_size)
@@ -1988,7 +1993,7 @@ class PositionWidget(QWidget):
                 input_table = self.validate_input_dataframe(dataf)
                 '''
                 ctn_table = cfc.HUnumberTable()
-                ctn_table.materials = [
+                ctn_table.labels = [
                     str(dataf.iat[row, 1]) for row in range(nrows)]
                 ctn_table.pos_x = [
                     float(dataf.iat[row, 2]) for row in range(nrows)]
@@ -2124,8 +2129,14 @@ class PositionTableWidget(QTableWidget):
 
     def update_table(self):
         """Populate table with current table."""
-        setattr(self.main.current_paramset, self.table_attribute_name,
-                self.current_table)
+        print(f'update table {self.table_attribute_name} {self.current_table}')
+        if self.current_table is None:  # not initiated yet
+            self.current_table = getattr(
+                self.main.current_paramset, self.table_attribute_name, None)
+            print(self.main.current_paramset)
+        else:
+            setattr(self.main.current_paramset, self.table_attribute_name,
+                    self.current_table)
         self.blockSignals(True)
         self.clear()
         self.setColumnCount(len(self.headers))
@@ -2229,7 +2240,7 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
                 dlg.exec()
             else:
                 ctn_table = cfc.HUnumberTable()
-                ctn_table.materials = [
+                ctn_table.labels = [
                     str(dataf.iat[row, 1]) for row in range(nrows)]
                 ctn_table.pos_x = [
                     float(dataf.iat[row, 2]) for row in range(nrows)]
@@ -2255,7 +2266,7 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
     def copy_table(self):
         """Copy contents of table to clipboard."""
         dict_2_pd = {
-            'materials': self.main.current_paramset.ctn_table.materials,
+            'labels': self.main.current_paramset.ctn_table.labels,
             'pos_x': self.main.current_paramset.ctn_table.pos_x,
             'pos_y': self.main.current_paramset.ctn_table.pos_y,
             'Rel. mass density':
@@ -2272,7 +2283,7 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
             rowno = sel[0].row()
         else:
             rowno = self.table.rowCount()
-        self.main.current_paramset.ctn_table.materials.insert(rowno, '')
+        self.main.current_paramset.ctn_table.labels.insert(rowno, '')
         self.main.current_paramset.ctn_table.pos_x.insert(rowno, 0)
         self.main.current_paramset.ctn_table.pos_y.insert(rowno, 0)
         self.main.current_paramset.ctn_table.relative_mass_density.insert(
@@ -2285,7 +2296,7 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
         sel = self.table.selectedIndexes()
         if len(sel) > 0:
             rowno = sel[0].row()
-            self.main.current_paramset.ctn_table.materials.pop(rowno)
+            self.main.current_paramset.ctn_table.labels.pop(rowno)
             self.main.current_paramset.ctn_table.pos_x.pop(rowno)
             self.main.current_paramset.ctn_table.pos_y.pop(rowno)
             self.main.current_paramset.ctn_table.relative_mass_density.pop(
@@ -2330,7 +2341,7 @@ class CTnTable(QTableWidget):
         if col > 0:
             val = float(val)
         if col == 0:
-            self.main.current_paramset.ctn_table.materials[row] = val
+            self.main.current_paramset.ctn_table.labels[row] = val
         elif col == 1:
             self.main.current_paramset.ctn_table.pos_x[row] = val
         elif col == 2:
@@ -2345,14 +2356,14 @@ class CTnTable(QTableWidget):
         self.blockSignals(True)
         self.clear()
         self.setColumnCount(4)
-        n_rows = len(self.main.current_paramset.ctn_table.materials)
+        n_rows = len(self.main.current_paramset.ctn_table.labels)
         self.setRowCount(n_rows)
         self.setHorizontalHeaderLabels(
             ['Material', 'x pos (mm)', 'y pos (mm)', 'Rel. mass density'])
         self.verticalHeader().setVisible(False)
 
         values = [
-            self.main.current_paramset.ctn_table.materials,
+            self.main.current_paramset.ctn_table.labels,
             self.main.current_paramset.ctn_table.pos_x,
             self.main.current_paramset.ctn_table.pos_y,
             self.main.current_paramset.ctn_table.relative_mass_density]

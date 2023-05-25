@@ -227,6 +227,8 @@ class MainWindow(QMainWindow):
         """Fill gui with params from selected paramset."""
         self.current_paramset = copy.deepcopy(
             self.paramsets[self.wid_paramset.cbox_template.currentIndex()])
+        if self.results:
+            self.reset_results()
         widget = self.stack_test_tabs.currentWidget()
         widget.update_displayed_params()
         self.wid_res_tbl.tb_copy.parameters_output = self.current_paramset.output
@@ -777,13 +779,15 @@ class MainWindow(QMainWindow):
         dlg = rename_dicom.RenameDicomDialog(self)
         dlg.exec()
 
-    def run_settings(self, initial_view='', initial_template_label=''):
+    def run_settings(self, initial_view='', initial_template_label='',
+                     paramset_output=False):
         """Display settings dialog."""
         if initial_view == '':
             dlg = settings.SettingsDialog(self)
         else:
             dlg = settings.SettingsDialog(
                 self, initial_view=initial_view,
+                paramset_output=paramset_output,
                 initial_template_label=initial_template_label)
         dlg.exec()
         self.update_settings()

@@ -61,6 +61,11 @@ class SelectTemplateWidget(QWidget):
                 set_index = 0
             self.cbox_template.blockSignals(False)
             self.cbox_template.setCurrentIndex(set_index)
+            if set_label != '' and set_label not in labels:  # name changed in settings
+                if 'paramset' in self.fname:
+                    self.update_current_template()
+                else:
+                    self.main.reset_results()
         else:
             self.cbox_template.blockSignals(False)
         self.lastload = time()
@@ -131,6 +136,7 @@ class SelectTemplateWidget(QWidget):
                     proceed, path = cff.save_settings(
                         self.modality_dict[self.main.current_modality],
                         fname=self.fname)
+                    self.main.paramsets = self.modality_dict[self.main.current_modality]
                 if proceed:
                     self.lbl_edit.setText('')
                     self.lastload = time()
@@ -138,7 +144,6 @@ class SelectTemplateWidget(QWidget):
 
                     if new_added:
                         self.fill_template_list(set_label=self.current_template.label)
-
                 else:
                     QMessageBox.warning(
                         self, 'Failed saving', f'Failed saving to {path}')
@@ -242,6 +247,7 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         self.main.tree_file_list.update_file_list()
         self.flag_edit(False)
         self.main.stop_wait_cursor()
+        self.main.reset_results()
 
     def set_current_template_to_imgs(self):
         """Set image-dict values according to current template."""
@@ -379,3 +385,4 @@ class SelectParamsetWidget(SelectTemplateWidget):
             self.ask_to_save_changes(before_select_new=True)
 
         self.main.update_paramset()
+        self.main.reset_results()

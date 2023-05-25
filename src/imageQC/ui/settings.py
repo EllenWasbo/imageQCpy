@@ -47,9 +47,31 @@ class SettingsDialog(ImageQCDialog):
 
     def __init__(
             self, main, initial_view='User local settings', initial_template_label='',
+            paramset_output=False,
             initial_modality=None,
             width1=200, width2=800,
             import_review_mode=False):
+        """Initiate Settings dialog.
+
+        Parameters
+        ----------
+        main : MainWindow or ImportMain
+            MainWindow if not import review mode
+        initial_view : str, optional
+            title of widget to select from tree. The default is 'User local settings'.
+        initial_template_label : str, optional
+            If a preset template on opening. The default is ''.
+        paramset_output : bool, optional
+            If initial view is paramset and open in output tab. The default is False.
+        initial_modality : str, optional
+            Modality as defined in imageQC. The default is None.
+        width1 : int, optional
+            width of tree widget. The default is 200.
+        width2 : it, optional
+            width of the right panel. The default is 800.
+        import_review_mode : bool, optional
+            special settings if reviewing settings to import. The default is False.
+        """
         super().__init__()
         self.main = main
         if initial_modality is None:
@@ -199,6 +221,9 @@ class SettingsDialog(ImageQCDialog):
 
         if import_review_mode is False:
             widget.update_from_yaml(initial_template_label=initial_template_label)
+            if paramset_output:
+                if hasattr(widget, 'tabs'):
+                    widget.tabs.setCurrentIndex(1)
         else:
             self.update_import_main()
 
@@ -263,7 +288,7 @@ class SettingsDialog(ImageQCDialog):
         if self.import_review_mode:
             reply = QMessageBox.question(
                 self, 'Cancel import?',
-                'To finish import go to first page (Settings for import) and make '
+                'To finish import go to first page (Settings for import) and '
                 'select what to include in the import. Proceed cancel import?',
                 QMessageBox.Yes, QMessageBox.No)
             if reply == QMessageBox.Yes:
@@ -558,8 +583,11 @@ class UserSettingsWidget(StackWidget):
         super().__init__(dlg_settings, header, subtxt)
 
         self.config_folder = QLineEdit()
+        self.lbl_user_prefs_path = QLabel()
         self.chk_dark_mode = QCheckBox()
         self.font_size = QSpinBox()
+
+        self.vlo.addWidget(self.lbl_user_prefs_path)
 
         self.config_folder.setMinimumWidth(500)
         hlo_config_folder = QHBoxLayout()
@@ -618,7 +646,7 @@ class UserSettingsWidget(StackWidget):
     def update_from_yaml(self, initial_template_label=''):
         """Load settings from yaml and fill form."""
         _, path, self.user_prefs = cff.load_user_prefs()
-        self.lbl_yaml_path = path
+        self.lbl_user_prefs_path.setText('User preferences saved in: ' + path)
         self.config_folder.setText(self.user_prefs.config_folder)
         self.font_size.setValue(self.user_prefs.font_size)
         self.chk_dark_mode.setChecked(self.user_prefs.dark_mode)
@@ -845,6 +873,17 @@ class SharedSettingsImportWidget(StackWidget):
         self.vlo.addWidget(btn_all)
         self.vlo.addWidget(btn_marked)
         self.vlo.addWidget(btn_all_but)
+        self.vlo.addStretch()
+
+        header_text = """<html><head/><body>
+            <p><span style=\" font-size:20pt;color:gray\"><i>Review mode!</i></span></p>
+            </body></html>"""
+        info_text = """<html><head/><body>
+            <p><span style=\" font-size:14pt;color:gray\"><i>Return to this tab
+            (from tree list at your left hand) when you have decided what to include
+            and not</i></span></p></body></html>"""
+        self.vlo.addWidget(QLabel(header_text))
+        self.vlo.addWidget(QLabel(info_text))
         self.vlo.addStretch()
 
         btn_all.clicked.connect(

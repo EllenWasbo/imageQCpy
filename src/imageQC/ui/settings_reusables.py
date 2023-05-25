@@ -1397,7 +1397,7 @@ class QuickTestOutputSubDialog(ImageQCDialog):
                     if testcode == 'DCM':
                         cols = self.paramset.dcm_tagpattern.list_tags
                     elif testcode == 'CTn':
-                        cols = self.paramset.ctn_table.materials
+                        cols = self.paramset.ctn_table.labels
             self.list_columns.clear()
             if len(cols) > 0:
                 self.list_columns.addItems(cols)

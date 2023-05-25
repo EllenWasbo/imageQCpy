@@ -170,6 +170,12 @@ def verify_input_dict(dict_input, default_object):
     default_dict = asdict(default_object)
     actual_keys = [*default_dict]
     updated_dict = {k: v for k, v in dict_input.items() if k in actual_keys}
+
+    # specific changes 
+    if default_object == cfc.HUnumberTable():
+        if 'materials' in [*dict_input]:
+            updated_dict['labels'] = dict_input['materials']
+
     return updated_dict
 
 

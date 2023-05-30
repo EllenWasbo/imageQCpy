@@ -580,6 +580,30 @@ def test_PET_Cro():
         np.array([7.3000e+01, 1.1599e+04, 1.1835e+04, 1.0000e+00, 1.0000e+00]))
 
 
+def test_PET_Rec():
+    input_main = InputMain(
+        current_modality='PET',
+        current_test='Rec',
+        current_paramset=cfc.ParamSetPET(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Rec']]*36),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = path_tests / 'test_inputs' / 'PET' / 'body_phantom'
+    files = [x for x in file_path.glob('**/*') if x.is_file()]
+    img_infos, ignored_files = dcm.read_dcm_info(
+        files, GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(np.array(input_main.results['Rec']['values']))
+    breakpoint()
+    assert np.array_equal(
+        values,
+        np.array([7.3000e+01, 1.1599e+04, 1.1835e+04, 1.0000e+00, 1.0000e+00]))
+
+
 def test_MR_SNR():
 
     tests = [[''] for x in range(11)]

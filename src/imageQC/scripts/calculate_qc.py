@@ -156,7 +156,7 @@ def quicktest_output(input_main):
                         test]
         for test in input_main.results:  # add defaults if not defined
             if input_main.results[test] is not None:
-                if test not in output_all_actual:
+                if test not in output_all_actual or len(output_all_actual[test]) == 0:
                     output_all_actual[test] = [cfc.QuickTestOutputSub(columns=[])]
 
         for test in output_all_actual:
@@ -233,6 +233,10 @@ def quicktest_output(input_main):
                             if row is None:
                                 row = [None] * len(headers)
                             if any(row):
+                                if all([test == 'MTF',
+                                        input_main.current_modality == 'CT']):
+                                    if not input_main.current_paramset.mtf_cy_pr_mm:
+                                        row = list(10 * np.array(row))
                                 out_values = extract_values(
                                     row,
                                     columns=sub.columns,
@@ -439,6 +443,8 @@ def calculate_qc(input_main,
                                        'RadiopharmaceuticalStartTime', 'Units'])
                         extra_tag_list = []
                         read_tags[i] = True
+                    if 'Rec' in marked[i]:
+                        marked_3d[i].append('Rec')
                 elif modality == 'MR':
                     if 'SNR' in marked[i]:
                         marked_3d[i].append('SNR')
@@ -513,9 +519,10 @@ def calculate_qc(input_main,
                             )
                         input_main.current_group_indicators[i] = '_'.join(tags[0])
                 if wid_auto is not None and image is not None:
-                    wid_auto.wid_image_display.canvas.main.active_img = image
-                    wid_auto.wid_image_display.canvas.img_draw(
-                        auto=True, window_level=tags[-1])
+                    if wid_auto.chk_display_images.isChecked():
+                        wid_auto.wid_image_display.canvas.main.active_img = image
+                        wid_auto.wid_image_display.canvas.img_draw(
+                            auto=True, window_level=tags[-1])
 
                 for test in marked[i]:
                     input_main.current_test = test
@@ -540,11 +547,11 @@ def calculate_qc(input_main,
                                     errmsgs.append(f'{test} get ROI image {i}:')
                                     errmsgs.append(errmsg)
                             if wid_auto is not None:
-                                wid_auto.wid_image_display.canvas.main.current_test = (
-                                    test)
-                                wid_auto.wid_image_display.canvas.main.current_roi = (
-                                    prev_roi[test])
-                                wid_auto.wid_image_display.canvas.roi_draw()
+                                if wid_auto.chk_display_images.isChecked():
+                                    canv_main = wid_auto.wid_image_display.canvas.main
+                                    canv_main.current_test = test
+                                    canv_main.current_roi = prev_roi[test]
+                                    wid_auto.wid_image_display.canvas.roi_draw()
                                 wid_auto.status_label.showMessage((
                                     f'{auto_template_label}: Calculating '
                                     f'img {i+1}/{n_img} ({auto_template_session})'
@@ -1389,6 +1396,12 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
     flat_marked = [item for sublist in marked_3d for item in sublist]
     all_tests = list(set(flat_marked))
 
+    def sum_matrix(images_to_test):
+        sum_matrix = matrix[images_to_test[0]]
+        for i in images_to_test[1:]:
+            sum_matrix = np.add(sum_matrix, matrix[i])
+        return sum_matrix
+
     def MTF(images_to_test):
         if modality in ['CT', 'SPECT']:
             headers = HEADERS[modality][test_code][f'alt{paramset.mtf_type}']
@@ -1539,6 +1552,89 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                               errmsg=errmsgs)
         return res
 
+    def Rec(images_to_test):
+        """PET Recovery Curve."""
+        alt = paramset.rec_type
+        headers = HEADERS[modality][test_code]['alt' + str(alt)]
+        if len(images_to_test) == 0:
+            res = Results(headers=headers)
+        else:
+            errmsgs = []
+            roi_array, errmsg = get_rois(
+                sum_matrix(images_to_test), images_to_test[0], input_main)
+            if errmsg is not None:
+                errmsgs.append(errmsg)
+
+            roi_array_spheres = roi_array[0:6]
+            roi_array_backgrounds = roi_array[6:]
+
+            maxs = []
+            for image in matrix:
+                if image is not None:
+                    arr = np.ma.masked_array(
+                        image, mask=np.invert(roi_array_spheres[0]))
+                    maxs.append(np.max(arr))
+
+            zpos = [float(img_info.zpos) for img_info in input_main.imgs]
+            zpos = np.array(zpos)[images_to_test]
+            sort_idx = np.argsort(zpos)
+            zpos = zpos[sort_idx]
+            maxs = np.array(maxs)[sort_idx]
+
+            details_dict = {'roi_maxs': maxs, 'zpos': zpos}
+
+            max_idx = np.where(maxs == np.max(maxs))
+            zpos_max = zpos[max_idx[0]]
+            diff_z = np.abs(zpos - zpos_max)
+            idxs = np.where(diff_z < 20.)
+            # Ø 37 largest sphere, 20 mm from center should be enough slices
+
+            start_slice = np.min(idxs)
+            stop_slice = np.max(idxs)
+            maxs = maxs[start_slice:stop_slice + 1]
+            zpos = zpos[start_slice:stop_slice + 1]
+            details_dict['used_roi_maxs'] = maxs
+            details_dict['used_zpos'] = zpos
+
+            background_values = []
+            for i in range(start_slice, stop_slice + 1):
+                if matrix[i] is not None:
+                    for background_roi in roi_array_backgrounds:
+                        arr = np.ma.masked_array(
+                            matrix[i], mask=np.invert(background_roi))
+                        background_values.append(np.mean(arr))
+            background_value = np.mean(background_values)
+            details_dict['background_values'] = background_values
+
+            values_A50 = [background_value]
+            values_max = [background_value]
+            values_peak = [background_value]
+            img_info = input_main.imgs[0]
+            vol_vox = img_info.pix[0] * img_info.pix[1] * img_info.slice_thickness
+            n_vox_1mL = int(1000. / vol_vox)
+            for roi in roi_array_spheres:
+                values = []
+                for i in range(start_slice, stop_slice + 1):
+                    if matrix[i] is not None:
+                        arr = np.ma.masked_array(matrix[i], mask=np.invert(roi))
+                        values.append(arr.flatten())
+                values = np.hstack(values)
+                maxval = np.max(values)
+                values_max.append(maxval)
+                threshold = 0.5 * (maxval + background_value)
+                values_A50.append(np.mean(values > threshold))
+                sorted_values = np.sort(values)
+                values_peak.append(np.mean(sorted_values[-n_vox_1mL:]))
+
+            details_dict['values'] = [values_A50, values_max, values_peak]
+
+            values = details_dict['values'][paramset.rec_type]
+
+            res = Results(headers=headers, values=[values],
+                          details_dict=details_dict, pr_image=False,
+                          errmsg=errmsgs)
+        return res
+
     def SNR(images_to_test):
         # use two and two images
         values_first_imgs = []
@@ -1583,12 +1679,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
             res = Results(values=values, headers=headers, errmsg=errmsg, pr_image=True)
         return res
-
-    def sum_matrix(images_to_test):
-        sum_matrix = matrix[images_to_test[0]]
-        for i in images_to_test[1:]:
-            sum_matrix = np.add(sum_matrix, matrix[i])
-        return sum_matrix
 
     def Uni(images_to_test):
         headers = HEADERS[modality][test_code]['alt0']
@@ -2926,8 +3016,9 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         }
     return (SNI, details_dict_roi)
 
+
 def calculate_NM_SNI(image2d, roi_array, image_info, paramset):
-    """Calculate uniformity parameters.
+    """Calculate Structured Noise Index.
 
     Parameters
     ----------

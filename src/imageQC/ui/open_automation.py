@@ -243,6 +243,8 @@ class OpenAutomationDialog(ImageQCDialog):
         hlo_status = QHBoxLayout()
         hlo_status.addWidget(self.status_label)
         vlo.addLayout(hlo_status)
+        self.progress_bar = uir.ProgressBar(self)
+        vlo.addWidget(self.progress_bar)
 
         self.refresh_list()
 
@@ -602,8 +604,10 @@ class OpenAutomationDialog(ImageQCDialog):
             log = []
             self.automation_active = True
             self.main.start_wait_cursor()
+            self.progress_bar.setRange(0, len(tempnos))
 
             for i, tempno in enumerate(tempnos):
+                self.progress_bar.setValue(i)
                 proceed = True
                 if self.chk_pause_between.isChecked() and i > 0:
                     self.main.stop_wait_cursor()
@@ -641,6 +645,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     #TODO offer to clipboard
                     pass
             self.status_label.clearMessage()
+            self.progress_bar.reset()
 
             self.automation_active = False
             self.main.refresh_results_display() # TODO only when manually selected files?

@@ -1300,6 +1300,8 @@ class QuickTestOutputSubDialog(ImageQCDialog):
         self.cbox_table.addItems(['Result table', 'Supplement_table'])
         self.list_columns = QListWidget()
         self.cbox_calculation = QComboBox()
+        self.cbox_calculation.currentIndexChanged.connect(
+            self.update_suggested_header)
         self.chk_per_group = uir.BoolSelect(
             self, text_true='per group', text_false='per image')
         self.txt_header = QLineEdit('')
@@ -1326,17 +1328,26 @@ class QuickTestOutputSubDialog(ImageQCDialog):
         self.suplement_txt = 'Supplement table'
 
         flo = QFormLayout()
-        flo.addRow(QLabel('Test:'), self.cbox_testcode)
-        flo.addRow(QLabel('Alternative:'), self.cbox_alternatives)
-        flo.addRow(QLabel('Table:'), self.cbox_table)
-        flo.addRow(QLabel('Columns:'), self.list_columns)
-        flo.addRow(QLabel('Calculation:'), self.cbox_calculation)
+        flo.addRow(uir.LabelHeader('Test:', 4), self.cbox_testcode)
+        flo.addRow(uir.LabelHeader('Alternative:', 4), self.cbox_alternatives)
+        flo.addRow(uir.LabelHeader('Table:', 4), self.cbox_table)
+        flo.addRow(uir.LabelHeader('Columns:', 4), self.list_columns)
+        flo.addRow(uir.LabelHeader('Calculation:', 4), self.cbox_calculation)
         flo.addRow(uir.LabelItalic(
-            '    ignored if any of the values are strings'))
+            'Calculation method ignored if any of the values are strings'))
         flo.addRow(QLabel(''), self.chk_per_group)
-        flo.addRow(QLabel('Header:'), self.txt_header)
         flo.addRow(uir.LabelItalic(
-            '    header_imagelabel or header_grouplabel, ignored if = and > 1 column'))
+            'Per image/group = per row where results already pr all selected '
+            'images'))
+        flo.addRow(QLabel(''))
+        flo.addRow(uir.LabelHeader('Header:', 4),
+                   self.txt_header)
+        flo.addRow(uir.LabelItalic(
+            'Default header is column title.'))
+        flo.addRow(uir.LabelItalic(
+            'Ignored if more than one output parameter per image or group.'))
+        flo.addRow(uir.LabelItalic(
+            'Used as: header_imagelabel or header_grouplabel'))
 
         vlo.addLayout(flo)
 
@@ -1422,6 +1433,15 @@ class QuickTestOutputSubDialog(ImageQCDialog):
         if first:
             self.chk_per_group.setChecked(self.qt_output_sub.per_group)
             self.txt_header.setText(self.qt_output_sub.label)
+
+    def update_suggested_header(self):
+        """Suggest header text."""
+        calc_opt_text = self.cbox_calculation.currentText()
+        if calc_opt_text == '=':
+            self.txt_header.setText('')
+        else:
+            self.txt_header.setText(
+                f'{self.get_testcode()}_{calc_opt_text}')
 
     def get_testcode(self):
         """Get selected testcode.

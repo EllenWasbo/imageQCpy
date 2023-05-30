@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     qApp, QWidget, QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayout, QFrame,
     QToolBar, QAction, QComboBox, QRadioButton, QButtonGroup, QToolButton,
     QLabel, QPushButton, QListWidget, QLineEdit, QCheckBox,
-    QProgressDialog, QStatusBar
+    QProgressDialog, QProgressBar, QStatusBar
     )
 
 # imageQC block start
@@ -176,6 +176,26 @@ class VLine(QFrame):
         super().__init__()
         self.setFrameShape(QFrame.VLine)
         self.setLineWidth(1)
+
+
+class ProgressBar(QProgressBar):
+    """Redefine QProgressBar to set style."""
+
+    def __init__(self, parent_widget):
+        super().__init__(parent_widget)
+        self
+        self.setAlignment(Qt.AlignCenter)
+        self.setStyleSheet(
+            """
+            QProgressBar {
+                border-radius: 10px;
+                }
+            QProgressBar:chunk {
+                background-color: #6e94c0;
+                border-radius :10px;
+                }
+            """
+            )
 
 
 class ProgressModal(QProgressDialog):

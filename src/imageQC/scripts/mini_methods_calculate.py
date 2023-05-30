@@ -8,6 +8,7 @@ Collection of small functions used in ImageQC.
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter
+from scipy.ndimage.interpolation import geometric_transform
 
 
 def get_distance_map_point(shape, center_dx=0., center_dy=0.):
@@ -913,3 +914,37 @@ def get_min_max_pos_2d(image, roi_array):
         [min_idx[0][0], min_idx[1][0]],
         [max_idx[0][0], max_idx[1][0]]
         ]
+
+
+def topolar(img, order=1):
+    """
+    Transform img to its polar coordinate representation.
+
+    from: Matt Hancock
+    https://stackoverflow.com/questions/3798333/image-information-along-a-polar-coordinate-system
+
+    order: int, default 1
+        Specify the spline interpolation order.
+        High orders may be slow for large images.
+    """
+    # max_radius is the length of the diagonal from a corner to the mid-point of img.
+    max_radius = 0.5*np.linalg.norm(img.shape)
+
+    def transform(coords):
+        # Put coord[1] in the interval, [-pi, pi]
+        theta = 2*np.pi*coords[1] / (img.shape[1] - 1.)
+
+        # Then map it to the interval [0, max_radius].
+        # radius = float(img.shape[0]-coords[0]) / img.shape[0] * max_radius
+        radius = max_radius * coords[0] / img.shape[0]
+
+        i = 0.5*img.shape[0] - radius*np.sin(theta)
+        j = radius*np.cos(theta) + 0.5*img.shape[1]
+        return i, j
+
+    polar = geometric_transform(img, transform, order=order)
+
+    rads = max_radius * np.linspace(0, 1, img.shape[0])
+    angs = np.linspace(0, 2*np.pi, img.shape[1])
+
+    return polar, (rads, angs)

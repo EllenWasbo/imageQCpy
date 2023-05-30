@@ -8,11 +8,13 @@ Calculation processes for the different tests.
 from timeit import default_timer as timer  #TODO delete
 import numpy as np
 from scipy import ndimage
+from scipy.signal import find_peaks
 from skimage import feature
 
 
 # imageQC block start
 import imageQC.scripts.mini_methods_calculate as mmcalc
+import imageQC.scripts.dcm as dcm
 # imageQC block end
 
 
@@ -385,7 +387,18 @@ def get_rois(image, image_number, input_main):
         return get_roi_circle(img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
 
     def Rec():
-        return get_roi_recovery_curve(image, image_info, paramset)
+        if 'MainWindow' in str(type(input_main)):
+            if input_main.summed_img is None:  # avoid each time active slice changes
+                input_main.summed_img, _ = dcm.sum_marked_images(
+                    input_main.imgs,
+                    input_main.tree_file_list.get_marked_imgs_current_test(),
+                    tag_infos=input_main.tag_infos
+                    )
+            summed_img = input_main.summed_img
+        else:
+            summed_img = image
+
+        return get_roi_recovery_curve(summed_img, image_info, paramset)
 
     def SNR():
         return get_roi_circle_MR(
@@ -904,48 +917,85 @@ def get_roi_NM_bar(image, image_info, test_params):
     return roi_array
 
 
-def get_roi_recovery_curve(image, image_info, test_params):
+def get_roi_recovery_curve(summed_image, image_info, test_params):
     """Generate background and sphere rois based on image content.
 
     Parameters
     ----------
-    image : nparr
+    summed_image : nparr
+        sum of all selected images
     image_info : DcmInfo
         as defined in scripts/dcm.py
     test_params : ParamSetPET
         as defined in config/config_classes.py
 
-
     Returns
     -------
-    roi_array : ndarray
-        list of 7 2d arrays (background and 6 spheres) with type bool. Default is None
-    errmsg : list of str. Default is []
+    roi_array : list of list of ndarray
+        6 spheres, smallest to largest (None if not found)
+        all background rois
+    errmsg : str
+        Default is None
     """
-    roi_array = []
+    errmsg = None
+    roi_array_spheres = [None for i in range(6)]
 
-    # search lung insert center of image
-    dx, dy = (0, 0)
-    '''
+    # search (lung insert in) center of image
     search_radius_mm = 50.
-    roi_central_cylinder = get_roi_circle(
-        image.shape, (0, 0), search_radius_mm/image_info.pix[0])
-    cx, cy = mmcalc.center_xy_of_disc(image, roi=roi_central_cylinder)
-    dx, dy = (cx - image.shape[1] // 2, cy - image.shape[0] // 2)
+    roi_search_central_cylinder = get_roi_circle(
+        summed_image.shape, (0, 0), search_radius_mm/image_info.pix[0])
+    cx, cy = mmcalc.center_xy_of_disc(summed_image, roi=roi_search_central_cylinder)
+    dx, dy = (0, 0)
+    if cx is not None and cy is not None:
+        dx, dy = (cx - summed_image.shape[1] // 2, cy - summed_image.shape[0] // 2)
+    else:
+        res = mmcalc.optimize_center(summed_image)  # center of object if no lung insert
+        if res is not None:
+            cx, cy, _, _ = res
+            dx, dy = (cx - summed_image.shape[1] // 2, cy - summed_image.shape[0] // 2)
 
-    roi_array.append(roi_central_cylinder)
-    '''
+    # get position of spheres
+    pol, (rads, angs) = mmcalc.topolar(summed_image)
+    prof = np.max(pol, axis=0)
+    prof = prof - np.min(prof)
+    peaks = find_peaks(prof, distance=prof.shape[0]/10)
+    peaks_pos = peaks[0]
+    if peaks_pos.shape[0] in [6, 7]:  # 7 if one sphere at 0
+        peak_values = prof[peaks_pos]
+        if peaks_pos.shape[0] == 7:
+            if peak_values[0] > peak_values[-1]:
+                peaks_pos = peaks_pos[0:6]
+            else:
+                peaks_pos = peaks_pos[1:]
+        order_peaks = np.argsort(prof[peaks_pos])
+        roi_radii = np.array([10, 13, 17, 22, 28, 37])  # search radius = Ø
+        roi_radii = roi_radii / image_info.pix[0]
+        dist = 57 / image_info.pix[0]  # distance from center to center of spheres
+        tan_angles = np.tan(angs[peaks_pos])
+        for no, order in enumerate(order_peaks):
+            pos_x = dist / np.sqrt(1 + tan_angles[no]**2)
+            this_ang = angs[peaks_pos[no]]
+            if this_ang > np.pi/2 and this_ang < 3*np.pi/2:
+                pos_x = - pos_x
+            pos_y = - pos_x * tan_angles[no]
+            roi_array_spheres[order] = get_roi_circle(
+                summed_image.shape, (dx + pos_x, dy + pos_y), roi_radii[order])
+    else:
+        errmsg = 'Failed to find 6 spheres'
+
+    # background ROIs
+    roi_array_background = []
     radius = test_params.rec_roi_size / image_info.pix[0]
     try:
         for i in range(len(test_params.rec_table.pos_x)):
             pos_x = test_params.rec_table.pos_x[i] / image_info.pix[0]
             pos_y = test_params.rec_table.pos_y[i] / image_info.pix[1]
-            roi_array.append(get_roi_circle(
-                image.shape, (dx + pos_x, dy + pos_y), radius))
-    except AttributeError:
+            roi_array_background.append(get_roi_circle(
+                summed_image.shape, (dx + pos_x, dy + pos_y), radius))
+    except AttributeError:  # if rec_table is None (maybe fixed)
         pass
 
-    return roi_array
+    return (roi_array_spheres + roi_array_background, errmsg)
 
 
 def get_roi_circle_MR(image, image_info, test_params, test_code, delta_xy):

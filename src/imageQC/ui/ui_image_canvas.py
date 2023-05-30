@@ -505,8 +505,13 @@ class ImageCanvas(GenericImageCanvas):
 
     def Rec(self):
         """Draw PET Rec ROI."""
+        if self.main.current_roi[0] is not None:
+            self.add_contours_to_all_rois(
+                colors=['blue' for i in range(6)],
+                roi_indexes=[i for i in range(6)])
         self.add_contours_to_all_rois(
-            labels=self.main.current_paramset.rec_table.labels)
+            labels=self.main.current_paramset.rec_table.labels,
+            roi_indexes=[i for i in range(6, len(self.main.current_roi))])
 
     def PIU(self):
         """Draw MR PIU ROI."""

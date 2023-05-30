@@ -354,7 +354,12 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
 
         today = date.today()
 
+        if parent_widget is not None:
+            parent_widget.progress_bar.setRange(0, len(files))
+            
         for f_id, file in enumerate(files):
+            if parent_widget is not None:
+                parent_widget.progress_bar.setValue(f_id)
             pd = {}
             try:
                 pd = pydicom.dcmread(file, stop_before_pixels=True)
@@ -484,6 +489,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                     f'Reading DICOM header of file {f_id + 1} / {len(files)}')
         if parent_widget is not None:
             parent_widget.status_label.clearMessage()
+            parent_widget.progress_bar.reset()
 
         # ensure uniq new file names
         fullpaths = [

@@ -32,6 +32,7 @@ class InputMain:
     automation_active: bool = True
     active_img: np.ndarray = field(default_factory=lambda: np.zeros((2, 2)))
     current_roi: list = field(default_factory=list)
+    summed_img: np.ndarray = field(default_factory=lambda: np.zeros((2, 2)))
 
     def display_errmsg(self, errmsg):
         """Display error messages on console."""

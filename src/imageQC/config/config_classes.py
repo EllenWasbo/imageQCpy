@@ -422,9 +422,10 @@ class ParamSetPET(ParamSetCommon):
     hom_roi_distance: float = 55.
     cro_roi_size: float = 60.
     cro_volume: float = 6283.
-    cro_auto_select_slices: bool = False
+    cro_auto_select_slices: bool = True
     cro_percent_slices: float = 75  # % within fwhm of signal profile to include
     rec_roi_size: float = 20.
+    rec_type: int = 0  # 0 = A50, 1 = max, 2 = peak
     rec_table: RecTable = field(default_factory=RecTable)
 
 

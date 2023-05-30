@@ -4,9 +4,38 @@ Tests on automation.
 
 @author: ewas
 """
+import yaml
+import numpy as np
+from pathlib import Path
+
+import imageQC.config.config_classes as cfc
+from imageQC.scripts.input_main_auto import InputMain
+import imageQC.scripts.calculate_qc as calculate_qc
 import imageQC.resources
 import imageQC.scripts.automation as automation
 
+path_tests = Path(__file__).parent
+path_src_imageQC = path_tests.parent / 'src' / 'imageQC'
+
+
+def read_tag_infos_from_yaml():
+    """Get DICOM tags from tag_infos.yaml if tag_infos.yaml do not exist yet.
+
+    Returns
+    -------
+    tag_infos : list of TagInfo
+    """
+    tag_infos = []
+    file_path = path_src_imageQC / 'config_defaults' / 'tag_infos.yaml'
+    with open(file_path, "r") as f:
+        docs = yaml.safe_load_all(f)
+        for doc in docs:
+            tag_infos.append(cfc.TagInfo(**doc))
+
+    return tag_infos
+
+
+tag_infos = read_tag_infos_from_yaml()
 
 
 def test_validate_args():

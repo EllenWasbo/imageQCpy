@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "update_displayed_params"
+search_string = "print(self.main.curr"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

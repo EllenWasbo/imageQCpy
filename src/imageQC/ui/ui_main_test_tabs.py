@@ -2129,11 +2129,9 @@ class PositionTableWidget(QTableWidget):
 
     def update_table(self):
         """Populate table with current table."""
-        print(f'update table {self.table_attribute_name} {self.current_table}')
         if self.current_table is None:  # not initiated yet
             self.current_table = getattr(
                 self.main.current_paramset, self.table_attribute_name, None)
-            print(self.main.current_paramset)
         else:
             setattr(self.main.current_paramset, self.table_attribute_name,
                     self.current_table)

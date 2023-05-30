@@ -445,6 +445,12 @@ def load_settings(fname='', temp_config_folder=''):
                                         doc['ctn_table'] = cfc.HUnumberTable(**upd)
                                         upd = verify_input_dict(doc, cfc.ParamSetCT())
                                         sett_this.append(cfc.ParamSetCT(**upd))
+                                    elif modality == 'PET':
+                                        upd = verify_input_dict(doc['rec_table'],
+                                                                cfc.RecTable())
+                                        doc['rec_table'] = cfc.RecTable(**upd)
+                                        upd = verify_input_dict(doc, cfc.ParamSetPET())
+                                        sett_this.append(cfc.ParamSetPET(**upd))
                                     else:
                                         class_ = getattr(cfc, f'ParamSet{modality}')
                                         upd = verify_input_dict(doc, class_())

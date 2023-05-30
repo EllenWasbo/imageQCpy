@@ -23,7 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.0-b3'
+VERSION = '3.0.0-b4'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -63,6 +63,9 @@ ALTERNATIVES = {
         },
     'SPECT': {
         'MTF': ['Point source', 'Line source']
+        },
+    'PET': {
+        'Rec': ['Mean A50', 'Max', 'Peak Ø 15mm circle', 'Peak 12mm square']
         },
     'MR': {
         'Sli': ['Ramp', 'Wedge']
@@ -179,7 +182,9 @@ HEADERS = {
             },
         'Rec': {
             'alt0': [f'A50 {i+1}' for i in range(6)] + ['background'],
-            'alt1': [f'Max {i+1}' for i in range(6)] + ['background']
+            'alt1': [f'Max {i+1}' for i in range(6)] + ['background'],
+            'alt2': [f'Peak {i+1}' for i in range(6)] + ['background'],
+            'alt3': [f'Peak {i+1}' for i in range(6)] + ['background']
             }
         },
     'MR': {
@@ -242,7 +247,11 @@ HEADERS_SUP = {
             'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y']
             },
         },
-    'PET':  {},
+    'PET':  {
+        'Rec': {
+            'alt0': [f'Max {i+1}' for i in range(6)] + ['background']
+            },
+        },
     'MR': {
         'PIU': {
             'altAll': ['x min (pix from lower left)', 'y min',

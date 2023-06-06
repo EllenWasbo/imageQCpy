@@ -666,7 +666,11 @@ class ParamsTabCT(ParamsTabCommon):
         self.update_sli_plot_options()
         self.sli_plot.currentIndexChanged.connect(self.main.refresh_results_display)
 
-        self.tab_sli.vlo_top.addStretch()
+        info_txt = '''
+        When using the beaded ramp for CatPhan note that the inner ramps should be
+        used for nominal slice thickness less than 2 mm.
+        '''
+        self.tab_sli.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
         hlo_type = QHBoxLayout()
         hlo_type.addWidget(QLabel('Ramp type'))
         hlo_type.addWidget(self.sli_type)

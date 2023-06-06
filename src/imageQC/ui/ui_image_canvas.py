@@ -145,6 +145,11 @@ class ImageCanvas(GenericImageCanvas):
         self.ax.add_artist(at)
         self.draw()
 
+    def img_clear(self):
+        """Clear image."""
+        self.ax.cla()
+        self.draw()
+
     def img_draw(self, auto=False, window_level=[]):
         """Refresh image."""
         self.ax.cla()
@@ -505,13 +510,21 @@ class ImageCanvas(GenericImageCanvas):
 
     def Rec(self):
         """Draw PET Rec ROI."""
-        if self.main.current_roi[0] is not None:
-            self.add_contours_to_all_rois(
-                colors=['blue' for i in range(6)],
-                roi_indexes=[i for i in range(6)])
+        labels = self.main.current_paramset.rec_table.labels
         self.add_contours_to_all_rois(
-            labels=self.main.current_paramset.rec_table.labels,
-            roi_indexes=[i for i in range(6, len(self.main.current_roi))])
+            labels=labels,
+            roi_indexes=[i for i in range(len(labels))])
+        self.add_contours_to_all_rois(
+            labels=['center'],
+            roi_indexes=[len(labels)])
+        if 'Rec' in self.main.results:
+            if 'details_dict' in self.main.results['Rec']:
+                pass
+                '''
+                self.add_contours_to_all_rois(
+                    colors=['blue' for i in range(6)],
+                    roi_indexes=[i for i in range(6)])
+                '''
 
     def PIU(self):
         """Draw MR PIU ROI."""

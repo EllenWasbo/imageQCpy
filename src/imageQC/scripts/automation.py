@@ -803,6 +803,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                             calculate_qc(input_main_this, wid_auto=parent_widget,
                                          auto_template_label=auto_template.label,
                                          auto_template_session=f'Session {d+1}/{nd}')
+                            if parent_widget is not None:
+                                curr_val = parent_widget.progress_bar.value()
+                                new_val = curr_val + int(100/nd)
+                                parent_widget.progress_bar.setValue(new_val)
                             value_list, header_list = quicktest_output(input_main_this)
                             header_list = ['Date'] + header_list
                             value_list = [date_str] + value_list
@@ -819,9 +823,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                                         input_main_imgs=input_main_this.imgs)
                                     if errmsg is not None:
                                         log.append(errmsg)
-                        print(
-                            '\rFinished analysing template                            ',
-                            '                                                         ')
+                        if parent_widget is None:
+                            print(
+                                '\rFinished analysing template                        ',
+                                '                                                     ')
                         log.append(
                             f'Finished analysing template ({nd} sessions)'
                             )
@@ -878,6 +883,9 @@ def run_template_vendor(auto_template, modality, decimal_mark='.',
                 if parent_widget is not None:
                     parent_widget.status_label.showMessage(
                         f'{log_pre} Extracting data from file {fileno}/{len(files)}...')
+                    curr_val = parent_widget.progress_bar.value()
+                    new_val = curr_val + int(100/len(files))
+                    parent_widget.progress_bar.setValue(new_val)
                 res = read_vendor_QC_reports.read_vendor_template(auto_template, file)
                 if res is None:
                     log.append(f'\t Found no expected content in {file}')

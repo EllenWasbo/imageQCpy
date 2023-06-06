@@ -446,9 +446,10 @@ def load_settings(fname='', temp_config_folder=''):
                                         upd = verify_input_dict(doc, cfc.ParamSetCT())
                                         sett_this.append(cfc.ParamSetCT(**upd))
                                     elif modality == 'PET':
-                                        upd = verify_input_dict(doc['rec_table'],
-                                                                cfc.RecTable())
-                                        doc['rec_table'] = cfc.RecTable(**upd)
+                                        if 'rec_table' in doc:
+                                            upd = verify_input_dict(doc['rec_table'],
+                                                                    cfc.RecTable())
+                                            doc['rec_table'] = cfc.RecTable(**upd)
                                         upd = verify_input_dict(doc, cfc.ParamSetPET())
                                         sett_this.append(cfc.ParamSetPET(**upd))
                                     else:

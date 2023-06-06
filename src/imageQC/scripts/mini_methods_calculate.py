@@ -920,7 +920,7 @@ def topolar(img, order=1):
     """
     Transform img to its polar coordinate representation.
 
-    from: Matt Hancock
+    based on code from Matt Hancock
     https://stackoverflow.com/questions/3798333/image-information-along-a-polar-coordinate-system
 
     order: int, default 1

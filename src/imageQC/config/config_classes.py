@@ -425,8 +425,14 @@ class ParamSetPET(ParamSetCommon):
     cro_auto_select_slices: bool = True
     cro_percent_slices: float = 75  # % within fwhm of signal profile to include
     rec_roi_size: float = 20.
-    rec_type: int = 0  # 0 = A50, 1 = max, 2 = peak
+    rec_type: int = 1  # 0 = avg, 1 = max, 2 = peak
+    rec_auto_select_slices: bool = True
+    rec_background_full_phantom: bool = False
     rec_table: RecTable = field(default_factory=RecTable)
+    rec_sphere_diameters: list[float] = field(
+        default_factory=lambda: [10., 13., 17., 22., 28., 37.])  # in mm NB increasing
+    rec_sphere_dist: float = 57.  # distance center to center of spheres in mm
+    rec_sphere_percent: int = 50  # % threshold to evaluate mean from
 
 
 @dataclass

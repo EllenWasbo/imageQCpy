@@ -7,6 +7,7 @@ User interface for dialog Rename Dicom.
 """
 import os
 from pathlib import Path
+from time import sleep
 
 import pydicom
 from PyQt5.QtCore import Qt
@@ -27,6 +28,7 @@ from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.scripts.dcm import find_all_valid_dcm_files, get_dcm_info_list
 from imageQC.scripts.mini_methods_format import (
     valid_path, generate_uniq_filepath)
+from imageQC.scripts.mini_methods import get_all_matches
 # imageQC block end
 
 
@@ -112,6 +114,9 @@ class RenameDicomDialog(ImageQCDialog):
         vlo_btns_table.addWidget(self.btn_rename)
         vlo_btns_table.addStretch()
 
+        #self.progress_bar = uir.ProgressBar(self)
+        #vlo.addWidget(self.progress_bar)
+
         hlo_dlg_btns = QHBoxLayout()
         vlo.addLayout(hlo_dlg_btns)
         hlo_dlg_btns.addStretch()
@@ -187,7 +192,7 @@ class RenameDicomDialog(ImageQCDialog):
                             count_renamed += 1
                         except FileExistsError as err:
                             failed_paths.append(file.resolve())
-                            print(f'Faile renameing {file} to {new_file_str}/n{err}')
+                            print(f'Failed renameing {file} to {new_file_str}/n{err}')
                     else:
                         failed_paths.append(file.resolve())
                 self.reset_names()
@@ -391,6 +396,17 @@ class RenameDicomDialog(ImageQCDialog):
                     ('Tag pattern is empty. Tag pattern is '
                      'needed to generate names.'))
 
+            if len(self.new_names) > 0:  # ensure unique names
+                uniq_names = list(set(self.new_names))
+                for name in uniq_names:
+                    n_same = self.new_names.count(name)
+                    if n_same > 1:
+                        idxs = get_all_matches(self.new_names, name)
+                        base_name = str(name.parent / name.stem)
+                        for i in enumerate(idxs):
+                            new_name = f'{base_name}_({i:03}).dcm'
+                            self.new_names[i] = Path(new_name)
+
             self.fill_table()
             if limit == 0 and len(self.new_names) > 0:
                 self.btn_rename.setDisabled(False)
@@ -410,9 +426,13 @@ class RenameDicomDialog(ImageQCDialog):
             for i, path in enumerate(self.original_names):
                 progress.setValue(i)
                 try:
+                    print(path)
+                    print(self.new_names[i])
                     path.rename(self.new_names[i])
                 except (PermissionError, OSError) as err:
                     errmsg.append(f'{path.resolve}: {err}')
+                    print(err)
+                sleep(2)
                 if progress.wasCanceled():
                     break
             progress.setValue(max_val)

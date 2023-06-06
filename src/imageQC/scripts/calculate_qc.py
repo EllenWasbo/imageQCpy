@@ -10,13 +10,14 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 import numpy as np
 import scipy as sp
+from scipy.signal import find_peaks
 import skimage
 
 from PyQt5.QtWidgets import qApp
 
 # imageQC block start
 import imageQC.scripts.dcm as dcm
-from imageQC.scripts.calculate_roi import get_rois
+from imageQC.scripts.calculate_roi import get_rois, get_roi_circle
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
@@ -518,11 +519,13 @@ def calculate_qc(input_main,
                             get_window_level=any(auto_template_label)
                             )
                         input_main.current_group_indicators[i] = '_'.join(tags[0])
-                if wid_auto is not None and image is not None:
-                    if wid_auto.chk_display_images.isChecked():
+                if wid_auto is not None:
+                    if image is not None and wid_auto.chk_display_images.isChecked():
                         wid_auto.wid_image_display.canvas.main.active_img = image
                         wid_auto.wid_image_display.canvas.img_draw(
                             auto=True, window_level=tags[-1])
+                    else:
+                        wid_auto.wid_image_display.canvas.img_clear()
 
                 for test in marked[i]:
                     input_main.current_test = test
@@ -1054,6 +1057,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             res = Results(headers=headers, headers_sup=headers_sup)
         else:
             errmsg = ''
+            values = []
+            values_sup = []
             details_dict = {}
             dx, dy = roi_array[-1]
             centers_x = []
@@ -1068,8 +1073,14 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     prof_x, 0.5 * (max(prof_x) + min(prof_x)))
                 width_y, center_y = mmcalc.get_width_center_at_threshold(
                     prof_y, 0.5 * (max(prof_y) + min(prof_y)))
-                centers_x.append(center_x - prof_x.size / 2 + dx[i])
-                centers_y.append(center_y - prof_y.size / 2 + dy[i])
+                if center_x is not None:
+                    centers_x.append(center_x - prof_x.size / 2 + dx[i])
+                else:
+                    centers_x.append(None)
+                if center_y is not None:
+                    centers_y.append(center_y - prof_y.size / 2 + dy[i])
+                else:
+                    centers_y.append(None)
             if all(centers_x) and all(centers_y):
                 pix = image_info.pix[0]
                 diffs = []
@@ -1556,6 +1567,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         """PET Recovery Curve."""
         alt = paramset.rec_type
         headers = HEADERS[modality][test_code]['alt' + str(alt)]
+        headers_sup = HEADERS_SUP[modality][test_code]['alt0']
         if len(images_to_test) == 0:
             res = Results(headers=headers)
         else:
@@ -1565,72 +1577,86 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             if errmsg is not None:
                 errmsgs.append(errmsg)
 
-            roi_array_spheres = roi_array[0:6]
-            roi_array_backgrounds = roi_array[6:]
-
-            maxs = []
+            # find z-profile of first background roi
+            avgs_background = []
             for image in matrix:
                 if image is not None:
-                    arr = np.ma.masked_array(
-                        image, mask=np.invert(roi_array_spheres[0]))
-                    maxs.append(np.max(arr))
-
+                    arr = np.ma.masked_array(image, mask=np.invert(roi_array[0]))
+                    avgs_background.append(np.mean(arr))
             zpos = [float(img_info.zpos) for img_info in input_main.imgs]
             zpos = np.array(zpos)[images_to_test]
             sort_idx = np.argsort(zpos)
             zpos = zpos[sort_idx]
-            maxs = np.array(maxs)[sort_idx]
+            avgs = np.array(avgs_background)[sort_idx]
+            details_dict = {'roi_averages': avgs, 'zpos': zpos}
 
-            details_dict = {'roi_maxs': maxs, 'zpos': zpos}
+            # find slices to include based on z-profile of background
+            if paramset.rec_auto_select_slices:
+                if avgs[0] < max(avgs)/2 and avgs[-1] < max(avgs)/2:
+                    width, center = mmcalc.get_width_center_at_threshold(
+                        avgs, max(avgs)/2, force_above=True)
+                    if center is None or width is None:
+                        errmsgs.append(
+                            'Auto select slice failed. Could not find FWHM.')
+                    else:
+                        center_slice = round(center)
+                        width = width * 0.75
+                        start_slice = center_slice - round(width/2)
+                        stop_slice = center_slice + round(width/2)
+                        avgs = avgs[start_slice:stop_slice + 1]
+                        zpos = zpos[start_slice:stop_slice + 1]
+                else:
+                    errmsgs.append('Outer slices have average above half max. '
+                                   'Auto select slice ignored.')
+            details_dict['used_roi_averages'] = avgs
+            details_dict['used_zpos'] = zpos
 
+            # find slices with spheres
+            matrix_used = []
+            for idx in sort_idx:
+                matrix_used.append(matrix[idx])
+            maxs = [np.max(image) for image in matrix_used]
             max_idx = np.where(maxs == np.max(maxs))
             zpos_max = zpos[max_idx[0]]
             diff_z = np.abs(zpos - zpos_max)
             idxs = np.where(diff_z < 20.)
             # Ø 37 largest sphere, 20 mm from center should be enough slices
-
             start_slice = np.min(idxs)
             stop_slice = np.max(idxs)
             maxs = maxs[start_slice:stop_slice + 1]
             zpos = zpos[start_slice:stop_slice + 1]
-            details_dict['used_roi_maxs'] = maxs
-            details_dict['used_zpos'] = zpos
 
+            # get background from each roi
+            if paramset.rec_background_full_phantom:
+                start_slice_bg = 0
+                stop_slice_bg = len(matrix_used) - 1
+            else:
+                start_slice_bg = start_slice
+                stop_slice_bg = stop_slice
             background_values = []
-            for i in range(start_slice, stop_slice + 1):
-                if matrix[i] is not None:
-                    for background_roi in roi_array_backgrounds:
+            for i in range(start_slice_bg, stop_slice_bg + 1):
+                if matrix_used[i] is not None:
+                    for background_roi in roi_array[:-1]:
                         arr = np.ma.masked_array(
-                            matrix[i], mask=np.invert(background_roi))
+                            matrix_used[i], mask=np.invert(background_roi))
                         background_values.append(np.mean(arr))
             background_value = np.mean(background_values)
             details_dict['background_values'] = background_values
 
-            values_A50 = [background_value]
-            values_max = [background_value]
-            values_peak = [background_value]
-            img_info = input_main.imgs[0]
-            vol_vox = img_info.pix[0] * img_info.pix[1] * img_info.slice_thickness
-            n_vox_1mL = int(1000. / vol_vox)
-            for roi in roi_array_spheres:
-                values = []
-                for i in range(start_slice, stop_slice + 1):
-                    if matrix[i] is not None:
-                        arr = np.ma.masked_array(matrix[i], mask=np.invert(roi))
-                        values.append(arr.flatten())
-                values = np.hstack(values)
-                maxval = np.max(values)
-                values_max.append(maxval)
-                threshold = 0.5 * (maxval + background_value)
-                values_A50.append(np.mean(values > threshold))
-                sorted_values = np.sort(values)
-                values_peak.append(np.mean(sorted_values[-n_vox_1mL:]))
+            # calculate sphere values
+            res_dict, errmsg = calculate_recovery_curve(
+                matrix_used[start_slice:stop_slice], input_main.imgs[0],
+                roi_array[-1], zpos, paramset, background_value)
+            if errmsg is not None:
+                errmsgs.append(errmsg)
 
-            details_dict['values'] = [values_A50, values_max, values_peak]
+            details_dict.update(res_dict)
 
             values = details_dict['values'][paramset.rec_type]
 
             res = Results(headers=headers, values=[values],
+                          headers_sup=headers_sup,
+                          values_sup=[details_dict['values'][0]],
                           details_dict=details_dict, pr_image=False,
                           errmsg=errmsgs)
         return res
@@ -1943,10 +1969,10 @@ def get_profile_sli(image, paramset, line, direction='h'):
 
         profile = profiles[max_i]
         if n_avg > 0:
-            try:
-                profile = np.mean(profiles[max_i-n_avg:max_i+n_avg+1], axis=0)
-            except IndexError:
-                errmsg = 'Profile too close to border to be averaged.'
+            p_start = np.max([max_i-n_avg, 0])
+            p_stop = np.min([len(profiles), max_i+n_avg+1])
+            profile = np.mean(profiles[p_start:p_stop], axis=0)
+
     else:
         rr, cc = skimage.draw.line(r0, c0, r1, c1)
         profile = image[rr, cc]
@@ -2724,7 +2750,7 @@ def get_corrections_point_source(
     dict
         corrected_image : numpy.2darray
         correction_matrix : numpy.2darray
-            multiply by this matrix to obtain corrected image2d
+            add this matrix to obtain corrected image2d
         fit_matrix : numpy.2darray
             fitted image
         estimated_noise_image : numpy.2darray
@@ -2802,11 +2828,8 @@ def get_corrections_point_source(
             estimated_noise_image = rng.poisson(fit_matrix)
 
             # correct input image
-            corr_sub = fit - fit[0]
-            corr_sub = (1./np.max(fit)) * fit  # matrix to subtract
-            corr_sub = 1./corr_sub
-            correction_matrix = corr_sub.reshape(image2d.shape)
-            corrected_image = image2d * correction_matrix
+            correction_matrix = np.max(fit) - fit_matrix
+            corrected_image = image2d + correction_matrix
         else:
             errmsg = 'Failed fitting matrix to point source.'
 
@@ -2863,7 +2886,7 @@ def calculate_NM_uniformity(image2d, roi_array, pix):
     selected_pix = np.where(possible_pix >= pix_range[0])
     scale_factor = scale_factors[selected_pix[0][0]]
     image64 = skimage.measure.block_reduce(
-        image2d, (scale_factor, scale_factor), np.mean)  # scale down to 6.4mm/pix
+        image2d, (scale_factor, scale_factor), np.sum)  # scale down to ~6.4mm/pix
     roi64 = []
     for i in range(2):
         reduced_roi = skimage.measure.block_reduce(
@@ -2986,8 +3009,8 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         sub_estimated_noise = fit_dict['estimated_noise_image'][rows][:, cols]
         # curve correct both subarray and quantum noise
         corr_matrix = fit_dict['correction_matrix'][rows][:, cols]
-        subarray = subarray * corr_matrix
-        sub_estimated_noise = sub_estimated_noise * corr_matrix
+        subarray = subarray + corr_matrix
+        sub_estimated_noise = sub_estimated_noise + corr_matrix
         # 2d NPS
         NPS = mmcalc.get_2d_NPS(subarray, pix)
         quantum_noise = mmcalc.get_2d_NPS(sub_estimated_noise, pix)
@@ -3087,3 +3110,105 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset):
     values = [np.max(SNI_values)] + SNI_values
 
     return (values, values_sup, details_dict, errmsgs)
+
+
+def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, background):
+    """Find spheres and calculculate recovery curve values."""
+    size_y, size_x = matrix[0].shape
+    dist = paramset.rec_sphere_dist / img_info.pix[0]  # distance from center
+    n_spheres = len(paramset.rec_sphere_diameters)
+
+    # get center from center roi
+    mask = np.where(center_roi, 0, 1)
+    mask_pos = np.where(mask == 0)
+    xpos = int(np.mean(mask_pos[1]))
+    ypos = int(np.mean(mask_pos[0]))
+    dx = xpos - size_x // 2
+    dy = ypos - size_y // 2
+
+    # sum centered image
+    dists = [xpos, size_x - xpos, ypos, size_y - ypos]
+    min_dists = np.min(dists) - 1
+    summed_img = None
+    for image in matrix:
+        this_centered = image[ypos - min_dists:ypos + min_dists,
+                              xpos - min_dists:xpos + min_dists]
+        if summed_img is None:
+            summed_img = this_centered
+        else:
+            summed_img = summed_img + this_centered
+
+    # get position of spheres
+    pol, (rads, angs) = mmcalc.topolar(summed_img)
+    prof = np.max(pol, axis=0)
+    prof = prof - np.min(prof)
+    peaks = find_peaks(prof, distance=prof.shape[0]/10)
+    peaks_pos = peaks[0]
+    roi_dx_dy = [(0, 0) for i in range(n_spheres)]
+    if peaks_pos.shape[0] in [n_spheres, n_spheres + 1]:  # +1 if one sphere split at 0
+        peak_values = prof[peaks_pos]
+        if peaks_pos.shape[0] == n_spheres + 1:
+            if peak_values[0] > peak_values[-1]:
+                peaks_pos = peaks_pos[0:n_spheres]
+            else:
+                peaks_pos = peaks_pos[1:]
+        order_peaks = np.argsort(prof[peaks_pos])
+
+        tan_angles = np.tan(angs[peaks_pos])
+        for no, order in enumerate(order_peaks):
+            pos_x = dist / np.sqrt(1 + tan_angles[no]**2)
+            this_ang = angs[peaks_pos[no]]
+            if this_ang > np.pi/2 and this_ang < 3*np.pi/2:
+                pos_x = - pos_x
+            pos_y = - pos_x * tan_angles[no]
+            roi_dx_dy[order] = (pos_x + dx, pos_y + dy)
+
+        # for each sphere - get spheric roi
+        roi_radii = np.array(paramset.rec_sphere_diameters)  # search radius = Ø
+        vol_vox = img_info.pix[0] * img_info.pix[1] * img_info.slice_thickness
+        n_vox_1mL = int(1000. / vol_vox)
+        zpos_center = zpos[len(zpos) // 2]
+        zpos_diff = np.abs(zpos - zpos_center)
+        roi_spheres = []
+        max_values = []
+        avg_values = []
+        peak_values = []
+        for roi_no, dx_dy in enumerate(roi_dx_dy):
+            this_roi = []
+            values = []
+            for i, image in enumerate(matrix):
+                if zpos_diff[i] < roi_radii[roi_no]:
+                    radius_this = np.sqrt(roi_radii[roi_no] ** 2 - zpos_diff[i] ** 2)
+                    this_roi.append(get_roi_circle(
+                        image.shape, dx_dy, radius_this / img_info.pix[0]))
+                else:
+                    this_roi.append(None)
+            roi_spheres.append(this_roi)
+            values = None
+            for i, image in enumerate(matrix):
+                if this_roi[i] is not None:
+                    arr = np.ma.masked_array(matrix[i], mask=np.invert(this_roi[i]))
+                    if values is None:
+                        values = arr.flatten()
+                    else:
+                        values = np.append(values, arr.flatten())
+            max_this = np.max(values)
+            max_values.append(max_this)
+            threshold = paramset.rec_sphere_percent * 0.01 * (max_this - background)
+            avg_values.append(np.mean(values[values > threshold]))
+            sorted_values = np.sort(values)
+            peak_values.append(np.mean(sorted_values[-n_vox_1mL:]))
+            details_dict = {
+                'values': [
+                    avg_values + [background],
+                    max_values + [background],
+                    peak_values + [background]
+                    ],
+                'roi_spheres': roi_spheres
+                }
+            errmsg = None
+    else:
+        details_dict = {}
+        errmsg = 'Failed to find 6 spheres'
+
+    return (details_dict, errmsg)

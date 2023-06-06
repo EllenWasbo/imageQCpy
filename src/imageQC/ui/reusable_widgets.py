@@ -211,6 +211,18 @@ class ProgressModal(QProgressDialog):
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
         self.setMinimumDuration(200)
         self.setAutoClose(True)
+        self.setStyleSheet(
+            """
+            QProgressBar {
+                border-radius: 10px;
+                width: 400px;
+                }
+            QProgressBar:chunk {
+                background-color: #6e94c0;
+                border-radius :10px;
+                }
+            """
+            )
 
 
 class ToolBarBrowse(QToolBar):

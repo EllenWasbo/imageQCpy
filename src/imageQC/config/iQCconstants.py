@@ -23,7 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.0-b4'
+VERSION = '3.0.0-b5'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -181,10 +181,9 @@ HEADERS = {
                 'New calibration factor']
             },
         'Rec': {
-            'alt0': [f'A50 {i+1}' for i in range(6)] + ['background'],
+            'alt0': [f'Avg {i+1}' for i in range(6)] + ['background'],
             'alt1': [f'Max {i+1}' for i in range(6)] + ['background'],
-            'alt2': [f'Peak {i+1}' for i in range(6)] + ['background'],
-            'alt3': [f'Peak {i+1}' for i in range(6)] + ['background']
+            'alt2': [f'Peak {i+1}' for i in range(6)] + ['background']
             }
         },
     'MR': {
@@ -249,7 +248,7 @@ HEADERS_SUP = {
         },
     'PET':  {
         'Rec': {
-            'alt0': [f'Max {i+1}' for i in range(6)] + ['background']
+            'alt0': [f'Avg {i+1}' for i in range(6)] + ['background'],
             },
         },
     'MR': {

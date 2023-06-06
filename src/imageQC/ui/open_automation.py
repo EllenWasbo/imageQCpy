@@ -490,6 +490,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     self, 'File not found',
                     f'File not found {path}'
                     )
+            self.list_templates.setCurrentRow(sel[0].row())
 
     def reset_auto_template(self):
         """Move files from Archive to path_input."""
@@ -502,6 +503,7 @@ class OpenAutomationDialog(ImageQCDialog):
                 temp = self.templates[mod][id_this]
                 reset_auto_template(auto_template=temp, parent_widget=self)
                 self.refresh_list()
+            self.list_templates.setCurrentRow(sel[0].row())
 
     def edit_template(self):
         """Run settings with current template selected."""
@@ -604,10 +606,10 @@ class OpenAutomationDialog(ImageQCDialog):
             log = []
             self.automation_active = True
             self.main.start_wait_cursor()
-            self.progress_bar.setRange(0, len(tempnos))
+            self.progress_bar.setRange(0, 100*len(tempnos))  # 0-100 within each temp
 
             for i, tempno in enumerate(tempnos):
-                self.progress_bar.setValue(i)
+                self.progress_bar.setValue(100 * i)
                 proceed = True
                 if self.chk_pause_between.isChecked() and i > 0:
                     self.main.stop_wait_cursor()

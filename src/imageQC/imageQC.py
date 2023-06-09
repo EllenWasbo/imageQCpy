@@ -43,7 +43,7 @@ def prepare_debug():
 
 
 if __name__ == '__main__':
-    prepare_debug()  # TODO - activate (not needen when not debugging)
+    #prepare_debug()  # TODO - activate (not needen when not debugging)
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     # verify that config_folder exists
     if user_prefs.config_folder != '':

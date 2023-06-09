@@ -425,7 +425,7 @@ class ParamSetPET(ParamSetCommon):
     cro_auto_select_slices: bool = True
     cro_percent_slices: float = 75  # % within fwhm of signal profile to include
     rec_roi_size: float = 20.
-    rec_type: int = 1  # 0 = avg, 1 = max, 2 = peak
+    rec_type: int = 0  # 0 = RC avg, 1 = RC max, 2 = RC peak, 3,4,5 Bq/mL avg,max,peak
     rec_auto_select_slices: bool = True
     rec_background_full_phantom: bool = False
     rec_table: RecTable = field(default_factory=RecTable)
@@ -433,6 +433,9 @@ class ParamSetPET(ParamSetCommon):
         default_factory=lambda: [10., 13., 17., 22., 28., 37.])  # in mm NB increasing
     rec_sphere_dist: float = 57.  # distance center to center of spheres in mm
     rec_sphere_percent: int = 50  # % threshold to evaluate mean from
+    rec_plot: int = 0  # 0 = rec max, 1 rec avg, 2 rec peak, 3 z-profile
+    rec_earl: int = 1  # tolerances from 0 = None, 1 = EARL1, 2 = EARL2
+    rec_background_volume: int = 9700
 
 
 @dataclass

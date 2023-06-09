@@ -420,8 +420,9 @@ class AutoCommonWidget(StackWidget):
         """Display log file contents."""
         _, path, _ = cff.load_user_prefs()
         log_path = Path(path).parent / LOG_FILENAME
-        if log_path.exists:
-            os.startfile(str(log_path))
+        path_log = str(log_path)
+        if os.path.exists(path_log):
+            os.startfile(path_log)
 
     def mark_import(self, ignore=False):
         """If import review mode: Mark AutoCommon for import or ignore."""

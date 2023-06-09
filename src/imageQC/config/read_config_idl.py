@@ -234,6 +234,9 @@ class ConfigIdl2Py():
                 'The relavant parameters for each modality are now saved as '
                 'separate modality specific templates.',
                 '----------------',
+                'If extra offsets for positioning of ROIs are used for the parameter '
+                'sets please set control these and set them again.'
+                '----------------',
                 'Changes to filtering of CT test on ring artifacts. Please reestablish '
                 'tolerance values.'
             ]
@@ -261,23 +264,6 @@ class ConfigIdl2Py():
                 this_set = getattr(paramset, mod_py(m))
                 this_set.label = cNames[i]
                 this_set.output = copy.deepcopy(output)
-            #todo delete
-            '''
-            paramset.CT.label = cNames[i]
-            paramset.Xray.label = cNames[i]
-            paramset.NM.label = cNames[i]
-            paramset.SPECT.label = cNames[i]
-            paramset.PET.label = cNames[i]
-            paramset.MR.label = cNames[i]
-            output = cfc.QuickTestOutputTemplate()
-            
-            paramset.CT.output = output
-            paramset.Xray.output = output
-            paramset.NM.output = output
-            paramset.SPECT.output = output
-            paramset.PET.output = output
-            paramset.MR.output = output
-            '''
 
             if 'AUTOIMPORTPATH' in param_names and i == 1:
                 if isinstance(cp.AUTOIMPORTPATH[0], bytes):
@@ -720,6 +706,7 @@ class ConfigIdl2Py():
             return outstr
 
         qto = {}
+        warning_MTF_CT = False
         for m, mv in c.items():
             temps = self.as_dict(mv[0])
             tempsThis = {}
@@ -757,6 +744,8 @@ class ConfigIdl2Py():
                                         alt = int(v[0].ALT[0])
                                         if alt > 0 and m in ['NM', 'MR']:
                                             alt = 10  # supplement starting with 10
+                                        if alt == 2 and m == 'CT':
+                                            warning_MTF_CT = True
                                         this_sub = cfc.QuickTestOutputSub(
                                             label=key,
                                             alternative=alt,
@@ -774,6 +763,12 @@ class ConfigIdl2Py():
                             f'available. Ignored from output templates.')
                 tempsThis[tmp] = testsThis
             qto[mod_py(m)] = tempsThis
+        if warning_MTF_CT:
+            self.errmsg.append(
+                'Found output templates for CT with MTF using alternative 2 '
+                '(wire or circular disc in IDL version). Wire and circular disc'
+                'are now treated separately. Check wether wire should be changed to '
+                'circular disc for the CT parametersets output.')
 
         self.quicktest_output_templates = qto
 
@@ -1044,7 +1039,7 @@ class ConfigIdl2Py():
                 except ValueError:
                     try:
                         tag_uppercase = [
-                            attr.uppercase() for attr in self.tag_infos_labels]
+                            attr.upper() for attr in self.tag_infos_labels]
                         idx = tag_uppercase.index(idl_tag_name)
                         sort_tags.append(self.tag_infos_labels[idx])
                     except ValueError:

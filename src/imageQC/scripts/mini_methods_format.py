@@ -5,6 +5,7 @@ Collection of small functions used in ImageQC.
 
 @author: Ellen Wasbo
 """
+import os
 from time import time
 from pathlib import Path
 import re
@@ -156,7 +157,7 @@ def generate_uniq_filepath(input_filepath, max_attempts=1000):
     """
     uniq_path = input_filepath
     p = Path(input_filepath)
-    if p.exists():
+    if os.path.exists(input_filepath):
         for i in range(max_attempts):
             new_p = p.parent / f'{p.stem}_{i:03}.{p.suffix}'
             if new_p.exists() is False:

@@ -5,6 +5,7 @@ Collection of small functions used in ImageQC.
 
 @author: Ellen Wasbo
 """
+import os
 from fnmatch import fnmatch
 from pathlib import Path
 from PyQt5.QtWidgets import QMessageBox
@@ -88,7 +89,7 @@ def get_included_tags(modality, tag_infos, avoid_special_tags=False):
 
 def create_empty_file(filepath, parent_widget, proceed_info_txt='', proceed=False):
     """Ask to create empty file if not existing path."""
-    if not Path(filepath).exists():
+    if not os.path.exists(filepath):
         if proceed is False:
             proceed = messageboxes.proceed_question(
                 parent_widget, f'{proceed_info_txt} Proceed creating an empty file?')
@@ -104,7 +105,7 @@ def create_empty_file(filepath, parent_widget, proceed_info_txt='', proceed=Fals
 
 def create_empty_folder(folderpath, parent_widget, proceed_info_txt=''):
     """Ask to create empty folder if not existing path."""
-    if not Path(folderpath).exists():
+    if not os.path.exists(folderpath):
         proceed = messageboxes.proceed_question(
             parent_widget, f'{proceed_info_txt} Proceed creating an empty folder?')
         if proceed:

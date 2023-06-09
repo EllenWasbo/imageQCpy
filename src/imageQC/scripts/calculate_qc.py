@@ -21,7 +21,8 @@ from imageQC.scripts.calculate_roi import get_rois, get_roi_circle
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
-from imageQC.config.iQCconstants import HEADERS, HEADERS_SUP, QUICKTEST_OPTIONS
+from imageQC.config.iQCconstants import (
+    HEADERS, HEADERS_SUP, QUICKTEST_OPTIONS, HALFLIFE)
 import imageQC.config.config_classes as cfc
 # imageQC block end
 
@@ -173,8 +174,9 @@ def quicktest_output(input_main):
                     values = input_main.results[test]['values_sup']
                     headers = input_main.results[test]['headers_sup']
                 else:
-                    values = input_main.results[test]['values']
-                    headers = input_main.results[test]['headers']
+                    if input_main.results[test]['alternative'] == sub.alternative:
+                        values = input_main.results[test]['values']
+                        headers = input_main.results[test]['headers']
                 if values is not None:
                     suffixes = []  # _imgno/name or _groupno/name
                     if sub.per_group:
@@ -414,6 +416,7 @@ def calculate_qc(input_main,
             matrix = [None for i in range(n_img)]
             tag_lists = [[] for i in range(n_img)]
             extra_tag_list = None
+            extra_tag_list_compare = None
             marked_3d = []
             input_main.current_group_indicators = ['' for i in range(n_img)]
             for i in range(n_analyse):
@@ -443,9 +446,15 @@ def calculate_qc(input_main,
                             list_tags=['AcquisitionTime', 'RadionuclideTotalDose',
                                        'RadiopharmaceuticalStartTime', 'Units'])
                         extra_tag_list = []
+                        extra_tag_list_compare = [False, True, True, True]
                         read_tags[i] = True
                     if 'Rec' in marked[i]:
                         marked_3d[i].append('Rec')
+                        extra_tag_pattern = cfc.TagPatternFormat(
+                            list_tags=['AcquisitionTime', 'Units'])
+                        extra_tag_list = []
+                        extra_tag_list_compare = [False, True]
+                        read_tags[i] = True
                 elif modality == 'MR':
                     if 'SNR' in marked[i]:
                         marked_3d[i].append('SNR')
@@ -458,6 +467,7 @@ def calculate_qc(input_main,
 
             prev_image_xypix = {}
             prev_roi = {}
+            err_extra = False
             for i in range(n_analyse):
                 if 'MainWindow' in str(type(input_main)):
                     input_main.status_bar.showMessage(
@@ -490,12 +500,14 @@ def calculate_qc(input_main,
                                 extra_tag_list.append(tags[2])
                         if extra_tag_pattern is not None:
                             if len(extra_tag_list) == 2:
-                                if extra_tag_list[0] != extra_tag_list[1]:
-                                    errmsgs.append(
-                                        f'Warning image {i}: Differences found in '
-                                        'DICOM header '
-                                        'that are supposed to be equal for this test:'
-                                        f'{extra_tag_pattern.list_tags}')
+                                if extra_tag_list_compare is None:
+                                    if extra_tag_list[0] != extra_tag_list[1]:
+                                        err_extra = True
+                                else:
+                                    for cno, comp in enumerate(extra_tag_list_compare):
+                                        if comp:
+                                            if extra_tag_list[0][cno] != extra_tag_list[1][cno]:
+                                                err_extra = True
                                 extra_tag_list.pop()  # always chech against first
                     else:
                         tags = dcm.get_tags(
@@ -595,6 +607,19 @@ def calculate_qc(input_main,
                                 test]['values_sup'][i] = result.values_sup
                             input_main.results[
                                 test]['details_dict'][i] = result.details_dict
+
+            if err_extra:
+                if extra_tag_list_compare is not None:
+                    attr_list = []
+                    for attr_no, attr in enumerate(extra_tag_pattern.list_tags):
+                        if extra_tag_list_compare[attr_no]:
+                            attr_list.append(attr)
+                else:
+                    attr_list = extra_tag_pattern.list_tags
+                errmsgs.append(
+                    f'Warning image: Differences found in DICOM header that are '
+                    'supposed to be equal for this test:'
+                    f'{attr_list}')
 
             # post processing - where values depend on all images
             if modality == 'CT':
@@ -1455,7 +1480,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 elif paramset.mtf_type == 2:  # circular disc
                     details_dict, errmsg = calculate_MTF_circular_edge(
                         sub, roi_array[rows][:, cols],
-                        img_infos[images_to_test[0]].pix[0], paramset)
+                        img_infos[images_to_test[0]].pix[0], paramset, images_to_test)
                     details_dict = [details_dict]
 
                 values = None
@@ -1503,7 +1528,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 activity_inj = int(extra_taglists[0][1]) * 1/1000000  # Bq to MBq
                 time_diff = acq_time - inj_time
                 activity_at_scan = activity_inj * np.exp(
-                    -np.log(2)*time_diff.seconds/60/109.77)
+                    -np.log(2)*time_diff.seconds/60/HALFLIFE['F18'])
                 actual_concentr = 1000000 * activity_at_scan / paramset.cro_volume
 
                 roi_array, errmsg = get_rois(
@@ -1568,10 +1593,26 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         alt = paramset.rec_type
         headers = HEADERS[modality][test_code]['alt' + str(alt)]
         headers_sup = HEADERS_SUP[modality][test_code]['alt0']
+        errmsgs = []
+        proceed = True
+        if extra_taglists[0][-1] != 'BQML':
+            errmsgs.append(f'BQML expected as Unit. Found {extra_taglists[0][0]}')
+        #try:
+        activity_dict = input_main.tab_pet.get_Rec_activities()
+        if not activity_dict:
+            errmsgs.append(
+                'Missing input on activity, time or volume. '
+                'Recovery coefficients will not be calculated.')
+        #except AttributeError:
+        #    activity_dict = {}
+        #    errmsgs.append(
+        #        'Automation not available for Recovery Curve, GUI input needed')
+        #    proceed = False
         if len(images_to_test) == 0:
-            res = Results(headers=headers)
+            res = Results(headers=headers, headers_sup=headers_sup)
+        elif proceed is False:
+            res = Results(headers=headers, headers_sup=headers_sup, errmsg=errmsgs)
         else:
-            errmsgs = []
             roi_array, errmsg = get_rois(
                 sum_matrix(images_to_test), images_to_test[0], input_main)
             if errmsg is not None:
@@ -1619,12 +1660,13 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             max_idx = np.where(maxs == np.max(maxs))
             zpos_max = zpos[max_idx[0]]
             diff_z = np.abs(zpos - zpos_max)
-            idxs = np.where(diff_z < 20.)
-            # Ø 37 largest sphere, 20 mm from center should be enough slices
+            idxs = np.where(diff_z < paramset.rec_sphere_diameters[-1])  # largest diam
             start_slice = np.min(idxs)
             stop_slice = np.max(idxs)
-            maxs = maxs[start_slice:stop_slice + 1]
-            zpos = zpos[start_slice:stop_slice + 1]
+            maxs = maxs[start_slice:stop_slice]
+            zpos = zpos[start_slice:stop_slice]
+            details_dict['used_roi_maxs'] = maxs
+            details_dict['used_zpos_spheres'] = zpos
 
             # get background from each roi
             if paramset.rec_background_full_phantom:
@@ -1649,16 +1691,53 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 roi_array[-1], zpos, paramset, background_value)
             if errmsg is not None:
                 errmsgs.append(errmsg)
+            n_spheres = len(paramset.rec_sphere_diameters)
+            if res_dict:
+                details_dict.update(res_dict)
+                values_sup = []
+                rec_type = paramset.rec_type
+                if activity_dict:
+                    fmt = '%H%M%S'
+                    acq_time = datetime.strptime(
+                        extra_taglists[0][0].split('.')[0], fmt)
+                    tdiff_h = acq_time.hour - activity_dict['sphere_time'].hour
+                    tdiff_m = acq_time.minute - activity_dict['sphere_time'].minute
+                    tdiff_s = acq_time.second - activity_dict['sphere_time'].second
+                    time_diff = tdiff_h * 60 + tdiff_m + tdiff_s / 60
+                    sph_act_at_scan = activity_dict['sphere_Bq_ml'] * np.exp(
+                        -np.log(2)*time_diff/HALFLIFE['F18'])
+                    tdiff_h = acq_time.hour - activity_dict['background_time'].hour
+                    tdiff_m = acq_time.minute - activity_dict['background_time'].minute
+                    tdiff_s = acq_time.second - activity_dict['background_time'].second
+                    time_diff = tdiff_h * 60 + tdiff_m + tdiff_s / 60
+                    bg_act_at_scan = activity_dict['background_Bq_ml'] * np.exp(
+                        -np.log(2)*time_diff/HALFLIFE['F18'])
+                    rc_values_all = []
+                    for i in range(3):
+                        img_values = np.array(details_dict['values'][i])
+                        rc_values = img_values[:n_spheres] / sph_act_at_scan
+                        rc_values = list(rc_values) + [img_values[-1] / bg_act_at_scan]
+                        rc_values_all.append(rc_values)
+                    values_sup = [sph_act_at_scan, bg_act_at_scan]
+                else:
+                    rc_values = [None for i in range(n_spheres + 1)]
+                    rc_values_all = [rc_values for i in range(3)]
+                    rec_type = rec_type + 3  # image values, not RC values
+                    headers = HEADERS[modality][test_code]['alt' + str(rec_type)]
+                    input_main.tab_pet.rec_type.setCurrentIndex(rec_type)
 
-            details_dict.update(res_dict)
+                details_dict['values'] = rc_values_all + details_dict['values']
+                values = details_dict['values'][rec_type]
+                res = Results(headers=headers, values=[values],
+                              headers_sup=headers_sup,
+                              values_sup=values_sup,
+                              details_dict=details_dict, pr_image=False,
+                              errmsg=errmsgs)
+            else:
+                res = Results(headers=headers,
+                              headers_sup=headers_sup,
+                              errmsg=errmsgs)
 
-            values = details_dict['values'][paramset.rec_type]
-
-            res = Results(headers=headers, values=[values],
-                          headers_sup=headers_sup,
-                          values_sup=[details_dict['values'][0]],
-                          details_dict=details_dict, pr_image=False,
-                          errmsg=errmsgs)
         return res
 
     def SNR(images_to_test):
@@ -2449,7 +2528,7 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
     return (details_dict, errmsg)
 
 
-def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
+def calculate_MTF_circular_edge(matrix, roi, pix, paramset, images_to_test):
     """Calculate MTF from circular edge.
 
     Based on Richard et al: Towards task-based assessment of CT performance,
@@ -2501,9 +2580,9 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
         center_xy = [np.mean(np.array(center_x)), np.mean(np.array(center_y))]
         # sort pixel values from center
         dist_map = mmcalc.get_distance_map_point(
-            matrix[0].shape,
-            center_dx=center_xy[0] - 0.5 * matrix[0].shape[1],
-            center_dy=center_xy[1] - 0.5 * matrix[0].shape[0])
+            matrix[images_to_test[0]].shape,
+            center_dx=center_xy[0] - 0.5 * matrix[images_to_test[0]].shape[1],
+            center_dy=center_xy[1] - 0.5 * matrix[images_to_test[0]].shape[0])
         dists_flat = dist_map.flatten()
         sort_idxs = np.argsort(dists_flat)
         dists = dists_flat[sort_idxs]
@@ -2525,7 +2604,7 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset):
         values_avg = img_avg_flat[sort_idxs]
 
         # ignore dists > radius
-        radius = 0.5 * matrix[0].shape[0] * pix
+        radius = 0.5 * matrix[images_to_test[0]].shape[0] * pix
         dists_cut = dists[dists < radius]
         values = values_avg[dists < radius]
 
@@ -3170,6 +3249,7 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
         zpos_center = zpos[len(zpos) // 2]
         zpos_diff = np.abs(zpos - zpos_center)
         roi_spheres = []
+        sorted_pix = []
         max_values = []
         avg_values = []
         peak_values = []
@@ -3187,26 +3267,33 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
             values = None
             for i, image in enumerate(matrix):
                 if this_roi[i] is not None:
-                    arr = np.ma.masked_array(matrix[i], mask=np.invert(this_roi[i]))
+                    mask = np.where(this_roi[i], 0, 1)
+                    mask_pos = np.where(mask == 0)
                     if values is None:
-                        values = arr.flatten()
+                        values = image[mask_pos].flatten()
                     else:
-                        values = np.append(values, arr.flatten())
+                        values = np.append(values, image[mask_pos].flatten())
             max_this = np.max(values)
             max_values.append(max_this)
             threshold = paramset.rec_sphere_percent * 0.01 * (max_this - background)
             avg_values.append(np.mean(values[values > threshold]))
             sorted_values = np.sort(values)
-            peak_values.append(np.mean(sorted_values[-n_vox_1mL:]))
-            details_dict = {
-                'values': [
-                    avg_values + [background],
-                    max_values + [background],
-                    peak_values + [background]
-                    ],
-                'roi_spheres': roi_spheres
-                }
-            errmsg = None
+            if sorted_values.size > n_vox_1mL:
+                peak_values.append(np.mean(sorted_values[-n_vox_1mL:]))
+            else:
+                peak_values.append(np.mean(sorted_values))
+            sorted_pix.append(sorted_values)
+        details_dict = {
+            'values': [
+                avg_values + [background],
+                max_values + [background],
+                peak_values + [background]
+                ],
+            'roi_spheres': roi_spheres,
+            'sorted_pix': sorted_pix,
+            'n_voxels_1mL': n_vox_1mL
+            }
+        errmsg = None
     else:
         details_dict = {}
         errmsg = 'Failed to find 6 spheres'

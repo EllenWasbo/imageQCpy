@@ -23,7 +23,7 @@ upper_path = os.path.dirname(
                 __file__))))
 
 # cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.0-b5'
+VERSION = '3.0.0-b6'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -46,6 +46,7 @@ QUICKTEST_OPTIONS = {
 """dict: with lists defining modalities and their corresponding
 list of tests with QuickTest as option."""
 
+HALFLIFE = {'F18': 109.77}
 ALTERNATIVES = {
     'CT': {
         'Sli': ['Wire ramp Catphan',
@@ -65,7 +66,12 @@ ALTERNATIVES = {
         'MTF': ['Point source', 'Line source']
         },
     'PET': {
-        'Rec': ['Mean A50', 'Max', 'Peak Ø 15mm circle', 'Peak 12mm square']
+        'Rec': ['Recovery coefficients, average',
+                'Recovery coefficients, max',
+                'Recovery coefficients, peak',
+                'Bq/ml from images, average',
+                'Bq/ml from images, max',
+                'Bq/ml from images, peak'],
         },
     'MR': {
         'Sli': ['Ramp', 'Wedge']
@@ -183,7 +189,10 @@ HEADERS = {
         'Rec': {
             'alt0': [f'Avg {i+1}' for i in range(6)] + ['background'],
             'alt1': [f'Max {i+1}' for i in range(6)] + ['background'],
-            'alt2': [f'Peak {i+1}' for i in range(6)] + ['background']
+            'alt2': [f'Peak {i+1}' for i in range(6)] + ['background'],
+            'alt3': [f'Avg {i+1}' for i in range(6)] + ['background'],
+            'alt4': [f'Max {i+1}' for i in range(6)] + ['background'],
+            'alt5': [f'Peak {i+1}' for i in range(6)] + ['background']
             }
         },
     'MR': {
@@ -248,7 +257,8 @@ HEADERS_SUP = {
         },
     'PET':  {
         'Rec': {
-            'alt0': [f'Avg {i+1}' for i in range(6)] + ['background'],
+            'alt0': ['Spheres at scan start (Bq/mL)',
+                     'Background at scan start (Bq/mL)'],
             },
         },
     'MR': {

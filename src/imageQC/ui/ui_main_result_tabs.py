@@ -1540,7 +1540,6 @@ class ResultPlotCanvas(PlotCanvas):
         elif'correction' in sel_text:
             plot_curve_corr_check()
 
-
     def Spe(self):
         """Prepare plot for test NM Speed test."""
         self.title = 'Scan speed profile'
@@ -1576,6 +1575,78 @@ class ResultPlotCanvas(PlotCanvas):
         self.curves.append(
             {'label': 'used slices', 'xvals': details_dict['used_zpos'],
              'yvals': details_dict['used_roi_averages'], 'style': '-r'})
+
+    def Rec(self):
+        """Prepare plot for test PET recovery curve."""
+        details_dict = self.main.results['Rec']['details_dict']
+        test_widget = self.main.stack_test_tabs.currentWidget()
+
+        def plot_Rec_curve(title):
+            """Plot Rec values together with EARL tolerances."""
+            self.title = title
+            self.xtitle = 'Sphere diameter (mm)'
+            roi_sizes = self.main.current_paramset.rec_sphere_diameters
+            rec_type = test_widget.rec_type.currentIndex()
+            self.curves.append(
+                {'label': 'measured values', 'xvals': roi_sizes,
+                 'yvals': details_dict['values'][rec_type][:-1], 'style': '-bo'})
+            if rec_type < 3:
+                self.ytitle = 'Recovery coefficient'
+                if roi_sizes == [10., 13., 17., 22., 28., 37.]:  # EARL tolerances
+                    idx = test_widget.rec_earl.currentIndex()
+                    if idx == 1:  # EARL 1
+                        yvals = [[.27, .44, .57, .63, .72, .76],  # lower A50
+                                 [.43, .6, .73, .78, .85, .89],  # upper A50
+                                 [.34, .59, .73, .83, .91, .95],  # lower max
+                                 [.57, .85, 1.01, 1.09, 1.13, 1.16],  # upper max
+                                 ]
+                    elif idx == 2:  # EARL 2
+                        yvals = [[.39, .63, .76, .8, .82, .85],  # lower A50
+                                 [.61, .86, .97, .99, .97, 1.],  # upper A50
+                                 [.52, .85, 1., 1.01, 1.01, 1.05],  # lower max
+                                 [.88, 1.22, 1.38, 1.32, 1.26, 1.29],  # upper max
+                                 ]
+                    idx_lower = 0 if 'average' in title else 1
+                    tolmin = {'label': f'EARL{idx} lower',
+                              'xvals': roi_sizes,
+                              'yvals': yvals[idx_lower],
+                              'style': '--k'}
+                    tolmax = {'label': f'EARL{idx} upper',
+                              'xvals': roi_sizes,
+                              'yvals': yvals[idx_lower + 2],
+                              'style': '--k'}
+                    self.curves.append(tolmin)
+                    self.curves.append(tolmax)
+            else:
+                self.ytitle = 'Image values (Bq/ml)'
+
+        def plot_z_profile():
+            """Plot z-profile of used slices."""
+            self.title = 'z profile'
+            self.xtitle = 'Slice position (mm)'
+            self.ytitle = 'Pixel value'
+            self.curves.append(
+                {'label': 'first background ROI average, all',
+                 'xvals': details_dict['zpos'],
+                 'yvals': details_dict['roi_averages'], 'style': '-k'})
+            self.curves.append(
+                {'label': 'first background ROI average, used slices',
+                 'xvals': details_dict['used_zpos'],
+                 'yvals': details_dict['used_roi_averages'], 'style': '-r'})
+            self.curves.append(
+                {'label': 'max in image, used slices spheres',
+                 'xvals': details_dict['used_zpos_spheres'],
+                 'yvals': details_dict['used_roi_maxs'], 'style': '-b'})
+
+        try:
+            sel_text = test_widget.rec_plot.currentText()
+        except AttributeError:
+            sel_text = ''
+        if'z-profile' in sel_text:
+            plot_z_profile()
+        else:
+            sel_text = test_widget.rec_type.currentText()
+            plot_Rec_curve(sel_text)
 
     def vendor(self):
         """Prepare plot if vendor test results contain details."""

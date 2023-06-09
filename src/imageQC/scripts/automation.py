@@ -1009,26 +1009,28 @@ def archive_files(input_main_imgs=None, filepath=None):
     parent_path = first_file.parent
     archive_path = parent_path / 'Archive'
     archive_path.mkdir(exist_ok=True)
+    n_fail = 0
     if len(all_files) == 1:
         # move file directly to Archive
-        first_file.rename(archive_path / first_file.name)
+        try:
+            first_file.rename(archive_path / first_file.name)
+        except FileExistsError:
+            n_fail += 1
     else:
         # move files to Archive/yyyymmdd - only if dicom
         archive_path = archive_path / input_main_imgs[0].acq_date
         archive_path.mkdir(exist_ok=True)
 
-        n_fail = 0
         for p in all_files:
             this_file = Path(p)
             try:
                 this_file.rename(archive_path / this_file.name)
             except FileExistsError:
                 n_fail += 1
-                pass  # ignore if files already exists
-        if n_fail > 0:
-            errmsg = (
-                f'\t{n_fail} files failed to archive, name already exist.'
-                'Left in input path.')
+    if n_fail > 0:
+        errmsg = (
+            f'\t{n_fail} files failed to archive, name already exist.'
+            'Left in input path.')
 
     return errmsg
 

@@ -13,12 +13,12 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QFormLayout, QGroupBox,
     QPushButton, QLabel, QDoubleSpinBox, QCheckBox, QRadioButton, QButtonGroup,
-    QComboBox, QAction, QToolBar, QTableWidget, QTableWidgetItem,
+    QComboBox, QAction, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
     QMessageBox, QInputDialog
     )
 
 # imageQC block start
-from imageQC.config.iQCconstants import ENV_ICON_PATH, ALTERNATIVES
+from imageQC.config.iQCconstants import ENV_ICON_PATH, ALTERNATIVES, HALFLIFE, HEADERS
 from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
 from imageQC.ui import reusable_widgets as uir
@@ -233,6 +233,8 @@ class ParamsTabCommon(QTabWidget):
                         and clear_results is False):
                     if attribute == 'mtf_gaussian':
                         self.update_values_mtf()
+                    elif attribute == 'rec_type':
+                        self.update_values_rec()
                     self.main.refresh_results_display()
                 if all([self.main.current_modality == 'Xray',
                         self.main.current_test == 'NPS']):
@@ -274,6 +276,24 @@ class ParamsTabCommon(QTabWidget):
                 self.main.results['MTF']['values'] = new_values
                 self.main.refresh_results_display()
                 self.main.status_bar.showMessage('MTF tabular values updated', 1000)
+
+    def update_values_rec(self):
+        """Update Rec table values when changing type of values to display."""
+        if 'Rec' in self.main.results:
+            try:
+                rec_type = self.main.current_paramset.rec_type
+                proceed = True
+            except AttributeError:
+                proceed = False
+            if proceed:
+                if 'values' in self.main.results['Rec']:
+                    self.main.results['Rec']['values'] = (
+                        [self.main.results['Rec']['details_dict']['values'][rec_type]])
+                    self.main.results['Rec']['headers'] = (
+                        HEADERS[self.main.current_modality]['Rec'][
+                            'alt' + str(rec_type)])
+                    self.main.refresh_results_display()
+                    self.main.status_bar.showMessage('Tabular values updated', 1000)
 
     def update_NPS_independent_pixels(self):
         """Calculate independent pixels for NPS Xray."""
@@ -1589,23 +1609,165 @@ class ParamsTabPET(ParamsTabCommon):
 
     def create_tab_rec(self):
         """GUI of tab Recovery Curve."""
-        self.tab_rec = ParamsWidget(self, run_txt='Calculate recovery curve')
-        self.tab_rec.vlo_top.addWidget(QLabel(
-            'Assuming NEMA NU2 phantom. Autofind phantom and spheres.'))
+        self.tab_rec = ParamsWidget(self, run_txt='Calculate recovery coefficients')
         self.tab_rec.vlo_top.addWidget(uir.UnderConstruction())
         self.rec_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, maximum=100)
         self.rec_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='rec_roi_size'))
+        self.rec_sphere_percent = QDoubleSpinBox(decimals=0, minimum=10, maximum=100)
+        self.rec_sphere_percent.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rec_sphere_percent'))
         self.rec_table_widget = PositionWidget(
                 self, self.main, table_attribute_name='rec_table')
-        # self.rec_table_widget.table.update_table() # first mode always CT so no use
+        self.rec_plot = QComboBox()
+        self.rec_plot.addItems(['Table values', 'z-profile slice selections'])
+        self.rec_plot.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
+        self.rec_type = QComboBox()
+        self.rec_type.addItems(ALTERNATIVES['PET']['Rec'])
+        self.rec_type.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rec_type',
+                                                update_roi=False,
+                                                clear_results=False))
+        self.rec_earl = QComboBox()
+        self.rec_earl.addItems(['None', 'EARL1', 'EARL2'])
+        self.rec_earl.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
 
-        flo1 = QFormLayout()
-        flo1.addRow(QLabel('ROI radius background (mm)'), self.rec_roi_size)
+        self.rec_act_sph = QDoubleSpinBox(decimals=2, minimum=0.)
+        self.rec_act_sph.editingFinished.connect(self.clear_results_current_test)
+        self.rec_act_sph_resid = QDoubleSpinBox(decimals=2, minimum=0.)
+        self.rec_act_sph_resid.editingFinished.connect(self.clear_results_current_test)
+        self.rec_vol_sph = QDoubleSpinBox(decimals=2, minimum=0., maximum=2000)
+        self.rec_vol_sph.setValue(1000)
+        self.rec_vol_sph.editingFinished.connect(self.clear_results_current_test)
+        self.rec_act_bg = QDoubleSpinBox(decimals=2, minimum=0.)
+        self.rec_act_bg.editingFinished.connect(self.clear_results_current_test)
+        self.rec_act_bg_resid = QDoubleSpinBox(decimals=2, minimum=0.)
+        self.rec_act_bg_resid.editingFinished.connect(self.clear_results_current_test)
+        self.rec_background_volume = QDoubleSpinBox(
+            decimals=0, minimum=0, maximum=20000)
+        self.rec_background_volume.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rec_background_volume',
+                                                update_roi=False))
+        self.rec_time_sph = QTimeEdit(self)
+        self.rec_time_sph.setDisplayFormat('hh:mm:ss')
+        self.rec_time_sph.editingFinished.connect(self.clear_results_current_test)
+        self.rec_time_sph_resid = QTimeEdit(self)
+        self.rec_time_sph_resid.setDisplayFormat('hh:mm:ss')
+        self.rec_time_sph_resid.editingFinished.connect(self.clear_results_current_test)
+        self.rec_time_bg = QTimeEdit(self)
+        self.rec_time_bg.setDisplayFormat('hh:mm:ss')
+        self.rec_time_bg.editingFinished.connect(self.clear_results_current_test)
+        self.rec_time_bg_resid = QTimeEdit(self)
+        self.rec_time_bg_resid.setDisplayFormat('hh:mm:ss')
+        self.rec_time_bg_resid.editingFinished.connect(self.clear_results_current_test)
 
-        self.tab_rec.hlo.addLayout(flo1)
+        vlo_left = QVBoxLayout()
+        self.tab_rec.hlo.addLayout(vlo_left)
         self.tab_rec.hlo.addWidget(uir.VLine())
-        self.tab_rec.hlo.addWidget(self.rec_table_widget)
+        vlo_right = QVBoxLayout()
+        self.tab_rec.hlo.addLayout(vlo_right)
+
+        vlo_left.addWidget(uir.LabelHeader('Stock solution spheres', 3))
+        hlo_sph = QHBoxLayout()
+        vlo_left.addLayout(hlo_sph)
+        flo1 = QFormLayout()
+        flo2 = QFormLayout()
+        hlo_sph.addLayout(flo1)
+        hlo_sph.addLayout(flo2)
+        flo1.addRow(QLabel('Activity (MBq)'), self.rec_act_sph)
+        flo2.addRow(QLabel('at'), self.rec_time_sph)
+        flo1.addRow(QLabel('Residual (MBq)'), self.rec_act_sph_resid)
+        flo2.addRow(QLabel('at'), self.rec_time_sph_resid)
+        flo1.addRow(QLabel('Total volume (mL)'), self.rec_vol_sph)
+
+        vlo_left.addWidget(uir.LabelHeader('Background', 3))
+        hlo_bg = QHBoxLayout()
+        vlo_left.addLayout(hlo_bg)
+        flo1b = QFormLayout()
+        flo2b = QFormLayout()
+        hlo_bg.addLayout(flo1b)
+        hlo_bg.addLayout(flo2b)
+        flo1b.addRow(QLabel('Activity (MBq)'), self.rec_act_bg)
+        flo2b.addRow(QLabel('at'), self.rec_time_bg)
+        flo1b.addRow(QLabel('Residual (MBq)'), self.rec_act_bg_resid)
+        flo2b.addRow(QLabel('at'), self.rec_time_bg_resid)
+        flo1b.addRow(QLabel('Volume background (mL)'), self.rec_background_volume)
+
+        flo_avg_perc = QFormLayout()
+        flo_avg_perc.addRow(QLabel('Agerage in sphere threshold (%)'),
+                            self.rec_sphere_percent)
+        vlo_right.addLayout(flo_avg_perc)
+
+        hlo_bg = QHBoxLayout()
+        vlo_right.addLayout(hlo_bg)
+        vlo_bg_roisize = QVBoxLayout()
+        vlo_bg_roisize.addWidget(QLabel('ROI radius background'))
+        flo_bg = QFormLayout()
+        flo_bg.addRow(self.rec_roi_size, QLabel('mm'))
+        vlo_bg_roisize.addLayout(flo_bg)
+        hlo_bg.addLayout(vlo_bg_roisize)
+        hlo_bg.addWidget(self.rec_table_widget)
+
+        flo_plot = QFormLayout()
+        flo_plot.addRow(QLabel('Table values'), self.rec_type)
+        flo_plot.addRow(QLabel('Plot'), self.rec_plot)
+        hlo_right = QHBoxLayout()
+        vlo_right.addLayout(hlo_right)
+        hlo_right.addLayout(flo_plot)
+        hlo_right.addWidget(QLabel('EARL tolerances'))
+        hlo_right.addWidget(self.rec_earl)
+
+    def get_Rec_activities(self):
+        """Get values for Recovery curve test."""
+        if all([
+                self.rec_vol_sph.value() > 0,
+                self.rec_act_sph.value() > 0,
+                self.rec_act_bg.value() > 0
+                ]):
+            if self.rec_act_sph_resid.value() > 0:
+                resid_time = self.rec_time_sph_resid.time().toPyTime()
+                act_time = self.rec_time_sph.time().toPyTime()
+                minutes = (
+                    (resid_time.hour - act_time.hour) * 60 +
+                    (resid_time.minute - act_time.minute) +
+                    (resid_time.second - act_time.second) / 60
+                    )
+                act = self.rec_act_sph.value() * np.exp(
+                    -np.log(2)*minutes/HALFLIFE['F18'])
+                sph_act = act - self.rec_act_sph_resid.value()
+                sph_time = self.rec_time_sph_resid.time().toPyTime()
+            else:
+                sph_act = self.rec_act_sph.value()
+                sph_time = self.rec_time_sph.time().toPyTime()
+
+            if self.rec_act_bg_resid.value() > 0:
+                resid_time = self.rec_time_bg_resid.time().toPyTime()
+                act_time = self.rec_time_bg.time().toPyTime()
+                minutes = (
+                    (resid_time.hour - act_time.hour) * 60 +
+                    (resid_time.minute - act_time.minute) +
+                    (resid_time.second - act_time.second) / 60
+                    )
+                bg = self.rec_act_bg.value() * np.exp(
+                    -np.log(2)*minutes/HALFLIFE['F18'])
+                bg_act = bg - self.rec_act_bg_resid.value()
+                bg_time = self.rec_time_bg_resid.time().toPyTime()
+            else:
+                bg_act = self.rec_act_bg.value()
+                bg_time = self.rec_time_bg.time().toPyTime()
+
+            sph_act = sph_act * 1000000 / self.rec_vol_sph.value()
+            bg_act = bg_act * 1000000 / self.rec_background_volume.value()
+            rec_dict = {
+                'sphere_Bq_ml': sph_act, 'sphere_time': sph_time,
+                'background_Bq_ml': bg_act, 'background_time': bg_time,
+                }
+        else:
+            rec_dict = {}
+
+        return rec_dict
 
 
 class ParamsTabMR(ParamsTabCommon):
@@ -1769,7 +1931,7 @@ class ParamsTabMR(ParamsTabCommon):
         self.tab_geo.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         self.geo_actual_size = QDoubleSpinBox(
-            decimals=1, minimum=0.1, singleStep=0.1)
+            decimals=1, minimum=0.1, maximum=300, singleStep=1)
         self.geo_actual_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='geo_actual_size'))
         self.geo_mask_outer = QDoubleSpinBox(
@@ -1937,7 +2099,7 @@ class PositionWidget(QWidget):
         self.parent = parent
         self.main = main
         self.table = PositionTableWidget(self.parent, self.main,
-                                   table_attribute_name, headers=headers)
+                                         table_attribute_name, headers=headers)
         self.ncols = len(self.table.headers)
 
         hlo = QHBoxLayout()
@@ -1966,6 +2128,7 @@ class PositionWidget(QWidget):
         toolb = QToolBar()
         toolb.addActions([act_import, act_copy, act_add, act_delete, act_get_pos])
         toolb.setOrientation(Qt.Vertical)
+        hlo.addStretch()
         hlo.addWidget(toolb)
         hlo.addWidget(self.table)
 

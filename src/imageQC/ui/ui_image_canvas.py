@@ -253,7 +253,7 @@ class ImageCanvas(GenericImageCanvas):
         try:
             self.ax.texts.clear()
         except AttributeError:  # matplotlib 3.7+
-            for txt in self.ax.tests:
+            for txt in self.ax.texts:
                 txt.remove()
 
         if self.main.current_roi is not None:
@@ -519,12 +519,21 @@ class ImageCanvas(GenericImageCanvas):
             roi_indexes=[len(labels)])
         if 'Rec' in self.main.results:
             if 'details_dict' in self.main.results['Rec']:
-                pass
-                '''
-                self.add_contours_to_all_rois(
-                    colors=['blue' for i in range(6)],
-                    roi_indexes=[i for i in range(6)])
-                '''
+                zpos_this = self.main.imgs[self.main.gui.active_img_no].zpos
+                dd = self.main.results['Rec']['details_dict']
+                if 'used_zpos' in dd:
+                    if zpos_this in dd['used_zpos_spheres']:
+                        idx = np.where(dd['used_zpos_spheres'] == zpos_this)
+                        idx = idx[0][0]
+                        if 'roi_spheres' in dd:
+                            for roi in dd['roi_spheres']:
+                                if roi[idx] is not None:
+                                    mask = np.where(roi[idx], 0, 1)
+                                    contour = self.ax.contour(
+                                        mask, levels=[0.9],
+                                        colors='blue', alpha=0.5,
+                                        linewidths=self.linewidth)
+                                    self.contours.append(contour)
 
     def PIU(self):
         """Draw MR PIU ROI."""

@@ -40,7 +40,7 @@ def reset_auto_template(auto_template=None, parent_widget=None):
     auto_template : AutoTemplate
     """
     archive_path = Path(auto_template.path_input) / "Archive"
-    if archive_path.exists():
+    if os.path.exists(auto_template.path_input):
         move_files = []
         move_dirs = []
         dirs = [x for x in archive_path.glob('*') if x.is_dir()]
@@ -296,7 +296,7 @@ class OpenAutomationDialog(ImageQCDialog):
     def import_sort(self):
         """Import and sort images from image pool."""
         path = self.txt_import_path.text()
-        if Path(path).exists():
+        if os.path.exists(path):
             ignore_since = -1
             if self.chk_ignore_since.isChecked():
                 ignore_since = self.spin_ignore_since.value()
@@ -405,11 +405,11 @@ class OpenAutomationDialog(ImageQCDialog):
         for mod in modalities:
             arr = []
             for temp in self.templates[mod]:
-                if temp.label != '' and temp.active:
+                if temp.label != '':
                     name = mod + ' - ' + temp.label
                     self.templates_displayed_names_all.append(name)
                     arr.append(name)
-                    if count:
+                    if count and temp.active:
                         if temp.path_input != '':
                             n_files, err = self.count_files(temp.path_input)
                             if n_files > 0:
@@ -419,6 +419,8 @@ class OpenAutomationDialog(ImageQCDialog):
                                     errormsgs.append(f'{err}')
                         else:
                             arr[-1] = arr[-1] + ' (input path unknown)'
+                    elif temp.active == False:
+                        arr[-1] = arr[-1] + ' (deactivated)'
 
             if len(arr) > 0:
                 self.templates_mod.extend([mod] * len(arr))
@@ -428,11 +430,11 @@ class OpenAutomationDialog(ImageQCDialog):
                 template_list.extend(arr)
             arr = []
             for temp in self.templates_vendor[mod]:
-                if temp.label != '' and temp.active:
+                if temp.label != '':
                     name = mod + ' - (vendor file) ' + temp.label
                     self.templates_displayed_names_all.append(name)
                     arr.append(name)
-                    if count:
+                    if count and temp.active:
                         if temp.path_input != '':
                             n_files, err = self.count_files(temp.path_input)
                             if n_files > 0:
@@ -442,6 +444,8 @@ class OpenAutomationDialog(ImageQCDialog):
                                     errormsgs.append(f'{err}')
                         else:
                             arr[-1] = arr[-1] + ' (input path unknown)'
+                    elif temp.active == False:
+                        arr[-1] = arr[-1] + ' (deactivated)'
 
             if len(arr) > 0:
                 self.templates_mod.extend([mod] * len(arr))
@@ -543,6 +547,7 @@ class OpenAutomationDialog(ImageQCDialog):
                 )
         else:
             tempno = sels[0].row()
+            print(f'tempno {tempno}')
             mod = self.templates_mod[tempno]
             if self.templates_is_vendor[tempno]:
                 temp_this = self.templates_vendor[mod][self.templates_id[tempno]]
@@ -552,6 +557,7 @@ class OpenAutomationDialog(ImageQCDialog):
                 temp_this = self.templates[mod][self.templates_id[tempno]]
                 filt = 'DICOM files (*.dcm);;All files (*)'
                 open_txt = 'Open DICOM files'
+            print(f'tempthis {temp_this}')
 
             if temp_this.path_input == '':
                 fnames = QFileDialog.getOpenFileNames(self, open_txt, filter=filt)
@@ -560,39 +566,40 @@ class OpenAutomationDialog(ImageQCDialog):
                     self, open_txt, temp_this.path_input, filter=filt)
             pre_selected_files = fnames[0]
 
-            if self.templates_is_vendor[tempno]:
-                self.main.clear_all_images()
-                self.main.btn_read_vendor_file.setChecked(True)
-                self.main.current_modality = mod
-                self.main.update_mode()
-                self.main.tab_vendor.run_template(template=temp_this, files=fnames)
-            else:
-                self.main.start_wait_cursor()
-                self.main.chk_append.setChecked(False)
-                self.main.open_files(file_list=pre_selected_files)
-                self.main.imgs = sort_imgs(
-                    self.main.imgs, temp_this.sort_pattern, self.tag_infos)
-                self.main.tree_file_list.update_file_list()
-                paramset_labels = [temp.label for temp in self.main.paramsets]
-                quicktemp_labels = [
-                    temp.label for temp in self.main.quicktest_templates[
-                        self.main.current_modality]]
-                proceed = True
-                if temp_this.paramset_label in paramset_labels:
-                    self.main.wid_paramset.cbox_template.setCurrentText(
-                        temp_this.paramset_label)
+            if len(pre_selected_files) > 0:
+                if self.templates_is_vendor[tempno]:
+                    self.main.clear_all_images()
+                    self.main.btn_read_vendor_file.setChecked(True)
+                    self.main.current_modality = mod
+                    self.main.update_mode()
+                    self.main.tab_vendor.run_template(template=temp_this, files=fnames)
                 else:
-                    proceed = False
-                if temp_this.quicktemp_label in quicktemp_labels:
-                    self.main.wid_quicktest.gb_quicktest.setChecked(True)
-                    self.main.wid_quicktest.cbox_template.setCurrentText(
-                        temp_this.quicktemp_label)
-                else:
-                    proceed = False
-                if proceed:
-                    self.main.wid_quicktest.run_quicktest()
-                self.main.stop_wait_cursor()
-            self.close()
+                    self.main.start_wait_cursor()
+                    self.main.chk_append.setChecked(False)
+                    self.main.open_files(file_list=pre_selected_files)
+                    self.main.imgs = sort_imgs(
+                        self.main.imgs, temp_this.sort_pattern, self.tag_infos)
+                    self.main.tree_file_list.update_file_list()
+                    paramset_labels = [temp.label for temp in self.main.paramsets]
+                    quicktemp_labels = [
+                        temp.label for temp in self.main.quicktest_templates[
+                            self.main.current_modality]]
+                    proceed = True
+                    if temp_this.paramset_label in paramset_labels:
+                        self.main.wid_paramset.cbox_template.setCurrentText(
+                            temp_this.paramset_label)
+                    else:
+                        proceed = False
+                    if temp_this.quicktemp_label in quicktemp_labels:
+                        self.main.wid_quicktest.gb_quicktest.setChecked(True)
+                        self.main.wid_quicktest.cbox_template.setCurrentText(
+                            temp_this.quicktemp_label)
+                    else:
+                        proceed = False
+                    if proceed:
+                        self.main.wid_quicktest.run_quicktest()
+                    self.main.stop_wait_cursor()
+                self.close()
 
     def run_templates(self, tempnos=[]):
         """Run selected templates.
@@ -624,28 +631,29 @@ class OpenAutomationDialog(ImageQCDialog):
                 else:
                     temp_this = self.templates[mod][self.templates_id[tempno]]
 
-                if self.templates_is_vendor[tempno]:
-                    pre_msg = f'Template {mod}/{temp_this.label}:'
-                    self.status_label.showMessage(
-                        f'{pre_msg} Extracting data from vendor report...'
-                        )
-                    msgs, not_written = automation.run_template_vendor(
-                        temp_this, mod,
-                        decimal_mark=self.paramsets[mod].output.decimal_mark,
-                        parent_widget=self)
-                else:
-                    msgs, not_written = automation.run_template(
-                        temp_this, mod,
-                        self.paramsets, self.quicktest_templates, self.tag_infos,
-                        parent_widget=self
-                        )
-                if len(msgs) > 0:
-                    for msg in msgs:
-                        log.append(msg)
-                if len(not_written) > 0:
-                    log.append('Results failed to be written to output file.')
-                    #TODO offer to clipboard
-                    pass
+                if temp_this.active:
+                    if self.templates_is_vendor[tempno]:
+                        pre_msg = f'Template {mod}/{temp_this.label}:'
+                        self.status_label.showMessage(
+                            f'{pre_msg} Extracting data from vendor report...'
+                            )
+                        msgs, not_written = automation.run_template_vendor(
+                            temp_this, mod,
+                            decimal_mark=self.paramsets[mod][0].output.decimal_mark,
+                            parent_widget=self)
+                    else:
+                        msgs, not_written = automation.run_template(
+                            temp_this, mod,
+                            self.paramsets, self.quicktest_templates, self.tag_infos,
+                            parent_widget=self
+                            )
+                    if len(msgs) > 0:
+                        for msg in msgs:
+                            log.append(msg)
+                    if len(not_written) > 0:
+                        log.append('Results failed to be written to output file.')
+                        #TODO offer to clipboard
+                        pass
             self.status_label.clearMessage()
             self.progress_bar.reset()
 

@@ -65,6 +65,8 @@ class GuiVariables():
     active_img_no: int = -1
     # which img number in imgDicts is currently on display
     last_clicked_pos: tuple = (-1, -1)  # x,y
+    current_auto_template: str = ''
+    # if open auto, run files main, reset on mode change
 
     panel_width: int = 1400
     panel_height: int = 700
@@ -441,6 +443,7 @@ class MainWindow(QMainWindow):
             if self.wid_quicktest.gb_quicktest.isChecked():
                 self.current_quicktest = cfc.QuickTestTemplate()
                 self.refresh_img_display()
+        self.gui.current_auto_template = ''
         self.reset_results()
 
     def update_current_test(self, reset_index=False, refresh_display=True):

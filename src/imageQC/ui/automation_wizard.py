@@ -15,8 +15,8 @@ from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QWizard, QWizardPage,
     QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QButtonGroup,
-    QLabel, QCheckBox, QLineEdit, QPushButton, QRadioButton, QAction,
-    QMessageBox, QFileDialog
+    QLabel, QCheckBox, QLineEdit, QPushButton, QRadioButton, QAction, QComboBox,
+    QMessageBox, QFileDialog, QDialogButtonBox
     )
 
 # imageQC block start
@@ -26,8 +26,10 @@ from imageQC.scripts.mini_methods_format import valid_template_name
 import imageQC.ui.settings
 from imageQC.config import config_classes as cfc
 from imageQC.scripts import dcm
-from imageQC.ui.reusable_widgets import LabelMultiline, LabelItalic, ToolBarBrowse
+from imageQC.ui.reusable_widgets import (
+    LabelMultiline, LabelItalic, ToolBarBrowse, ListWidgetCheckable)
 from imageQC.ui import messageboxes
+from imageQC.ui.ui_dialogs import ImageQCDialog
 from imageQC.scripts.mini_methods import create_empty_file
 # imageQC block end
 
@@ -196,6 +198,50 @@ class OkGroupBox(QGroupBox):
             )
 
 
+class SelectOverrideDialog(ImageQCDialog):
+    """Dialog to select what to override for selected template."""
+
+    def __init__(self, saved_template, current_template):
+        super().__init__()
+        self.setWindowTitle('Override/keep settings?')
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
+
+        txt = '''
+        <p>These wizard will not change these settings of the selected template:</p>
+        <ul><li>Dicom criteria</li></ul>
+        <p>These settings will be overridden by current values (if saved):</p>
+        <ul>
+        <li>Sort pattern</li>
+        <li>Parameter set label</li>
+        <li>Quicktest template label</li>
+        </ul>
+        <p>Set archiving and activation manually.</p>
+        <p>
+        '''
+        html_txt = f"""<html><head/><body>{txt}</body></html>"""
+
+        vLO.addWidget(QLabel(html_txt))
+        vLO.addWidget(QLabel('Keep these saved values from the selected template:'))
+
+        texts = [
+            f'Input path: {saved_template.path_input}',
+            f'Output path: {saved_template.path_output}',
+            f'Station name: {saved_template.station_name}',
+            ]
+        self.list_widget = ListWidgetCheckable(
+            texts=texts,
+            set_checked_ids=[0, 1, 2]
+            )
+        vLO.addWidget(self.list_widget)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vLO.addWidget(self.buttonBox)
+
+
 class SavePage(QWizardPage):
     """Page to finish and save."""
 
@@ -205,24 +251,23 @@ class SavePage(QWizardPage):
         self.templates = templates
         self.lastload = lastload
         self.saved_label = ''
+        self.already_labels = []
+        saved_temp = cfc.AutoTemplate()
         try:
             self.already_labels = \
                 [obj.label for obj
                  in self.templates[self.main.current_modality]]
             if len(self.already_labels) > 0:
                 if self.already_labels[0] == '':
-                    self.already_labels = None
+                    self.already_labels = []
+                if self.main.gui.current_auto_template != '':
+                    if self.main.gui.current_auto_template in self.already_labels:
+                        idx = self.already_labels.index(
+                            self.main.gui.current_auto_template)
+                        saved_temp = self.templates[self.main.current_modality][idx]
         except KeyError:
-            self.already_labels = None
-
-        self.setTitle('Finish and save template')
-        self.setSubTitle(
-            '''Verify the parameters.''')
-        vlo = QVBoxLayout()
-        self.setLayout(vlo)
-
-        flo = QFormLayout()
-        vlo.addLayout(flo)
+            pass
+        self.already_labels.insert(0, '(create new)')
 
         if len(self.main.imgs) > 0:
             statname = dcm.get_tags(
@@ -234,8 +279,20 @@ class SavePage(QWizardPage):
         else:
             self.statname = ''
             path_input = ''
+
+        self.initial_temp = cfc.AutoTemplate(
+            label=saved_temp.label,
+            path_input=path_input,
+            path_output=saved_temp.path_output,
+            station_name=self.statname,
+            paramset_label=self.main.current_paramset.label,
+            quicktemp_label=self.main.wid_quicktest.cbox_template.currentText(),
+            archive=saved_temp.archive,
+            active=saved_temp.active
+            )
         sort_pattern_txt = '-'
         if self.main.current_sort_pattern is not None:
+            self.initial_temp.sort_pattern = self.main.current_sort_pattern
             tags = self.main.current_sort_pattern.list_tags
             asc_txt = self.main.current_sort_pattern.list_sort
             tags_txt = []
@@ -245,13 +302,38 @@ class SavePage(QWizardPage):
                 tags_txt.append(tags[i] + asc_txt)
             sort_pattern_txt = ', '.join(tags_txt)
 
+        self.setTitle('Finish and save template')
+        self.setSubTitle('''Verify the parameters.''')
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        flo = QFormLayout()
+        vlo.addLayout(flo)
+
+        self.txt_label = QLineEdit(self.initial_temp.label)
+        self.registerField("label*", self.txt_label)  # next not available before given
+        self.cbox_labels = QComboBox()
+        self.cbox_labels.addItems(self.already_labels)
+        if self.initial_temp.label in self.already_labels:
+            self.cbox_labels.setCurrentText(self.initial_temp.label)
+        else:
+            self.cbox_labels.setCurrentIndex(0)
+        self.cbox_labels.currentIndexChanged.connect(self.update_selected_temp)
+        hlo_label = QHBoxLayout()
+        hlo_label.addWidget(QLabel('Create new or override existing template:'))
+        hlo_label.addWidget(self.cbox_labels)
+        hlo_label.addWidget(QLabel('Template name:'))
+        hlo_label.addWidget(self.txt_label)
+        vlo.addLayout(hlo_label)
+
         flo.addRow(QLabel('Modality:'), QLabel(self.main.current_modality))
-        flo.addRow(QLabel('Station name:'), QLabel(self.statname))
+        self.lbl_statname = QLabel(self.statname)
+        flo.addRow(QLabel('Station name:'), self.lbl_statname)
 
         hlo_path_input = QHBoxLayout()
         vlo.addLayout(hlo_path_input)
         hlo_path_input.addWidget(QLabel('Input path '))
-        self.txt_path_input = QLineEdit(path_input)
+        self.txt_path_input = QLineEdit(self.initial_temp.path_input)
         self.txt_path_input.setMinimumWidth(300)
         hlo_path_input.addWidget(self.txt_path_input)
         toolb = ToolBarBrowse('Browse to find path')
@@ -262,7 +344,7 @@ class SavePage(QWizardPage):
         hlo_path_output = QHBoxLayout()
         vlo.addLayout(hlo_path_output)
         hlo_path_output.addWidget(QLabel('Output path '))
-        self.txt_path_output = QLineEdit('')
+        self.txt_path_output = QLineEdit(self.initial_temp.path_output)
         self.txt_path_output.setMinimumWidth(300)
         hlo_path_output.addWidget(self.txt_path_output)
         toolb = ToolBarBrowse('Browse to file')
@@ -282,34 +364,64 @@ class SavePage(QWizardPage):
         flo2 = QFormLayout()
         vlo.addLayout(flo2)
         flo2.addRow(QLabel('Use parameter set:'),
-                    QLabel(self.main.current_paramset.label))
+                    QLabel(self.initial_temp.paramset_label))
         flo2.addRow(QLabel('Use QuickTest template:'),
-                    QLabel(self.main.wid_quicktest.cbox_template.currentText()))
+                    QLabel(self.initial_temp.quicktemp_label))
         flo2.addRow(QLabel('Sort images by:'), QLabel(sort_pattern_txt))
 
         self.chk_archive = QCheckBox()
-        self.chk_archive.setChecked(True)
+        self.chk_archive.setChecked(self.initial_temp.archive)
         flo2.addRow(QLabel('Archive images when analysed:'), self.chk_archive)
         self.chk_active = QCheckBox()
-        self.chk_active.setChecked(True)
+        self.chk_active.setChecked(self.initial_temp.active)
         flo2.addRow(QLabel('Set template active:'), self.chk_active)
         vlo.setSpacing(20)
 
-        self.txt_label = QLineEdit()
-        self.registerField("label*", self.txt_label)  # next not available before given
-        hlo_label = QHBoxLayout()
-        hlo_label.addWidget(QLabel('Name the new template:'))
-        hlo_label.addWidget(self.txt_label)
         btn_save = QPushButton('Save automation template')
         btn_save.setIcon(QIcon(
             f'{os.environ[ENV_ICON_PATH]}save.png'))
         btn_save.clicked.connect(self.save_template)
         if self.main.save_blocked:
             btn_save.setEnabled(False)
-        hlo_label.addWidget(btn_save)
-        vlo.addLayout(hlo_label)
+        vlo.addWidget(btn_save)
+
         self.lbl_verif_label = LabelItalic('', color='red')
         vlo.addWidget(self.lbl_verif_label)
+        self.current_template = copy.deepcopy(self.initial_temp)
+
+    def update_selected_temp(self):
+        """Ask to update settings according to selected template."""
+        if self.cbox_labels.currentIndex() == 0:
+            self.current_template = copy.deepcopy(self.initial_template)
+        else:
+            self.current_template.label = self.cbox_labels.currentText()
+            self.txt_label.setText(self.current_template.label)
+            idx = self.cbox_labels.currentIndex() - 1
+            saved_temp = self.templates[self.main.current_modality][idx]
+            dlg = SelectOverrideDialog(saved_temp, self.current_template)
+            res = dlg.exec()
+            proceed = True
+            if res:
+                checked_ids = dlg.list_widget.get_checked_ids()
+            else:
+                proceed = False
+                self.cbox_labels.setCurrentIndex(0)
+            if proceed:
+                # 0 input, 1 output, 2 station name
+                if 0 in checked_ids:
+                    self.current_template.path_input = saved_temp.path_input
+                if 1 in checked_ids:
+                    self.current_template.path_output = saved_temp.path_output
+                if 2 in checked_ids:
+                    self.current_template.station_name = saved_temp.station_name
+                self.current_template.dicom_crit_attributenames = (
+                    saved_temp.dicom_crit_attributenames)
+                self.current_template.dicom_crit_values = saved_temp.dicom_crit_values
+
+        self.txt_label.setText(self.current_template.label)
+        self.lbl_statname.setText(self.current_template.station_name)
+        self.txt_path_input.setText(self.current_template.path_input)
+        self.txt_path_output.setText(self.current_template.path_output)
 
     def locate_folder(self, widget):
         dlg = QFileDialog()
@@ -319,6 +431,7 @@ class SavePage(QWizardPage):
         if dlg.exec():
             fname = dlg.selectedFiles()
             widget.setText(os.path.normpath(fname[0]))
+            self.current_template.path_input = fname[0]
 
     def locate_file(self, widget, title='Locate file',
                     filter_str='All files (*)', opensave=False):
@@ -332,6 +445,7 @@ class SavePage(QWizardPage):
                 self, title, widget.text(), filter=filter_str)
         if fname != '':
             widget.setText(os.path.normpath(fname))
+            self.current_template.path_output = fname
 
     def verify_new_label(self):
         text = self.txt_label.text()
@@ -340,55 +454,48 @@ class SavePage(QWizardPage):
             self.txt_label.setText(text)
         else:
             self.lbl_verif_label.setText(
-                'Please define a new label for the automation template.')
+                'Please define a label for the automation template.')
         ok_label = True if text != '' else False
-        if self.already_labels:
-            if text in self.already_labels:
-                ok_label = False
-                if text != '':
-                    self.lbl_verif_label.setText(
-                        'Label already used. Set another.')
-            else:
-                self.lbl_verif_label.setText('')
 
         return ok_label
 
     def save_template(self):
+        """Verify and save current template."""
         proceed = self.verify_new_label()
         if proceed:
             fname = 'auto_templates'
-            # create new template and add to self.templates
-            this_temp = cfc.AutoTemplate(
-                label=self.txt_label.text(),
-                path_input=self.txt_path_input.text(),
-                path_output=self.txt_path_output.text(),
-                station_name=self.statname,
-                paramset_label=self.main.current_paramset.label,
-                quicktemp_label=self.main.wid_quicktest.cbox_template.currentText(),
-                archive=self.chk_archive.isChecked(),
-                active=self.chk_active.isChecked()
-                )
-            if self.main.current_sort_pattern is not None:
-                this_temp.sort_pattern = self.main.current_sort_pattern
-            # TODO: delete_if_not_image: bool = False
-            # TODO delete_if_too_many: bool = False
-            if self.already_labels:
-                self.templates[self.main.current_modality].append(this_temp)
+            self.current_template.label = self.txt_label.text()
+            self.current_template.archive = self.chk_archive.isChecked()
+            self.current_template.active = self.chk_active.isChecked()
+            if self.current_template.label in self.already_labels:
+                proceed = messageboxes.proceed_question(
+                    self,
+                    f'Continue to override template {self.current_template.label}?')
+                if proceed:
+                    idx = self.already_labels.index(self.current_template.label)
+                    self.templates[self.main.current_modality][
+                        idx - 1] = self.current_template
             else:
-                self.templates[self.main.current_modality] = [this_temp]
+                self.templates[self.main.current_modality].append(self.current_template)
+                proceed = True
 
-            proceed, errmsg = cff.check_save_conflict(fname, self.lastload)
-            if errmsg != '':
-                proceed = messageboxes.proceed_question(self, errmsg)
             if proceed:
-                ok_save, path = cff.save_settings(self.templates, fname=fname)
-                if ok_save:
-                    self.saved_label = self.txt_label.text()
-                    self.lbl_verif_label.setText(
-                        'Template saved.')
-                else:
-                    QMessageBox.warning(
-                        self, 'Failed saving', f'Failed saving to {path}')
+                proceed, errmsg = cff.check_save_conflict(fname, self.lastload)
+                if errmsg != '':
+                    proceed = messageboxes.proceed_question(self, errmsg)
+                if proceed:
+                    ok_save, path = cff.save_settings(self.templates, fname=fname)
+                    if ok_save:
+                        self.saved_label = self.txt_label.text()
+                        self.lbl_verif_label.setText(
+                            'Template saved.'
+                            ' Press Next for further options or Cancel to Close.')
+                        self.lbl_verif_label.setStyleSheet("QLabel {color: darkgreen}")
+                        self.main.gui.current_auto_template = (
+                            self.current_template.label)
+                    else:
+                        QMessageBox.warning(
+                            self, 'Failed saving', f'Failed saving to {path}')
 
 
 class FinishPage(QWizardPage):

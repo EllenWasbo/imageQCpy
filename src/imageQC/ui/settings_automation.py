@@ -7,6 +7,7 @@
 import os
 from time import time
 from pathlib import Path
+import numpy as np
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -385,13 +386,11 @@ class AutoCommonWidget(StackWidget):
     def pop_auto_delete(self):
         """Delete selected auto-delete option."""
         sel_indexes = self.list_auto_delete.selectedIndexes()
-        rows2delete = []
-        for idx in sel_indexes:
-            rows2delete.insert(0, idx.row())
-        if len(rows2delete) > 0:
-            for i in enumerate(rows2delete):
-                self.templates.auto_delete_criterion_attributenames.pop(i)
-                self.templates.auto_delete_criterion_values.pop(i)
+        if len(sel_indexes) > 0:
+            idx = sel_indexes[0].row()
+            self.templates.auto_delete_criterion_attributenames.pop(idx)
+            self.templates.auto_delete_criterion_values.pop(idx)
+            self.fill_auto_delete_list()
             self.flag_edit(True)
         else:
             QMessageBox.information(

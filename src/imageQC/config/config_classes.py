@@ -216,6 +216,43 @@ class HUnumberTable:
     pos_y: list[float] = field(
         default_factory=lambda:
         [50., 0., -50., -58., -50., 0., 50., 58.])
+    min_HU: list[int] = field(default_factory=list)
+    max_HU: list[int] = field(default_factory=list)
+
+    def add_pos(self, label='', pos_x=0, pos_y=0, index=-1):
+        """Add element in each list at given index or append."""
+        if index == -1:
+            self.labels.append(label)
+            self.pos_x.append(pos_x)
+            self.pos_y.append(pos_y)
+            self.relative_mass_density.append(0.)
+            if len(self.min_HU) > 0:
+                self.min_HU.append(0)
+                self.max_HU.append(0)
+        else:
+            self.labels.insert(index, label)
+            self.pos_x.insert(index, pos_x)
+            self.pos_y.insert(index, pos_y)
+            self.relative_mass_density.insert(index, 0.)
+            if len(self.min_HU) > 0:
+                self.min_HU.insert(index, 0)
+                self.max_HU.insert(index, 0)
+        if len(self.min_HU) == 0:
+            self.min_HU = [0 for i in range(len(self.labels))]
+            self.max_HU = [0 for i in range(len(self.labels))]
+
+    def delete_pos(self, index):
+        """Delete element."""
+        try:
+            self.labels.pop(index)
+            self.pos_x.pop(index)
+            self.pos_y.pop(index)
+            self.relative_mass_density.pop(index)
+            if len(self.min_HU) > 0:
+                self.min_HU.pop(index)
+                self.max_HU.pop(index)
+        except IndexError:
+            print(f'Failed deleting tag idx {index} from {self}')
 
 
 @dataclass
@@ -224,9 +261,10 @@ class RecTable(PositionTable):
 
     def __post_init__(self):
         """Set default values."""
-        self.labels = [str(i) for i in range(6)]
-        self.pos_x = [-55, -110, -100, 100, 110, 55]
-        self.pos_y = [75, 40, -25, -25, 40, 75]
+        if len(self.labels) == 0:
+            self.labels = [str(i) for i in range(6)]
+            self.pos_x = [-55, -110, -100, 100, 110, 55]
+            self.pos_y = [75, 40, -25, -25, 40, 75]
 
 
 @dataclass
@@ -435,7 +473,7 @@ class ParamSetPET(ParamSetCommon):
     rec_sphere_percent: int = 50  # % threshold to evaluate mean from
     rec_plot: int = 0  # 0 = rec max, 1 rec avg, 2 rec peak, 3 z-profile
     rec_earl: int = 1  # tolerances from 0 = None, 1 = EARL1, 2 = EARL2
-    rec_background_volume: int = 9700
+    rec_background_volume: int = 9500
 
 
 @dataclass

@@ -210,7 +210,10 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
 
             if frames is None:
                 if attrib['slice_thickness'] is not None:
-                    attrib['zpos'] = float(slice_location)  # try?
+                    try:
+                        attrib['zpos'] = float(slice_location)
+                    except ValueError:
+                        pass
                 try:
                     attrib['nm_radius'] = float(nm_radius)
                 except (TypeError, ValueError):

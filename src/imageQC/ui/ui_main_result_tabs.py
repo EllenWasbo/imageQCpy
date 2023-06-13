@@ -167,6 +167,19 @@ class ResultTable(QTableWidget):
         if self.parent.tb_copy.tool_decimal.isChecked():
             decimal_mark = ','
 
+        def mtf_multiply_10(row):
+            """Multiply MTF values by 10 to cy/cm (cy/mm default), accept None."""
+            new_row = []
+            try:
+                new_row = list(10 * np.array(row))
+            except TypeError:
+                for val in row:
+                    if val is not None:
+                        new_row.append(10 * val)
+                    else:
+                        new_row.append(None)
+            return new_row
+
         values_rows_copy = copy.deepcopy(values_rows)
         if vendor:
             try:
@@ -187,10 +200,7 @@ class ResultTable(QTableWidget):
             if self.main.current_paramset.mtf_cy_pr_mm is False:
                 # factor 10 to get /cm instead of /mm
                 for i in range(len(values_rows_copy)):
-                    try:
-                        values_rows_copy[i] = list(10 * np.array(values_rows_copy[i]))
-                    except TypeError:
-                        pass
+                    values_rows_copy[i] = mtf_multiply_10(values_rows_copy[i])
 
         if len(row_labels) != 0:
             n_cols = len(values_cols)
@@ -1003,10 +1013,11 @@ class ResultPlotCanvas(PlotCanvas):
                 pix = self.main.imgs[marked_imgs[0]].pix[0]
 
                 for no, sli in enumerate(submatrix):
+                    proceed = True
                     if self.main.results['MTF']['pr_image'] is False:
                         if no not in marked_imgs:
                             proceed = False
-                    if proceed:
+                    if proceed and sli is not None:
                         suffix = f' {no}' if len(submatrix) > 1 else ''
                         szy, szx = sli.shape
                         xvals1 = pix * (np.arange(szx) - center_xy[0])

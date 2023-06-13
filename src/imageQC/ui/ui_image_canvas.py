@@ -446,6 +446,21 @@ class ImageCanvas(GenericImageCanvas):
             else:
                 self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
 
+            if 'MTF' in self.main.results and self.main.current_modality == 'CT':
+                try:
+                    if 'details_dict' in self.main.results['MTF']:
+                        if self.main.current_paramset.mtf_type == 2:  # circular disc
+                            roi_disc = self.main.results[
+                                'MTF']['details_dict'][0]['found_disc_roi']
+                            mask = np.where(roi_disc, 0, 1)
+                            contour = self.ax.contour(
+                                mask, levels=[0.9],
+                                colors='blue', alpha=0.5, linewidths=self.linewidth,
+                                linestyles='dotted')
+                            self.contours.append(contour)
+                except TypeError:
+                    pass
+
     def Uni(self):
         """Draw NM uniformity ROI."""
         self.add_contours_to_all_rois(colors=['red', 'blue'])
@@ -516,7 +531,7 @@ class ImageCanvas(GenericImageCanvas):
             roi_indexes=[i for i in range(len(labels))])
         self.add_contours_to_all_rois(
             labels=['center'],
-            roi_indexes=[len(labels)])
+            roi_indexes=[len(labels)], reset_contours=False)
         if 'Rec' in self.main.results:
             if 'details_dict' in self.main.results['Rec']:
                 zpos_this = self.main.imgs[self.main.gui.active_img_no].zpos

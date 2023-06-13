@@ -171,7 +171,7 @@ def verify_input_dict(dict_input, default_object):
     actual_keys = [*default_dict]
     updated_dict = {k: v for k, v in dict_input.items() if k in actual_keys}
 
-    # specific changes 
+    # specific changes
     if default_object == cfc.HUnumberTable():
         if 'materials' in [*dict_input]:
             updated_dict['labels'] = dict_input['materials']
@@ -347,7 +347,8 @@ def load_default_ct_number_tables():
         docs = yaml.safe_load_all(data)
         for doc in docs:
             for key, ct_tab in doc.items():
-                ct_number_tables[key] = cfc.HUnumberTable(**ct_tab)
+                upd = verify_input_dict(ct_tab, cfc.HUnumberTable())
+                ct_number_tables[key] = cfc.HUnumberTable(**upd)
 
     return ct_number_tables
 

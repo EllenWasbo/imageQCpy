@@ -4,6 +4,7 @@
 @author: Ellen Wasbø
 """
 import os
+import copy
 from dataclasses import fields
 import numpy as np
 import pandas as pd
@@ -130,6 +131,8 @@ class ParamsTabCommon(QTabWidget):
                 if field.name == 'ctn_table':
                     self.ctn_table_widget.table.update_table()
                 elif field.name == 'rec_table':
+                    self.rec_table_widget.table.current_table = copy.deepcopy(
+                        paramset.rec_table)
                     self.rec_table_widget.table.update_table()
 
         if self.main.current_modality == 'Xray':
@@ -1610,7 +1613,6 @@ class ParamsTabPET(ParamsTabCommon):
     def create_tab_rec(self):
         """GUI of tab Recovery Curve."""
         self.tab_rec = ParamsWidget(self, run_txt='Calculate recovery coefficients')
-        self.tab_rec.vlo_top.addWidget(uir.UnderConstruction())
         self.rec_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, maximum=100)
         self.rec_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='rec_roi_size'))
@@ -2158,36 +2160,18 @@ class PositionWidget(QWidget):
                 dlg.exec()
             else:
                 input_table = self.validate_input_dataframe(dataf)
-                '''
-                ctn_table = cfc.HUnumberTable()
-                ctn_table.labels = [
-                    str(dataf.iat[row, 1]) for row in range(nrows)]
-                ctn_table.pos_x = [
-                    float(dataf.iat[row, 2]) for row in range(nrows)]
-                ctn_table.pos_y = [
-                    float(dataf.iat[row, 3]) for row in range(nrows)]
-                ctn_table.relative_mass_density = [
-                    float(dataf.iat[row, 4]) for row in range(nrows)]
-                '''
         else:
-            input_table = self.get_predefined_table()
-            '''
-            table_dict = cff.load_default_ct_number_tables()
-            if len(table_dict) > 0:
-                labels = [*table_dict]
-                label, ok = QInputDialog.getItem(
-                    self.main, "Select predefined table",
-                    "Predefined tables:", labels, 0, False)
-                if ok and label:
-                    ctn_table = table_dict[label]
-            '''
+            # input_table = self.get_predefined_table()
+            QMessageBox.information(
+                self, 'Missing predefined table',
+                'Sorry - no set of predefined tables exist yet.')
 
         if input_table is not None:
             self.table.current_table = input_table
             self.parent.flag_edit(True)
             self.table.update_table()
 
-    def validate_input_table(self, input_df):
+    def validate_input_dataframe(self, input_df):
         """Convert the input pandas dataframe to the current_table format."""
         table = cfc.PositionTable()
         nrows, ncols = input_df.shape
@@ -2390,11 +2374,11 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
         if res:
             dataf = pd.read_clipboard()
             nrows, ncols = dataf.shape
-            if ncols != 4:
+            if ncols != 6:
                 pass #TODO ask for separator / decimal or guess?
                 errmsg = [
                     'Failed reading table from clipboard.',
-                    'Expected 4 columns of data that are',
+                    'Expected 6 columns of data that are',
                     'separated by tabs as if copied to clipboard',
                     'from ImageQC or copied from Excel.'
                     ]
@@ -2411,8 +2395,12 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
                     float(dataf.iat[row, 2]) for row in range(nrows)]
                 ctn_table.pos_y = [
                     float(dataf.iat[row, 3]) for row in range(nrows)]
-                ctn_table.relative_mass_density = [
+                ctn_table.min_HU = [
                     float(dataf.iat[row, 4]) for row in range(nrows)]
+                ctn_table.max_HU = [
+                    float(dataf.iat[row, 5]) for row in range(nrows)]
+                ctn_table.relative_mass_density = [
+                    float(dataf.iat[row, 6]) for row in range(nrows)]
         else:
             table_dict = cff.load_default_ct_number_tables()
             if len(table_dict) > 0:
@@ -2434,6 +2422,8 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
             'labels': self.main.current_paramset.ctn_table.labels,
             'pos_x': self.main.current_paramset.ctn_table.pos_x,
             'pos_y': self.main.current_paramset.ctn_table.pos_y,
+            'min_HU': self.main.current_paramset.ctn_table.min_HU,
+            'max_HU': self.main.current_paramset.ctn_table.max_HU,
             'Rel. mass density':
                 self.main.current_paramset.ctn_table.relative_mass_density
             }
@@ -2448,11 +2438,14 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
             rowno = sel[0].row()
         else:
             rowno = self.table.rowCount()
+        self.main.current_paramset.ctn_table.add_pos(index=rowno)
+        '''
         self.main.current_paramset.ctn_table.labels.insert(rowno, '')
         self.main.current_paramset.ctn_table.pos_x.insert(rowno, 0)
         self.main.current_paramset.ctn_table.pos_y.insert(rowno, 0)
         self.main.current_paramset.ctn_table.relative_mass_density.insert(
             rowno, 0.0)
+        '''
         self.parent.flag_edit(True)
         self.table.update_table()
 
@@ -2461,11 +2454,14 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
         sel = self.table.selectedIndexes()
         if len(sel) > 0:
             rowno = sel[0].row()
+            self.main.current_paramset.ctn_table.delete_pos(rowno)
+            '''
             self.main.current_paramset.ctn_table.labels.pop(rowno)
             self.main.current_paramset.ctn_table.pos_x.pop(rowno)
             self.main.current_paramset.ctn_table.pos_y.pop(rowno)
             self.main.current_paramset.ctn_table.relative_mass_density.pop(
                 rowno)
+            '''
             self.parent.flag_edit(True)
             self.table.update_table()
 
@@ -2503,8 +2499,15 @@ class CTnTable(QTableWidget):
     def edit_ctn_table(self, row, col):
         """Update HUnumberTable when cell edited."""
         val = self.item(row, col).text()
+        n_rows = len(self.main.current_paramset.ctn_table.labels)
         if col > 0:
-            val = float(val)
+            try:
+                val = float(val)
+            except ValueError:
+                if col > 2:
+                    val = None
+                else:
+                    val = 0
         if col == 0:
             self.main.current_paramset.ctn_table.labels[row] = val
         elif col == 1:
@@ -2512,7 +2515,19 @@ class CTnTable(QTableWidget):
         elif col == 2:
             self.main.current_paramset.ctn_table.pos_y[row] = val
         elif col == 3:
-            self.main.current_paramset.ctn_table.relative_mass_density = val
+            try:
+                self.main.current_paramset.ctn_table.min_HU[row] = val
+            except IndexError:
+                self.main.current_paramset.ctn_table.min_HU = [0 for i in range(n_rows)]
+                self.main.current_paramset.ctn_table.min_HU[row] = val
+        elif col == 4:
+            try:
+                self.main.current_paramset.ctn_table.max_HU[row] = val
+            except IndexError:
+                self.main.current_paramset.ctn_table.max_HU = [0 for i in range(n_rows)]
+                self.main.current_paramset.ctn_table.max_HU[row] = val
+        elif col == 5:
+            self.main.current_paramset.ctn_table.relative_mass_density[row] = val
         self.parent.flag_edit(True)
         self.parent.main.update_roi(clear_results_test=True)
 
@@ -2520,20 +2535,27 @@ class CTnTable(QTableWidget):
         """Populate table with current HUnumberTable."""
         self.blockSignals(True)
         self.clear()
-        self.setColumnCount(4)
+        self.setColumnCount(6)
         n_rows = len(self.main.current_paramset.ctn_table.labels)
         self.setRowCount(n_rows)
         self.setHorizontalHeaderLabels(
-            ['Material', 'x pos (mm)', 'y pos (mm)', 'Rel. mass density'])
+            ['Material', 'x pos (mm)', 'y pos (mm)',
+             'Min HU', 'Max HU', 'Rel. mass density'])
         self.verticalHeader().setVisible(False)
+
+        if len(self.main.current_paramset.ctn_table.min_HU) == 0:
+            self.main.current_paramset.ctn_table.min_HU = [0 for i in range(n_rows)]
+            self.main.current_paramset.ctn_table.max_HU = [0 for i in range(n_rows)]
 
         values = [
             self.main.current_paramset.ctn_table.labels,
             self.main.current_paramset.ctn_table.pos_x,
             self.main.current_paramset.ctn_table.pos_y,
+            self.main.current_paramset.ctn_table.min_HU,
+            self.main.current_paramset.ctn_table.max_HU,
             self.main.current_paramset.ctn_table.relative_mass_density]
 
-        for col in range(4):
+        for col in range(6):
             this_col = values[col]
             for row in range(n_rows):
                 twi = QTableWidgetItem(str(this_col[row]))

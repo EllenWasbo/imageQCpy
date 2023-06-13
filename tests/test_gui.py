@@ -147,7 +147,6 @@ def test_quicktest_CT_13imgs(qtbot):
         ['MTFx 10%_img2', '15,44'],
         ['max_noise_group2', '3,657'],
         ['max_noise_group3', '4,080']]
-    breakpoint()
 
     assert expected_res == res.values.tolist()
 

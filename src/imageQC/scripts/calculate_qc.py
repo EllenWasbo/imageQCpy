@@ -121,6 +121,19 @@ def quicktest_output(input_main):
     string_list = []
     header_list = []
 
+    def mtf_multiply_10(row):
+        """Multiply MTF values by 10 to cy/cm (cy/mm default), accept None in values."""
+        new_row = []
+        try:
+            new_row = list(10 * np.array(row))
+        except TypeError:
+            for val in row:
+                if val is not None:
+                    new_row.append(10 * val)
+                else:
+                    new_row.append(None)
+        return new_row
+
     if input_main.results != {}:
         n_imgs = len(input_main.imgs)
         # get set names of images or generate default names (indexed names)
@@ -193,7 +206,7 @@ def quicktest_output(input_main):
                                             test == 'MTF',
                                             input_main.current_modality == 'CT']):
                                         if not input_main.current_paramset.mtf_cy_pr_mm:
-                                            row = list(10 * np.array(row))
+                                            row = mtf_multiply_10(row)
                                     actual_values.append(row)
                                     actual_image_names.append(image_names[rowno])
                                     actual_group_names.append(group_names[rowno])
@@ -239,7 +252,7 @@ def quicktest_output(input_main):
                                 if all([test == 'MTF',
                                         input_main.current_modality == 'CT']):
                                     if not input_main.current_paramset.mtf_cy_pr_mm:
-                                        row = list(10 * np.array(row))
+                                        row = mtf_multiply_10(row)
                                 out_values = extract_values(
                                     row,
                                     columns=sub.columns,
@@ -709,6 +722,12 @@ def calculate_qc(input_main,
             widget.setCurrentIndex(idx_set_test)
             input_main.current_test = set_current_test
             input_main.refresh_results_display()
+            # refresh image display if result contain rois to display
+            if 'MTF' in input_main.results and input_main.current_modality == 'CT':
+                if input_main.current_paramset.mtf_type == 2:
+                    input_main.refresh_img_display()
+            elif 'Rec' in input_main.results:
+                input_main.refresh_img_display()
             input_main.stop_wait_cursor()
 
 
@@ -821,14 +840,30 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         headers_sup = HEADERS_SUP[modality][test_code]['altAll']
         if image2d is not None:
             values = []
+            errmsg = []
+            x_vals = []
+            y_vals = []
             for i in range(len(paramset.ctn_table.labels)):
                 arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
                 values.append(np.mean(arr))
-            res = sp.stats.linregress(
-                values, paramset.ctn_table.relative_mass_density)
-            values_sup = [res.rvalue**2, res.intercept, res.slope]
+                try:
+                    rel_md = float(paramset.ctn_table.relative_mass_density[i])
+                    x_vals.append(np.mean(arr))
+                    y_vals.append(rel_md)
+                except (ValueError, TypeError):
+                    pass
+
+            if len(x_vals) > 0:
+                res = sp.stats.linregress(x_vals, y_vals)
+                values_sup = [res.rvalue**2, res.intercept, res.slope]
+            else:
+                values_sup = [None, None, None]
+                errmsg = (
+                    'Could not linear fit HU to relative mass density. Values not valid'
+                    )
             res = Results(headers=headers, values=values,
-                          headers_sup=headers_sup, values_sup=values_sup)
+                          headers_sup=headers_sup, values_sup=values_sup,
+                          errmsg=errmsg)
         else:
             res = Results(headers=headers, headers_sup=headers_sup)
         return res
@@ -1481,6 +1516,18 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     details_dict, errmsg = calculate_MTF_circular_edge(
                         sub, roi_array[rows][:, cols],
                         img_infos[images_to_test[0]].pix[0], paramset, images_to_test)
+                    if details_dict['disc_radius_mm'] is not None:
+                        first_row = np.where(rows)[0][0]
+                        first_col = np.where(cols)[0][0]
+                        dx_dy = (
+                            first_col + details_dict['center_xy'][0] - sum_image.shape[1]//2,
+                            first_row + details_dict['center_xy'][1] - sum_image.shape[0]//2
+                            )
+                        roi_disc = get_roi_circle(
+                            sum_image.shape, dx_dy,
+                            details_dict['disc_radius_mm'] / img_infos[
+                                images_to_test[0]].pix[0])
+                        details_dict['found_disc_roi'] = roi_disc
                     details_dict = [details_dict]
 
                 values = None
@@ -1597,17 +1644,17 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         proceed = True
         if extra_taglists[0][-1] != 'BQML':
             errmsgs.append(f'BQML expected as Unit. Found {extra_taglists[0][0]}')
-        #try:
-        activity_dict = input_main.tab_pet.get_Rec_activities()
-        if not activity_dict:
+        try:
+            activity_dict = input_main.tab_pet.get_Rec_activities()
+            if not activity_dict:
+                errmsgs.append(
+                    'Missing input on activity, time or volume. '
+                    'Recovery coefficients will not be calculated.')
+        except AttributeError:
+            activity_dict = {}
             errmsgs.append(
-                'Missing input on activity, time or volume. '
-                'Recovery coefficients will not be calculated.')
-        #except AttributeError:
-        #    activity_dict = {}
-        #    errmsgs.append(
-        #        'Automation not available for Recovery Curve, GUI input needed')
-        #    proceed = False
+                'Automation not available for Recovery Curve, GUI input needed')
+            proceed = False
         if len(images_to_test) == 0:
             res = Results(headers=headers, headers_sup=headers_sup)
         elif proceed is False:
@@ -2539,7 +2586,7 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset, images_to_test):
     matrix : numpy.2darray or list of numpy.array
         list of 2d part of slice limited to disc (or None if ignored slice)
     roi : numpy.2darray of bool
-        2d part of larger roi
+        2d part of larger roi limited to disc
     pix : float
         pixelsize in mm
     paramset : ParamSetXX
@@ -2616,7 +2663,10 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset, images_to_test):
             new_y, prefilter_sigma=sigma_f)
 
         width, center = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/2)
+        disc_radius_mm = None
         if width is not None:
+            if center is not None:
+                disc_radius_mm = center * step_size
             # Discrete MTF
             # modality specific settings
             fade_lsf_fwhm = 0
@@ -2655,7 +2705,8 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset, images_to_test):
                     force_first_below=True)
 
             details_dict = {
-                'matrix': matrix, 'center_xy': center_xy,
+                'matrix': matrix,
+                'center_xy': center_xy, 'disc_radius_mm': disc_radius_mm,
                 'LSF_x': LSF_x, 'LSF': LSF_no_filt,
                 'sigma_prefilter': sigma_f*step_size,
                 'sorted_pixels_x': dists, 'sorted_pixels': values_all,

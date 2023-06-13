@@ -547,7 +547,6 @@ class OpenAutomationDialog(ImageQCDialog):
                 )
         else:
             tempno = sels[0].row()
-            print(f'tempno {tempno}')
             mod = self.templates_mod[tempno]
             if self.templates_is_vendor[tempno]:
                 temp_this = self.templates_vendor[mod][self.templates_id[tempno]]
@@ -557,7 +556,6 @@ class OpenAutomationDialog(ImageQCDialog):
                 temp_this = self.templates[mod][self.templates_id[tempno]]
                 filt = 'DICOM files (*.dcm);;All files (*)'
                 open_txt = 'Open DICOM files'
-            print(f'tempthis {temp_this}')
 
             if temp_this.path_input == '':
                 fnames = QFileDialog.getOpenFileNames(self, open_txt, filter=filt)
@@ -575,6 +573,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     self.main.tab_vendor.run_template(template=temp_this, files=fnames)
                 else:
                     self.main.start_wait_cursor()
+                    self.main.gui.current_auto_template = temp_this.label
                     self.main.chk_append.setChecked(False)
                     self.main.open_files(file_list=pre_selected_files)
                     self.main.imgs = sort_imgs(

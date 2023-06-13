@@ -513,7 +513,7 @@ def center_xy_of_disc(matrix2d, threshold=None, roi=None, mode='mean', sigma=5.)
         else:
             prof1 = np.max(smoothed_matrix, axis=ax)
         if threshold is None:
-            threshold = min(prof1) + 0.5 * (max(prof1) - min(prof1))
+            threshold = np.min(prof1) + 0.5 * (np.max(prof1) - np.min(prof1))
         width, center = get_width_center_at_threshold(
             prof1, threshold, get_widest=True)
         center_xy.append(center)

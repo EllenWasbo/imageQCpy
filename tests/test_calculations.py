@@ -343,15 +343,17 @@ def test_Xray_MTF_autocenter():
         )
 
     file_path = path_tests / 'test_inputs' / 'Xray' / 'mtf.dcm'
+    #input_main.current_paramset.mtf_auto_center_mask_outer = 60
+    #file_path = r'C:\Users\ellen\Downloads\20230614_111844_071kV_020mAs.dcm'
     img_infos, ignored_files = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
+    breakpoint()
     assert len(input_main.results['MTF']['values'][0]) == 6
     values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
     assert np.array_equal(values10, np.array([8., 6., 4., 3., 2., 12.]))
-
 
 def test_Xray_Var():
     input_main = InputMain(

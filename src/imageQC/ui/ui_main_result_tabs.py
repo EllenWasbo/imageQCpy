@@ -9,10 +9,10 @@ import copy
 import numpy as np
 import pandas as pd
 
-from PyQt5.QtGui import QIcon, QKeyEvent
+from PyQt5.QtGui import QIcon, QKeyEvent, QKeySequence
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QAction, QToolBar, QToolButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QAction, QToolBar, QToolButton, QMenu,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QAbstractScrollArea,
     QMessageBox, QLabel, QSizePolicy
     )
@@ -70,7 +70,7 @@ class ResultTableWidget(QWidget):
         toolb.setOrientation(Qt.Vertical)
         hlo.addWidget(toolb)
 
-    def copy_table(self):
+    def copy_table(self, row_range=None, col_range=None):
         """Copy contents of table to clipboard."""
         decimal_mark = '.'
         if self.tb_copy.tool_decimal.isChecked():
@@ -81,14 +81,27 @@ class ResultTableWidget(QWidget):
                 decimal_mark=decimal_mark)
             for col in self.result_table.values]
 
+        if row_range is not None and col_range is not None:
+            values = values[col_range[0]: col_range[1]+1]
+            values = [col[row_range[0]: row_range[1]+1] for col in values]
+
         if self.tb_copy.tool_header.isChecked():  # insert headers
             if self.result_table.row_labels[0] == '':
-                for i in range(len(values)):
-                    values[i].insert(0, self.result_table.col_labels[i])
+                if col_range is None:
+                    for i in range(len(values)):
+                        values[i].insert(0, self.result_table.col_labels[i])
+                else:
+                    col_labels = self.result_table.col_labels[
+                        col_range[0]:col_range[1]+1]
+                    for i in range(len(values)):
+                        values[i].insert(0, col_labels[i])
             else:
                 # row headers true headers
-                values.insert(0, self.result_table.row_labels)
-
+                if row_range is None:
+                    values.insert(0, self.result_table.row_labels)
+                else:
+                    values.insert(0, self.result_table.row_labels[
+                        row_range[0]:row_range[1]+1])
         if self.tb_copy.tool_transpose.isChecked() is False:
             values = np.array(values).T.tolist()
 
@@ -119,18 +132,45 @@ class ResultTable(QTableWidget):
         self.col_labels = []
         self.installEventFilter(self)
 
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.generate_ctxmenu)
+
+    def generate_ctxmenu(self, pos):
+        menu = QMenu(self)
+        act_copy = menu.addAction('Copy selected cells to clipboard (Ctrl+C)')
+        act_copy.triggered.connect(self.copy_selection)
+        menu.exec_(self.mapToGlobal(pos))
+
     def eventFilter(self, source, event):
         """Handle arrow up/down events."""
         if isinstance(event, QKeyEvent):
             if event.type() == QEvent.KeyRelease:
                 if event.key() in [Qt.Key_Up, Qt.Key_Down]:
                     self.cell_selected()
+            elif event.type() == QEvent.KeyPress:
+                if event == QKeySequence.Copy:
+                    self.copy_selection()
+                    return True
+            '''
+            elif event.type() == QEvent.ContextMenu:
+                print('event.type ctx')
+                self.generate_ctxmenu(event.pos())
+                pass'''
         return False
 
     def cell_selected(self):
         """Set new active image when current cell changed."""
         if self.linked_image_list:
-            self.main.set_active_img(self.currentRow())
+            marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+            self.main.set_active_img(marked_imgs[self.currentRow()])
+
+    def copy_selection(self):
+        """Find which rows and columns to copy."""
+        if self.selectedIndexes():
+            rows = [index.row() for index in self.selectedIndexes()]
+            cols = [index.column() for index in self.selectedIndexes()]
+            self.parent.copy_table(row_range=[min(rows), max(rows)],
+                                   col_range=[min(cols), max(cols)])
 
     def clear(self):
         """Also update visual table."""
@@ -196,11 +236,16 @@ class ResultTable(QTableWidget):
                 linked_image_list = False
             except KeyError:
                 pass
-        elif self.main.current_test == 'MTF' and self.main.current_modality == 'CT':
-            if self.main.current_paramset.mtf_cy_pr_mm is False:
-                # factor 10 to get /cm instead of /mm
-                for i in range(len(values_rows_copy)):
-                    values_rows_copy[i] = mtf_multiply_10(values_rows_copy[i])
+        else:
+            if linked_image_list:
+                marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+                values_rows_copy = [
+                    row for i, row in enumerate(values_rows_copy) if i in marked_imgs]
+            if self.main.current_test == 'MTF' and self.main.current_modality == 'CT':
+                if self.main.current_paramset.mtf_cy_pr_mm is False:
+                    # factor 10 to get /cm instead of /mm
+                    for i in range(len(values_rows_copy)):
+                        values_rows_copy[i] = mtf_multiply_10(values_rows_copy[i])
 
         if len(row_labels) != 0:
             n_cols = len(values_cols)
@@ -527,26 +572,88 @@ class ResultPlotCanvas(PlotCanvas):
 
     def CTn(self):
         """Prepare plot for test CTn."""
-        self.title = 'CT linearity'
-        self.ytitle = 'Relative mass density'
-        yvals = self.main.current_paramset.ctn_table.relative_mass_density
-        imgno = self.main.gui.active_img_no
-        xvals = self.main.results['CTn']['values'][imgno]
-        self.curves.append(
-            {'label': 'HU mean', 'xvals': xvals,
-             'yvals': yvals, 'style': '-bo'})
-        fit_r2 = self.main.results['CTn']['values_sup'][imgno][0]
-        fit_b = self.main.results['CTn']['values_sup'][imgno][1]
-        fit_a = self.main.results['CTn']['values_sup'][imgno][2]
-        yvals = fit_a * np.array(xvals) + fit_b
-        self.curves.append(
-            {'label': 'fitted', 'xvals': xvals,
-             'yvals': yvals, 'style': 'b:'}
-            )
-        at = matplotlib.offsetbox.AnchoredText(
-            f'$R^2$ = {fit_r2:.4f}', loc='lower right')
-        self.ax.add_artist(at)
-        self.xtitle = 'HU value'
+
+        def prepare_plot_HU_min_max(percent=False):
+            unit = '(%)' if percent else '(HU)'
+            self.ytitle = f'Difference from set HU min/max {unit}'
+            imgno = self.main.gui.active_img_no
+            meas_vals = self.main.results['CTn']['values'][imgno]
+            proceed = True
+            try:
+                diff_max = np.subtract(self.main.current_paramset.ctn_table.max_HU,
+                                       meas_vals)
+                diff_min = np.subtract(self.main.current_paramset.ctn_table.min_HU,
+                                       meas_vals)
+            except TypeError:
+                self.main.status_bar.showMessage(
+                    'Some set HU min or max is not valid', 2000, warning=True)
+                proceed = False
+
+            if proceed:
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [np.min(meas_vals), np.max(meas_vals)],
+                    'yvals': [0, 0],
+                    'style': ':',
+                    'color': 'blue'}
+                    )
+                self.curves.append(
+                    {'label': 'set max - measured', 'xvals': meas_vals,
+                     'yvals': diff_max, 'style': 'bv'})
+                self.curves.append(
+                    {'label': 'set min - measured', 'xvals': meas_vals,
+                     'yvals': diff_min, 'style': 'b^'})
+                if np.max(diff_min) > 0:
+                    idxs = np.where(diff_min > 0)
+                    xvals = [meas_vals[i] for i in idxs[0]]
+                    yvals = [diff_min[i] for i in idxs[0]]
+                    self.curves.append({
+                        'label': '_nolegend_', 'xvals': xvals, 'yvals': yvals,
+                        'style': 'r^'
+                        })
+                if np.min(diff_max) < 0:
+                    idxs = np.where(diff_max < 0)
+                    xvals = [meas_vals[i] for i in idxs[0]]
+                    yvals = [diff_min[i] for i in idxs[0]]
+                    self.curves.append({
+                        'label': '_nolegend_', 'xvals': xvals, 'yvals': yvals,
+                        'style': 'rv'
+                        })
+                self.xtitle = 'HU value'
+
+        def prepare_plot_linear():
+            self.ytitle = self.main.current_paramset.ctn_table.linearity_unit
+            yvals = self.main.current_paramset.ctn_table.linearity_axis
+            imgno = self.main.gui.active_img_no
+            xvals = self.main.results['CTn']['values'][imgno]
+            self.curves.append(
+                {'label': 'HU mean', 'xvals': xvals,
+                 'yvals': yvals, 'style': '-bo'})
+            if self.main.results['CTn']['values_sup'][imgno][0] is not None:
+                fit_r2 = self.main.results['CTn']['values_sup'][imgno][0]
+                fit_b = self.main.results['CTn']['values_sup'][imgno][1]
+                fit_a = self.main.results['CTn']['values_sup'][imgno][2]
+                yvals = fit_a * np.array(xvals) + fit_b
+                self.curves.append(
+                    {'label': 'fitted', 'xvals': xvals,
+                     'yvals': yvals, 'style': 'b:'}
+                    )
+                at = matplotlib.offsetbox.AnchoredText(
+                    f'$R^2$ = {fit_r2:.4f}', loc='lower right')
+                self.ax.add_artist(at)
+            self.xtitle = 'HU value'
+
+        test_widget = self.main.stack_test_tabs.currentWidget()
+        try:
+            sel_text = test_widget.ctn_plot.currentText()
+        except AttributeError:
+            sel_text = ''
+        if 'HU' in sel_text:
+            percent = True if '%' in sel_text else False
+            prepare_plot_HU_min_max(percent=percent)
+        else:
+            prepare_plot_linear()
+        self.title = sel_text
 
     def HUw(self):
         """Prepare plot for test HUw."""

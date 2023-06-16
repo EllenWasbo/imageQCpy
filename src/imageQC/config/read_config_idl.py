@@ -274,7 +274,8 @@ class ConfigIdl2Py():
                 paramset.CT.ctn_table.labels = \
                     [elem.decode('UTF-8')
                      for elem in cp.LINTAB[0].MATERIALS[0]]
-                paramset.CT.ctn_table.relative_mass_density = \
+                paramset.CT.ctn_table.linearity_unit = 'Rel. mass density'
+                paramset.CT.ctn_table.linearity_axis = \
                     [round(elem.item(), 3) for elem in cp.LINTAB[0].RELMASSD[0]]
                 paramset.CT.ctn_table.pos_x = \
                     [elem.item() for elem in cp.LINTAB[0].POSX[0]]

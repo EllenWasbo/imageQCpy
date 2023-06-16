@@ -641,13 +641,15 @@ class MainWindow(QMainWindow):
                 if self.results[self.current_test]['pr_image']:
                     wid = self.tab_results.currentWidget()
                     if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
-                        self.wid_res_tbl.result_table.blockSignals(True)
-                        self.wid_res_tbl_sup.result_table.blockSignals(True)
-                        self.wid_res_tbl.result_table.selectRow(self.gui.active_img_no)
-                        self.wid_res_tbl_sup.result_table.selectRow(
-                            self.gui.active_img_no)
-                        self.wid_res_tbl.result_table.blockSignals(False)
-                        self.wid_res_tbl_sup.result_table.blockSignals(False)
+                        marked_imgs = self.tree_file_list.get_marked_imgs_current_test()
+                        if self.gui.active_img_no in marked_imgs:
+                            idx = marked_imgs.index(self.gui.active_img_no)
+                            self.wid_res_tbl.result_table.blockSignals(True)
+                            self.wid_res_tbl_sup.result_table.blockSignals(True)
+                            self.wid_res_tbl.result_table.selectRow(idx)
+                            self.wid_res_tbl_sup.result_table.selectRow(idx)
+                            self.wid_res_tbl.result_table.blockSignals(False)
+                            self.wid_res_tbl_sup.result_table.blockSignals(False)
 
     def sort_imgs(self):
         """Resort images by dicom info."""

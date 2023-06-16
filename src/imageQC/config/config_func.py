@@ -175,6 +175,9 @@ def verify_input_dict(dict_input, default_object):
     if default_object == cfc.HUnumberTable():
         if 'materials' in [*dict_input]:
             updated_dict['labels'] = dict_input['materials']
+        if 'relative_mass_density' in [*dict_input]:
+            updated_dict['linearity_axis'] = dict_input['relative_mass_density']
+            updated_dict['linearity_unit'] = 'Rel. mass density'
 
     return updated_dict
 

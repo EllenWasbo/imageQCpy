@@ -464,8 +464,8 @@ class ParamsTabCommon(QTabWidget):
             lambda: self.param_changed_from_gui(attribute='mtf_auto_center_type'))
 
         self.mtf_auto_center_mask_outer = QDoubleSpinBox(
-            decimals=0, minimum=0, maximum=90, singleStep=1)
-        self.mtf_auto_center_mask_outer.valueChanged.connect(
+            decimals=0, minimum=0, maximum=200, singleStep=1)
+        self.mtf_auto_center_mask_outer.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_auto_center_mask_outer'))
 
         self.mtf_plot.addItems(['Edge position',
@@ -735,12 +735,20 @@ class ParamsTabCT(ParamsTabCommon):
         self.ctn_auto_center = QCheckBox('')
         self.ctn_auto_center.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='ctn_auto_center'))
+        self.ctn_plot = QComboBox()
+        self.ctn_plot.addItems([
+            'HU difference for set min/max',
+            'HU difference for set min/max (%)',
+            'CT number linearity'])
+        self.ctn_plot.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
 
         flo1 = QFormLayout()
         flo1.addRow(QLabel('ROI radius (mm)'), self.ctn_roi_size)
         flo1.addRow(QLabel('Search for circular element'), self.ctn_search)
         flo1.addRow(QLabel('Search radius (mm)'), self.ctn_search_size)
         flo1.addRow(QLabel('Auto center'), self.ctn_auto_center)
+        flo1.addRow(QLabel('Plot'), self.ctn_plot)
         self.tab_ctn.hlo.addLayout(flo1)
         self.tab_ctn.hlo.addWidget(uir.VLine())
         self.tab_ctn.hlo.addWidget(self.ctn_table_widget)
@@ -2332,8 +2340,10 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
         self.parent = parent
         self.main = main
 
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
         hlo = QHBoxLayout()
-        self.setLayout(hlo)
+        vlo.addLayout(hlo)
 
         act_import = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
@@ -2361,6 +2371,10 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
         hlo.addWidget(toolb)
         self.table = CTnTable(self.parent, self.main)
         hlo.addWidget(self.table)
+
+        self.ctn_edit_linearity_unit = QPushButton('Rename linearity column')
+        self.ctn_edit_linearity_unit.clicked.connect(self.rename_linearity_unit)
+        vlo.addWidget(self.ctn_edit_linearity_unit)
 
     def import_table(self):
         """Import contents to table from clipboard or from predefined."""
@@ -2399,7 +2413,7 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
                     float(dataf.iat[row, 4]) for row in range(nrows)]
                 ctn_table.max_HU = [
                     float(dataf.iat[row, 5]) for row in range(nrows)]
-                ctn_table.relative_mass_density = [
+                ctn_table.linearity_axis = [
                     float(dataf.iat[row, 6]) for row in range(nrows)]
         else:
             table_dict = cff.load_default_ct_number_tables()
@@ -2424,8 +2438,8 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
             'pos_y': self.main.current_paramset.ctn_table.pos_y,
             'min_HU': self.main.current_paramset.ctn_table.min_HU,
             'max_HU': self.main.current_paramset.ctn_table.max_HU,
-            'Rel. mass density':
-                self.main.current_paramset.ctn_table.relative_mass_density
+            self.main.current_paramset.ctn_table.linearity_unit:
+                self.main.current_paramset.ctn_table.linearity_axis
             }
         dataf = pd.DataFrame(dict_2_pd)
         dataf.to_clipboard(index=False)
@@ -2439,13 +2453,6 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
         else:
             rowno = self.table.rowCount()
         self.main.current_paramset.ctn_table.add_pos(index=rowno)
-        '''
-        self.main.current_paramset.ctn_table.labels.insert(rowno, '')
-        self.main.current_paramset.ctn_table.pos_x.insert(rowno, 0)
-        self.main.current_paramset.ctn_table.pos_y.insert(rowno, 0)
-        self.main.current_paramset.ctn_table.relative_mass_density.insert(
-            rowno, 0.0)
-        '''
         self.parent.flag_edit(True)
         self.table.update_table()
 
@@ -2455,18 +2462,30 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
         if len(sel) > 0:
             rowno = sel[0].row()
             self.main.current_paramset.ctn_table.delete_pos(rowno)
-            '''
-            self.main.current_paramset.ctn_table.labels.pop(rowno)
-            self.main.current_paramset.ctn_table.pos_x.pop(rowno)
-            self.main.current_paramset.ctn_table.pos_y.pop(rowno)
-            self.main.current_paramset.ctn_table.relative_mass_density.pop(
-                rowno)
-            '''
             self.parent.flag_edit(True)
             self.table.update_table()
 
+    def rename_linearity_unit(self):
+        """Rename column for linearity check."""
+        text, proceed = QInputDialog.getText(
+            self, 'Rename linearity column',
+            'Rename column used for linearity control against measured HU.',
+            text=self.main.current_paramset.ctn_table.linearity_unit)
+        if proceed:
+            if text == '':
+                '''
+                QMessageBox.warning(
+                    self, 'Rename ignored',
+                    'Name cannot be empty string. Ignored.')
+                '''
+                pass
+            else:
+                self.main.current_paramset.ctn_table.linearity_unit = text
+                self.parent.flag_edit(True)
+                self.table.update_table()
+
     def get_pos_mouse(self):
-        """Get position from last mouseclick in i mage."""
+        """Get position from last mouseclick in image."""
         sel = self.table.selectedIndexes()
         if len(sel) > 0:
             rowno = sel[0].row()
@@ -2527,7 +2546,7 @@ class CTnTable(QTableWidget):
                 self.main.current_paramset.ctn_table.max_HU = [0 for i in range(n_rows)]
                 self.main.current_paramset.ctn_table.max_HU[row] = val
         elif col == 5:
-            self.main.current_paramset.ctn_table.relative_mass_density[row] = val
+            self.main.current_paramset.ctn_table.linearity_axis[row] = val
         self.parent.flag_edit(True)
         self.parent.main.update_roi(clear_results_test=True)
 
@@ -2540,7 +2559,7 @@ class CTnTable(QTableWidget):
         self.setRowCount(n_rows)
         self.setHorizontalHeaderLabels(
             ['Material', 'x pos (mm)', 'y pos (mm)',
-             'Min HU', 'Max HU', 'Rel. mass density'])
+             'Min HU', 'Max HU', self.main.current_paramset.ctn_table.linearity_unit])
         self.verticalHeader().setVisible(False)
 
         if len(self.main.current_paramset.ctn_table.min_HU) == 0:
@@ -2553,7 +2572,7 @@ class CTnTable(QTableWidget):
             self.main.current_paramset.ctn_table.pos_y,
             self.main.current_paramset.ctn_table.min_HU,
             self.main.current_paramset.ctn_table.max_HU,
-            self.main.current_paramset.ctn_table.relative_mass_density]
+            self.main.current_paramset.ctn_table.linearity_axis]
 
         for col in range(6):
             this_col = values[col]

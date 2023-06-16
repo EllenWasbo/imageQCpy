@@ -517,12 +517,17 @@ class OpenAutomationDialog(ImageQCDialog):
             tempno = sel[0].row()
             if self.templates_is_vendor[tempno]:
                 view = 'Templates vendor files'
-        mod = self.templates_mod[tempno]
-        temp_this = self.templates[mod][self.templates_id[tempno]]
-        dlg = settings.SettingsDialog(
-            self.main, initial_view=view, initial_modality=mod,
-            initial_template_label=temp_this.label
-            )
+        else:
+            tempno = 0
+        try:
+            mod = self.templates_mod[tempno]
+            temp_this = self.templates[mod][self.templates_id[tempno]]
+            dlg = settings.SettingsDialog(
+                self.main, initial_view=view, initial_modality=mod,
+                initial_template_label=temp_this.label
+                )
+        except IndexError:
+            dlg = settings.SettingsDialog(self.main, initial_view=view)
         dlg.exec()
 
     def run_all(self):

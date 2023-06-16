@@ -612,7 +612,8 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
             slope, intercept = get_dcm_info_list(
                 pd, TagPatternFormat(list_tags=['RescaleSlope', 'RescaleIntercept']),
                 tag_infos)
-            if frame_number == -1:
+            if frame_number == -1 or isinstance(slope, str):
+                # assume intercept is str if slope is str
                 slope_this = slope
                 intercept_this = intercept
             else:

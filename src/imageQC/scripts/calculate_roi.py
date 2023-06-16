@@ -178,6 +178,8 @@ def get_rois(image, image_number, input_main):
                 mask_outer_pix = round(
                     paramset.mtf_auto_center_mask_outer / image_info.pix[0])
                 rect_dict = find_rectangle_object(image, mask_outer=mask_outer_pix)
+
+                roi_this = []
                 if rect_dict['centers_of_edges_xy'] is not None:
                     centers_of_edges_xy = rect_dict['centers_of_edges_xy']
                     cent = [image.shape[1] // 2, image.shape[0] // 2]
@@ -197,7 +199,6 @@ def get_rois(image, image_number, input_main):
                             offcenter_xy=off_xy[idx_min]
                             )]
                     else:
-                        roi_this = []
                         for i in range(len(off_xy)):
                             height_idx = i % 2
                             width_idx = 1 if height_idx == 0 else 0
@@ -208,11 +209,12 @@ def get_rois(image, image_number, input_main):
                                 offcenter_xy=off_xy[i]
                                 )
                             )
-                    if mask_outer_pix > 0:
-                        inside = np.full(img_shape, False)
-                        inside[mask_outer_pix:-mask_outer_pix,
-                               mask_outer_pix:-mask_outer_pix] = True
-                        roi_this.append(inside)
+
+                if mask_outer_pix > 0:
+                    inside = np.full(img_shape, False)
+                    inside[mask_outer_pix:-mask_outer_pix,
+                           mask_outer_pix:-mask_outer_pix] = True
+                    roi_this.append(inside)
 
             else:
                 if any(paramset.mtf_offset_xy):
@@ -1231,8 +1233,8 @@ def find_rectangle_object(image, mask_outer=0):
     threshold = 0.5 * (np.min(inner_img) + np.max(inner_img))
     image_binary = np.zeros(image.shape)
     image_binary[image > threshold] = 1.
+    inside = np.full(image.shape, False)
     if mask_outer > 0:
-        inside = np.full(image.shape, False)
         inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
         image_binary[inside == False] = 1.
 
@@ -1241,10 +1243,13 @@ def find_rectangle_object(image, mask_outer=0):
         min_distance=10
         )
 
-    if corn.shape[1] != 2:  # try negative high signal
-        #image_binary = np.zeros(image.shape)
-        #image_binary[image < threshold] = 1.
-        image_binary = np.logical_not(image_binary).astype(int)
+    if corn.shape[1] != 2 or corn.shape[0] != 4:  # try negative high signal
+        if corn.shape[1] != 2:
+            image_binary = np.logical_not(image_binary).astype(int)
+        else:  # corn.shape[0] != 4
+            image_binary = np.zeros(image.shape)
+            image_binary[image < threshold] = 1.
+            image_binary[inside == False] = 1.
         corn = feature.corner_peaks(
             feature.corner_fast(image_binary, 10),
             min_distance=10

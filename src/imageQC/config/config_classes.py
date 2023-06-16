@@ -207,9 +207,10 @@ class HUnumberTable:
         default_factory=lambda:
         ['Teflon', 'Delrin', 'Acrylic', 'Water', 'Polystyrene',
          'LDPE', 'PMP', 'Air'])
-    relative_mass_density: list[float] = field(
+    linearity_unit: str = 'Rel. e-density'
+    linearity_axis: list[float] = field(
         default_factory=lambda:
-        [2.16, 1.41, 1.18, 1., 1.05, 0.92, 0.83, 0.])
+        [1.868, 1.363, 1.147, 1., .998, 0.945, 0.853, 0.001])
     pos_x: list[float] = field(
         default_factory=lambda:
         [-28., -58., -28., 0., 28., 58., 28., 0.])
@@ -225,7 +226,7 @@ class HUnumberTable:
             self.labels.append(label)
             self.pos_x.append(pos_x)
             self.pos_y.append(pos_y)
-            self.relative_mass_density.append(0.)
+            self.linearity_axis_axis.append(0.)
             if len(self.min_HU) > 0:
                 self.min_HU.append(0)
                 self.max_HU.append(0)
@@ -233,7 +234,7 @@ class HUnumberTable:
             self.labels.insert(index, label)
             self.pos_x.insert(index, pos_x)
             self.pos_y.insert(index, pos_y)
-            self.relative_mass_density.insert(index, 0.)
+            self.linearity_axis.insert(index, 0.)
             if len(self.min_HU) > 0:
                 self.min_HU.insert(index, 0)
                 self.max_HU.insert(index, 0)
@@ -247,7 +248,7 @@ class HUnumberTable:
             self.labels.pop(index)
             self.pos_x.pop(index)
             self.pos_y.pop(index)
-            self.relative_mass_density.pop(index)
+            self.linearity_axis.pop(index)
             if len(self.min_HU) > 0:
                 self.min_HU.pop(index)
                 self.max_HU.pop(index)
@@ -336,6 +337,7 @@ class ParamSetCT(ParamSetCommon):
     ctn_search: bool = True
     ctn_table: HUnumberTable = field(default_factory=HUnumberTable)
     ctn_auto_center: bool = False
+    ctn_plot: int = 0  # 0=HU min max diff, 1=HU min max diff % 2=linearity
     sli_ramp_distance: float = 38.
     sli_ramp_length: float = 60.
     sli_background_width: float = 5.

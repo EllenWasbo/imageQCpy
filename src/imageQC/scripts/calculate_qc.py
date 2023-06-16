@@ -847,9 +847,9 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
                 values.append(np.mean(arr))
                 try:
-                    rel_md = float(paramset.ctn_table.relative_mass_density[i])
+                    y_val = float(paramset.ctn_table.linearity_axis[i])
                     x_vals.append(np.mean(arr))
-                    y_vals.append(rel_md)
+                    y_vals.append(y_val)
                 except (ValueError, TypeError):
                     pass
 
@@ -859,7 +859,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             else:
                 values_sup = [None, None, None]
                 errmsg = (
-                    'Could not linear fit HU to relative mass density. Values not valid'
+                    f'Could not linear fit HU to {paramset.ctn_table.linearity_unit}. '
+                    'Values not valid.'
                     )
             res = Results(headers=headers, values=values,
                           headers_sup=headers_sup, values_sup=values_sup,
@@ -980,7 +981,15 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             if image2d is None:
                 res = Results(headers=headers, headers_sup=headers_sup)
             else:
+                roi_mtf_exist = True
                 if roi_array is None:
+                    roi_mtf_exist = False
+                else:
+                    if isinstance(roi_array, list):
+                        if roi_array[0] is None:
+                            roi_mtf_exist = False
+
+                if roi_mtf_exist is False:
                     res = Results(
                         headers=headers, headers_sup=headers_sup,
                         errmsg='Failed finding ROI')

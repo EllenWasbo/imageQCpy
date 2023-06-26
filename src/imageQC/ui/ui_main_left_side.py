@@ -86,7 +86,7 @@ class TreeFileList(QTreeWidget):
                 marked_img_ids = list(np.arange(len(self.main.imgs)))
         return marked_img_ids
 
-    def update_file_list(self):
+    def update_file_list(self, set_selected=None):
         """Populate tree with filepath/pattern and test indicators."""
         self.clear()
         quicktest_active = self.main.wid_quicktest.gb_quicktest.isChecked()
@@ -110,8 +110,22 @@ class TreeFileList(QTreeWidget):
                     file_text = ' '.join(img.file_list_strings)
                 QTreeWidgetItem(self, [file_text, frameno, test_string])
             self.main.lbl_n_loaded.setText(str(len(self.main.imgs)))
-            self.setCurrentItem(self.topLevelItem(
-                self.main.gui.active_img_no))
+            try:
+                self.main.gui.active_img_no = set_selected[-1]
+            except (TypeError, IndexError):
+                pass
+
+            self.setCurrentItem(self.topLevelItem(self.main.gui.active_img_no))
+            if isinstance(set_selected, list):
+                # force selected
+                self.blockSignals(True)
+                for i in range(len(self.main.imgs)):
+                    if i in set_selected:
+                        self.topLevelItem(i).setSelected(True)
+                    else:
+                        self.topLevelItem(i).setSelected(False)
+                self.blockSignals(False)
+
 
     def dragEnterEvent(self, event):
         """Handle drag enter event. Opening files by drag/drop."""
@@ -271,25 +285,37 @@ class TreeFileList(QTreeWidget):
         direction : str
             to where: top/down/up/bottom
         """
-        if direction == 'top':
-            insert_no = 0
-        elif direction == 'down':
-            insert_no = self.main.gui.active_img_no + 1
-        elif direction == 'up':
-            insert_no = self.main.gui.active_img_no - 1
-        elif direction == 'bottom':
-            insert_no = -1
-        else:
-            insert_no = -2
-        if insert_no > -2:
-            this = self.main.imgs.pop(self.main.gui.active_img_no)
-            if insert_no == -1:
-                self.main.imgs.append(this)
-                self.main.gui.active_img_no = len(self.main.imgs) - 1
-            else:
-                self.main.imgs.insert(insert_no, this)
-                self.main.gui.active_img_no = insert_no
-            self.update_file_list()
+        selrows, _ = self.get_selected_imgs()
+        if len(selrows) > 0:
+            if direction in ['top', 'down', 'up', 'bottom']:
+                selrows_rev = sorted(selrows, reverse=True)
+                selrows_ord = sorted(selrows)
+                n_imgs = len(self.main.imgs)
+                n_moved = len(selrows)
+                popped_imgs = []
+                order = [i for i in range(n_imgs)]
+                for i in selrows_rev:
+                    popped_imgs.insert(0, self.main.imgs.pop(i))
+                    order.pop(i)
+                if direction == 'bottom':
+                    self.main.imgs.extend(popped_imgs)
+                    set_selected = [i for i in range(n_imgs-n_moved, n_imgs)]
+                    order = order + selrows_ord
+                elif direction == 'top':
+                    self.main.imgs = popped_imgs + self.main.imgs
+                    set_selected = [i for i in range(0, n_moved)]
+                    order = selrows_ord + order
+                else:
+                    addidx = 1 if direction == 'down' else -1
+                    for i, selidx in enumerate(selrows_ord):
+                        self.main.imgs.insert(selidx + addidx, popped_imgs[i])
+                        order.insert(selidx + addidx, selidx)
+                    set_selected = list(np.array(selrows) + addidx)
+                self.update_file_list(set_selected=set_selected)
+                if self.main.results:
+                    self.main.update_results(sort_idxs=order)
+                    self.main.refresh_selected_table_row()
+
 
     def set_image_or_group_name(self, image_or_group='image'):
         """Set name of selected image for QuickTestTemplate."""

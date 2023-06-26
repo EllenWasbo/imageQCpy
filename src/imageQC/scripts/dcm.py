@@ -105,9 +105,12 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         DcmInfo, DcmInfoGui or DcmInfoGroup objects
     ignored_files : list of str
         file_paths not accepted as dicom images
+    warnings : list of str
+        warnings to display
     """
     list_of_DcmInfo = []
     ignored_files = []
+    warnings = []
 
     for file in filenames:
         file_verified = True
@@ -173,6 +176,11 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     attrib['pix'] = pix
                 except ValueError:
                     pass
+            if np.sum(attrib['pix']) == 0:
+                attrib['pix'] = [1, 1]  #TODO warning? avoid ZeroDevisionError
+                warnings.append(
+                    f'Missing pixel spacing set to 1x1 mm for file {file}'
+                    )
 
             if isinstance(acq_date, str):
                 if len(acq_date) > 8:  # if AcquisitionDateTime is used
@@ -260,7 +268,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         else:
             ignored_files.append(file)
 
-    return (list_of_DcmInfo, ignored_files)
+    return (list_of_DcmInfo, ignored_files, warnings)
 
 
 def info_extract_frame(frame, info):
@@ -642,6 +650,12 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
                 pixarr = pd.pixel_array
             if pixarr is not None:
                 npout = pixarr * slope + intercept
+
+        if len(npout.shape) == 3:
+            # rgb to grayscale NTSC formula
+            npout = (0.299 * npout[:, :, 0]
+                     + 0.587 * npout[:, :, 1]
+                     + 0.114 * npout[:, :, 2])
 
         if overlay is not None:
             if pixarr is not None:

@@ -358,8 +358,8 @@ def get_rois(image, image_number, input_main):
         roi_size_in_pix = paramset.var_roi_size / image_info.pix[0]
         roi_small = get_roi_rectangle(
             img_shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
-        w = 0.01 * paramset.noi_percent * img_shape[1]
-        h = 0.01 * paramset.noi_percent * img_shape[0]
+        w = 0.01 * paramset.var_percent * img_shape[1]
+        h = 0.01 * paramset.var_percent * img_shape[0]
         roi_large = get_roi_rectangle(
             img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
         return [roi_large, roi_small]
@@ -463,7 +463,7 @@ def get_roi_rectangle(image_shape,
     roi : ndarray
         2d array with type 'bool'
     """
-    inside = np.full(image_shape, False)
+    inside = np.full(image_shape[0:2], False)
     if roi_width > 0 and roi_height > 0:
         center_pos_xy = [round(offcenter_xy[0] + 0.5*image_shape[1]),
                          round(offcenter_xy[1] + 0.5*image_shape[0])]

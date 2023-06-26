@@ -497,7 +497,8 @@ class DicomTagsWidget(StackWidget):
 
     def sort_header(self):
         """When clicked to sort column."""
-        self.flag_edit()
+        if not self.import_review_mode:
+            self.flag_edit()
         self.update_indexes()
 
     def update_indexes(self):
@@ -774,15 +775,23 @@ class DicomTagsWidget(StackWidget):
                 if 1 in n_idx_same_mod:
                     self.tag_infos = self.templates
                     _, _, found_attributes = cff.get_taginfos_used_in_templates(
-                        self)
-                    for mod, attr in found_attributes.items():
-                        if len(idx_same_name[mod]) == 1:
-                            if self.templates[idx].attribute_name in attr:
-                                proceed = False
+                        self, specific_attribute=self.templates[idx].attribute_name)
+                    details_txt = []
+                    for mod, msgs in found_attributes.items():
+                        if len(idx_same_name[mod]) == 1 and len(msgs) > 0:
+                            proceed = False
+                            details_txt.append(f'{mod}:')
+                            for msg in msgs:
+                                details_txt.append(f'\t{msg}')
                     if proceed is False:
-                        QMessageBox.warning(
-                            self, 'Tag in use',
-                            'The selected tag is in use. Tag info can not be deleted.')
+                        txt = ('The selected tag is in use and can not be removed '
+                               'until removed from the templates using it.')
+                        dlg = messageboxes.MessageBoxWithDetails(
+                            self, title='Tag in use', msg=txt,
+                            info='See details for which templates it is used.',
+                            details=details_txt,
+                            icon=QMessageBox.Warning)
+                        dlg.exec()
                 if proceed:
                     self.templates.pop(idx)
                     self.flag_edit()

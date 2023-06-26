@@ -402,7 +402,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                     # older than ignore since?
                     proceed = True
                     if ignore_since > -1:
-                        img_infos, _ = dcm.read_dcm_info(
+                        img_infos, _, _ = dcm.read_dcm_info(
                             [file], GUI=False, tag_infos=tag_infos)
                         try:
                             datestr = img_infos[0].acq_date
@@ -747,7 +747,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                         print(f'Reading {len(files)} new files for template ',
                               f'{modality}/{auto_template.label} ...',
                               sep='', end='', flush=True)
-                    img_infos, ignored_files = dcm.read_dcm_info(
+                    img_infos, _, warnings = dcm.read_dcm_info(
                         files, GUI=False, tag_infos=tag_infos)
 
                     if len(img_infos) > 0:
@@ -757,6 +757,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
                             current_quicktest=qt_templates[modality][qt_idx],
                             tag_infos=tag_infos
                             )
+                        if len(warnings) > 0:
+                            log.extend(warnings)
 
                         if parent_widget is None:
                             print(f'\rSorting {len(img_infos)} files for template ',

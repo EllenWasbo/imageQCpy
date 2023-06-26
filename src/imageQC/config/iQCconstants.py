@@ -22,8 +22,9 @@ upper_path = os.path.dirname(
             os.path.dirname(
                 __file__))))
 
-# cfg_path = os.path.join(upper_path, 'setup.cfg')
-VERSION = '3.0.0-b8'
+# version string used to caluclate increasing number for comparison
+# convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
+VERSION = '3.0.0-b9'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -141,7 +142,7 @@ HEADERS = {
         'NPS': {'alt0': ['Average variance', 'Large area signal',
                          'Large area stdev (noise)', 'AUC horiz/AUC vert']},
         'STP': {'alt0': ['Dose', 'Q', 'Mean pix', 'Stdev pix']},
-        'Var': {'alt0': ['Min variance', 'Max variance', 'Median variance']}
+        'Var': {'alt0': ['Min variance', 'Max variance', 'Median variance']},
         },
     'NM': {
         'ROI': {'alt0': roi_headers},

@@ -400,10 +400,11 @@ class SettingsDialog(ImageQCDialog):
                         ('Imported one or more templates with same name as '
                          'templates already set. The imported template names '
                          'was marked with _import.'))
-                _, widget = self.get_item_widget_from_txt(
-                    self.previous_selected_txt)
-                widget.update_from_yaml()
-                self.widget_shared_settings.verify_config_files()
+                # TODO if later option to import from the different widgets
+                # _, widget = self.get_item_widget_from_txt(
+                #    self.previous_selected_txt)
+                self.widget_shared_settings.update_from_yaml()
+                # TODO DELETE? fails? self.widget_shared_settings.verify_config_files()
 
     def update_import_main(self):
         """Update templates of all widgets according to import_main (on initiate)."""
@@ -491,21 +492,25 @@ class SettingsDialog(ImageQCDialog):
                     if len(widget.marked) == 0:
                         import_main.tag_infos = []
                     else:
+                        indexes = [widget.indexes[i] for i in widget.marked]
                         import_main.tag_infos = [
-                            tag_info for numb, tag_info
-                            in enumerate(import_main.tag_infos)
-                            if numb in [widget.marked]
+                            tag_info for tag_info
+                            in import_main.tag_infos
+                            if tag_info.sort_index in indexes
                             ]
                 else:
                     if len(widget.marked_ignore) == 0:
                         pass
                     else:
-                        ignore_ids = widget.marked_ignore
-                        ignore_ids.sort(reverse=True)
-                        for ign_id in ignore_ids:
-                            del import_main.tag_infos[ign_id]
+                        ignore_ids = [widget.indexes[i] for i in widget.marked_ignore]
+                        import_main.tag_infos = [
+                            tag_info for tag_info
+                            in import_main.tag_infos
+                            if tag_info.sort_index not in ignore_ids
+                            ]
             except AttributeError:
                 pass  # marked not set
+            breakpoint()
 
             list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
                           if item['saved_as'] == 'modality_dict']
@@ -740,6 +745,8 @@ class SharedSettingsWidget(StackWidget):
                                     ['    last edited by',
                                      res[0], time_diff_string(res[1]),
                                      '(', ctime(res[1]), ')'])
+                                if len(res) > 2:  # with version number
+                                    string = string + ' in version ' + res[2]
                                 self.list_files.addItem(string)
                         except AttributeError:
                             pass
@@ -867,9 +874,9 @@ class SharedSettingsImportWidget(StackWidget):
         subtxt = '''Mark templates for import or mark templates to ignore.<br>
         Then get back to this window to import according to your selections.'''
         super().__init__(dlg_settings, header, subtxt)
-        btn_all = QPushButton('Import all templates')
+        btn_all = QPushButton('Import all')
         btn_all_but = QPushButton('Import all except for those marked to ignore')
-        btn_marked = QPushButton('Import only marked templates')
+        btn_marked = QPushButton('Import only marked')
         self.vlo.addWidget(btn_all)
         self.vlo.addWidget(btn_marked)
         self.vlo.addWidget(btn_all_but)
@@ -994,7 +1001,7 @@ class ImportMain:
     current_quicktest: dict = field(default_factory=dict)
     # converted from dict to paramset of correct modality when initialized
     tag_infos: list = field(default_factory=list)
-    tag_infos_new: list = field(default_factory=list)
+    # TODO delete? tag_infos_new: list = field(default_factory=list)
     tag_patterns_special: dict = field(default_factory=dict)
     tag_patterns_format: dict = field(default_factory=dict)
     tag_patterns_sort: dict = field(default_factory=dict)
@@ -1021,12 +1028,28 @@ class SelectImportFilesDialog(ImageQCDialog):
             set_checked_ids=list(np.arange(len(filenames)))
             )
         vlo.addWidget(self.list_widget)
+        self.btn_select_all = QPushButton('Deselect all')
+        self.btn_select_all.clicked.connect(self.select_all)
+        vlo.addWidget(self.btn_select_all)
 
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         button_box = QDialogButtonBox(buttons)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         vlo.addWidget(button_box)
+
+    def select_all(self):
+        """Select or deselect all in list."""
+        if self.btn_select_all.text() == 'Deselect all':
+            set_state = Qt.Unchecked
+            self.btn_select_all.setText('Select all')
+        else:
+            set_state = Qt.Checked
+            self.btn_select_all.setText('Deselect all')
+
+        for i in range(len(self.list_widget.texts)):
+            item = self.list_widget.item(i)
+            item.setCheckState(set_state)
 
     def get_checked_files(self):
         """Get list of checked testcode ids."""

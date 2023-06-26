@@ -31,7 +31,6 @@ def prepare_debug():
     # https://stackoverflow.com/questions/1736015/debugging-a-pyqt4-app
     from PyQt5.QtCore import pyqtRemoveInputHook
     import pdb
-    import sys
     pyqtRemoveInputHook()
     # set up the debugger
     debugger = pdb.Pdb()
@@ -43,6 +42,7 @@ def prepare_debug():
 
 
 if __name__ == '__main__':
+    print('imageQC is starting up...', flush=True)
     #prepare_debug()  # TODO - activate (not needed when not debugging)
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     # verify that config_folder exists
@@ -82,7 +82,6 @@ if __name__ == '__main__':
 
         sys.exit('Program exits')
     else:
-        print('imageQC is starting up...', flush=True)
         # to set taskbar icon correctly for windows
         try:
             from ctypes import windll  # Only exists on Windows.
@@ -181,4 +180,5 @@ if __name__ == '__main__':
         w = ui_main.MainWindow(scX=sz.width(), scY=sz.height(), char_width=char_width)
         w.show()
         splash.finish(w)
+        w.version_control()
         app.exec()

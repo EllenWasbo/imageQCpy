@@ -8,6 +8,7 @@ import copy
 from dataclasses import fields
 import numpy as np
 import pandas as pd
+from pathlib import Path
 
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
@@ -15,7 +16,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QFormLayout, QGroupBox,
     QPushButton, QLabel, QDoubleSpinBox, QCheckBox, QRadioButton, QButtonGroup,
     QComboBox, QAction, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
-    QMessageBox, QInputDialog
+    QMessageBox, QInputDialog, QFileDialog, QDialogButtonBox
     )
 
 # imageQC block start
@@ -26,6 +27,8 @@ from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
 from imageQC.ui.tag_patterns import TagPatternTreeTestDCM
 from imageQC.scripts.calculate_qc import calculate_qc
+from imageQC.scripts.mini_methods import get_all_matches
+from imageQC.ui.ui_dialogs import ImageQCDialog
 # imageQC block end
 
 
@@ -124,6 +127,9 @@ class ParamsTabCommon(QTabWidget):
                 elif field.type == 'str':
                     if hasattr(reciever, 'setText'):
                         reciever.setText(content)
+                    elif hasattr(reciever, 'setCurrentText'):
+                        if field.name == 'sni_ref_image':
+                            reciever.setCurrentText(content)
                     else:  # info to programmer
                         print(f'Warning: Parameter {field.name} not set ',
                               '(ui_main_test_tabs.update_displayed_params)')
@@ -149,14 +155,17 @@ class ParamsTabCommon(QTabWidget):
             self.roi_x.setEnabled(False)
             self.roi_y.setEnabled(False)
             self.roi_a.setEnabled(False)
+            self.roi_read_number.setEnabled(False)
         else:
             self.roi_radius.setEnabled(False)
             self.roi_x.setEnabled(True)
             self.roi_y.setEnabled(True)
             if paramset.roi_type == 1:
                 self.roi_a.setEnabled(False)
+                self.roi_read_number.setEnabled(True)
             else:
                 self.roi_a.setEnabled(True)
+                self.roi_read_number.setEnabled(False)
         # continues in subclasses if needed
 
     def make_param_odd_number(self, attribute='', update_roi=True,
@@ -221,6 +230,8 @@ class ParamsTabCommon(QTabWidget):
                     content = sender.text()
                 elif hasattr(sender, 'setCurrentIndex'):  # QComboBox
                     content = sender.currentIndex()
+                    if attribute == 'sni_ref_image':
+                        content = sender.currentText()
                 else:
                     content = None
 
@@ -386,27 +397,44 @@ class ParamsTabCommon(QTabWidget):
                                     singleStep=0.1)
         self.roi_a.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_a'))
+        self.roi_table_widget = PositionWidget(
+                self, self.main, table_attribute_name='roi_table')
+        self.roi_read_number = QCheckBox(
+            'Read number from text in (rectangular) ROI')
+        self.roi_read_number.toggled.connect(
+                lambda: self.param_changed_from_gui(attribute='roi_read_number'))
 
         self.create_offset_widget('roi')
+
+        vlo_left = QVBoxLayout()
+        self.tab_roi.hlo.addLayout(vlo_left)
 
         flo1 = QFormLayout()
         flo1.addRow(QLabel('ROI shape'), self.roi_type)
         flo1.addRow(QLabel('Radius of circular ROI (mm)'), self.roi_radius)
-        self.tab_roi.hlo_top.addLayout(flo1)
-        self.tab_roi.hlo_top.addStretch()
-        hlo_size = QHBoxLayout()
-        hlo_size.addWidget(QLabel('Rectangular ROI size width/height (mm)'))
-        hlo_size.addWidget(self.roi_x)
-        hlo_size.addWidget(QLabel('/'))
-        hlo_size.addWidget(self.roi_y)
-        hlo_size.addWidget(QLabel('  Rotation (degrees)'))
-        hlo_size.addWidget(self.roi_a)
-        hlo_size.addStretch()
-        self.tab_roi.vlo.addLayout(hlo_size)
+        flo1.addRow(QLabel('Rectangular ROI width (mm)'), self.roi_x)
+        flo1.addRow(QLabel('Rectangular ROI height (mm)'), self.roi_y)
+        flo1.addRow(QLabel('ROI rotation (degrees)'), self.roi_a)
+        vlo_left.addLayout(flo1)
+        '''TODO
+        vlo_left.addWidget(self.roi_read_number)
+        '''
+
         hlo_offset = QHBoxLayout()
         hlo_offset.addWidget(self.wid_roi_offset)
         hlo_offset.addStretch()
-        self.tab_roi.vlo.addLayout(hlo_offset)
+        vlo_left.addLayout(hlo_offset)
+
+        self.tab_roi.hlo.addStretch()
+        '''TODO
+        vlo_right = QVBoxLayout()
+        self.tab_roi.hlo.addLayout(vlo_right)
+        vlo_right.addWidget(uir.UnderConstruction(
+            txt='Under construction'))
+
+        vlo_right.addWidget(uir.LabelHeader('ROI positions', 3))
+        vlo_right.addWidget(self.roi_table_widget)
+        '''
 
     def create_tab_mtf(self):
         """GUI of tab MTF - common settings here."""
@@ -1108,6 +1136,7 @@ class GroupBoxCorrectPointSource(QGroupBox):
                  chk_radius=None, wid_radius=None, wid_ref_image=None):
         super().__init__('Correct for point source curvature')
         testcode = testcode.lower()
+        self.parent = parent
         self.setCheckable(True)
         self.toggled.connect(
             lambda: parent.param_changed_from_gui(
@@ -1125,7 +1154,7 @@ class GroupBoxCorrectPointSource(QGroupBox):
             lambda: parent.param_changed_from_gui(
                 attribute=f'{testcode}_radius'))
         if wid_ref_image is not None:
-            wid_ref_image.valueChanged.connect(
+            wid_ref_image.currentIndexChanged.connect(
                 lambda: parent.param_changed_from_gui(
                     attribute=f'{testcode}_ref_image'))
 
@@ -1141,9 +1170,107 @@ class GroupBoxCorrectPointSource(QGroupBox):
         hlo_lock_dist.addWidget(chk_radius)
         hlo_lock_dist.addWidget(wid_radius)
         hlo_lock_dist.addWidget(QLabel('mm'))
+
+        self.ref_folder = Path(cff.get_config_folder()) / 'SNI_ref_images'
+        self.wid_ref_image = wid_ref_image
         if wid_ref_image is not None:
+            self.update_reference_images()
             hlo_ref_image = QHBoxLayout()
+            hlo_ref_image.addWidget(QLabel('Ref. image (optional):'))
+            hlo_ref_image.addWidget(wid_ref_image)
+            act_add = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+                'Add refernce image', self)
+            act_add.triggered.connect(self.add_reference_image)
+            act_delete = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+                'Delete reference image', self)
+            act_delete.triggered.connect(self.delete_reference_image)
+            act_info = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}info.png'),
+                'Info about reference image', self)
+            act_info.triggered.connect(self.info_reference_image)
+            toolb = QToolBar()
+            toolb.addActions([act_add, act_delete, act_info])
+            hlo_ref_image.addWidget(toolb)
             vlo_gb.addLayout(hlo_ref_image)
+
+    def update_reference_images(self, set_text=''):
+        available_images = ['']
+        if self.ref_folder.exists():
+            filenames = [x.stem for x in self.ref_folder.glob('*')
+                         if x.suffix == '.dcm']
+            available_images.extend(filenames)
+        self.wid_ref_image.clear()
+        self.wid_ref_image.addItems(available_images)
+        self.wid_ref_image.setCurrentText(set_text)
+
+    def add_reference_image(self):
+        fname = QFileDialog.getOpenFileName(
+            self, 'Select DICOM file to use as reference image for NM SNI test',
+            filter="DICOM files (*.dcm);;All files (*)")
+        if fname[0] != '':
+            src = fname[0]
+            text, proceed = QInputDialog.getText(
+                self, 'Rename copy?',
+                'Rename the copy (how it will be listed)                      ',
+                text=Path(fname[0]).stem)
+            stem = text if proceed else Path(fname[0]).stem
+            dest = self.ref_folder / (stem + '.dcm')
+            if dest.exists():
+                QMessageBox.warning(
+                    self, 'Filename exist',
+                    'Failed to add reference image. Set filename already exist')
+            else:
+                import shutil
+                if not self.ref_folder.exists():
+                    os.mkdir(self.ref_folder.resolve())
+                shutil.copy2(src, dest.resolve())
+                self.update_reference_images(set_text=stem)
+
+    def delete_reference_image(self):
+        if self.wid_ref_image.currentText() != '':
+            filename = self.ref_folder / (self.wid_ref_image.currentText() + '.dcm')
+            if filename.exists():
+                ref_images = [p.sni_ref_image for p in self.parent.main.paramsets]
+                labels = [p.label for p in self.parent.main.paramsets]
+                idxs = get_all_matches(ref_images, self.wid_ref_image.currentText())
+                if len(idxs) > 1:
+                    labels_used = [label for i, label in enumerate(labels) if i in idxs]
+                    labels_used.remove(self.parent.main.current_paramset.label)
+                    QMessageBox.warning(
+                        self, 'Used in other templates',
+                        'Failed to delete reference image. Used in other templates:\n'
+                        f'{labels_used}')
+                else:
+                    question = (
+                        f'Remove {self.wid_ref_image.currentText()}.dcm from the '
+                        'list of available reference images?')
+                    proceed = messageboxes.proceed_question(self, question)
+                    if proceed:
+                        os.remove(filename.resolve())
+                        self.update_reference_images()
+
+    def info_reference_image(self):
+        html_body_text = (
+            'Estimating noise for calibration images using Siemens gamma camera '
+            'is not straight forward.<br>'
+            'Find a calibration image without artifacts and use this as a reference '
+            'to detect changes over time compared to the reference image.'
+            )
+        dlg = ImageQCDialog()
+        dlg.setWindowTitle('Information')
+        dlg.infotext = QLabel(f"""<html><head/><body>
+                {html_body_text}
+                </body></html>""")
+        vlo = QVBoxLayout()
+        vlo.addWidget(dlg.infotext)
+        buttons = QDialogButtonBox.Ok
+        dlg.buttonBox = QDialogButtonBox(buttons)
+        dlg.buttonBox.accepted.connect(dlg.accept)
+        vlo.addWidget(dlg.buttonBox)
+        dlg.setLayout(vlo)
+        dlg.exec()
 
 
 class ParamsTabNM(ParamsTabCommon):
@@ -1241,12 +1368,15 @@ class ParamsTabNM(ParamsTabCommon):
         Based on Nelson et al, J Nucl Med 2014; 55:169-174<br>
         SNI is a measure attempting to quantify the amount of structured noise in <br>
         the image. Noise Power Spectrum (NPS) is calculated for each ROI and the <br>
-        expected quantum noise NPS is subtracted. A human eye filter is applied.
+        expected quantum noise NPS is subtracted. A human eye filter is applied.<br>
+        <br>
+        For the option to correct for point source curvature, the quantum noise is <br>
+        based on counts in image. For calibration images (Siemens) this is not <br>
+        sufficient. For that case it is recommended to use a reference image to <br>
+        estimate the expected noise. The reference image should be aquired under <br>
+        the exact same conditions as the image to be analysed.
         '''
         self.tab_sni.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
-        self.tab_sni.hlo_top.addWidget(uir.UnderConstruction(
-            txt='NB for AutoQC calibration images - working to optimize this'))
-
         self.sni_area_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.sni_area_ratio.valueChanged.connect(
@@ -1257,10 +1387,12 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_correct_radius_chk = QCheckBox('Lock source distance to')
         self.sni_correct_radius = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=5000, singleStep=0.1)
+        self.sni_ref_image = QComboBox()
         self.sni_correct = GroupBoxCorrectPointSource(
             self, testcode='sni',
             chk_pos_x=self.sni_correct_pos_x, chk_pos_y=self.sni_correct_pos_y,
-            chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_correct_radius)
+            chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_correct_radius,
+            wid_ref_image=self.sni_ref_image)
 
         gb_eye_filter = QGroupBox('Human visual respose filter')
         self.sni_eye_filter_c = QDoubleSpinBox(
@@ -1710,6 +1842,7 @@ class ParamsTabPET(ParamsTabCommon):
                             self.rec_sphere_percent)
         vlo_right.addLayout(flo_avg_perc)
 
+        vlo_right.addWidget(uir.LabelHeader('Background ROIs', 3))
         hlo_bg = QHBoxLayout()
         vlo_right.addLayout(hlo_bg)
         vlo_bg_roisize = QVBoxLayout()
@@ -1717,8 +1850,8 @@ class ParamsTabPET(ParamsTabCommon):
         flo_bg = QFormLayout()
         flo_bg.addRow(self.rec_roi_size, QLabel('mm'))
         vlo_bg_roisize.addLayout(flo_bg)
-        hlo_bg.addLayout(vlo_bg_roisize)
         hlo_bg.addWidget(self.rec_table_widget)
+        hlo_bg.addLayout(vlo_bg_roisize)
 
         flo_plot = QFormLayout()
         flo_plot.addRow(QLabel('Table values'), self.rec_type)
@@ -2138,7 +2271,6 @@ class PositionWidget(QWidget):
         toolb = QToolBar()
         toolb.addActions([act_import, act_copy, act_add, act_delete, act_get_pos])
         toolb.setOrientation(Qt.Vertical)
-        hlo.addStretch()
         hlo.addWidget(toolb)
         hlo.addWidget(self.table)
 

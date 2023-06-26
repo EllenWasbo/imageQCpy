@@ -1246,7 +1246,7 @@ sequence: ['']
 limited2mod: ['']
 unit: mm
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 125
 attribute_name: PixelSpacing
@@ -1256,7 +1256,7 @@ sequence: [PerFrameFunctionalGroupsSequence, PixelMeasuresSequence]
 limited2mod: ['']
 unit: mm
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 126
 attribute_name: PixelSpacing
@@ -1266,7 +1266,7 @@ sequence: [SharedFunctionalGroupsSequence, PixelMeasuresSequence]
 limited2mod: ['']
 unit: mm
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 127
 attribute_name: PixelSpacing
@@ -1276,7 +1276,7 @@ sequence: ['']
 limited2mod: ['']
 unit: mm
 factor: 1.0
-protected: false
+protected: true
 ---
 sort_index: 128
 attribute_name: PresentationIntentType
@@ -1696,7 +1696,7 @@ sequence: [PerFrameFunctionalGroupsSequence, CTAcquisitionDetailsSequence]
 limited2mod: [CT]
 unit: mm
 factor: 1.0
-protected: true
+protected: false
 ---
 sort_index: 170
 attribute_name: SliceLocation

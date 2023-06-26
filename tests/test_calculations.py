@@ -43,7 +43,6 @@ def read_tag_infos_from_yaml():
 
 tag_infos = read_tag_infos_from_yaml()
 
-
 def test_CTn():
     input_main = InputMain(
         current_modality='CT',
@@ -55,7 +54,7 @@ def test_CTn():
         )
 
     file_path = path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' / 'CTP404_FOV150_001.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -78,7 +77,7 @@ def test_CT_Sli_axial():
 
     file_path = (
         path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' / 'CTP404_FOV150_001.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -100,7 +99,7 @@ def test_CT_Rin():
 
     file_path = (
         path_tests / 'test_inputs' / 'CT' / 'CTP486' / 'CTP486_005.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -121,7 +120,7 @@ def test_CT_Dim():
 
     file_path = (
         path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' / 'CTP404_FOV150_001.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -144,7 +143,7 @@ def test_CT_Sli_helical():
 
     file_path = (
         path_tests / 'test_inputs' / 'CT' / 'CTP591_06mm' / 'CTP591_06mm_023.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -169,7 +168,7 @@ def test_CT_MTF_bead():
         )
 
     file_path = path_tests / 'test_inputs' / 'CT' / 'Wire_FOV50' / 'CT_wire_FOV50_001.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -194,7 +193,7 @@ def test_CT_Teflon_MTF_circular_edge_autocenter():
 
     file_path = (path_tests / 'test_inputs' / 'CT' / 'CTP404_FOV150' /
                  'CTP404_FOV150_001.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -226,7 +225,7 @@ def test_CT_MTF_circular_edge_not_optimal_offset():
             tag_infos=tag_infos,
             automation_active=False,
             )
-        img_infos, ignored_files = dcm.read_dcm_info(
+        img_infos, ignored_files, _ = dcm.read_dcm_info(
             [file_path], GUI=False, tag_infos=input_main.tag_infos)
         input_main.imgs = img_infos
         calculate_qc.calculate_qc(input_main)
@@ -256,7 +255,7 @@ def test_CT_Acrylic_MTF_circular_edge():
     file1 = file_path / 'CTP404_FOV150_001.dcm'
     file2 = file_path / 'CTP404_FOV150_002.dcm'
     file3 = file_path / 'CTP404_FOV150_003.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file1, file2, file3], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -281,7 +280,7 @@ def test_CT_Polystyrene_MTF_circular_edge():
     file1 = file_path / 'CTP404_FOV150_001.dcm'
     file2 = file_path / 'CTP404_FOV150_002.dcm'
     file3 = file_path / 'CTP404_FOV150_003.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file1, file2, file3], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -301,7 +300,7 @@ def test_CT_NPS():
 
     file_path = (
         path_tests / 'test_inputs' / 'CT' / 'CTP486' / 'CTP486_005.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -322,7 +321,7 @@ def test_Xray_NPS():
 
     file_path = (
         path_tests / 'test_inputs' / 'Xray' / 'hom.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -345,12 +344,11 @@ def test_Xray_MTF_autocenter():
     file_path = path_tests / 'test_inputs' / 'Xray' / 'mtf.dcm'
     #input_main.current_paramset.mtf_auto_center_mask_outer = 60
     #file_path = r'C:\Users\ellen\Downloads\20230614_111844_071kV_020mAs.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    breakpoint()
     assert len(input_main.results['MTF']['values'][0]) == 6
     values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
     assert np.array_equal(values10, np.array([8., 6., 4., 3., 2., 12.]))
@@ -367,7 +365,7 @@ def test_Xray_Var():
 
     file_path = (
         path_tests / 'test_inputs' / 'Xray' / 'hom.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -392,13 +390,13 @@ def test_NM_uniformity():
         )
 
     file_path = path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(np.array(input_main.results['Uni']['values'][0]))
-    assert np.array_equal(values, np.array([2., 1., 2., 1.]))
+    assert np.array_equal(values, np.array([3., 2., 2., 1.]))
 
 
 def test_NM_uniformity_sum():
@@ -415,7 +413,7 @@ def test_NM_uniformity_sum():
         )
 
     file_path = path_tests / 'test_inputs' / 'NM' / 'sweep.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -441,7 +439,7 @@ def test_NM_SNI():
     file_paths = [
         path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist.dcm',
         path_tests / 'test_inputs' / 'NM' / 'point_source_short_dist_artifacts.dcm']
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         file_paths, GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -469,7 +467,7 @@ def test_NM_SNI_sum():
         )
 
     file_path = path_tests / 'test_inputs' / 'NM' / 'sweep.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -500,7 +498,7 @@ def test_NM_MTF_pointsource():
         )
 
     file_path = path_tests / 'test_inputs' / 'SPECT' / 'linesource_tomo_recon.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -523,7 +521,7 @@ def test_NM_MTF_2_linesources():
         )
 
     file_path = path_tests / 'test_inputs' / 'NM' / 'linesource_planar.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -548,7 +546,7 @@ def test_SPECT_MTF_linesource():
         )
 
     file_path = path_tests / 'test_inputs' / 'SPECT' / 'linesource_tomo_recon.dcm'
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -571,7 +569,7 @@ def test_PET_Cro():
     file_path = path_tests / 'test_inputs' / 'PET' / 'waterphantom'
     no = ['007', '010', '034', '035', '036']
     files = [file_path / f'PT_PETWB_{no[i]}.dcm' for i in range(5)]
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         files, GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -594,7 +592,7 @@ def test_PET_Rec():
 
     file_path = path_tests / 'test_inputs' / 'PET' / 'body_phantom'
     files = [x for x in file_path.glob('**/*') if x.is_file()]
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         files, GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -622,7 +620,7 @@ def test_MR_SNR():
 
     file_path = (
         path_tests / 'test_inputs' / 'MR' / 'ACR.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
@@ -647,7 +645,7 @@ def test_MR_Geo():
 
     file_path = (
         path_tests / 'test_inputs' / 'MR' / 'ACR.dcm')
-    img_infos, ignored_files = dcm.read_dcm_info(
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 

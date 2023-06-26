@@ -7,7 +7,6 @@ User interface for dialog Rename Dicom.
 """
 import os
 from pathlib import Path
-from time import sleep
 
 import pydicom
 from PyQt5.QtCore import Qt
@@ -82,7 +81,7 @@ class RenameDicomDialog(ImageQCDialog):
         hlo_browse.addWidget(tb_split_gather)
         act_split = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}split.png'),
-            'Move files into folders according to subfolder template or seriesUID',
+            'Split/move files into folders defined by subfolder template or seriesUID',
             self)
         act_split.triggered.connect(self.split_series)
         act_gather = QAction(
@@ -113,9 +112,6 @@ class RenameDicomDialog(ImageQCDialog):
         self.btn_rename.clicked.connect(self.rename)
         vlo_btns_table.addWidget(self.btn_rename)
         vlo_btns_table.addStretch()
-
-        #self.progress_bar = uir.ProgressBar(self)
-        #vlo.addWidget(self.progress_bar)
 
         hlo_dlg_btns = QHBoxLayout()
         vlo.addLayout(hlo_dlg_btns)
@@ -223,10 +219,15 @@ class RenameDicomDialog(ImageQCDialog):
         series_uid = False
         if len(self.wid_rename_pattern.current_template.list_tags) == 0:
             series_uid = True
+            rename_files = False
         else:
             tag_pattern = cfc.TagPatternFormat(
                 list_tags=self.wid_rename_pattern.current_template.list_tags,
                 list_format=self.wid_rename_pattern.current_template.list_format)
+            tag_pattern2 = cfc.TagPatternFormat(
+                list_tags=self.wid_rename_pattern.current_template.list_tags2,
+                list_format=self.wid_rename_pattern.current_template.list_format2)
+            rename_files = True if len(tag_pattern2.list_tags) > 0 else False
 
         proceed = True
         if os.access(self.path.text(), os.W_OK) is False:
@@ -254,13 +255,14 @@ class RenameDicomDialog(ImageQCDialog):
 
                 if proceed:
                     new_folders = []
+                    new_filenames = []
                     dcm_files = dcm_dict['files']
                     max_val = len(dcm_files)
                     progress = uir.ProgressModal(
                         "Building new subfolder names...", "Stop",
                         0, max_val, self)
                     if series_uid:
-                        new_folders, sorted_dcm_files = self.sort_seriesUID(
+                        new_folders, dcm_files = self.sort_seriesUID(
                             dcm_files, progress_widget=progress)
                     else:
                         for i, file in enumerate(dcm_files):
@@ -274,6 +276,15 @@ class RenameDicomDialog(ImageQCDialog):
                             new_name = "_".join(name_parts)
                             new_name = valid_path(new_name, folder=True)
                             new_folders.append(file.parent / new_name)
+
+                            if rename_files:
+                                name_parts_file = get_dcm_info_list(
+                                    pd, tag_pattern2, self.wid_rename_pattern.tag_infos,
+                                    prefix_separator='', suffix_separator='',
+                                    not_found_text='')
+                                new_name_file = "_".join(name_parts_file)
+                                new_name_file = valid_path(new_name_file) + '.dcm'
+                                new_filenames.append(new_folders[-1] / new_name_file)
 
                             if progress.wasCanceled():
                                 new_folders = []
@@ -292,6 +303,13 @@ class RenameDicomDialog(ImageQCDialog):
                             detailed_text='\n'.join(
                                 [x.name for x in uniq_new_folders])
                             )
+                        if proceed and series_uid is False:
+                            for folder in uniq_new_folders:
+                                idxs = get_all_matches(new_folders, folder)
+                                files_in_folder = [new_filenames[i] for i in idxs]
+                                uniq_names = self.get_uniq_filenames(files_in_folder)
+                                for u, i in enumerate(idxs):
+                                    new_filenames[i] = uniq_names[u]
                     else:
                         proceed = False
 
@@ -309,7 +327,10 @@ class RenameDicomDialog(ImageQCDialog):
                                 except (PermissionError, OSError) as e:
                                     errmsg.append(
                                         f'{new_folder.resolve()}: {e}')
-                            file_new_loc = new_folder / file.name
+                            if rename_files:
+                                file_new_loc = new_filenames[i]
+                            else:
+                                file_new_loc = new_folder / file.name
                             try:
                                 file.rename(file_new_loc)
                             except (PermissionError, OSError) as e:
@@ -397,6 +418,8 @@ class RenameDicomDialog(ImageQCDialog):
                      'needed to generate names.'))
 
             if len(self.new_names) > 0:  # ensure unique names
+                self.new_names = self.get_uniq_filenames(self.new_names)
+                '''delete
                 uniq_names = list(set(self.new_names))
                 for name in uniq_names:
                     n_same = self.new_names.count(name)
@@ -406,6 +429,7 @@ class RenameDicomDialog(ImageQCDialog):
                         for i in enumerate(idxs):
                             new_name = f'{base_name}_({i:03}).dcm'
                             self.new_names[i] = Path(new_name)
+                '''
 
             self.fill_table()
             if limit == 0 and len(self.new_names) > 0:
@@ -426,13 +450,9 @@ class RenameDicomDialog(ImageQCDialog):
             for i, path in enumerate(self.original_names):
                 progress.setValue(i)
                 try:
-                    print(path)
-                    print(self.new_names[i])
                     path.rename(self.new_names[i])
                 except (PermissionError, OSError) as err:
                     errmsg.append(f'{path.resolve}: {err}')
-                    print(err)
-                sleep(2)
                 if progress.wasCanceled():
                     break
             progress.setValue(max_val)
@@ -540,14 +560,39 @@ class RenameDicomDialog(ImageQCDialog):
             folder_names = []
             for uid in uniq_uids:
                 idx_this = uids.index(uid)
-                ser_descr_this = series_descr[idx_this[0]]
+                ser_descr_this = series_descr[idx_this]
                 if ser_descr_this in folder_names:
                     n_already = folder_names.count(ser_descr_this)
-                    series_descr_modified[idx_this] = (
-                        f'{ser_descr_this}_{n_already:03}')
+                    ser_descr_this_mod = f'{ser_descr_this}_{n_already:03}'
                 else:
-                    series_descr_modified[idx_this] = ser_descr_this
-                folder_names.append(ser_descr_this)
-                sorted_dcm_files.append(dcm_files[idx_this])
+                    ser_descr_this_mod = ser_descr_this
+                series_descr_modified.append(ser_descr_this_mod)
+                idx_all_this = get_all_matches(uids, uid)
+                files_this = [dcm_files[i] for i in idx_all_this]
+                sorted_dcm_files.extend(files_this)
+                folder_names.extend(
+                    [dcm_files[0].parent / ser_descr_this] * len(files_this))
 
         return (folder_names, sorted_dcm_files)
+
+    def get_uniq_filenames(self, names):
+        """Add suffix if some names are identical.
+
+        Parameters
+        ----------
+        names : list of Path
+
+        Returns
+        -------
+        names
+        """
+        uniq_names = list(set(names))
+        for name in uniq_names:
+            n_same = names.count(name)
+            if n_same > 1:
+                idxs = get_all_matches(names, name)
+                base_name = str(name.parent / name.stem)
+                for i in enumerate(idxs):
+                    new_name = f'{base_name}_({i:03}).dcm'
+                    names[i] = Path(new_name)
+        return names

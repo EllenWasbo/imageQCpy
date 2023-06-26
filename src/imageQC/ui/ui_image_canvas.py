@@ -168,16 +168,9 @@ class ImageCanvas(GenericImageCanvas):
                 wl_min = meanval-stdval
                 wl_max = meanval+stdval
 
-        if len(np.shape(nparr)) == 2:
-            self.img = self.ax.imshow(
-                nparr, cmap='gray', vmin=wl_min, vmax=wl_max)
-        elif len(np.shape(nparr)) == 3:
-            # rgb to grayscale NTSC formula
-            nparr = (0.299 * nparr[:, :, 0]
-                     + 0.587 * nparr[:, :, 1]
-                     + 0.114 * nparr[:, :, 2])
-            self.img = self.ax.imshow(nparr, cmap='gray')
-            annotate = False
+        self.img = self.ax.imshow(
+            nparr, cmap='gray', vmin=wl_min, vmax=wl_max)
+
         self.ax.axis('off')
         if annotate:
             try:

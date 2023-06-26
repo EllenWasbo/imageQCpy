@@ -6,6 +6,7 @@ Functions used for configuration settings.
 @author: Ellen Wasbo
 """
 import os
+import copy
 from pathlib import Path
 from time import time, ctime
 import yaml
@@ -18,12 +19,53 @@ from PyQt5.QtWidgets import QMessageBox, QFileDialog
 # imageQC block start
 from imageQC.config.iQCconstants import (
     USERNAME, APPDATA, TEMPDIR, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER,
-    CONFIG_FNAMES, USER_PREFS_FNAME, QUICKTEST_OPTIONS
+    CONFIG_FNAMES, USER_PREFS_FNAME, QUICKTEST_OPTIONS, VERSION
     )
 import imageQC.config.config_classes as cfc
 from imageQC.ui import messageboxes
-from imageQC.scripts.mini_methods import get_included_tags
+from imageQC.scripts.mini_methods import get_included_tags, get_all_matches
 # imageQC block end
+
+
+def calculate_version_difference(version_string):
+    """Calculate version difference for comparing versions.
+
+    x.y.z-bw = x*1000000 + y*10000 + z*100 + w (i.e. max 100 for each subversion)
+
+    Parameters
+    ----------
+    version_string : str
+        version string to compare VERSION (current version) to
+
+    Returns
+    -------
+    version_difference : int
+        this_version - input version = if negative the current version is older
+    """
+    def calculate_version_number(vstring):
+        version_number = 0
+        if len(vstring) > 0:
+            main_str = vstring
+            beta_str = ''
+            try:
+                main_str, beta_str = vstring.split('-b')
+            except ValueError:  # no beta or not valid main
+                pass
+            try:
+                main_x, main_y, main_z = main_str.split('.')
+                version_number = 1e6*int(main_x) + 1e4*int(main_y) + 1e2*int(main_z)
+                if beta_str != '':
+                    version_number = version_number + int(beta_str)
+            except ValueError:
+                print(f'version string {vstring} not as expected. Failed converting '
+                      '(config_func - calculate_version_number).')
+
+        return version_number
+
+    version_difference = (
+        calculate_version_number(VERSION) - calculate_version_number(version_string))
+
+    return version_difference
 
 
 def verify_config_folder(widget):
@@ -443,23 +485,27 @@ def load_settings(fname='', temp_config_folder=''):
                                             'output']['include_filename'],
                                         tests=tests)
                                     modality = fn.split('_')[1]
+                                    if 'roi_table' in doc:
+                                        upd = verify_input_dict(doc['roi_table'],
+                                                                cfc.PositionTable())
+                                        doc['roi_table'] = cfc.PositionTable(**upd)
                                     if modality == 'CT':
                                         upd = verify_input_dict(doc['ctn_table'],
                                                                 cfc.HUnumberTable())
                                         doc['ctn_table'] = cfc.HUnumberTable(**upd)
-                                        upd = verify_input_dict(doc, cfc.ParamSetCT())
-                                        sett_this.append(cfc.ParamSetCT(**upd))
+                                        #upd = verify_input_dict(doc, cfc.ParamSetCT())
+                                        #sett_this.append(cfc.ParamSetCT(**upd))
                                     elif modality == 'PET':
                                         if 'rec_table' in doc:
                                             upd = verify_input_dict(doc['rec_table'],
                                                                     cfc.RecTable())
                                             doc['rec_table'] = cfc.RecTable(**upd)
-                                        upd = verify_input_dict(doc, cfc.ParamSetPET())
-                                        sett_this.append(cfc.ParamSetPET(**upd))
-                                    else:
-                                        class_ = getattr(cfc, f'ParamSet{modality}')
-                                        upd = verify_input_dict(doc, class_())
-                                        sett_this.append(class_(**upd))
+                                        #upd = verify_input_dict(doc, cfc.ParamSetPET())
+                                        #sett_this.append(cfc.ParamSetPET(**upd))
+                                    #else:
+                                    class_ = getattr(cfc, f'ParamSet{modality}')
+                                    upd = verify_input_dict(doc, class_())
+                                    sett_this.append(class_(**upd))
 
                                     if len(fnames) == 1:
                                         settings = sett_this
@@ -578,7 +624,20 @@ def check_save_conflict(fname, lastload):
     if os.path.exists(path):
         if os.path.getmtime(path) > lastload:
             ok, path, last_mod = load_settings(fname='last_modified')
-            user, modtime = getattr(last_mod, fname)
+            res = getattr(last_mod, fname)
+            if len(res) == 2:
+                user, modtime = res
+                version_string = ''
+            else:
+                user, modtime, version_string = res
+
+            version_difference = calculate_version_difference(version_string)
+            if version_difference < 0:
+                errmsg = errmsg + (
+                    f' Current imageQC version {VERSION} is older than the one '
+                    f'{user} used for saving {fname} ({version_string}).'
+                    'saved parameters of new features might get lost if saved.'
+                    )
 
             if user != USERNAME:
                 if modtime > lastload:
@@ -589,6 +648,7 @@ def check_save_conflict(fname, lastload):
                 errmsg = (
                     errmsg +
                     '\nProceed saving and possibly overwrite changes done by others?')
+            if errmsg != '':
                 status = False
 
     return status, errmsg
@@ -598,7 +658,7 @@ def update_last_modified(fname=''):
     """Update last_modified.yaml."""
     # path = get_config_filename(fname, force=True)
     ok, path_last_mod, last_mod = load_settings(fname='last_modified')
-    setattr(last_mod, fname, [USERNAME, time()])
+    setattr(last_mod, fname, [USERNAME, time(), VERSION])
     ok, path_last_mod = save_settings(last_mod, fname='last_modified')
 
 
@@ -708,11 +768,25 @@ def save_settings(settings, fname=''):
 def import_settings(import_main):
     """Import config settings."""
     any_same_name = False
-    if import_main.tag_infos_new != []:
+    if import_main.tag_infos != []:
         fname = 'tag_infos'
         ok, path, tag_infos = load_settings(fname=fname)
-        tag_infos.extend(import_main.tag_infos_new)
-        tag_infos = taginfos_reset_sort_index(tag_infos)
+        tag_infos.extend(import_main.tag_infos)
+
+        quest = (f'Importing {len(import_main.tag_infos)} DICOM tag settings. '
+                 'By default these will be added to the end of tag-list. '
+                 'Sort all tags by attribute name?')
+        msgBox = QMessageBox(
+            QMessageBox.Question,
+            'Sort DICOM tags?', quest,
+            buttons=QMessageBox.Yes | QMessageBox.No,
+            parent=None
+            )
+        res = msgBox.exec_()
+        if res == QMessageBox.Yes:
+            tag_infos = sorted(tag_infos, key=lambda x: x.attribute_name)
+
+        taginfos_reset_sort_index(tag_infos)
         status, path = save_settings(tag_infos, fname=fname)
 
     list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
@@ -756,7 +830,26 @@ def import_settings(import_main):
     return any_same_name
 
 
-def get_taginfos_used_in_templates(object_with_templates):
+def get_taginfos_used_in_templates(object_with_templates, specific_attribute=None):
+    """Find all or one specific taginfo used in different templates.
+
+    Parameters
+    ----------
+    object_with_templates : object
+        some object with attributes named like template fnames as in iQCconstants.py
+    specific_attribute : str, optional
+        if only interest of one specific attribute. The default is None.
+
+    Returns
+    -------
+    status : bool
+        false if some taginfos used, but not defined in tag_infos
+    log : list of str
+        information log to be displayed to user
+    found_attributes : dict
+        list of attributes found for each modality
+        or list of templates where special attribute is found
+    """
 
     status = True
     log = []
@@ -765,7 +858,7 @@ def get_taginfos_used_in_templates(object_with_templates):
     if hasattr(object_with_templates, fname):
         tag_infos = getattr(object_with_templates, fname)
     else:
-        ok, path, templates = load_settings(fname=fname)
+        _, _, templates = load_settings(fname=fname)
 
     modalities = [*QUICKTEST_OPTIONS]
     defined_attributes = {}
@@ -782,38 +875,71 @@ def get_taginfos_used_in_templates(object_with_templates):
         if hasattr(object_with_templates, fname):
             templates = getattr(object_with_templates, fname)
         else:
-            ok, path, templates = load_settings(fname=fname)
+            _, _, templates = load_settings(fname=fname)
         for mod in templates:
             for template in templates[mod]:
                 if 'patterns' in fname:
-                    found_attributes[mod].extend(template.list_tags)
+                    if specific_attribute:
+                        if specific_attribute in template.list_tags:
+                            found_attributes[mod].append(f'{fname}: {template.label}')
+                    else:
+                        found_attributes[mod].extend(template.list_tags)
                 if fname == 'rename_patterns':
-                    found_attributes[mod].extend(template.list_tags2)
+                    if specific_attribute:
+                        if specific_attribute in template.list_tags2:
+                            found_attributes[mod].append(f'{fname}: {template.label}')
+                    else:
+                        found_attributes[mod].extend(template.list_tags2)
                 if fname == 'paramsets':
-                    found_attributes[mod].extend(
-                        template.dcm_tagpattern.list_tags)
-                    found_attributes[mod].extend(template.output.group_by)
+                    if specific_attribute:
+                        if specific_attribute in template.dcm_tagpattern.list_tags:
+                            found_attributes[mod].append(
+                                f'{fname}: {template.label} (DCM test pattern)')
+                        if specific_attribute in template.output.group_by:
+                            found_attributes[mod].append(
+                                f'{fname}: {template.label} (Output group by)')
+                    else:
+                        found_attributes[mod].extend(
+                            template.dcm_tagpattern.list_tags)
+                        found_attributes[mod].extend(template.output.group_by)
                 if fname == 'auto_templates':
-                    found_attributes[mod].extend(template.dicom_crit_attributenames)
-                    found_attributes[mod].extend(template.sort_pattern.list_tags)
+                    if specific_attribute:
+                        if specific_attribute in template.dicom_crit_attributenames:
+                            found_attributes[mod].append(
+                                f'{fname}: {template.label} (Dicom criteria)')
+                        if specific_attribute in template.sort_pattern.list_tags:
+                            found_attributes[mod].append(
+                                f'{fname}: {template.label} (Sorting of images)')
+                    else:
+                        found_attributes[mod].extend(template.dicom_crit_attributenames)
+                        found_attributes[mod].extend(template.sort_pattern.list_tags)
 
         fname = 'auto_common'
         if hasattr(object_with_templates, fname):
             template = getattr(object_with_templates, fname)
         else:
-            ok, path, template = load_settings(fname=fname)
-        found_attributes['CT'].extend(template.auto_delete_criterion_attributenames)
-        found_attributes['CT'].extend(template.filename_pattern.list_tags)
+            _, _, template = load_settings(fname=fname)
+        if specific_attribute:
+            if specific_attribute in template.auto_delete_criterion_attributenames:
+                found_attributes['General'].append(
+                    'Automation import settings: Auto delete criteria')
+            if specific_attribute in template.filename_pattern.list_tags:
+                found_attributes['General'].append(
+                    'Automation import settings: Rename template')
+        else:
+            found_attributes['CT'].extend(template.auto_delete_criterion_attributenames)
+            found_attributes['CT'].extend(template.filename_pattern.list_tags)
 
-    for mod, found_attr in found_attributes.items():
-        missing = []
-        for attr in found_attr:
-            if attr not in defined_attributes[mod]:
-                missing.append(attr)
-        if len(missing) > 0:
-            missing = list(set(missing))
-            log.append(f'{mod}: missing definition of DICOM tags named {missing}')
-            status = False
+    if specific_attribute is None:
+        for mod, found_attr in found_attributes.items():
+            missing = []
+            for attr in found_attr:
+                if attr not in defined_attributes[mod]:
+                    missing.append(attr)
+            if len(missing) > 0:
+                missing = list(set(missing))
+                log.append(f'{mod}: missing definition of DICOM tags named {missing}')
+                status = False
 
     return (status, log, found_attributes)
 
@@ -890,13 +1016,107 @@ def taginfos_reset_sort_index(tag_infos):
 
 
 def tag_infos_difference(tag_infos_import, tag_infos):
-    """Compare imported tag_infos to current tag_infos and return tags to add."""
+    """Compare imported tag_infos to current tag_infos and return tags to add.
+
+    Parameters
+    ----------
+    tag_infos_import : list of TagInfo
+        tag infos to be imported
+    tag_infos : list of TagInfo
+        current tag infos
+
+    Returns
+    -------
+    tag_infos_new : list of TagInfo
+        tags infos to import
+    """
     old_attr = [tag.attribute_name for tag in tag_infos]
+    import_attr = [tag.attribute_name for tag in tag_infos_import]
     tag_infos_new = []
-    for tag in tag_infos_import:
-        if tag.attribute_name not in old_attr:
-            tag_infos_new.append(tag)
+    for attr in list(set(import_attr)):
+        if attr not in old_attr:
+            tag_infos_new.extend(
+                [tag for tag in tag_infos_import if tag.attribute_name == attr])
+        else:
+            # find all old with this tag.attribute_name and compare tag and sequence
+            old_tags_seqs = [
+                (tag.tag, tag.sequence) for tag in tag_infos
+                if tag.attribute_name == attr]
+            old_tags = [tag_seq[0] for tag_seq in old_tags_seqs]
+            old_seqs = [tag_seq[1] for tag_seq in old_tags_seqs]
+            import_idxs = get_all_matches(import_attr, attr)
+            for idx in import_idxs:
+                diff_tag = False if tag_infos_import[idx].tag in old_tags else True
+                diff_seq = False if tag_infos_import[idx].sequence in old_seqs else True
+                if any([diff_tag, diff_seq]):
+                    tag_infos_new.append(tag_infos_import[idx])
     return tag_infos_new
+
+
+def tag_infos_difference_default(current_tag_infos):
+    """Compare current tag_infos to default and return tags to adjusted current.
+
+    New protections might have been added or new default tags might have been added.
+
+    Parameters
+    ----------
+    current_tag_infos : list of TagInfo
+        current tag infos
+
+    Returns
+    -------
+    changes : bool
+        True if changes available
+    added_tags : list of TagInfo
+        tags added
+    protected_tags : list of TagInfo
+        tags with changed protection
+    adjusted_tag_infos : list of TagInfo
+        updated tags infos
+    """
+    changes = False
+    added_tags = []
+    protected_tags = []
+    current_attr = [tag.attribute_name for tag in current_tag_infos]
+    default_tag_infos = CONFIG_FNAMES['tag_infos']['default']
+
+    default_attr = [tag.attribute_name for tag in default_tag_infos]
+    adjusted_tag_infos = copy.deepcopy(current_tag_infos)
+    for attr in list(set(default_attr)):
+        if attr not in current_attr:
+            new_tags = [tag for tag in default_tag_infos if tag.attribute_name == attr]
+            adjusted_tag_infos.extend(new_tags)
+            changes = True
+            added_tags.extend(new_tags)
+        else:
+            # find all tags with attr as name and compare tag, sequence and protection
+            curr_taginfos = [
+                tag for tag in current_tag_infos if tag.attribute_name == attr]
+            curr_vals = []
+            for tag in curr_taginfos:
+                this_vals = [val for key, val in asdict(tag).items()][1:]
+                curr_vals.append(this_vals)
+
+            default_idxs = get_all_matches(default_attr, attr)
+            for idx in default_idxs:
+                def_vals = [
+                    val for key, val in asdict(default_tag_infos[idx]).items()][1:]
+
+                if def_vals not in curr_vals:
+                    curr_wo_prot = [vals[:-1] for vals in curr_vals]
+                    try:  # replace if only protection differ
+                        idx_curr_this = curr_wo_prot.index(def_vals[:-1])
+                        curr_idxs = [
+                            i for i, tag in enumerate(current_tag_infos)
+                            if tag.attribute_name == attr]
+                        curr_idx = curr_idxs[idx_curr_this]
+                        adjusted_tag_infos[curr_idx].protected = def_vals[-1]
+                        protected_tags.append(adjusted_tag_infos[curr_idx])
+                    except ValueError:
+                        adjusted_tag_infos.append(default_tag_infos[idx])
+                        added_tags.append(default_tag_infos[idx])
+                    changes = True
+    return (changes, added_tags, protected_tags, adjusted_tag_infos)
 
 
 def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):

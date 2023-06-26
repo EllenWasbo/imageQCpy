@@ -308,6 +308,8 @@ class ParamSetCommon:
     roi_a: float = 0.
     roi_offset_xy: list[float] = field(default_factory=lambda: [0., 0.])
     roi_offset_mm: bool = False  # False = pix, True = mm
+    roi_table: PositionTable = field(default_factory=PositionTable)
+    roi_read_number: bool = False
 
 
 @dataclass
@@ -391,6 +393,7 @@ class ParamSetXray(ParamSetCommon):
     stp_roi_size: float = 11.3
     var_roi_size: float = 2.0
     var_percent: int = 90
+    dea_percent: int = 100
 
 
 @dataclass

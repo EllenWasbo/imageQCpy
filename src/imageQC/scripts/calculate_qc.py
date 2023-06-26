@@ -8,6 +8,7 @@ Calculation processes for the different tests.
 from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
+from pathlib import Path
 import numpy as np
 import scipy as sp
 from scipy.signal import find_peaks
@@ -17,13 +18,15 @@ from PyQt5.QtWidgets import qApp
 
 # imageQC block start
 import imageQC.scripts.dcm as dcm
-from imageQC.scripts.calculate_roi import get_rois, get_roi_circle
+from imageQC.scripts.calculate_roi import (
+    get_rois, get_roi_circle, get_roi_SNI)
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
 from imageQC.config.iQCconstants import (
     HEADERS, HEADERS_SUP, QUICKTEST_OPTIONS, HALFLIFE)
 import imageQC.config.config_classes as cfc
+from imageQC.config.config_func import get_config_folder
 # imageQC block end
 
 
@@ -406,6 +409,7 @@ def calculate_qc(input_main,
             extra_tag_pattern = None
             read_image = [False] * n_img
             NM_count = [False] * n_img
+            extras = None  # placeholder for extra arguments to pass to calc_2d/3d
             for i in range(n_analyse):
                 if len(marked[i]) > 0:
                     if 'DCM' in marked[i]:
@@ -416,6 +420,9 @@ def calculate_qc(input_main,
                         if 'CountsAccumulated' in paramset.dcm_tagpattern.list_tags:
                             read_image[i] = True
                             NM_count[i] = True
+                    if input_main.current_modality == 'NM' and 'SNI' in marked[i]:
+                        if paramset.sni_correct and paramset.sni_ref_image != '':
+                            extras = get_sni_ref_image(paramset, tag_infos)
 
             # remove old results
             existing_tests = [*input_main.results]
@@ -588,7 +595,8 @@ def calculate_qc(input_main,
 
                             result = calculate_2d(
                                 image, prev_roi[test], img_infos[i],
-                                modality, paramset, test, delta_xya)
+                                modality, paramset, test, delta_xya,
+                                extras)
                             if result is not None:
                                 if result.errmsg is not None:
                                     intro = f'{test} image {i}:'
@@ -603,6 +611,10 @@ def calculate_qc(input_main,
 
                             if test not in [*input_main.results]:
                                 # initiate results
+                                ''' NB if changing dict structure also update in:
+                                        input_main.results['DCM'] (below)
+                                        ui_main.update_results
+                                '''
                                 input_main.results[test] = {
                                     'headers': result.headers,
                                     'values': [[] for i in range(n_img)],
@@ -682,10 +694,15 @@ def calculate_qc(input_main,
                 input_main.results['DCM'] = {
                     'headers': paramset.dcm_tagpattern.list_tags,
                     'values': tag_lists,
-                    'values_info': '',
                     'alternative': 0,
-                    'pr_image': True
+                    'headers_sup': [],
+                    'values_sup': [[] for i in range(n_img)],
+                    'details_dict': [{} for i in range(n_img)],
+                    'pr_image': True,
+                    'values_info': '',
+                    'values_sup_info': ''
                     }
+
     msgs = []
     if len(errmsgs) > 0:
         # flatten errmsgs and remove None and '' from errmsgs
@@ -732,7 +749,7 @@ def calculate_qc(input_main,
 
 
 def calculate_2d(image2d, roi_array, image_info, modality,
-                 paramset, test_code, delta_xya):
+                 paramset, test_code, delta_xya, extras):
     """Calculate tests based on 2d-image.
 
     Parameters
@@ -753,6 +770,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         code as defined in iQCconstants.py
     delta_xya : list
         center and angle offset from gui
+    extras : object
+        holder for extra argumets. Default is None
 
     Returns
     -------
@@ -766,6 +785,14 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             avg_val = np.mean(arr)
             std_val = np.std(arr)
             values = [avg_val, std_val]
+            '''
+            #### for testing text recognition - delete
+            rows = np.max(roi_array, axis=1)
+            cols = np.max(roi_array, axis=0)
+            sub = image2d[rows][:, cols]
+            sub_binary = np.zeros(sub.shape)
+            sub_binary[sub < 0.5*(np.max(sub) + np.min(sub))] = 1
+            '''
         headers = HEADERS[modality][test_code]['alt0']
         res = Results(headers=headers, values=values)
         return res
@@ -1250,7 +1277,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     image2d, image_info, roi_array[0],
                     fit_x=paramset.uni_correct_pos_x,
                     fit_y=paramset.uni_correct_pos_y,
-                    lock_z=lock_z
+                    lock_z=lock_z,
+                    correction_type='multiply'
                     )
                 image_input = res['corrected_image']
                 values_sup = [res['dx'], res['dy'], res['distance']]
@@ -1276,8 +1304,13 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         if image2d is None:
             res = Results(headers=headers, headers_sup=headers_sup)
         else:
+            reference_image = None
+            if extras is not None:
+                if 'reference_image' in extras:
+                    reference_image = extras['reference_image'][image_info.frame_number]
+
             values, values_sup, details_dict, errmsg = calculate_NM_SNI(
-                image2d, roi_array, image_info, paramset)
+                image2d, roi_array, image_info, paramset, reference_image)
 
             res = Results(
                 headers=headers, values=values,
@@ -1881,7 +1914,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 image_input, images_to_test[0], input_main)
             details_dict = {'sum_image': image_input}
             values, _, details_dict2, _ = calculate_NM_SNI(
-                image_input, roi_array, img_infos[0], paramset)
+                image_input, roi_array, img_infos[0], paramset, None)
             details_dict.update(details_dict2)
 
             res = Results(headers=headers, values=[values],
@@ -2864,7 +2897,8 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
 
 def get_corrections_point_source(
         image2d, img_info, roi_array,
-        fit_x=False, fit_y=False, lock_z=None, estimate_noise=False):
+        fit_x=False, fit_y=False, lock_z=None,
+        correction_type='multiply', estimate_noise=False):
     """Estimate xyz of point source and generate correction matrix.
 
     Parameters
@@ -2881,6 +2915,8 @@ def get_corrections_point_source(
         Fit in y direction. The default is False.
     lock_z : float, optional
         Use locked distance to source when fitting. The default is None.
+    correction_type : str, optional
+        'subtract' or 'multiply'. Default is 'multiply'
     estimate_noise : bool
         if True estimate poisson noise for fitted image
 
@@ -2904,6 +2940,7 @@ def get_corrections_point_source(
     correction_matrix = np.ones(image2d.shape)
     fit_matrix = None
     distance = 0.
+    estimated_noise_image = None
     errmsg = None
 
     # get subarray
@@ -2962,13 +2999,18 @@ def get_corrections_point_source(
             fit = mmcalc.point_source_func(dists_inplane.flatten(), C, distance)
 
             # estimate noise
-            fit_matrix = fit.reshape(image2d.shape)
-            rng = np.random.default_rng()
-            estimated_noise_image = rng.poisson(fit_matrix)
+            fit_matrix = fit.reshape(image2d.shape)    
+            if estimate_noise:
+                rng = np.random.default_rng()
+                estimated_noise_image = rng.poisson(fit_matrix)
 
             # correct input image
-            correction_matrix = np.max(fit) - fit_matrix
-            corrected_image = image2d + correction_matrix
+            if correction_type == 'multiply':
+                normalized_fit_matrix = fit_matrix/np.max(fit)
+                corrected_image = image2d / normalized_fit_matrix
+            elif correction_type == 'subtract':
+                correction_matrix = np.max(fit) - fit_matrix
+                corrected_image = image2d + correction_matrix
         else:
             errmsg = 'Failed fitting matrix to point source.'
 
@@ -3096,6 +3138,35 @@ def get_eye_filter(roi_size, pix, c):
     return {'filter_2d': eye_filter_2d, 'curve': eye_filter_1d, 'unit': unit}
 
 
+def get_sni_ref_image(paramset, tag_infos):
+    """Get noise from reference image.
+
+    Parameters
+    ----------
+    paramset : cfc.ParamsetNM
+    tag_infos : tag_infos to read reference image
+
+    Returns
+    -------
+    dict
+        'reference_image': list of nd.array
+        empty list if image failed to read
+        one image for each frame else
+    """
+    sni_ref_image = []
+    filename = (
+        Path(get_config_folder()) / 'SNI_ref_images' /
+        (paramset.sni_ref_image + '.dcm'))
+    ref_infos, _, _ = dcm.read_dcm_info([filename], GUI=False, tag_infos=tag_infos)
+    for rno, ref_info in enumerate(ref_infos):
+        image, _ = dcm.get_img(
+            filename,
+            frame_number=rno, tag_infos=tag_infos)
+        if image is not None:
+            sni_ref_image.append(image)
+    return {'reference_image': sni_ref_image}
+
+
 def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
                       pix=1., fit_dict=None):
     """Calculate SNI for one ROI.
@@ -3126,7 +3197,6 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         rNPS_filt
         rNPS_struct
         rNPS_struct_filt
-    errmsgs : list of str
     """
     rows = np.max(roi_array_this, axis=1)
     cols = np.max(roi_array_this, axis=0)
@@ -3144,11 +3214,13 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         NPS[line, line] = 0
         NPS_struct = NPS - quantum_noise
     else:
-        # point source - varying quantum noise
-        sub_estimated_noise = fit_dict['estimated_noise_image'][rows][:, cols]
         # curve correct both subarray and quantum noise
         corr_matrix = fit_dict['correction_matrix'][rows][:, cols]
         subarray = subarray + corr_matrix
+        if 'reference_image' in fit_dict:
+            sub_estimated_noise = fit_dict['reference_image'][rows][:, cols]
+        else:
+            sub_estimated_noise = fit_dict['estimated_noise_image'][rows][:, cols]
         sub_estimated_noise = sub_estimated_noise + corr_matrix
         # 2d NPS
         NPS = mmcalc.get_2d_NPS(subarray, pix)
@@ -3179,7 +3251,7 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
     return (SNI, details_dict_roi)
 
 
-def calculate_NM_SNI(image2d, roi_array, image_info, paramset):
+def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
     """Calculate Structured Noise Index.
 
     Parameters
@@ -3190,6 +3262,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset):
     image_info :  DcmInfo
         as defined in scripts/dcm.py
     paramset : cfc.ParamsetNM
+    reference_image : numpy.ndarray or None
 
     Returns
     -------
@@ -3207,15 +3280,24 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset):
     fit_dict = None
     if paramset.sni_correct:
         lock_z = paramset.sni_radius if paramset.sni_lock_radius else None
+        est_noise = False if reference_image is not None else True
+
         fit_dict, errmsg = get_corrections_point_source(
             image2d, image_info, roi_array[0],
             fit_x=paramset.sni_correct_pos_x,
             fit_y=paramset.sni_correct_pos_y,
-            lock_z=lock_z
+            lock_z=lock_z,
+            correction_type='subtract', estimate_noise=est_noise
             )
         if errmsg is not None:
             errmsgs.append(errmsg)
         values_sup = [fit_dict['dx'], fit_dict['dy'], fit_dict['distance']]
+        if reference_image is not None:
+            if reference_image.shape == image2d.shape:
+                fit_dict['reference_image'] = reference_image
+            else:
+                errmsgs.append('Reference image not same size as image to analyse. '
+                               'Quantum noise estimated.')
         details_dict = fit_dict
 
     details_dict['pr_roi'] = []

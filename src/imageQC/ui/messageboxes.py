@@ -95,7 +95,8 @@ class QuestionBox(QMessageBox):
 
     def __init__(
             self, parent=None, title='?', msg='?',
-            yes_text='Yes', no_text='No', msg_width=500):
+            yes_text='Yes', no_text='No', msg_width=500,
+            info='', details=[]):
         """Initiate QuestionBox.
 
         Parameters
@@ -124,6 +125,12 @@ class QuestionBox(QMessageBox):
         self.setWindowTitle(title)
         self.setText(msg)
         self.setTextFormat(Qt.RichText)
+        if info != '':
+            self.setInformativeText(info)
+        if details != []:
+            self.setDetailedText('\n'.join(details))
+        _qlabels = self.findChildren(QLabel)
+        _qlabels[1].setFixedWidth(msg_width)
         self.addButton(no_text, QMessageBox.RejectRole)
         self.addButton(yes_text, QMessageBox.AcceptRole)
         self.setStyleSheet(

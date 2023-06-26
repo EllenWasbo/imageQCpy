@@ -13,13 +13,14 @@ from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup,
     QPushButton, QLabel, QLineEdit, QSpinBox, QDoubleSpinBox,
     QListWidget, QRadioButton, QAbstractItemView,
-    QFileDialog, QDialogButtonBox,
+    QFileDialog, QDialogButtonBox, QMessageBox
     )
 
 # imageQC block start
 from imageQC.ui.ui_dialogs import ImageQCDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.scripts.dcm import find_all_valid_dcm_files, read_dcm_info
+from imageQC.ui import messageboxes
 # imageQC block end
 
 
@@ -212,9 +213,15 @@ class OpenMultiDialog(ImageQCDialog):
                 f'Reading header of {len(dcm_dict["files"])} dicom files...')
             if len(dcm_dict['files']) > 0:
                 dcm_files = dcm_dict['files']
-                img_infos, ignored_files = read_dcm_info(
+                img_infos, _, warnings = read_dcm_info(
                     dcm_files, tag_infos=self.main.tag_infos,
                     tag_patterns_special=self.main.tag_patterns_special)
+                if len(warnings) > 0:
+                    dlg = messageboxes.MessageBoxWithDetails(
+                        self, title='Some files read with warnings',
+                        msg='See details for warning messages',
+                        details=warnings, icon=QMessageBox.Warning)
+                    dlg.exec()
                 series_nmb_name = [' '.join(img.series_list_strings)
                                    for img in img_infos]
                 series_nmb_name = list(set(series_nmb_name))
@@ -224,6 +231,13 @@ class OpenMultiDialog(ImageQCDialog):
                     ser = ' '.join(img.series_list_strings)
                     serno = series_nmb_name.index(ser)
                     self.imgs[serno].append(img)
+
+                # sort by zpos if available
+                for serno, imgs in enumerate(self.imgs):
+                    zs = [img.zpos for img in imgs]
+                    if all(zs):
+                        imgs_temp = sorted(zip(imgs, zs), key=lambda t: t[1])
+                        self.imgs[serno] = [img[0] for img in imgs_temp]
 
                 self.list_series.clear()
                 self.list_series.addItems(series_nmb_name)

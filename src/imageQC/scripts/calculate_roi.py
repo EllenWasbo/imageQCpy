@@ -5,9 +5,9 @@ Calculation processes for the different tests.
 
 @author: Ellen Wasbø
 """
-from timeit import default_timer as timer  #TODO delete
 import numpy as np
 from scipy import ndimage
+from scipy.signal import find_peaks
 from skimage import feature
 
 
@@ -61,32 +61,63 @@ def get_rois(image, image_number, input_main):
         delta_xya = [0, 0, 0.0]
 
     def ROI():
-        roi_this = None
+        roi_array = []
 
-        if paramset.roi_offset_mm:
-            extra_xy = np.array(paramset.roi_offset_xy) / image_info.pix[0]
-        else:
-            extra_xy = np.array(paramset.roi_offset_xy)
-        off_center_xy = tuple(np.add(extra_xy, np.array(delta_xya[0:2])))
+        if paramset.roi_use_table in [0, 1]:
+            if paramset.roi_offset_mm:
+                extra_xy = np.array(paramset.roi_offset_xy) / image_info.pix[0]
+            else:
+                extra_xy = np.array(paramset.roi_offset_xy)
+            if paramset.roi_use_table == 0:
+                off_center_xys = [tuple(np.add(extra_xy, np.array(delta_xya[0:2])))]
+            else:  # 1
+                xs = [x + delta_xya[0] for x in paramset.roi_table.pos_x]
+                ys = [y + delta_xya[1] for y in paramset.roi_table.pos_y]
+                off_center_xys = [(xs[i], ys[i]) for i in range(len(xs))]
 
-        # roi_type 0=circular, 1=rectangular, 2=rectangular wi
-        if paramset.roi_type == 0:
-            roi_size_in_pix = paramset.roi_radius / image_info.pix[0]
-            roi_this = get_roi_circle(
-                img_shape, off_center_xy, roi_size_in_pix)
-        else:
-            w = paramset.roi_x / image_info.pix[0]
-            h = paramset.roi_y / image_info.pix[1]
-            roi_this = get_roi_rectangle(
-                img_shape, roi_width=w, roi_height=h,
-                offcenter_xy=off_center_xy)
-            if paramset.roi_type == 2:  # rotated ROI
-                roi_this = ndimage.rotate(
-                    roi_this.astype(float), -paramset.roi_a, reshape=False)
-                roi_this = np.round(roi_this)
-                roi_this = np.array(roi_this, dtype=bool)
+            # roi_type 0=circular, 1=rectangular, 2=rectangular wi
+            if paramset.roi_type == 0:
+                roi_size_in_pix = paramset.roi_radius / image_info.pix[0]
+                roi_array = [get_roi_circle(
+                    img_shape, off_xy, roi_size_in_pix) for off_xy in off_center_xys]
+            else:
+                w = paramset.roi_x / image_info.pix[0]
+                h = paramset.roi_y / image_info.pix[1]
+                roi_array = [get_roi_rectangle(
+                    img_shape, roi_width=w, roi_height=h,
+                    offcenter_xy=off_xy) for off_xy in off_center_xys]
+                if paramset.roi_type == 2:  # rotated ROI
+                    roi_array_rotated = []
+                    for roi in roi_array:
+                        roi = ndimage.rotate(
+                            roi.astype(float), -paramset.roi_a, reshape=False)
+                        roi = np.round(roi)
+                        roi = np.array(roi, dtype=bool)
+                        roi_array_rotated.append(roi)
+                    roi_array = roi_array_rotated
 
-        return roi_this
+        else:  # zoomed table
+            if len(paramset.roi_table.pos_x) > 0:
+                for i in range(len(paramset.roi_table.pos_x)):
+                    roi_array.append(get_roi_rectangle(
+                        img_shape,
+                        coords_x=paramset.roi_table.pos_x[i],
+                        coords_y=paramset.roi_table.pos_y[i]
+                        ))
+
+        return roi_array
+
+    def Num():
+        roi_array = []
+        if len(paramset.num_table.pos_x) > 0:
+            for i in range(len(paramset.num_table.pos_x)):
+                roi_array.append(get_roi_rectangle(
+                    img_shape,
+                    coords_x=paramset.num_table.pos_x[i],
+                    coords_y=paramset.num_table.pos_y[i]
+                    ))
+
+        return roi_array
 
     def Hom():
         return get_roi_hom(
@@ -257,7 +288,8 @@ def get_rois(image, image_number, input_main):
                                 offcenter_xy=res[i]
                                 )
                             )
-                    pass
+                    else:
+                        errmsg = 'Failed finding the two lines.'
             else:
                 offcenter_xy = [dx, dy]
 
@@ -444,8 +476,9 @@ def get_max_pos_yx(image):
 
 
 def get_roi_rectangle(image_shape,
-                      roi_width=0, roi_height=0, offcenter_xy=(0, 0)):
-    """Generate circular roi given center position and radius.
+                      roi_width=0, roi_height=0, offcenter_xy=(0, 0),
+                      coords_x=None, coords_y=None):
+    """Generate circular roi given center position and radius or coords_x/y.
 
     Parameters
     ----------
@@ -457,6 +490,10 @@ def get_roi_rectangle(image_shape,
         height of ROI in pix
     offcenter_xy : arraylike of floats
         center of roi relative to center of image
+    coords_x : tuple or None
+        if tuple start_x, end_x
+    coords_t : tuple or None
+        if tuple start_y, end_y
 
     Returns
     -------
@@ -464,6 +501,7 @@ def get_roi_rectangle(image_shape,
         2d array with type 'bool'
     """
     inside = np.full(image_shape[0:2], False)
+    start_y = None
     if roi_width > 0 and roi_height > 0:
         center_pos_xy = [round(offcenter_xy[0] + 0.5*image_shape[1]),
                          round(offcenter_xy[1] + 0.5*image_shape[0])]
@@ -479,7 +517,13 @@ def get_roi_rectangle(image_shape,
             end_x == image_shape[1]
         if end_y > image_shape[0]:
             end_y = image_shape[0]
+    elif coords_x is not None and coords_y is not None:
+        start_x = coords_x[0]
+        start_y = coords_y[0]
+        end_x = coords_x[1] if coords_x[1] < image_shape[1] else image_shape[1] - 1
+        end_y = coords_y[1] if coords_y[1] < image_shape[0] else image_shape[0] - 1
 
+    if start_y is not None:
         inside[start_y:end_y, start_x:end_x] = True
 
     return inside
@@ -540,14 +584,14 @@ def get_outer_ring(radius):
 
 
 def get_roi_hom(image_info,
-                test_params, delta_xya=[0, 0, 0.0], modality='CT'):
+                paramset, delta_xya=[0, 0, 0.0], modality='CT'):
     """Calculate roi array with center roi and periferral rois.
 
     Parameters
     ----------
     image_info : DcmInfo
         as defined in scripts/dcm.py
-    test_params : ParamSetXX
+    paramset : ParamSetXX
         ParamSet for given modality as defined in config/config_classes.py
     delta_xya : list
         center and angle offset [center x, center y, rotation].
@@ -560,15 +604,15 @@ def get_roi_hom(image_info,
     roi_all : list of np.array
     """
     off_centers = []  # [x,y] = center of roi relative to centerpos
-    roi_size_in_pix = test_params.hom_roi_size / image_info.pix[0]
+    roi_size_in_pix = paramset.hom_roi_size / image_info.pix[0]
 
     if modality in ['CT', 'PET']:
         roi_dist_in_pix = round(
-            test_params.hom_roi_distance / image_info.pix[0])
+            paramset.hom_roi_distance / image_info.pix[0])
         # central + 4 rois at 12, 15, 18, 21 o'clock optionally rotated
         rotation = delta_xya[2]
         if image_info.modality == 'CT':
-            rotation = rotation + test_params.hom_roi_rotation
+            rotation = rotation + paramset.hom_roi_rotation
         rotation_radians = np.deg2rad(rotation)
         if rotation_radians != 0:
             delta_rot = [np.cos(rotation_radians), np.sin(rotation_radians)]
@@ -597,23 +641,23 @@ def get_roi_hom(image_info,
         # optionally at specific distance and rotated
 
         rotation = delta_xya[2]
-        rotation = rotation + test_params.hom_roi_rotation
+        rotation = rotation + paramset.hom_roi_rotation
         rotation_radians = np.deg2rad(rotation - 45)
 
-        if rotation != 0 or test_params.hom_roi_distance > 0:
+        if rotation != 0 or paramset.hom_roi_distance > 0:
 
             center = [round(0.5 * image_info.shape[1]) + delta_xya[0],
                       round(0.5 * image_info.shape[0]) + delta_xya[1]]
             min_size = min([center[0], center[1],
                             image_info.shape[1] - center[0],
                             image_info.shape[0] - center[1]])
-            if test_params.hom_roi_distance == 0:
+            if paramset.hom_roi_distance == 0:
                 distance_pix = min_size * 0.5
                 # centered in rotated quadrant with min dist to border
                 # as reference distance
             else:
                 distance_pix = round(
-                    min_size * 0.01 * test_params.hom_roi_distance)
+                    min_size * 0.01 * paramset.hom_roi_distance)
                 # hom_roi_distane = % of shortest distance from center
 
             if rotation_radians != 0:
@@ -659,7 +703,7 @@ def get_roi_hom(image_info,
     return roi_array
 
 
-def get_roi_CTn(image, image_info, test_params, delta_xya=[0, 0, 0.]):
+def get_roi_CTn(image, image_info, paramset, delta_xya=[0, 0, 0.]):
     """Calculate roi array with center roi and periferral rois.
 
     Parameters
@@ -668,7 +712,7 @@ def get_roi_CTn(image, image_info, test_params, delta_xya=[0, 0, 0.]):
         pixeldata
     image_info : DcmInfo
         as defined in scripts/dcm.py
-    test_params : ParamSetCT
+    paramset : ParamSetCT
         ParamSetCT as defined in config/config_classes.py
     delta_xya : list
         center and angle offset [center x, center y, rotation].
@@ -681,25 +725,25 @@ def get_roi_CTn(image, image_info, test_params, delta_xya=[0, 0, 0.]):
         x 2 = first for actual ROI, next for search ROI (larger)
     errmsg
     """
-    roi_size_in_pix = round(test_params.ctn_roi_size / image_info.pix[0])
+    roi_size_in_pix = round(paramset.ctn_roi_size / image_info.pix[0])
 
     roi_array = None
     errmsg = None
 
     if roi_size_in_pix > 0:
-        if test_params.ctn_auto_center:
+        if paramset.ctn_auto_center:
             res = mmcalc.optimize_center(image, 0)
             if res is not None:
                 center_x, center_y, _, _ = res
                 delta_xya[0] = center_x - 0.5*image_info.shape[1]
                 delta_xya[1] = center_y - 0.5*image_info.shape[0]
         filt_image = ndimage.gaussian_filter(image, sigma=5)
-        n_rois = len(test_params.ctn_table.pos_x)
+        n_rois = len(paramset.ctn_table.pos_x)
         off_centers = []
         rot_a = np.deg2rad(delta_xya[2])
         for r in range(n_rois):
-            x = test_params.ctn_table.pos_x[r] / image_info.pix[0]
-            y = test_params.ctn_table.pos_y[r] / image_info.pix[0]
+            x = paramset.ctn_table.pos_x[r] / image_info.pix[0]
+            y = paramset.ctn_table.pos_y[r] / image_info.pix[0]
             x += delta_xya[0]
             y += delta_xya[1]
             if rot_a != 0:
@@ -711,9 +755,9 @@ def get_roi_CTn(image, image_info, test_params, delta_xya=[0, 0, 0.]):
             off_centers.append([x, y])
 
         roi_search_array = []
-        if test_params.ctn_search:  # optimize off_centers
+        if paramset.ctn_search:  # optimize off_centers
             search_size_in_pix = round(
-                test_params.ctn_search_size / image_info.pix[0])
+                paramset.ctn_search_size / image_info.pix[0])
             for r in range(n_rois):
                 roi_search_array.append(get_roi_circle(
                     image_info.shape, tuple(off_centers[r]),
@@ -776,7 +820,7 @@ def get_ratio_NM(image, image_info, ufov_ratio=0.95, cfov_ratio=0.75):
         pixeldata
     image_info : DcmInfo
         as defined in scripts/dcm.py
-    test_params : ParamSetNM
+    paramset : ParamSetNM
         ParamSetNM as defined in config/config_classes.py
 
     Returns
@@ -813,7 +857,7 @@ def get_ratio_NM(image, image_info, ufov_ratio=0.95, cfov_ratio=0.75):
     return roi_array
 
 
-def get_roi_SNI(image, image_info, test_params):
+def get_roi_SNI(image, image_info, paramset):
     """Generate roi_array for NM SNI test.
 
     Parameters
@@ -821,7 +865,7 @@ def get_roi_SNI(image, image_info, test_params):
     image : nparr
     image_info : DcmInfo
         as defined in scripts/dcm.py
-    test_params : ParamSetNM
+    paramset : ParamSetNM
         for given modality as defined in config/config_classes.py
 
     Returns
@@ -833,7 +877,7 @@ def get_roi_SNI(image, image_info, test_params):
     """
     errmsg = None
     roi_full, not_used = get_ratio_NM(
-        image, image_info, ufov_ratio=test_params.sni_area_ratio)
+        image, image_info, ufov_ratio=paramset.sni_area_ratio)
     roi_array = [roi_full]
 
     rows = np.max(roi_full, axis=1)
@@ -848,31 +892,57 @@ def get_roi_SNI(image, image_info, test_params):
     idxs_row = np.where(rows == True)
     first_row = idxs_row[0][0]
 
-    # large ROIs (2)
-    left_large = np.full(roi_full.shape, False)
-    left_large[rows, first_col:first_col + large_dim] = True
-    roi_array.append(left_large)
-    roi_array.append(np.fliplr(left_large))
-    # small ROIs (6)
-    upper_left = np.full(roi_full.shape, False)
-    upper_left[first_row:first_row + small_dim, first_col:first_col + small_dim] = True
-    roi_array.append(upper_left)
-    upper_mid = np.full(roi_full.shape, False)
-    s2 = round(small_dim/2)
-    sz_y, sz_x = image.shape
-    w2 = round(sz_x/2)
-    first_mid = w2-1-s2
-    upper_mid[first_row:first_row + small_dim, first_mid:first_mid + small_dim] = True
-    roi_array.append(upper_mid)
-    roi_array.append(np.fliplr(upper_left))
-    roi_array.append(np.flipud(upper_left))
-    roi_array.append(np.flipud(upper_mid))
-    roi_array.append(np.flipud(np.fliplr(upper_left)))
+    if width_x > width_y:
+        # large ROIs (2)
+        left_large = np.full(roi_full.shape, False)
+        left_large[rows, first_col:first_col + large_dim] = True
+        roi_array.append(left_large)
+        roi_array.append(np.fliplr(left_large))
+        # small ROIs (6)
+        upper_left = np.full(roi_full.shape, False)
+        upper_left[
+            first_row:first_row + small_dim, first_col:first_col + small_dim] = True
+        roi_array.append(upper_left)
+        upper_mid = np.full(roi_full.shape, False)
+        s2 = round(small_dim/2)
+        sz_y, sz_x = image.shape
+        w2 = round(sz_x/2)
+        first_mid = w2-1-s2
+        upper_mid[
+            first_row:first_row + small_dim, first_mid:first_mid + small_dim] = True
+        roi_array.append(upper_mid)
+        roi_array.append(np.fliplr(upper_left))
+        roi_array.append(np.flipud(upper_left))
+        roi_array.append(np.flipud(upper_mid))
+        roi_array.append(np.flipud(np.fliplr(upper_left)))
+    else:
+        # large ROIs (2)
+        first_large = np.full(roi_full.shape, False)
+        first_large[first_row:first_row + large_dim, cols] = True
+        roi_array.append(first_large)
+        roi_array.append(np.flipud(first_large))
+        # small ROIs (6)
+        upper_left = np.full(roi_full.shape, False)
+        upper_left[
+            first_row:first_row + small_dim, first_col:first_col + small_dim] = True
+        roi_array.append(upper_left)
+        mid_left = np.full(roi_full.shape, False)
+        s2 = round(small_dim/2)
+        sz_y, sz_x = image.shape
+        w2 = round(sz_y/2)
+        first_mid = w2-1-s2
+        mid_left[
+            first_mid:first_mid + small_dim, first_col:first_col + small_dim] = True
+        roi_array.append(mid_left)
+        roi_array.append(np.flipud(upper_left))
+        roi_array.append(np.fliplr(upper_left))
+        roi_array.append(np.fliplr(mid_left))
+        roi_array.append(np.flipud(np.fliplr(upper_left)))
 
     return (roi_array, errmsg)
 
 
-def get_roi_NM_bar(image, image_info, test_params):
+def get_roi_NM_bar(image, image_info, paramset):
     """Generate circular rois for NM bar phantom tests.
 
     Circular ROI in each quadrant sorted by variance to get widest to narrowest bars.
@@ -882,7 +952,7 @@ def get_roi_NM_bar(image, image_info, test_params):
     image : nparr
     image_info : DcmInfo
         as defined in scripts/dcm.py
-    test_params : ParamSetNM
+    paramset : ParamSetNM
         as defined in config/config_classes.py
 
     Returns
@@ -897,7 +967,7 @@ def get_roi_NM_bar(image, image_info, test_params):
     nozero = np.nonzero(vec_y)
     n_nozero = nozero[0].size
     dd = n_nozero // 4
-    radius = test_params.bar_roi_size / image_info.pix[0]
+    radius = paramset.bar_roi_size / image_info.pix[0]
 
     x_fac = [-1, 1, -1, 1]  # (left, right) * 2
     y_fac = [-1, -1, 1, 1]  # upper, upper, lower, lower
@@ -918,7 +988,7 @@ def get_roi_NM_bar(image, image_info, test_params):
     return roi_array
 
 
-def get_roi_recovery_curve(summed_image, image_info, test_params):
+def get_roi_recovery_curve(summed_image, image_info, paramset):
     """Generate background and sphere rois based on image content.
 
     Parameters
@@ -927,7 +997,7 @@ def get_roi_recovery_curve(summed_image, image_info, test_params):
         sum of all selected images
     image_info : DcmInfo
         as defined in scripts/dcm.py
-    test_params : ParamSetPET
+    paramset : ParamSetPET
         as defined in config/config_classes.py
 
     Returns
@@ -956,11 +1026,11 @@ def get_roi_recovery_curve(summed_image, image_info, test_params):
 
     # background ROIs
     roi_array = []
-    radius = test_params.rec_roi_size / image_info.pix[0]
+    radius = paramset.rec_roi_size / image_info.pix[0]
     try:
-        for i in range(len(test_params.rec_table.pos_x)):
-            pos_x = test_params.rec_table.pos_x[i] / image_info.pix[0]
-            pos_y = test_params.rec_table.pos_y[i] / image_info.pix[1]
+        for i in range(len(paramset.rec_table.pos_x)):
+            pos_x = paramset.rec_table.pos_x[i] / image_info.pix[0]
+            pos_y = paramset.rec_table.pos_y[i] / image_info.pix[1]
             roi_array.append(get_roi_circle(
                 summed_image.shape, (dx + pos_x, dy + pos_y), radius))
     except AttributeError:  # if rec_table is None (maybe fixed)
@@ -972,7 +1042,7 @@ def get_roi_recovery_curve(summed_image, image_info, test_params):
     return (roi_array, errmsg)
 
 
-def get_roi_circle_MR(image, image_info, test_params, test_code, delta_xy):
+def get_roi_circle_MR(image, image_info, paramset, test_code, delta_xy):
     """Generate circular roi for MR tests.
 
     Circular ROI.
@@ -984,7 +1054,7 @@ def get_roi_circle_MR(image, image_info, test_params, test_code, delta_xy):
     image : nparr
     image_info : DcmInfo
         as defined in scripts/dcm.py
-    test_params : ParamSetMR
+    paramset : ParamSetMR
         for given modality as defined in config/config_classes.py
     test_code : str
     delta_xy : tuple
@@ -999,7 +1069,7 @@ def get_roi_circle_MR(image, image_info, test_params, test_code, delta_xy):
 
     mask_outer = 0
     if test_code == 'Geo':
-        mask_outer = round(test_params.geo_mask_outer / image_info.pix[0])
+        mask_outer = round(paramset.geo_mask_outer / image_info.pix[0])
 
     res = mmcalc.optimize_center(image, mask_outer)
     if res is not None:
@@ -1010,17 +1080,17 @@ def get_roi_circle_MR(image, image_info, test_params, test_code, delta_xy):
         optimize_center = True
         cut_top = 0
         if test_code == 'SNR':
-            radius = 0.5 * width * np.sqrt(0.01 * test_params.snr_roi_percent)
-            cut_top = test_params.snr_roi_cut_top
+            radius = 0.5 * width * np.sqrt(0.01 * paramset.snr_roi_percent)
+            cut_top = paramset.snr_roi_cut_top
         elif test_code == 'PIU':
-            radius = 0.5 * width * np.sqrt(0.01 * test_params.snr_roi_percent)
-            cut_top = test_params.piu_roi_cut_top
+            radius = 0.5 * width * np.sqrt(0.01 * paramset.snr_roi_percent)
+            cut_top = paramset.piu_roi_cut_top
         elif test_code == 'Gho':
-            radius = test_params.gho_roi_central / image_info.pix[0]
-            optimize_center = test_params.gho_optimize_center
-            cut_top = test_params.gho_roi_cut_top
+            radius = paramset.gho_roi_central / image_info.pix[0]
+            optimize_center = paramset.gho_optimize_center
+            cut_top = paramset.gho_roi_cut_top
         elif test_code == 'Geo':
-            radius = test_params.geo_actual_size / image_info.pix[0] / 2
+            radius = paramset.geo_actual_size / image_info.pix[0] / 2
         if optimize_center:
             delta_xy = (
                 center_x - 0.5*image_info.shape[1],
@@ -1042,9 +1112,9 @@ def get_roi_circle_MR(image, image_info, test_params, test_code, delta_xy):
         if test_code == 'Gho':  # add rectangular ROIs at borders
             # rois: 'Center', 'top', 'bottom', 'left', 'right'
             roi_array = [roi_array]
-            roi_w = round(test_params.gho_roi_w / image_info.pix[0])
-            roi_h = round(test_params.gho_roi_h / image_info.pix[0])
-            roi_d = round(test_params.gho_roi_dist / image_info.pix[0])
+            roi_w = round(paramset.gho_roi_w / image_info.pix[0])
+            roi_h = round(paramset.gho_roi_h / image_info.pix[0])
+            roi_d = round(paramset.gho_roi_dist / image_info.pix[0])
             w = [roi_w, roi_w, roi_h, roi_h]
             h = w[::-1]
             delta = roi_h/2 + roi_d
@@ -1309,7 +1379,7 @@ def find_rectangle_object(image, mask_outer=0):
             except TypeError:
                 pass
 
-    #TODO find edges also if full rectangle not imaged
+    # TODO find edges also if full rectangle not imaged
 
     return {'centers_of_edges_xy': centers_of_edges_xy,
             'corners_xy': corners_xy}
@@ -1339,9 +1409,48 @@ def find_lines(image):
     _, center_ydir_y = mmcalc.get_width_center_at_threshold(
         prof_y, 0.1*(np.max(prof_y)))
 
-    center_line_ydir_xy = [
-        center_ydir_x - image.shape[1]/2, center_ydir_y - image.shape[0]/2]
-    center_line_xdir_xy = [
-        center_xdir_x - image.shape[1]/2, center_xdir_y - image.shape[0]/2]
+    xy_dir_xy = [center_xdir_x, center_xdir_y, center_ydir_x, center_ydir_y]
+    if not all(xy_dir_xy):
+        # try scipy.signal.find_peaks
+        xy_dir_xy_peak = [None for i in range(4)]
+        di = 0
+        for iprof, prof in enumerate([prof_x, prof_y]):
+            peaks = find_peaks(prof, distance=10)
+            peaks_pos = peaks[0]
+            highest_peak_pos = None
+            lowest_peak_pos = None
+            if len(peaks_pos) >= 2:
+                order_peaks = np.argsort(prof[peaks_pos])
+                highest_peak_pos = peaks_pos[order_peaks[-1]]
+                lowest_peak_pos = peaks_pos[order_peaks[-2]]
+            if di == 0:  # prof_x
+                xy_dir_xy_peak[2] = highest_peak_pos  # xpos of ydir
+                xy_dir_xy_peak[0] = lowest_peak_pos  # xpos of xdir
+            else:  # prof_y
+                xy_dir_xy_peak[1] = highest_peak_pos  # ypos of x dir
+                xy_dir_xy_peak[3] = lowest_peak_pos  # ypos of y dir
+            di = di + 1
+
+        # try combine (trust more center at threshold technique)
+        xy_dir_xy_combine = []
+        for i in range(4):
+            if xy_dir_xy[i] is None:
+                xy_dir_xy_combine.append(xy_dir_xy_peak[i])
+            else:
+                xy_dir_xy_combine.append(xy_dir_xy[i])
+        xy_dir_xy = xy_dir_xy_combine
+
+    if all(xy_dir_xy):
+        center_line_ydir_xy = [
+            xy_dir_xy[2] - image.shape[1]/2,
+            xy_dir_xy[3] - image.shape[0]/2
+            ]
+        center_line_xdir_xy = [
+            xy_dir_xy[0] - image.shape[1]/2,
+            xy_dir_xy[1] - image.shape[0]/2
+            ]
+    else:
+        center_line_xdir_xy = None
+        center_line_ydir_xy = None
 
     return [center_line_xdir_xy, center_line_ydir_xy]

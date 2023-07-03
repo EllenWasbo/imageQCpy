@@ -35,6 +35,7 @@ from imageQC.ui.settings_reusables import StackWidget, QuickTestTreeView
 from imageQC.ui import settings_automation
 from imageQC.ui import settings_dicom_tags
 from imageQC.ui.settings_paramsets import ParamSetsWidget
+from imageQC.ui import settings_digits
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
 from imageQC.scripts.mini_methods import get_all_matches
@@ -47,10 +48,8 @@ class SettingsDialog(ImageQCDialog):
 
     def __init__(
             self, main, initial_view='User local settings', initial_template_label='',
-            paramset_output=False,
-            initial_modality=None,
-            width1=200, width2=800,
-            import_review_mode=False):
+            paramset_output=False, initial_modality=None,
+            width1=200, width2=800, import_review_mode=False, exclude_paramsets=False):
         """Initiate Settings dialog.
 
         Parameters
@@ -71,6 +70,8 @@ class SettingsDialog(ImageQCDialog):
             width of the right panel. The default is 800.
         import_review_mode : bool, optional
             special settings if reviewing settings to import. The default is False.
+        exclude_paramsets : bool, optional
+            if in import review mode and no paramset found (default set only)
         """
         super().__init__()
         self.main = main
@@ -110,6 +111,8 @@ class SettingsDialog(ImageQCDialog):
             proceed = True
             if import_review_mode and exclude_if_empty:
                 if getattr(self.main, snake) == {}:
+                    proceed = False
+                if snake == 'paramsets' and exclude_paramsets:
                     proceed = False
             if proceed:
                 setattr(self, f'item_{snake}', QTreeWidgetItem([title]))
@@ -210,6 +213,10 @@ class SettingsDialog(ImageQCDialog):
                            title='Templates vendor files',
                            widget=settings_automation.AutoVendorTemplateWidget(self),
                            exclude_if_empty=False)
+
+        add_widget(parent=self.item_shared_settings, snake='digit_templates',
+                   title='Digit templates',
+                   widget=settings_digits.DigitWidget(self))
 
         item, widget = self.get_item_widget_from_txt(initial_view)
         self.tree_settings.setCurrentItem(item)
@@ -322,6 +329,7 @@ class SettingsDialog(ImageQCDialog):
             dlg = SelectImportFilesDialog(filenames)
             if dlg.exec():
                 filenames = dlg.get_checked_files()
+                '''
                 # if any paramsets fname - add all mods to get default for each
                 f_paramsets = [x for x in filenames if 'paramsets' in x]
                 if len(f_paramsets) > 0:
@@ -330,6 +338,7 @@ class SettingsDialog(ImageQCDialog):
                         f_paramsets = [f'paramsets_{m}' for m in mods]
                         filenames.extend(f_paramsets)
                         filenames = list(set(filenames))
+                '''
             else:
                 filenames = []
             return filenames
@@ -363,8 +372,11 @@ class SettingsDialog(ImageQCDialog):
                     filenames = select_yaml_files_for_import(filenames)
 
         if len(filenames) > 0:
-            paramsets = {}
+            paramsets_imported = False
             import_main = ImportMain()
+            _, _, default_paramsets = cff.load_settings(
+                fname='paramsets', temp_config_folder='some_not_existing_folder')
+            import_main.paramsets = default_paramsets
             for fname in filenames:
                 if fname == 'tag_infos':
                     _, _, tag_infos_import = cff.load_settings(
@@ -373,23 +385,23 @@ class SettingsDialog(ImageQCDialog):
                         fname='tag_infos')
                     tag_infos_new = cff.tag_infos_difference(
                         tag_infos_import, tag_infos)
-                    import_main = ImportMain(tag_infos=tag_infos_new)
+                    import_main.tag_infos = tag_infos_new
                 else:
                     _, _, temps = cff.load_settings(
                         fname=fname, temp_config_folder=import_folder)
                     if 'paramsets' in fname:
                         mod = fname.split('_')[1]
-                        paramsets[mod] = temps
+                        import_main.paramsets[mod] = temps
+                        paramsets_imported = True
                     else:
                         setattr(import_main, fname, temps)
 
-            if paramsets:
-                import_main.paramsets = paramsets
+            if paramsets_imported:
                 import_main.current_paramset = import_main.paramsets['CT'][0]
             dlg = SettingsDialog(
                 import_main, initial_view='Config folder',
                 width1=self.width1, width2=self.width2,
-                import_review_mode=True)
+                import_review_mode=True, exclude_paramsets=(not paramsets_imported))
             res = dlg.exec()
             if res:
                 import_main = dlg.get_marked()
@@ -510,7 +522,6 @@ class SettingsDialog(ImageQCDialog):
                             ]
             except AttributeError:
                 pass  # marked not set
-            breakpoint()
 
             list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
                           if item['saved_as'] == 'modality_dict']

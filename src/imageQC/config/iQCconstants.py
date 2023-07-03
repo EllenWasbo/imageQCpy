@@ -24,7 +24,7 @@ upper_path = os.path.dirname(
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.0-b9'
+VERSION = '3.0.0-b10'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -37,36 +37,44 @@ ENV_ICON_PATH = 'IMAGEQC_ICON_PATH'
 USER_PREFS_FNAME = 'user_preferences.yaml'
 
 QUICKTEST_OPTIONS = {
-    'CT': ['DCM', 'ROI', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
+    'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
-    'Xray': ['DCM', 'ROI', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
-    'NM': ['DCM', 'ROI', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
-    'SPECT': ['DCM', 'ROI', 'MTF', 'Con'],
-    'PET': ['DCM', 'ROI', 'Hom', 'Cro', 'Rec'],
-    'MR': ['DCM', 'ROI', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF']}
+    'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
+    'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
+    'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Con'],
+    'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec'],
+    'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF']}
 """dict: with lists defining modalities and their corresponding
 list of tests with QuickTest as option."""
 
 HALFLIFE = {'F18': 109.77}
+ALTERNATIVES_ROI = ['One ROI',
+                    'ROIs from table, same shape',
+                    'ROIs from table, rectangle defined per ROI']
 ALTERNATIVES = {
     'CT': {
+        'ROI': ALTERNATIVES_ROI,
         'Sli': ['Wire ramp Catphan',
                 'Beaded ramp Catphan (helical)',
                 'Vertical beaded ramps GE phantom'],
         'MTF': ['bead', 'wire', 'circular edge'],
         },
     'Xray': {
+        'ROI': ALTERNATIVES_ROI,
         'Hom': ['Avg and stdev for each ROI',
                 'Avg for each ROI + difference from avg of all',
                 'Avg for each ROI + % difference from avg of all']
         },
     'NM': {
+        'ROI': ALTERNATIVES_ROI,
         'MTF': ['Point', 'One line source', 'Two perpendicular line sources']  # 'Edge']
         },
     'SPECT': {
+        'ROI': ALTERNATIVES_ROI,
         'MTF': ['Point source', 'Line source']
         },
     'PET': {
+        'ROI': ALTERNATIVES_ROI,
         'Rec': ['Recovery coefficients, average',
                 'Recovery coefficients, max',
                 'Recovery coefficients, peak',
@@ -75,9 +83,11 @@ ALTERNATIVES = {
                 'Bq/ml from images, peak'],
         },
     'MR': {
+        'ROI': ALTERNATIVES_ROI,
         'Sli': ['Ramp', 'Wedge']
         }
     }
+
 """dict: with lists defining the alternative methods/table displays
  if more than one option leading to different columns in table."""
 
@@ -85,10 +95,12 @@ CALCULATION_OPTIONS = ['=', 'min', 'max', 'mean', 'stdev', 'max abs']
 #  options for QuickTestOutput settings - type of calculations
 
 roi_headers = ['Average', 'Stdev']
+roi_headers_sup = ['Min', 'Max']
 
 HEADERS = {
     'CT': {
         'ROI': {'alt0': roi_headers},
+        'Num': {},
         'Hom': {
             'alt0': ['HU at12', 'HU at15', 'HU at18', 'HU at21', 'HU center',
                      'diff at12', 'diff at15', 'diff at18', 'diff at21'],
@@ -124,6 +136,7 @@ HEADERS = {
         },
     'Xray': {
         'ROI': {'alt0': roi_headers},
+        'Num': {},
         'Hom': {
             'alt0': ['Center', 'ROI 1', 'ROI 2', 'ROI 3', 'ROI 4',
                      'Std Center', 'Std 1', 'Std 2', 'Std 3', 'Std 4'],
@@ -146,6 +159,7 @@ HEADERS = {
         },
     'NM': {
         'ROI': {'alt0': roi_headers},
+        'Num': {},
         'Uni': {'alt0': ['IU_UFOV %', 'DU_UFOV %', 'IU_CFOV %', 'DU_CFOV %']},
         'SNI': {
             'alt0': ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', 'SNI S2',
@@ -167,6 +181,7 @@ HEADERS = {
         },
     'SPECT': {
         'ROI': {'alt0': roi_headers},
+        'Num': {},
         'MTF': {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y']
@@ -175,6 +190,7 @@ HEADERS = {
         },
     'PET': {
         'ROI': {'alt0': roi_headers},
+        'Num': {},
         'Hom': {
             'alt0': ['Center', 'at12', 'at15', 'at18', 'at21',
                      'dMean% C', 'dMean% at12', 'dMean% at15',
@@ -198,6 +214,7 @@ HEADERS = {
         },
     'MR': {
         'ROI': {'alt0': roi_headers},
+        'Num': {},
         'SNR': {'alt0': ['S img 1', 'S img 2', 'S mean', 'stdev diff', 'SNR']},
         'PIU': {'alt0': ['min', 'max', 'PIU']},
         'Gho': {'alt0': ['Center', 'top', 'bottom', 'left', 'right', 'PSG']},
@@ -215,6 +232,7 @@ HEADERS = {
 # else same alt0..n as for HEADERS ([] if none)
 HEADERS_SUP = {
     'CT': {
+        'ROI': {'alt0': roi_headers_sup},
         'Hom': {
             'altAll': ['Stdev at12', 'Stdev at15', 'Stdev at18', 'Stdev at21',
                        'Stdev Center']
@@ -232,9 +250,11 @@ HEADERS_SUP = {
             },
         },
     'Xray': {
+        'ROI': {'alt0': roi_headers_sup},
         'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2']}
         },
     'NM': {
+        'ROI': {'alt0': roi_headers_sup},
         'Uni': {
             'altAll': ['FitX (mm from center)', 'FitY (mm from center)',
                        'Fit distance (mm)']
@@ -251,18 +271,21 @@ HEADERS_SUP = {
             },
         },
     'SPECT': {
+        'ROI': {'alt0': roi_headers_sup},
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y']
             },
         },
     'PET':  {
+        'ROI': {'alt0': roi_headers_sup},
         'Rec': {
             'alt0': ['Spheres at scan start (Bq/mL)',
                      'Background at scan start (Bq/mL)'],
             },
         },
     'MR': {
+        'ROI': {'alt0': roi_headers_sup},
         'PIU': {
             'altAll': ['x min (pix from lower left)', 'y min',
                        'x max', 'y max']
@@ -334,6 +357,11 @@ CONFIG_FNAMES = {
         'saved_as': 'modality_dict',
         'default': iQCconstants_functions.empty_template_dict(
             QUICKTEST_OPTIONS, dummy=cfc.AutoVendorTemplate()),
+        },
+    'digit_templates': {
+        'saved_as': 'modality_dict',
+        'default': iQCconstants_functions.empty_template_dict(
+            QUICKTEST_OPTIONS, dummy=cfc.DigitTemplate()),
         },
     'active_users': {
         'saved_as': 'dict',

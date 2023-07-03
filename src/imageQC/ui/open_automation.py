@@ -112,6 +112,7 @@ class OpenAutomationDialog(ImageQCDialog):
             fname='auto_vendor_templates')
         _, _, self.paramsets = cff.load_settings(fname='paramsets')
         self.quicktest_templates = self.main.quicktest_templates
+        self.digit_templates = self.main.digit_templates
         self.tag_infos = self.main.tag_infos
         self.lastload_auto_common = time()
         self.templates_mod = []  # list of modality for all templates in list (all)
@@ -648,8 +649,9 @@ class OpenAutomationDialog(ImageQCDialog):
                     else:
                         msgs, not_written = automation.run_template(
                             temp_this, mod,
-                            self.paramsets, self.quicktest_templates, self.tag_infos,
-                            parent_widget=self
+                            self.paramsets,
+                            self.quicktest_templates, self.digit_templates,
+                            self.tag_infos, parent_widget=self
                             )
                     if len(msgs) > 0:
                         for msg in msgs:

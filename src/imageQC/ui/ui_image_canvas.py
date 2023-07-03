@@ -314,11 +314,12 @@ class ImageCanvas(GenericImageCanvas):
                 try:
                     label = labels[color_no]
                     mask_pos = np.where(mask == 0)
-                    xpos = np.mean(mask_pos[1])
-                    ypos = np.mean(mask_pos[0])
+                    xpos = np.min(mask_pos[1])
+                    ypos = np.min(mask_pos[0])
                     if np.isfinite(xpos) and np.isfinite(ypos):
-                        self.ax.text(xpos-self.fontsize, ypos+self.fontsize, label,
-                                     fontsize=self.fontsize, color=colors[color_no])
+                        self.ax.text(xpos-5, ypos-5, label,
+                                     fontsize=self.fontsize,
+                                     color=colors[color_no])
                 except IndexError:
                     pass
             self.contours.append(contour)
@@ -326,6 +327,19 @@ class ImageCanvas(GenericImageCanvas):
         #if hatches is not None:
          #   for i, collection in enumerate(self.contours.collections):
           #      collection.set_edgecolor(colors[i % len(colors)])
+
+    def ROI(self):
+        """Drow ROIs with labels if any."""
+        if self.main.current_paramset.roi_use_table > 0:
+            labels = self.main.current_paramset.roi_table.labels
+        else:
+            labels = None
+        self.add_contours_to_all_rois(labels=labels)
+
+    def Num(self):
+        """Draw  ROIs with labels."""
+        self.add_contours_to_all_rois(
+            labels=self.main.current_paramset.num_table.labels)
 
     def Hom(self):
         """Draw Hom ROI."""

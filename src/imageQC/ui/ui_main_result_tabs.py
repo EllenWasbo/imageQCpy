@@ -584,6 +584,9 @@ class ResultPlotCanvas(PlotCanvas):
                                        meas_vals)
                 diff_min = np.subtract(self.main.current_paramset.ctn_table.min_HU,
                                        meas_vals)
+                if percent:
+                    diff_max = 100. * np.divide(diff_max, meas_vals)
+                    diff_min = 100. * np.divide(diff_min, meas_vals)
             except TypeError:
                 self.main.status_bar.showMessage(
                     'Some set HU min or max is not valid', 2000, warning=True)
@@ -614,7 +617,7 @@ class ResultPlotCanvas(PlotCanvas):
                 if np.min(diff_max) < 0:
                     idxs = np.where(diff_max < 0)
                     xvals = [meas_vals[i] for i in idxs[0]]
-                    yvals = [diff_min[i] for i in idxs[0]]
+                    yvals = [diff_max[i] for i in idxs[0]]
                     self.curves.append({
                         'label': '_nolegend_', 'xvals': xvals, 'yvals': yvals,
                         'style': 'rv'
@@ -649,8 +652,8 @@ class ResultPlotCanvas(PlotCanvas):
         except AttributeError:
             sel_text = ''
         if 'HU' in sel_text:
-            percent = True if '%' in sel_text else False
-            prepare_plot_HU_min_max(percent=percent)
+            # percent = True if '%' in sel_text else False
+            prepare_plot_HU_min_max()  # percent=percent)
         else:
             prepare_plot_linear()
         self.title = sel_text

@@ -68,6 +68,66 @@ def calculate_version_difference(version_string):
     return version_difference
 
 
+def version_control(input_main):
+    """Compare version number of tag_infos with current saved."""
+    _, _, last_mod = load_settings(fname='last_modified')
+    res = getattr(last_mod, 'tag_infos')
+    if len(res) > 0:
+        if len(res) == 2:
+            user, modtime = res
+            version_string = ''
+        else:
+            user, modtime, version_string = res
+
+        version_diff = calculate_version_difference(version_string)
+        if version_diff > 0:  # current version newer than saved tag_infos
+            # compare protected tags in current versus saved version
+            res = tag_infos_difference_default(input_main.tag_infos)
+            change, added, protected, new_tag_infos = res
+            tags_in_added = [
+                '\t' + str((tag.attribute_name, tag.tag, tag.sequence))
+                for tag in added]
+            tags_in_protected = [
+                '\t' + str((tag.attribute_name, tag.tag, tag.sequence))
+                for tag in protected]
+            if change:
+                if 'MainWindow' not in str(type(input_main)):
+                    print('Warning: Current version of imageQC is newer than the '
+                          'version used to save the DICOM tag settings. Consider '
+                          'running imageQC GUI version to update settings.')
+                else:
+                    if len(tags_in_added):
+                        tags_in_added.insert(0, 'Add tags:')
+                    if len(tags_in_protected):
+                        tags_in_protected.insert(0, 'Changed protection:')
+                    res = messageboxes.QuestionBox(
+                        parent=input_main, title='Update tag infos with new defaults?',
+                        msg=(
+                            'The current version of imageQC is newer than the '
+                            'version previously used to save DICOM tag settings. '
+                            'Found default tags missing in your saved version '
+                            'and/or changes to protection settings. '
+                            'Add default tags and update protection settings?'
+                            ),
+                        info='Find added and protection changed tags in details.',
+                        details=(tags_in_added + tags_in_protected),
+                        msg_width=800
+                        )
+                    if res.exec():
+                        taginfos_reset_sort_index(new_tag_infos)
+                        ok_save, path = save_settings(
+                            new_tag_infos, fname='tag_infos')
+                    else:
+                        reply = QMessageBox.question(
+                            input_main, 'Keep asking?',
+                            'Ask again next time on startup?',
+                            QMessageBox.Yes, QMessageBox.No)
+                        if reply == QMessageBox.No:
+                            # update version number
+                            ok_save, path = save_settings(
+                                input_main.tag_infos, fname='tag_infos')
+
+
 def verify_config_folder(widget):
     """Test whether config folder exist, ask to create if not.
 
@@ -398,6 +458,27 @@ def load_default_ct_number_tables():
     return ct_number_tables
 
 
+def load_default_pos_tables(filename='Siemens_AutoQC'):
+    """Load default PositionTables.
+
+    Returns
+    -------
+    tables : dict of PositionTable
+    """
+    tables = {}
+    file = QFile(f":/config_defaults/{filename}.yaml")
+    if file.open(QIODevice.ReadOnly | QFile.Text):
+        data = QTextStream(file).readAll()
+        file.close()
+        docs = yaml.safe_load_all(data)
+        for doc in docs:
+            for key, ct_tab in doc.items():
+                upd = verify_input_dict(ct_tab, cfc.PositionTable())
+                tables[key] = cfc.PositionTable(**upd)
+
+    return tables
+
+
 def load_settings(fname='', temp_config_folder=''):
     """Load settings from yaml file in config folder.
 
@@ -489,20 +570,19 @@ def load_settings(fname='', temp_config_folder=''):
                                         upd = verify_input_dict(doc['roi_table'],
                                                                 cfc.PositionTable())
                                         doc['roi_table'] = cfc.PositionTable(**upd)
+                                    if 'num_table' in doc:
+                                        upd = verify_input_dict(doc['num_table'],
+                                                                cfc.PositionTable())
+                                        doc['num_table'] = cfc.PositionTable(**upd)
                                     if modality == 'CT':
                                         upd = verify_input_dict(doc['ctn_table'],
                                                                 cfc.HUnumberTable())
                                         doc['ctn_table'] = cfc.HUnumberTable(**upd)
-                                        #upd = verify_input_dict(doc, cfc.ParamSetCT())
-                                        #sett_this.append(cfc.ParamSetCT(**upd))
                                     elif modality == 'PET':
                                         if 'rec_table' in doc:
                                             upd = verify_input_dict(doc['rec_table'],
                                                                     cfc.RecTable())
                                             doc['rec_table'] = cfc.RecTable(**upd)
-                                        #upd = verify_input_dict(doc, cfc.ParamSetPET())
-                                        #sett_this.append(cfc.ParamSetPET(**upd))
-                                    #else:
                                     class_ = getattr(cfc, f'ParamSet{modality}')
                                     upd = verify_input_dict(doc, class_())
                                     sett_this.append(class_(**upd))
@@ -561,6 +641,11 @@ def load_settings(fname='', temp_config_folder=''):
                                         temp, cfc.TagPatternFormat())
                                     settings[mod].append(
                                         cfc.TagPatternFormat(**upd))
+                                elif fname == 'digit_templates':
+                                    upd = verify_input_dict(
+                                        temp, cfc.DigitTemplate())
+                                    settings[mod].append(
+                                        cfc.DigitTemplate(**upd))
                     status = True
                 except:
                     return_default = True
@@ -953,7 +1038,7 @@ def get_ref_label_used_in_auto_templates(auto_templates, ref_attr='paramset_labe
         key = modalitystring
         value = AutoTemplate
     ref_fname : str
-        'paramset_label' or 'quicktemp_label'
+        'paramset_label' or 'quicktemp_label'  ##TODO 'digit_label'
 
     Returns
     -------

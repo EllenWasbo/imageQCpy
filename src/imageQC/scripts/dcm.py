@@ -177,10 +177,15 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 except ValueError:
                     pass
             if np.sum(attrib['pix']) == 0:
-                attrib['pix'] = [1, 1]  #TODO warning? avoid ZeroDevisionError
-                warnings.append(
-                    f'Missing pixel spacing set to 1x1 mm for file {file}'
-                    )
+                attrib['pix'] = [1, 1]  # to avoid ZeroDevisionError
+                serdescr = pd['SeriesDescription'].value
+                ignore_strings = ['Save Screen', 'Dose Report']
+                if any([x in serdescr for x in ignore_strings]):
+                    pass
+                else:
+                    warnings.append(
+                        f'Missing pixel spacing set to 1x1 mm for file {file}'
+                        )
 
             if isinstance(acq_date, str):
                 if len(acq_date) > 8:  # if AcquisitionDateTime is used

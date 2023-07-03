@@ -592,7 +592,7 @@ class RenameDicomDialog(ImageQCDialog):
             if n_same > 1:
                 idxs = get_all_matches(names, name)
                 base_name = str(name.parent / name.stem)
-                for i in enumerate(idxs):
+                for i, idx in enumerate(idxs):
                     new_name = f'{base_name}_({i:03}).dcm'
-                    names[i] = Path(new_name)
+                    names[idx] = Path(new_name)
         return names

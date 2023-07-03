@@ -39,6 +39,7 @@ class LastModified:
     auto_common: list = field(default_factory=list)
     auto_templates: list = field(default_factory=list)
     auto_vendor_templates: list = field(default_factory=list)
+    digit_templates: list = field(default_factory=list)
 
 
 @dataclass
@@ -178,6 +179,12 @@ class PositionTable:
     pos_x: list[float] = field(default_factory=list)
     pos_y: list[float] = field(default_factory=list)
 
+    def __post_init__(self):
+        """Make sure labels if pos given."""
+        if len(self.labels) < len(self.pos_x):
+            diff = len(self.pos_x) - len(self.labels)
+            self.labels.extend([''] * diff)
+
     def add_pos(self, label='', pos_x=0, pos_y=0, index=-1):
         """Add element in each list at given index or append."""
         if index == -1:
@@ -255,6 +262,18 @@ class HUnumberTable:
         except IndexError:
             print(f'Failed deleting tag idx {index} from {self}')
 
+    def fix_list_lengths(self):
+        """Seen errors on list lengths."""
+        n_labels = len(self.labels)
+        for attr in ['pos_x', 'pos_y', 'min_HU', 'max_HU', 'linearity_axis']:
+            this_list = getattr(self, attr)
+            if len(this_list) != n_labels:
+                if len(this_list) > n_labels:
+                    setattr(self, attr, this_list[:n_labels])
+                else:
+                    extra = [0] * (n_labels - len(this_list))
+                    setattr(self, attr, this_list + extra)
+
 
 @dataclass
 class RecTable(PositionTable):
@@ -308,8 +327,17 @@ class ParamSetCommon:
     roi_a: float = 0.
     roi_offset_xy: list[float] = field(default_factory=lambda: [0., 0.])
     roi_offset_mm: bool = False  # False = pix, True = mm
+    roi_use_table: int = 0  # 0 = one point with offset, 1 = table of offsets, 2 zooms
     roi_table: PositionTable = field(default_factory=PositionTable)
-    roi_read_number: bool = False
+    roi_table_val: int = 0
+    # no in roi_headers + roi_headers_sup [average, stdev, min, max]
+    roi_table_val_sup: int = 1  # same options as roi_table_val
+    num_roi_size_x: int = 100
+    num_roi_size_y: int = 50
+    num_table: PositionTable = field(
+        default_factory=lambda: PositionTable(
+            pos_x=[(10, 20)], pos_y=[(10, 20)]))
+    num_digit_label: str = ''
 
 
 @dataclass
@@ -652,3 +680,13 @@ class AutoVendorTemplate:
     file_type: str = ''
     file_suffix: str = ''  # starting with . e.g. '.pdf'
     active: bool = True
+
+
+@dataclass
+class DigitTemplate:
+    """Dataclass for text identify (digit) templates."""
+
+    label: str = ''
+    images: list = field(default_factory=list)
+    # list of numpy arrays for the digits 0-9 and . and -
+    active: bool = False  # flag to tell if it is ready for use (all digits set)

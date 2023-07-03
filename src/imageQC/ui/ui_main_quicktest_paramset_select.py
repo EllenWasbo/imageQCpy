@@ -95,7 +95,7 @@ class SelectTemplateWidget(QWidget):
 
     def save_current_template(self, before_select_new=False):
         """Overwrite selected Paramset or QuickTest Template if any, else add new."""
-        if self.current_template.label == '':
+        if self.cbox_template.currentText() == '':
             self.add_current_template()
         else:
             if before_select_new:

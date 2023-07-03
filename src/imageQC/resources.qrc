@@ -4,6 +4,7 @@
 		<file alias="tag_infos.yaml">config_defaults\tag_infos.yaml</file>
 		<file alias="tag_patterns_test_dcm.yaml">config_defaults\tag_patterns_test_dcm.yaml</file>
 		<file alias="CTnumberSensitometry.yaml">config_defaults\CTnumberSensitometry.yaml</file>
+		<file alias="Siemens_AutoQC.yaml">config_defaults\Siemens_AutoQC.yaml</file>
 	</qresource>
 	<qresource prefix="icons">
 		<file alias="add.png">icons\add.png</file>

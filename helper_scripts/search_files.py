@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "read_dcm_info"
+search_string = "zoomed_area"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

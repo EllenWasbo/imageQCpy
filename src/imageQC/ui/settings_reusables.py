@@ -478,6 +478,13 @@ class StackWidget(QWidget):
         log : list of str, optional
             Log from process of connected templates. The default is [].
         """
+        def digit_templates_tolist(templates):
+            for key, templist in templates.items():
+                for tempno, temp in enumerate(templist):
+                    for imgno, img in enumerate(temp.images):
+                        if isinstance(img, np.ndarray):  # to list to save to yaml
+                            templates[key][tempno].images[imgno] = img.tolist()
+
         proceed = cff.verify_config_folder(self)
         if proceed:
             if self.fname == 'paramsets':
@@ -490,6 +497,8 @@ class StackWidget(QWidget):
             if errmsg != '':
                 proceed = messageboxes.proceed_question(self, errmsg)
             if proceed:
+                if fname == 'digit_templates':
+                    digit_templates_tolist(templates)
                 ok_save, path = cff.save_settings(templates, fname=fname)
                 if ok_save:
                     if save_more:
@@ -551,7 +560,7 @@ class ModTempSelector(QWidget):
         self.vlo.addWidget(uir.LabelItalic(self.parent.typestr.title()+'s'))
         hlo_list = QHBoxLayout()
         self.vlo.addLayout(hlo_list)
-        self.list_temps = QListWidget()#uir.ListWidget()
+        self.list_temps = QListWidget()
         self.list_temps.currentItemChanged.connect(self.parent.update_clicked_template)
         hlo_list.addWidget(self.list_temps)
 
@@ -639,6 +648,7 @@ class ModTempSelector(QWidget):
         text, proceed = QInputDialog.getText(
             self, 'New label',
             'Name the new ' + self.parent.typestr + '                      ')
+        # todo also ask if add as current or as empty
         text = valid_template_name(text)
         if proceed and text != '':
             if text in self.parent.current_labels:
@@ -647,6 +657,8 @@ class ModTempSelector(QWidget):
                     'This label is already in use.')
             else:
                 self.parent.add(text)
+        if self.parent.fname == 'digit_templates':
+            self.parent.edit_template()
 
     def save(self, label=None):
         """Save button pressed or specific save on label."""
@@ -1400,7 +1412,12 @@ class QuickTestOutputSubDialog(ImageQCDialog):
                     if 'altAll' in HEADERS_SUP[self.modality][testcode]:
                         cols = HEADERS_SUP[self.modality][testcode]['altAll']
                     elif 'alt0' in HEADERS_SUP[self.modality][testcode]:
-                        cols = HEADERS_SUP[self.modality][testcode]['alt'+str(idx_alt)]
+                        try:
+                            cols = HEADERS_SUP[
+                                self.modality][testcode]['alt'+str(idx_alt)]
+                        except KeyError:
+                            if testcode == 'ROI':
+                                cols = self.paramset.roi_table.labels
             else:
                 try:
                     cols = HEADERS[self.modality][testcode]['alt'+str(idx_alt)]
@@ -1409,6 +1426,10 @@ class QuickTestOutputSubDialog(ImageQCDialog):
                         cols = self.paramset.dcm_tagpattern.list_tags
                     elif testcode == 'CTn':
                         cols = self.paramset.ctn_table.labels
+                    elif testcode == 'Num':
+                        cols = self.paramset.num_table.labels
+                    elif testcode == 'ROI':
+                        cols = self.paramset.roi_table.labels
             self.list_columns.clear()
             if len(cols) > 0:
                 self.list_columns.addItems(cols)
@@ -1470,6 +1491,8 @@ class QuickTestOutputSubDialog(ImageQCDialog):
         for i in range(self.list_columns.count()):
             if self.list_columns.item(i).checkState() == Qt.Checked:
                 cols.append(i)
+        if len(cols) == self.list_columns.count():
+            cols = []  # == all
         qtsub.columns = cols
         qtsub.calculation = self.cbox_calculation.currentText()
         if qtsub.calculation == '=' and self.chk_per_group.isChecked():
@@ -1483,9 +1506,6 @@ class QuickTestOutputSubDialog(ImageQCDialog):
                 )
         else:
             qtsub.per_group = self.chk_per_group.isChecked()
-
-        if len(cols) == 0:
-            qtsub = None
 
         return qtsub
 

@@ -7,7 +7,6 @@
 import os
 from time import time
 from pathlib import Path
-import numpy as np
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon

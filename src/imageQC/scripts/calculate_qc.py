@@ -27,6 +27,7 @@ from imageQC.config.iQCconstants import (
     HEADERS, HEADERS_SUP, QUICKTEST_OPTIONS, HALFLIFE)
 import imageQC.config.config_classes as cfc
 from imageQC.config.config_func import get_config_folder
+from imageQC.scripts import digit_methods
 # imageQC block end
 
 
@@ -162,7 +163,7 @@ def quicktest_output(input_main):
                     name = next(s for s in set_names if s)
                     for idx in idxs_this_group:
                         group_names[idx] = name
-
+        marked = input_main.current_quicktest.tests
         dm = input_main.current_paramset.output.decimal_mark
 
         # first all output_sub defined, then defaults where no output defined
@@ -251,7 +252,11 @@ def quicktest_output(input_main):
                         for r, row in enumerate(values):
                             if row is None:
                                 row = [None] * len(headers)
-                            if any(row):
+                            force_include = False
+                            if len(values) == len(marked):  # not 3d
+                                if test in marked[r]:
+                                    force_include = True  # also if all None
+                            if any(row) or force_include:
                                 if all([test == 'MTF',
                                         input_main.current_modality == 'CT']):
                                     if not input_main.current_paramset.mtf_cy_pr_mm:
@@ -310,7 +315,6 @@ def quicktest_output(input_main):
                                 all_headers_this.append(header + '_' + suffix)
                     else:
                         all_headers_this = headers_this
-
                     header_list.extend(all_headers_this)
 
     return (string_list, header_list)
@@ -410,6 +414,14 @@ def calculate_qc(input_main,
             read_image = [False] * n_img
             NM_count = [False] * n_img
             extras = None  # placeholder for extra arguments to pass to calc_2d/3d
+            if input_main.current_modality == 'NM' and 'SNI' in flattened_marked:
+                if paramset.sni_correct and paramset.sni_ref_image != '':
+                    extras = get_sni_ref_image(paramset, tag_infos)
+            if 'Num' in flattened_marked:
+                digit_templates = input_main.digit_templates[
+                    input_main.current_modality]
+            else:
+                digit_templates = []
             for i in range(n_analyse):
                 if len(marked[i]) > 0:
                     if 'DCM' in marked[i]:
@@ -420,9 +432,6 @@ def calculate_qc(input_main,
                         if 'CountsAccumulated' in paramset.dcm_tagpattern.list_tags:
                             read_image[i] = True
                             NM_count[i] = True
-                    if input_main.current_modality == 'NM' and 'SNI' in marked[i]:
-                        if paramset.sni_correct and paramset.sni_ref_image != '':
-                            extras = get_sni_ref_image(paramset, tag_infos)
 
             # remove old results
             existing_tests = [*input_main.results]
@@ -596,7 +605,7 @@ def calculate_qc(input_main,
                             result = calculate_2d(
                                 image, prev_roi[test], img_infos[i],
                                 modality, paramset, test, delta_xya,
-                                extras)
+                                digit_templates, extras)
                             if result is not None:
                                 if result.errmsg is not None:
                                     intro = f'{test} image {i}:'
@@ -749,7 +758,7 @@ def calculate_qc(input_main,
 
 
 def calculate_2d(image2d, roi_array, image_info, modality,
-                 paramset, test_code, delta_xya, extras):
+                 paramset, test_code, delta_xya, digit_templates, extras):
     """Calculate tests based on 2d-image.
 
     Parameters
@@ -770,6 +779,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         code as defined in iQCconstants.py
     delta_xya : list
         center and angle offset from gui
+    digit_templates : list of DigitTemplate
+        if Num to be tested else []
     extras : object
         holder for extra argumets. Default is None
 
@@ -780,21 +791,129 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
     def ROI():
         values = []
-        if image2d is not None:
-            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
-            avg_val = np.mean(arr)
-            std_val = np.std(arr)
-            values = [avg_val, std_val]
-            '''
-            #### for testing text recognition - delete
-            rows = np.max(roi_array, axis=1)
-            cols = np.max(roi_array, axis=0)
-            sub = image2d[rows][:, cols]
-            sub_binary = np.zeros(sub.shape)
-            sub_binary[sub < 0.5*(np.max(sub) + np.min(sub))] = 1
-            '''
+        values_sup = []
+        alt = paramset.roi_use_table
+        errmsgs = []
         headers = HEADERS[modality][test_code]['alt0']
-        res = Results(headers=headers, values=values)
+        headers_sup = HEADERS_SUP[modality][test_code]['alt0']
+        all_headers = headers + headers_sup
+        if alt > 0:
+            labels = paramset.roi_table.labels
+            if '' in labels:
+                for i, lbl in enumerate(labels):
+                    if lbl == '':
+                        labels[i] = f'ROI_{i}'
+            headers = [
+                f'{labels[i]}_{all_headers[paramset.roi_table_val]}'
+                for i in range(len(labels))]
+            headers_sup = [
+                f'{labels[i]}_{all_headers[paramset.roi_table_val_sup]}'
+                for i in range(len(labels))]
+        if image2d is not None:
+            if roi_array is None:
+                errmsgs.append('Found no ROI defined.')
+            else:
+                if alt in [0, 1]:
+                    for i, roi in enumerate(roi_array):
+                        arr = np.ma.masked_array(image2d, mask=np.invert(roi))
+                        vals = [np.mean(arr), np.std(arr), np.min(arr), np.max(arr)]
+                        if alt == 0:
+                            values = vals[:2]
+                            values_sup = vals[2:]
+                        else:
+                            values.append(vals[paramset.roi_table_val])
+                            values_sup.append(vals[paramset.roi_table_val_sup])
+                else:  # zoomed area
+                    for i, roi in enumerate(roi_array):
+                        rows = np.max(roi, axis=1)
+                        cols = np.max(roi, axis=0)
+                        sub = image2d[rows][:, cols]
+                        missing_roi = False
+                        if np.min(sub.shape) > 2:
+                            arr = np.ma.masked_array(image2d, mask=np.invert(roi))
+                            vals = [np.mean(arr), np.std(arr), np.min(arr), np.max(arr)]
+                            values.append(vals[paramset.roi_table_val])
+                            values_sup.append(vals[paramset.roi_table_val_sup])
+                        else:
+                            missing_roi = True
+                            values.append(None)
+                            values_sup.append(None)
+
+                        if missing_roi:
+                            errmsgs.append(
+                                f'ROI too small or outside image for {labels[i]}.')
+
+        res = Results(
+            headers=headers, values=values,
+            headers_sup=headers_sup, values_sup=values_sup,
+            alternative=alt, errmsg=errmsgs)
+        return res
+
+    def Num():
+        headers = paramset.num_table.labels
+        if '' in headers:
+            for i, lbl in enumerate(headers):
+                if lbl == '':
+                    headers[i] = f'ROI_{i}'
+        values = []
+        errmsgs = []
+        if image2d is not None:
+            if len(digit_templates) == 0:
+                errmsgs.append(f'No digit templates defined for {modality}.')
+            elif paramset.num_digit_label == '':
+                errmsgs.append(
+                    'No digit template defined in current parameter '
+                    f'set {paramset.label}.')
+            elif len(roi_array) > 0:
+                labels = [temp.label for temp in digit_templates]
+                if paramset.num_digit_label in labels:
+                    temp_idx = labels.index(paramset.num_digit_label)
+                else:
+                    temp_idx = None
+                    errmsgs.append(
+                        f'Digit template {paramset.num_digit_label} not found.')
+                if temp_idx is not None:
+                    digit_template = digit_templates[temp_idx]
+                    imgs_is_arr = [
+                        isinstance(img, (np.ndarray, list)) for img
+                        in digit_template.images[:-2]]
+                    if not any(imgs_is_arr):
+                        temp_idx = None
+                        errmsgs.append(
+                            'Digit template images not defined for any digit '
+                            f'of Digit template {paramset.num_digit_label}'
+                            f'[{modality}].')
+                if temp_idx is not None:
+                    for i, roi in enumerate(roi_array):
+                        rows = np.max(roi, axis=1)
+                        cols = np.max(roi, axis=0)
+                        sub = image2d[rows][:, cols]
+                        missing_roi = False
+                        if np.min(sub.shape) > 2:
+                            char_imgs, chop_idxs = digit_methods.extract_char_blocks(sub)
+                        else:
+                            char_imgs = []
+                            missing_roi = True
+                        digit = None
+                        if len(char_imgs) == 0:
+                            if missing_roi:
+                                errmsgs.append(
+                                    f'ROI too small or outside image for {headers[i]}.')
+                            else:
+                                errmsgs.append(
+                                    f'Failed finding digits in {headers[i]}.')
+                        else:
+                            digit = digit_methods.compare_char_blocks_2_template(
+                                char_imgs, digit_template)
+                            if digit is None:
+                                errmsgs.append(
+                                    'Found no match for the blocks of {headers[i]}.')
+                        values.append(digit)
+
+            else:
+                errmsgs.append('No ROIs defined.')
+
+        res = Results(headers=headers, values=values, errmsg=errmsgs)
         return res
 
     def Noi():
@@ -1358,6 +1477,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     avg_val = np.mean(arr)
                     var_val = np.var(arr)
                     values.append(np.sqrt(2*(var_val - avg_val)) / avg_val)  # MTF
+
+                print(f'calc_2d bar_widths {paramset.bar_width_1} {paramset.bar_width_2} {paramset.bar_width_3} {paramset.bar_width_4}')
 
                 const = 4./np.pi * np.sqrt(np.log(2))
                 bar_widths = np.array([paramset.bar_width_1, paramset.bar_width_2,

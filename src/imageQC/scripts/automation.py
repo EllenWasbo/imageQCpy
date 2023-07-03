@@ -108,6 +108,8 @@ def run_automation_non_gui(sysargv):
             fname='paramsets')
         ok_qt, path, qt_templates = cff.load_settings(
             fname='quicktest_templates')
+        _, _, digit_templates = cff.load_settings(
+            fname='digit_templates')
         decimal_mark = '.'
         for templates in [auto_vendor_templates, auto_templates]:
             run_this = run_auto_vendor if vendor else run_auto
@@ -136,6 +138,7 @@ def run_automation_non_gui(sysargv):
                                     mod,
                                     paramsets,
                                     qt_templates,
+                                    digit_templates,
                                     tag_infos
                                 )
                             append_log(log_this, not_written)
@@ -668,8 +671,8 @@ def move_rename_file(filepath_orig, filepath_new):
     return (status, errmsg)
 
 
-def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
-                 parent_widget=None):
+def run_template(auto_template, modality, paramsets, qt_templates, digit_templates,
+                 tag_infos, parent_widget=None):
     """Find new images, generate img_dict, sort by date/sortpattern.
 
     Parameters
@@ -686,6 +689,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, tag_infos,
         collection of available quicktest templates from .yaml
         keys = modalities
         values = list of QuickTestTemplate defined in config_classes.py
+    digit_templates: dict
+        collection of available digit templates from .yaml
+        keys = modalities
+        values = list of DigitTemplate defined in config_classes.py
     tag_infos : list
         list of TagInfo as defined in config_classes.py
     parent_widget : widget, optional

@@ -25,6 +25,7 @@ class InputMain:
     current_quicktest: cfc.QuickTestTemplate = field(
         default_factory=cfc.QuickTestTemplate)
     tag_infos: list = field(default_factory=list)
+    digit_templates: dict = field(default_factory=dict)
     imgs: list = field(default_factory=list)
     results: dict = field(default_factory=dict)
     current_group_indicators: list = field(default_factory=list)

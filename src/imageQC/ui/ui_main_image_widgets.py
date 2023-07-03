@@ -108,21 +108,22 @@ class GenericImageToolbarPosVal(QToolBar):
         self.xypos = QLabel('')
         self.xypos.setMinimumWidth(500)
         self.addWidget(self.xypos)
-        try:
-            self.delta_x = window.gui.delta_x
-            self.delta_y = window.gui.delta_y
-        except AttributeError:
-            self.delta_x = 0
-            self.delta_y = 0
+        self.window = window
 
         canvas.mpl_connect('motion_notify_event', self.on_move)
 
     def on_move(self, event):
         """When mouse cursor is moving in the canvas."""
         if event.inaxes and len(event.inaxes.get_images()) > 0:
+            if hasattr(self.window, 'gui'):
+                delta_x = self.window.gui.delta_x
+                delta_y = self.window.gui.delta_y
+            else:
+                delta_x = 0
+                delta_y = 0
             sz_img = event.inaxes.get_images()[0].get_array().shape
-            xpos = event.xdata - 0.5 * sz_img[0] + self.delta_x
-            ypos = event.ydata - 0.5 * sz_img[1] + self.delta_y
+            xpos = event.xdata - 0.5 * sz_img[1] - delta_x
+            ypos = event.ydata - 0.5 * sz_img[0] - delta_y
             xyval = event.inaxes.get_images()[0].get_cursor_data(event)
             try:
                 txt = f'xy = ({xpos:.0f}, {ypos:.0f}), val = {xyval:.1f}'
@@ -146,6 +147,10 @@ class ImageDisplayWidget(GenericImageWidget):
         vlo_tb = QVBoxLayout()
         hlo.addLayout(vlo_tb)
 
+        act_redraw = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}refresh.png'),
+            'Force refresh on image if hiccups', self)
+        act_redraw.triggered.connect(self.main.refresh_img_display)
         self.tool_sum = QToolButton()
         self.tool_sum.setToolTip(
             'Toggle to display sum of marked images, press again to display average.')
@@ -163,6 +168,7 @@ class ImageDisplayWidget(GenericImageWidget):
             f'{os.environ[ENV_ICON_PATH]}layout_maximg.png'))
         self.tool_imgsize.clicked.connect(self.clicked_imgsize)
         self.tool_imgsize.setCheckable(True)
+        tbimg.addAction(act_redraw)
         tbimg.addWidget(self.tool_profile)
         tbimg.addWidget(self.tool_sum)
         tbimg.addAction(act_edit_annotations)
@@ -278,7 +284,7 @@ class ImageNavigationToolbar(NavigationToolbar2QT):
                 #    _enum("QtWidgets.QMessageBox.StandardButton").Ok,
                 #    _enum("QtWidgets.QMessageBox.StandardButton").NoButton)
 
-
+'''Not in use anymore?
 class ImageExtraToolbar(QToolBar):
     """Extra toolbar for showing more cursor position and value."""
 
@@ -301,8 +307,8 @@ class ImageExtraToolbar(QToolBar):
         """When mouse cursor is moving in the canvas."""
         if event.inaxes and len(event.inaxes.get_images()) > 0:
             sz_img = event.inaxes.get_images()[0].get_array().shape
-            xpos = event.xdata - 0.5 * sz_img[0] + self.delta_x
-            ypos = event.ydata - 0.5 * sz_img[1] + self.delta_y
+            xpos = event.xdata - 0.5 * sz_img[1] + self.delta_x
+            ypos = event.ydata - 0.5 * sz_img[0] + self.delta_y
             xyval = event.inaxes.get_images()[0].get_cursor_data(event)
             try:
                 self.xypos.setText(
@@ -311,3 +317,4 @@ class ImageExtraToolbar(QToolBar):
                 self.xypos.setText('')
         else:
             self.xypos.setText('')
+'''

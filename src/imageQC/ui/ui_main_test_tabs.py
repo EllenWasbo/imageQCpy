@@ -16,11 +16,12 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QFormLayout, QGroupBox,
     QPushButton, QLabel, QDoubleSpinBox, QCheckBox, QRadioButton, QButtonGroup,
     QComboBox, QAction, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
-    QMessageBox, QInputDialog, QFileDialog, QDialogButtonBox
+    QMessageBox, QInputDialog, QFileDialog, QDialogButtonBox, QHeaderView
     )
 
 # imageQC block start
-from imageQC.config.iQCconstants import ENV_ICON_PATH, ALTERNATIVES, HALFLIFE, HEADERS
+from imageQC.config.iQCconstants import (
+    ENV_ICON_PATH, ALTERNATIVES, ALTERNATIVES_ROI, HALFLIFE, HEADERS, HEADERS_SUP)
 from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
 from imageQC.ui import reusable_widgets as uir
@@ -79,8 +80,10 @@ class ParamsTabCommon(QTabWidget):
 
         self.create_tab_dcm()
         self.create_tab_roi()
+        self.create_tab_num()
         self.addTab(self.tab_dcm, "DCM")
         self.addTab(self.tab_roi, "ROI")
+        self.addTab(self.tab_num, "Num")
 
     def flag_edit(self, indicate_change=True):
         """Add star after cbox_paramsets to indicate any change from saved."""
@@ -97,6 +100,12 @@ class ParamsTabCommon(QTabWidget):
         paramset = self.main.current_paramset
         self.wid_dcm_pattern.current_template = paramset.dcm_tagpattern
         self.wid_dcm_pattern.update_data()
+
+        self.num_digit_label.clear()
+        avail_digit_labels = [''] + [
+            temp.label for temp in
+            self.main.digit_templates[self.main.current_modality]]
+        self.num_digit_label.addItems(avail_digit_labels)
 
         # where attribute name of widget == dataclass attribute name of ParamSetXX
         attributes = fields(paramset)
@@ -130,6 +139,8 @@ class ParamsTabCommon(QTabWidget):
                     elif hasattr(reciever, 'setCurrentText'):
                         if field.name == 'sni_ref_image':
                             reciever.setCurrentText(content)
+                        elif field.name == 'num_digit_label':
+                            reciever.setCurrentText(content)
                     else:  # info to programmer
                         print(f'Warning: Parameter {field.name} not set ',
                               '(ui_main_test_tabs.update_displayed_params)')
@@ -140,6 +151,23 @@ class ParamsTabCommon(QTabWidget):
                     self.rec_table_widget.table.current_table = copy.deepcopy(
                         paramset.rec_table)
                     self.rec_table_widget.table.update_table()
+                elif field.name == 'num_table':
+                    self.num_table_widget.table.current_table = copy.deepcopy(
+                        paramset.num_table)
+                    self.num_table_widget.table.update_table()
+                elif field.name == 'roi_table':
+                    self.roi_table_widget.table.current_table = copy.deepcopy(
+                        paramset.roi_table)
+                    self.roi_table_widget.table.update_table()
+                elif field.name == 'roi_use_table':
+                    new_zoom = True if paramset.roi_use_table == 2 else False
+                    if new_zoom != self.roi_table_widget.zoomed_area:
+                        self.roi_table_widget.zoomed_area = new_zoom
+                        self.roi_table_widget.update_on_zoom_change()
+                    if paramset.roi_use_table == 0:
+                        self.roi_table_widget.setEnabled(False)
+                    else:
+                        self.roi_table_widget.setEnabled(True)
 
         if self.main.current_modality == 'Xray':
             self.update_NPS_independent_pixels()
@@ -155,17 +183,14 @@ class ParamsTabCommon(QTabWidget):
             self.roi_x.setEnabled(False)
             self.roi_y.setEnabled(False)
             self.roi_a.setEnabled(False)
-            self.roi_read_number.setEnabled(False)
         else:
             self.roi_radius.setEnabled(False)
             self.roi_x.setEnabled(True)
             self.roi_y.setEnabled(True)
             if paramset.roi_type == 1:
                 self.roi_a.setEnabled(False)
-                self.roi_read_number.setEnabled(True)
             else:
                 self.roi_a.setEnabled(True)
-                self.roi_read_number.setEnabled(False)
         # continues in subclasses if needed
 
     def make_param_odd_number(self, attribute='', update_roi=True,
@@ -230,7 +255,7 @@ class ParamsTabCommon(QTabWidget):
                     content = sender.text()
                 elif hasattr(sender, 'setCurrentIndex'):  # QComboBox
                     content = sender.currentIndex()
-                    if attribute == 'sni_ref_image':
+                    if attribute in ['sni_ref_image', 'num_digit_label']:
                         content = sender.currentText()
                 else:
                     content = None
@@ -250,6 +275,15 @@ class ParamsTabCommon(QTabWidget):
                     elif attribute == 'rec_type':
                         self.update_values_rec()
                     self.main.refresh_results_display()
+                if attribute == 'roi_use_table':
+                    new_zoom = True if content == 2 else False
+                    if new_zoom != self.roi_table_widget.zoomed_area:
+                        self.roi_table_widget.zoomed_area = new_zoom
+                        self.roi_table_widget.update_on_zoom_change()
+                    if content == 0:
+                        self.roi_table_widget.setEnabled(False)
+                    else:
+                        self.roi_table_widget.setEnabled(True)
                 if all([self.main.current_modality == 'Xray',
                         self.main.current_test == 'NPS']):
                     self.update_NPS_independent_pixels()
@@ -263,7 +297,7 @@ class ParamsTabCommon(QTabWidget):
     def update_values_mtf(self):
         """Update MTF table values when changing analytic vs discrete options."""
         if 'MTF' in self.main.results:
-                #and self.main.current_modality in ['CT', 'Xray', 'SPECT', 'MR']):
+            #  and self.main.current_modality in ['CT', 'Xray', 'SPECT', 'MR']):
             if self.main.results['MTF']['pr_image']:
                 details_dicts = self.main.results['MTF']['details_dict']
             else:
@@ -397,12 +431,23 @@ class ParamsTabCommon(QTabWidget):
                                     singleStep=0.1)
         self.roi_a.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_a'))
+        self.roi_use_table = QComboBox()
+        self.roi_use_table.addItems(ALTERNATIVES_ROI)
+        self.roi_use_table.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='roi_use_table', update_roi=False))
         self.roi_table_widget = PositionWidget(
                 self, self.main, table_attribute_name='roi_table')
-        self.roi_read_number = QCheckBox(
-            'Read number from text in (rectangular) ROI')
-        self.roi_read_number.toggled.connect(
-                lambda: self.param_changed_from_gui(attribute='roi_read_number'))
+        self.roi_table_widget.setEnabled(False)  # default irresponsive
+        all_headers = HEADERS['CT']['ROI']['alt0'] + HEADERS_SUP['CT']['ROI']['alt0']
+        self.roi_table_val = QComboBox()
+        self.roi_table_val.addItems(all_headers)
+        self.roi_table_val.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='roi_table_val'))
+        self.roi_table_val_sup = QComboBox()
+        self.roi_table_val_sup.addItems(all_headers)
+        self.roi_table_val_sup.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='roi_table_val_sup'))
 
         self.create_offset_widget('roi')
 
@@ -416,25 +461,56 @@ class ParamsTabCommon(QTabWidget):
         flo1.addRow(QLabel('Rectangular ROI height (mm)'), self.roi_y)
         flo1.addRow(QLabel('ROI rotation (degrees)'), self.roi_a)
         vlo_left.addLayout(flo1)
-        '''TODO
-        vlo_left.addWidget(self.roi_read_number)
-        '''
 
         hlo_offset = QHBoxLayout()
         hlo_offset.addWidget(self.wid_roi_offset)
         hlo_offset.addStretch()
         vlo_left.addLayout(hlo_offset)
 
-        self.tab_roi.hlo.addStretch()
-        '''TODO
         vlo_right = QVBoxLayout()
         self.tab_roi.hlo.addLayout(vlo_right)
-        vlo_right.addWidget(uir.UnderConstruction(
-            txt='Under construction'))
 
-        vlo_right.addWidget(uir.LabelHeader('ROI positions', 3))
+        vlo_right.addWidget(self.roi_use_table)
         vlo_right.addWidget(self.roi_table_widget)
+        hlo_opt_val = QHBoxLayout()
+        vlo_right.addLayout(hlo_opt_val)
+        hlo_opt_val.addWidget(QLabel('Result table:'))
+        hlo_opt_val.addWidget(self.roi_table_val)
+        hlo_opt_val.addWidget(QLabel('Supplement table:'))
+        hlo_opt_val.addWidget(self.roi_table_val_sup)
+
+    def create_tab_num(self):
+        """GUI of tab NUM."""
+        self.tab_num = ParamsWidget(self, run_txt='Find numbers')
+
+        self.tab_num.hlo_top.addWidget(uir.LabelItalic(
+            'Read numbers in image (e.g. savescreens). Zoom to number and add as ROI.'))
+        info_txt = '''
+        Make sure to have a Digit template fitting the font used in your image.<br>
+        (A digit template can be defined and tested in Settings.)<br>
+        <br>
+        Set ROI by zooming to the number and find the arrow-button to the left of <br>
+        the table. Then the coordinates of the zoomed area will be added to the ROI
+        list. Label the ROIs to define the headers of the result table.
         '''
+        self.tab_num.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
+        self.num_table_widget = PositionWidget(
+                self, self.main, table_attribute_name='num_table',
+                headers=['ROI label', '(x1,x2)', '(y1,y2)'],
+                zoomed_area=True)
+        self.num_digit_label = QComboBox()
+        self.num_digit_label.setFixedWidth(250)
+        self.num_digit_label.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='num_digit_label'))
+
+        vlo_left = QVBoxLayout()
+        self.tab_num.hlo.addLayout(vlo_left)
+
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('Digit template'), self.num_digit_label)
+        vlo_left.addLayout(flo1)
+        self.tab_num.hlo.addWidget(self.num_table_widget)
 
     def create_tab_mtf(self):
         """GUI of tab MTF - common settings here."""
@@ -766,7 +842,7 @@ class ParamsTabCT(ParamsTabCommon):
         self.ctn_plot = QComboBox()
         self.ctn_plot.addItems([
             'HU difference for set min/max',
-            'HU difference for set min/max (%)',
+            # 'HU difference for set min/max (%)',
             'CT number linearity'])
         self.ctn_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
@@ -1196,6 +1272,7 @@ class GroupBoxCorrectPointSource(QGroupBox):
             vlo_gb.addLayout(hlo_ref_image)
 
     def update_reference_images(self, set_text=''):
+        """Update reference images for NM SNI."""
         available_images = ['']
         if self.ref_folder.exists():
             filenames = [x.stem for x in self.ref_folder.glob('*')
@@ -1206,6 +1283,7 @@ class GroupBoxCorrectPointSource(QGroupBox):
         self.wid_ref_image.setCurrentText(set_text)
 
     def add_reference_image(self):
+        """Add reference images for NM SNI."""
         fname = QFileDialog.getOpenFileName(
             self, 'Select DICOM file to use as reference image for NM SNI test',
             filter="DICOM files (*.dcm);;All files (*)")
@@ -1229,6 +1307,7 @@ class GroupBoxCorrectPointSource(QGroupBox):
                 self.update_reference_images(set_text=stem)
 
     def delete_reference_image(self):
+        """Delete reference images for NM SNI."""
         if self.wid_ref_image.currentText() != '':
             filename = self.ref_folder / (self.wid_ref_image.currentText() + '.dcm')
             if filename.exists():
@@ -1252,6 +1331,7 @@ class GroupBoxCorrectPointSource(QGroupBox):
                         self.update_reference_images()
 
     def info_reference_image(self):
+        """Info about reference images for NM SNI."""
         html_body_text = (
             'Estimating noise for calibration images using Siemens gamma camera '
             'is not straight forward.<br>'
@@ -1561,11 +1641,21 @@ class ParamsTabNM(ParamsTabCommon):
             setattr(self, f'bar_width_{i}', QDoubleSpinBox(
                 decimals=1, minimum=0.1, maximum=10, singleStep=0.1))
             this_spin = getattr(self, f'bar_width_{i}')
+            '''Fail to update other than bar_width_4....
             this_spin.valueChanged.connect(
                 lambda: self.param_changed_from_gui(attribute=f'bar_width_{i}'))
+            '''
             hlo_gb.addWidget(QLabel(f'{i}:'))
             hlo_gb.addWidget(this_spin)
             hlo_gb.addSpacing(50)
+        self.bar_width_1.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='bar_width_1'))
+        self.bar_width_2.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='bar_width_2'))
+        self.bar_width_3.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='bar_width_3'))
+        self.bar_width_4.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='bar_width_4'))
 
         self.bar_roi_size = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
@@ -1655,8 +1745,6 @@ class ParamsTabSPECT(ParamsTabCommon):
         """GUI of tab Contrast."""
         self.tab_con = ParamsWidget(self, run_txt='Calculate contrast')
         self.tab_con.vlo_top.addWidget(uir.UnderConstruction())
-
-        #...
 
 
 class ParamsTabPET(ParamsTabCommon):
@@ -2225,7 +2313,8 @@ class BoolSelectTests(uir.BoolSelect):
 class PositionWidget(QWidget):
     """Reusable table widget to hold user defined roi positions."""
 
-    def __init__(self, parent, main, table_attribute_name='', headers=None):
+    def __init__(self, parent, main, table_attribute_name='', headers=None,
+                 zoomed_area=False):
         """Initialize PositionWidget.
 
         Parameters
@@ -2237,13 +2326,21 @@ class PositionWidget(QWidget):
             attribute name of PositionTable or variants of this
         headers : list of str
             if None ['Label', 'pos x [mm]', 'pos y [mm]']
+        zoomed_area : bool
+            type of getting/using positions/coordinates
         """
         super().__init__()
+        self.get_position_tooltips = [
+            'Get position from last mouseclick in image',
+            'Set selected ROI = zoomed area']
+        self.zoomed_area = zoomed_area
         self.parent = parent
         self.main = main
-        self.table = PositionTableWidget(self.parent, self.main,
-                                         table_attribute_name, headers=headers)
+        self.table = PositionTableWidget(
+            self.parent, self.main,
+            table_attribute_name, headers=headers)
         self.ncols = len(self.table.headers)
+        self.test_name = table_attribute_name[:3]
 
         hlo = QHBoxLayout()
         self.setLayout(hlo)
@@ -2264,15 +2361,38 @@ class PositionWidget(QWidget):
             QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
             'Delete row', self)
         act_delete.triggered.connect(self.delete_row)
-        act_get_pos = QAction(
+        self.act_get_pos = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}selectArrow.png'),
-            'Get position from last mouseclick in image', self)
-        act_get_pos.triggered.connect(self.get_pos_mouse)
+            self.get_position_tooltips[0], self)
         toolb = QToolBar()
-        toolb.addActions([act_import, act_copy, act_add, act_delete, act_get_pos])
+        toolb.addActions([act_import, act_copy, act_add, act_delete, self.act_get_pos])
         toolb.setOrientation(Qt.Vertical)
         hlo.addWidget(toolb)
         hlo.addWidget(self.table)
+        self.update_on_zoom_change(silent=True)
+
+    def update_on_zoom_change(self, silent=False):
+        """Make changes to table and widget when zoom selection changes."""
+        if self.zoomed_area:
+            self.act_get_pos.setToolTip(self.get_position_tooltips[1])
+            self.act_get_pos.disconnect()
+            self.act_get_pos.triggered.connect(self.get_zoomed_area)
+        else:
+            self.act_get_pos.setToolTip(self.get_position_tooltips[0])
+            self.act_get_pos.disconnect()
+            self.act_get_pos.triggered.connect(self.get_pos_mouse)
+        if self.table.current_table is not None and silent is False:
+            if len(self.table.current_table.labels) > 0:
+                reply = QMessageBox.question(
+                    self, 'Copy current table to clipboard?',
+                    'Table will be reset. '
+                    'Copy content to clipboard to save current values?',
+                    QMessageBox.Yes, QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    self.copy_table()
+                self.table.current_table = cfc.PositionTable()
+                self.table.update_table()
+                self.main.update_roi()
 
     def import_table(self):
         """Import contents to table from clipboard or from predefined."""
@@ -2284,27 +2404,41 @@ class PositionWidget(QWidget):
         res = dlg.exec()
         input_table = None
         if res:
-            dataf = pd.read_clipboard()
-            _, ncols = dataf.shape
-            if ncols != self.ncols:
-                pass #TODO ask for separator / decimal or guess?
-                errmsg = [
-                    'Failed reading table from clipboard.',
-                    f'Expected {self.ncols} columns of data that are',
-                    'separated by tabs or as copied from Excel.'
-                    ]
-                dlg = messageboxes.MessageBoxWithDetails(
-                    self, title='Failed reading table',
-                    msg='Failed reading table. See details.',
-                    details=errmsg, icon=QMessageBox.Warning)
-                dlg.exec()
-            else:
-                input_table = self.validate_input_dataframe(dataf)
+            try:
+                dataf = pd.read_clipboard()
+                _, ncols = dataf.shape
+                if ncols != self.ncols:
+                    pass  # TODO ask for separator / decimal or guess?
+                    errmsg = [
+                        'Failed reading table from clipboard.',
+                        f'Expected {self.ncols} columns of data that are',
+                        'separated by tabs or as copied from Excel.'
+                        ]
+                    dlg = messageboxes.MessageBoxWithDetails(
+                        self, title='Failed reading table',
+                        msg='Failed reading table. See details.',
+                        details=errmsg, icon=QMessageBox.Warning)
+                    dlg.exec()
+                else:
+                    input_table = self.validate_input_dataframe(dataf)
+            except pd.errors.ParserError as err:
+                QMessageBox.warning(
+                    self, 'Validation failed',
+                    f'Trouble validating input table: {err}')
         else:
-            # input_table = self.get_predefined_table()
-            QMessageBox.information(
-                self, 'Missing predefined table',
-                'Sorry - no set of predefined tables exist yet.')
+            if self.test_name == 'num' and self.main.current_modality == 'NM':
+                table_dict = cff.load_default_pos_tables(filename='Siemens_AutoQC')
+                if len(table_dict) > 0:
+                    labels = [*table_dict]
+                    label, ok = QInputDialog.getItem(
+                        self.main, "Select predefined table",
+                        "Predefined tables:", labels, 0, False)
+                    if ok and label:
+                        input_table = table_dict[label]
+            else:
+                QMessageBox.information(
+                    self, 'Missing predefined table',
+                    'Sorry - no set of predefined tables exist yet.')
 
         if input_table is not None:
             self.table.current_table = input_table
@@ -2313,13 +2447,30 @@ class PositionWidget(QWidget):
 
     def validate_input_dataframe(self, input_df):
         """Convert the input pandas dataframe to the current_table format."""
-        table = cfc.PositionTable()
+        def str_2_tuple(pos_string):
+            pos_tuple = (0, 0)
+            if len(pos_string) > 2:
+                start_end = pos_string[1:-1].split(', ')
+                pos_tuple = (int(start_end[0]), int(start_end[1]))
+            return pos_tuple
         nrows, ncols = input_df.shape
         if nrows > 0:
-            table = []
-            table.labels = [str(input_df.iat[row, 1]) for row in range(nrows)]
-            table.pos_x = [float(input_df.iat[row, 2]) for row in range(nrows)]
-            table.pos_y = [float(input_df.iat[row, 3]) for row in range(nrows)]
+            table = cfc.PositionTable()
+            table.labels = [str(input_df.iat[row, 0]) for row in range(nrows)]
+            try:
+                if self.zoomed_area:  # pos is tuple
+                    table.pos_x = [
+                        str_2_tuple(input_df.iat[row, 1]) for row in range(nrows)]
+                    table.pos_y = [
+                        str_2_tuple(input_df.iat[row, 2]) for row in range(nrows)]
+                else:
+                    table.pos_x = [float(input_df.iat[row, 1]) for row in range(nrows)]
+                    table.pos_y = [float(input_df.iat[row, 2]) for row in range(nrows)]
+            except ValueError as err:
+                table = None
+                QMessageBox.warning(
+                    self, 'Validation failed',
+                    f'Trouble validating input table: {err}')
 
         return table
 
@@ -2345,9 +2496,17 @@ class PositionWidget(QWidget):
                 rowno = sel[0].row()
             else:
                 rowno = self.table.rowCount()
-        self.table.current_table.add_pos(index=rowno)
-        self.parent.flag_edit(True)
-        self.table.update_table()
+        if self.zoomed_area:
+            if self.main.active_img is not None:
+                self.get_zoomed_area()
+        else:
+            if self.main.active_img is not None:
+                self.get_pos_mouse()
+            else:
+                self.table.current_table.add_pos(
+                    index=rowno, pos_x=0, pos_y=0)
+                self.parent.flag_edit(True)
+                self.table.update_table()
 
     def delete_row(self):
         """Delete row from table."""
@@ -2361,18 +2520,64 @@ class PositionWidget(QWidget):
     def get_pos_mouse(self):
         """Get position from last mouseclick in i mage."""
         sel = self.table.selectedIndexes()
-        if len(sel) > 0:
+        add_row = False
+        if len(sel) == 0:
+            add_row = True
+            rowno = self.table.rowCount()
+        else:
             rowno = sel[0].row()
+        if self.main.active_img is not None:
             sz_acty, sz_actx = np.shape(self.main.active_img)
             image_info = self.main.imgs[self.main.gui.active_img_no]
-            dx_pix = self.main.gui.last_clicked_pos[0] - 0.5 * sz_actx
-            dxmm = round(dx_pix * image_info.pix[0], 1)
-            dy_pix = self.main.gui.last_clicked_pos[1] - 0.5 * sz_acty
-            dymm = round(dy_pix * image_info.pix[1], 1)
-            self.table.current_table.pos_x[rowno] = dxmm
-            self.table.current_table.pos_y[rowno] = dymm
+            if self.test_name == 'roi':
+                in_mm = self.main.current_paramset.roi_offset_mm
+            else:
+                in_mm = True
+            dx = self.main.gui.last_clicked_pos[0] - 0.5 * sz_actx
+            dy = self.main.gui.last_clicked_pos[1] - 0.5 * sz_acty
+            if in_mm:
+                dx = round(dx * image_info.pix[0], 1)
+                dy = round(dy * image_info.pix[1], 1)
+            else:
+                dx = int(dx)
+                dy = int(dy)
+            if add_row is False:
+                self.table.current_table.pos_x[rowno] = dx
+                self.table.current_table.pos_y[rowno] = dy
+            else:
+                self.table.current_table.add_pos(pos_x=dx, pos_y=dy)
             self.parent.flag_edit(True)
             self.table.update_table()
+
+    def get_zoomed_area(self):
+        """Get coordinates af zoomed area in image."""
+        sel = self.table.selectedIndexes()
+        add_row = False
+        if len(sel) == 0:
+            add_row = True
+            rowno = self.table.rowCount()
+        else:
+            rowno = sel[0].row()
+        if self.main.active_img is not None:
+            sz_y, sz_x = np.shape(self.main.active_img)
+            xs = np.sort(self.main.wid_image_display.canvas.ax.get_xlim())
+            ys = np.sort(self.main.wid_image_display.canvas.ax.get_ylim())
+            x_tuple = (int(xs[0])+1, int(xs[1])+1)
+            y_tuple = (int(ys[0])+1, int(ys[1])+1)
+            proceed = True
+            if x_tuple == (0, sz_x) and y_tuple == (0, sz_y):
+                question = (
+                    'Did you zoom to the region of interest with numbers? '
+                    'Proceed setting full image as ROI?')
+                proceed = messageboxes.proceed_question(self, question)
+            if proceed:
+                if add_row is False:
+                    self.table.current_table.pos_x[rowno] = x_tuple
+                    self.table.current_table.pos_y[rowno] = y_tuple
+                else:
+                    self.table.current_table.add_pos(pos_x=x_tuple, pos_y=y_tuple)
+                self.parent.flag_edit(True)
+                self.table.update_table()
 
 
 class PositionTableWidget(QTableWidget):
@@ -2405,8 +2610,25 @@ class PositionTableWidget(QTableWidget):
     def edit_current_table(self, row, col):
         """Update PositionTable when cell edited."""
         val = self.item(row, col).text()
+
+        def str_2_tuple(pos_string):
+            pos_tuple = (0, 10)
+            if len(pos_string) > 2:
+                start_end = pos_string[1:-1].split(', ')
+                pos_tuple = (int(start_end[0]), int(start_end[1]))
+            return pos_tuple
+
         if col > 0:
-            val = float(val)
+            if isinstance(self.current_table.pos_x[0], (tuple, list)):
+                try:
+                    val = str_2_tuple(val)
+                except ValueError:
+                    val = (0, 10)
+            else:
+                try:
+                    val = float(val)
+                except ValueError:
+                    val = 0
         if col == 0:
             self.current_table.labels[row] = val
         elif col == 1:
@@ -2429,6 +2651,8 @@ class PositionTableWidget(QTableWidget):
         self.blockSignals(True)
         self.clear()
         self.setColumnCount(len(self.headers))
+        self.setHorizontalHeaderLabels(self.headers)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         values = None
         n_rows = 0
         try:
@@ -2437,8 +2661,6 @@ class PositionTableWidget(QTableWidget):
         except AttributeError:
             pass
         self.setRowCount(n_rows)
-        self.setHorizontalHeaderLabels(self.headers)
-        self.verticalHeader().setVisible(False)
 
         if values is not None:
             for col in range(len(self.headers)):
@@ -2449,8 +2671,9 @@ class PositionTableWidget(QTableWidget):
                         twi.setTextAlignment(4)
                     self.setItem(row, col, twi)
 
-            self.resizeColumnsToContents()
+            self.verticalHeader().setVisible(False)
             self.resizeRowsToContents()
+
         self.blockSignals(False)
         self.parent.main.update_roi(clear_results_test=True)
 
@@ -2464,7 +2687,7 @@ class PositionTableWidget(QTableWidget):
         return values
 
 
-class CTnTableWidget(QWidget):#TODO PositionWidget
+class CTnTableWidget(QWidget):  # TODO PositionWidget
     """CT numbers table widget."""
 
     def __init__(self, parent, main):
@@ -2521,7 +2744,7 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
             dataf = pd.read_clipboard()
             nrows, ncols = dataf.shape
             if ncols != 6:
-                pass #TODO ask for separator / decimal or guess?
+                pass  # TODO ask for separator / decimal or guess?
                 errmsg = [
                     'Failed reading table from clipboard.',
                     'Expected 6 columns of data that are',
@@ -2536,17 +2759,17 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
             else:
                 ctn_table = cfc.HUnumberTable()
                 ctn_table.labels = [
-                    str(dataf.iat[row, 1]) for row in range(nrows)]
+                    str(dataf.iat[row, 0]) for row in range(nrows)]
                 ctn_table.pos_x = [
-                    float(dataf.iat[row, 2]) for row in range(nrows)]
+                    float(dataf.iat[row, 1]) for row in range(nrows)]
                 ctn_table.pos_y = [
-                    float(dataf.iat[row, 3]) for row in range(nrows)]
+                    float(dataf.iat[row, 2]) for row in range(nrows)]
                 ctn_table.min_HU = [
-                    float(dataf.iat[row, 4]) for row in range(nrows)]
+                    float(dataf.iat[row, 3]) for row in range(nrows)]
                 ctn_table.max_HU = [
-                    float(dataf.iat[row, 5]) for row in range(nrows)]
+                    float(dataf.iat[row, 4]) for row in range(nrows)]
                 ctn_table.linearity_axis = [
-                    float(dataf.iat[row, 6]) for row in range(nrows)]
+                    float(dataf.iat[row, 5]) for row in range(nrows)]
         else:
             table_dict = cff.load_default_ct_number_tables()
             if len(table_dict) > 0:
@@ -2563,7 +2786,7 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
             self.table.update_table()
 
     def copy_table(self):
-        """Copy contents of table to clipboard."""
+        """Copy conptents of table to clipboard."""
         dict_2_pd = {
             'labels': self.main.current_paramset.ctn_table.labels,
             'pos_x': self.main.current_paramset.ctn_table.pos_x,
@@ -2573,9 +2796,32 @@ class CTnTableWidget(QWidget):#TODO PositionWidget
             self.main.current_paramset.ctn_table.linearity_unit:
                 self.main.current_paramset.ctn_table.linearity_axis
             }
-        dataf = pd.DataFrame(dict_2_pd)
-        dataf.to_clipboard(index=False)
-        self.main.status_bar.showMessage('Values in clipboard', 2000)
+        proceed = True
+        try:
+            dataf = pd.DataFrame(dict_2_pd)
+        except ValueError:  # as err:
+            # might happen if not all same length
+            self.main.current_paramset.ctn_table.fix_list_lengths()
+            dict_2_pd = {
+                'labels': self.main.current_paramset.ctn_table.labels,
+                'pos_x': self.main.current_paramset.ctn_table.pos_x,
+                'pos_y': self.main.current_paramset.ctn_table.pos_y,
+                'min_HU': self.main.current_paramset.ctn_table.min_HU,
+                'max_HU': self.main.current_paramset.ctn_table.max_HU,
+                self.main.current_paramset.ctn_table.linearity_unit:
+                    self.main.current_paramset.ctn_table.linearity_axis
+                }
+            dataf = pd.DataFrame(dict_2_pd)
+            '''
+            proceed = False
+            QMessageBox.warning(
+                self, 'Copy failed',
+                f'Trouble copying table: {err}')
+            '''
+
+        if proceed:
+            dataf.to_clipboard(index=False)
+            self.main.status_bar.showMessage('Values in clipboard', 2000)
 
     def add_row(self):
         """Add row to table."""

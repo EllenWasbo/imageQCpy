@@ -820,6 +820,8 @@ class MainWindow(QMainWindow):
         status, path, self.tag_infos = cff.load_settings(fname='tag_infos')
         status, path, self.tag_patterns_special = cff.load_settings(
             fname='tag_patterns_special')
+        status, path, self.digit_templates = cff.load_settings(
+            fname='digit_templates')
 
         try:  # avoid error before gui ready
             prev_label = self.wid_quicktest.current_template.label
@@ -834,6 +836,8 @@ class MainWindow(QMainWindow):
 
     def version_control(self):
         """Compare version number of tag_infos with current saved."""
+        cff.version_control(self)
+        '''TODO delete? moved to config_func.py
         _, _, last_mod = cff.load_settings(fname='last_modified')
         res = getattr(last_mod, 'tag_infos')
         if len(res) > 0:
@@ -884,7 +888,7 @@ class MainWindow(QMainWindow):
                         if reply == QMessageBox.No:
                             # update version number
                             ok_save, path = cff.save_settings(
-                                self.tag_infos, fname='tag_infos')
+                                self.tag_infos, fname='tag_infos')'''
 
     def display_clipboard(self, title='Clipboard content'):
         """Display clipboard content e.g. when testing QuickTest output."""
@@ -947,20 +951,26 @@ class MainWindow(QMainWindow):
         """Return to normal mouse cursor after wait cursor."""
         QApplication.restoreOverrideCursor()
 
+    def finish_cleanup(self):
+        if self.wid_paramset.lbl_edit.text() == '*':
+            self.wid_paramset.ask_to_save_changes()
+        try:
+            cff.remove_user_from_active_users()
+            # save current settings to user prefs
+            self.user_prefs.annotations_line_thick = self.gui.annotations_line_thick
+            self.user_prefs.annotations_font_size = self.gui.annotations_font_size
+            ok, path = cff.save_user_prefs(self.user_prefs, parentwidget=self)
+        except:  # on pytest
+            pass
+
     def closeEvent(self, event):
         """Exit app by x in the corner."""
-        cff.remove_user_from_active_users()
+        self.finish_cleanup()
         event.accept()
 
     def exit_app(self):
         """Exit app by menu."""
-        if self.wid_paramset.lbl_edit.text() == '*':
-            self.wid_paramset.ask_to_save_changes()
-        cff.remove_user_from_active_users()
-        # save current settings to user prefs
-        self.user_prefs.annotations_line_thick = self.gui.annotations_line_thick
-        self.user_prefs.annotations_font_size = self.gui.annotations_font_size
-        ok, path = cff.save_user_prefs(self.user_prefs, parentwidget=self)
+        self.finish_cleanup()
         sys.exit()
 
     def clicked_resultsize(self, tool=None):
@@ -1051,7 +1061,7 @@ class MainWindow(QMainWindow):
         act_reset_split.triggered.connect(self.reset_split_sizes)
         self.act_warning = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}warning.png'),
-            'Show warings', self)
+            'Show warnings', self)
         self.act_warning.triggered.connect(self.display_previous_warnings)
         self.act_warning.setEnabled(False)
 

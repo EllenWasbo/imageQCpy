@@ -39,11 +39,15 @@ def prepare_debug():
     debugger.do_next(None)  # run the next command
     users_frame = sys._getframe().f_back  # frame where user invoked `pyqt_set_trace()`
     debugger.interaction(users_frame, None)
+    # to matplotlib in this mode:
+    # import matplotlib.pyplot as plt
+    # plt.imshow(your_image) /or plt.plot(xs, ys)
+    # plt.pause(1) not plt.show() which will show empty figure and errmsg
 
 
 if __name__ == '__main__':
     print('imageQC is starting up...', flush=True)
-    #prepare_debug()  # TODO - activate (not needed when not debugging)
+    #prepare_debug()  # type c to continue, # before this code in imageQC.py to deactivate debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     # verify that config_folder exists
     if user_prefs.config_folder != '':

@@ -23,7 +23,7 @@ from imageQC.config.iQCconstants import (
 from imageQC.config.config_func import init_user_prefs
 from imageQC.config.read_config_idl import ConfigIdl2Py
 from imageQC.ui import messageboxes
-from imageQC.ui.reusable_widgets import BoolSelect
+from imageQC.ui import reusable_widgets as uir
 import imageQC.resources
 # imageQC block end
 
@@ -62,22 +62,22 @@ class StartUpDialog(ImageQCDialog):
         logo = QLabel()
         im = QPixmap(':/icons/iQC_icon128.png')
         logo.setPixmap(im)
-        hLO_top = QHBoxLayout()
-        layout.addLayout(hLO_top)
-        hLO_top.addStretch()
-        hLO_top.addWidget(logo)
-        hLO_top.addStretch()
+        hlo_top = QHBoxLayout()
+        layout.addLayout(hlo_top)
+        hlo_top.addStretch()
+        hlo_top.addWidget(logo)
+        hlo_top.addStretch()
 
         header_text = """<html><head/><body>
             <p><span style=\" font-size:14pt;\">Welcome to imageQC!</span></p>
             </body></html>"""
-        hLO_header = QHBoxLayout()
+        hlo_header = QHBoxLayout()
         header = QLabel()
         header.setText(header_text)
-        hLO_header.addStretch()
-        hLO_header.addWidget(header)
-        hLO_header.addStretch()
-        layout.addLayout(hLO_header)
+        hlo_header.addStretch()
+        hlo_header.addWidget(header)
+        hlo_header.addStretch()
+        layout.addLayout(hlo_header)
 
         info_text = f"""<html><head/><body>
             <p>imageQC offer options to configure settings for calculations,
@@ -223,10 +223,10 @@ class EditAnnotationsDialog(ImageQCDialog):
         self.setMinimumHeight(300)
         self.setMinimumWidth(300)
 
-        vLO = QVBoxLayout()
-        self.setLayout(vLO)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
         fLO = QFormLayout()
-        vLO.addLayout(fLO)
+        vlo.addLayout(fLO)
 
         self.chk_annotations = QCheckBox('Show annotations')
         self.chk_annotations.setChecked(annotations)
@@ -246,7 +246,7 @@ class EditAnnotationsDialog(ImageQCDialog):
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
-        vLO.addWidget(self.buttonBox)
+        vlo.addWidget(self.buttonBox)
 
     def get_data(self):
         """Get settings.
@@ -277,26 +277,49 @@ class QuickTestClipboardDialog(ImageQCDialog):
         self.setMinimumHeight(200)
         self.setMinimumWidth(200)
 
-        vLO = QVBoxLayout()
-        self.setLayout(vLO)
-        vLO.addWidget(QLabel('Optionally change default settings for clipboard output:'))
-        fLO = QFormLayout()
-        vLO.addLayout(fLO)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        intro_text = (
+            'With QuickTest it is possible to customize which values (from all'
+            ' included tests) to output.<br>'
+            'These settings can be found in output settings for the parameterset used.'
+            '<br>'
+            'The output will always include the acquisition date for the first image '
+            'and all values are on one row or column.<br>'
+            'The idea is that for repeated tests the output can be listed by date'
+            'and loaded into text files or pasted to an Excel sheet.<br>'
+            'Default is output as a row without headers (this is how it is used with '
+            'automation). <br>'
+            'Include headers to better see what the values represent when establishing '
+            'your data e.g. include in your Excel sheet.'
+            )
+        vlo.addWidget(uir.LabelItalic(intro_text))
+        vlo.addWidget(uir.HLine())
+
+        hlo = QHBoxLayout()
+        vlo.addLayout(hlo)
+        hlo.addStretch()
+        vlo_vals = QVBoxLayout()
+        hlo.addLayout(vlo_vals)
+        hlo.addStretch()
 
         self.chk_include_headers = QCheckBox('Include headers')
         self.chk_include_headers.setChecked(include_headers)
-        fLO.addRow(QLabel(), self.chk_include_headers)
+        vlo_vals.addWidget(self.chk_include_headers)
 
-        self.chk_transpose_table = BoolSelect(
+        self.chk_transpose_table = uir.BoolSelect(
             self, text_true='column', text_false='row (like if automation)')
         self.chk_transpose_table.setChecked(transpose_table)
-        fLO.addRow(QLabel('Output values as'), self.chk_transpose_table)
+        hlo_transpose = QHBoxLayout()
+        hlo_transpose.addWidget(QLabel('Output values as'))
+        hlo_transpose.addWidget(self.chk_transpose_table)
+        vlo_vals.addLayout(hlo_transpose)
 
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
-        vLO.addWidget(self.buttonBox)
+        vlo.addWidget(self.buttonBox)
 
     def get_data(self):
         """Get settings.
@@ -329,28 +352,28 @@ class ResetAutoTemplateDialog(ImageQCDialog):
             self.list_elements = [folder.name for folder in directories]
             files_or_folders = 'folders'
 
-        vLO = QVBoxLayout()
-        self.setLayout(vLO)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
 
         self.list_file_or_dirs = QListWidget()
         self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)
         self.list_file_or_dirs.addItems(self.list_elements)
         self.list_file_or_dirs.setCurrentRow(len(self.list_elements) - 1)
 
-        vLO.addWidget(QLabel(
+        vlo.addWidget(QLabel(
             'Move files out of Archive to regard these files as incoming.'))
-        vLO.addStretch()
-        vLO.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
-        vLO.addWidget(self.list_file_or_dirs)
-        vLO.addStretch()
-        hLO_buttons = QHBoxLayout()
-        vLO.addLayout(hLO_buttons)
+        vlo.addStretch()
+        vlo.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
+        vlo.addWidget(self.list_file_or_dirs)
+        vlo.addStretch()
+        hlo_buttons = QHBoxLayout()
+        vlo.addLayout(hlo_buttons)
 
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
-        vLO.addWidget(self.buttonBox)
+        vlo.addWidget(self.buttonBox)
 
     def get_idxs(self):
         """Return selected indexes in list."""
@@ -367,20 +390,20 @@ class TextDisplay(ImageQCDialog):
                  read_only=True,
                  min_width=1000, min_height=1000):
         super().__init__()
-        vLO = QVBoxLayout()
-        self.setLayout(vLO)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
         txtEdit = QTextEdit('', self)
         txtEdit.setPlainText(text)
         txtEdit.setReadOnly(read_only)
         txtEdit.createStandardContextMenu()
         txtEdit.setMinimumWidth(min_width)
         txtEdit.setMinimumHeight(min_height)
-        vLO.addWidget(txtEdit)
+        vlo.addWidget(txtEdit)
         buttons = QDialogButtonBox.Close
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
-        vLO.addWidget(self.buttonBox)
+        vlo.addWidget(self.buttonBox)
 
         self.setWindowTitle(title)
         self.setMinimumWidth(min_width)

@@ -121,12 +121,17 @@ class GenericImageToolbarPosVal(QToolBar):
             else:
                 delta_x = 0
                 delta_y = 0
-            sz_img = event.inaxes.get_images()[0].get_array().shape
+            img = event.inaxes.get_images()[0].get_array()
+            sz_img = img.shape
+            max_abs = np.max(np.abs(img))
             xpos = event.xdata - 0.5 * sz_img[1] - delta_x
             ypos = event.ydata - 0.5 * sz_img[0] - delta_y
             xyval = event.inaxes.get_images()[0].get_cursor_data(event)
             try:
-                txt = f'xy = ({xpos:.0f}, {ypos:.0f}), val = {xyval:.1f}'
+                if max_abs < 10:
+                    txt = f'xy = ({xpos:.0f}, {ypos:.0f}), val = {xyval:.3f}'
+                else:
+                    txt = f'xy = ({xpos:.0f}, {ypos:.0f}), val = {xyval:.1f}'
                 self.xypos.setText(txt)
             except TypeError:
                 self.xypos.setText('')

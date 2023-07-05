@@ -110,7 +110,7 @@ class SettingsDialog(ImageQCDialog):
                        exclude_if_empty=True):
             proceed = True
             if import_review_mode and exclude_if_empty:
-                if getattr(self.main, snake) == {}:
+                if getattr(self.main, snake, {}) == {}:
                     proceed = False
                 if snake == 'paramsets' and exclude_paramsets:
                     proceed = False

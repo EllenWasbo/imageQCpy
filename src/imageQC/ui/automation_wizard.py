@@ -208,7 +208,7 @@ class SelectOverrideDialog(ImageQCDialog):
         self.setLayout(vLO)
 
         txt = '''
-        <p>These wizard will not change these settings of the selected template:</p>
+        <p>The wizard will not change these settings of the selected template:</p>
         <ul><li>Dicom criteria</li></ul>
         <p>These settings will be overridden by current values (if saved):</p>
         <ul>

@@ -1574,12 +1574,6 @@ class ResultPlotCanvas(PlotCanvas):
                 self.curves.append(
                     {'label': 'NPS estimated quantum noise',
                      'xvals': xvals, 'yvals': yvals, 'style': ':k'})
-                '''
-                txt_quantum_noise = (
-                    f'Quantum noise = {details_dict_roi["quantum_noise"]:.2f}')
-                at = matplotlib.offsetbox.AnchoredText(txt_quantum_noise, loc='lower right')
-                self.ax.add_artist(at)
-                '''
             else:
                 yvals = details_dict_roi['rNPS_quantum_noise']
                 self.curves.append(
@@ -1588,25 +1582,66 @@ class ResultPlotCanvas(PlotCanvas):
 
         def plot_all_NPS():
             """Plot NPS for all ROIs + hum vis filter (normalized to NPS in max)."""
-            colors = ['red', 'blue', 'green', 'cyan', 'k', 'k', 'k', 'k']
-            styles = ['-', '-', '-', '-', '-', '--', ':', '-.']
-            for roi_no in range(8):
-                details_dict_roi = details_dict['pr_roi'][roi_no]
-                yvals = details_dict_roi['rNPS']
-                if roi_no == 0:
-                    self.default_range_y = [0, 1.3 * np.max(yvals[10:])]
-                xvals = details_dict_roi['freq']
-                self.curves.append(
-                    {'label': f'NPS ROI {roi_names[roi_no]}',
-                     'xvals': xvals, 'yvals': yvals,
-                     'color': colors[roi_no], 'style': styles[roi_no]})
+            if self.main.current_paramset.sni_type == 0:
+                colors = ['red', 'blue', 'green', 'cyan', 'k', 'k', 'k', 'k']
+                styles = ['-', '-', '-', '-', '-', '--', ':', '-.']
+                for roi_no in range(8):
+                    details_dict_roi = details_dict['pr_roi'][roi_no]
+                    yvals = details_dict_roi['rNPS']
+                    if roi_no == 0:
+                        self.default_range_y = [0, 1.3 * np.max(yvals[10:])]
+                    xvals = details_dict_roi['freq']
+                    self.curves.append(
+                        {'label': f'NPS ROI {roi_names[roi_no]}',
+                         'xvals': xvals, 'yvals': yvals,
+                         'color': colors[roi_no], 'style': styles[roi_no]})
 
-            eye_filter_curve = details_dict['eye_filter_large']
-            yvals = eye_filter_curve['V'] * np.median(details_dict['pr_roi'][0]['rNPS'])
+                eye_filter_curve = details_dict['eye_filter_large']
+                yvals = eye_filter_curve['V'] * np.median(details_dict[
+                    'pr_roi'][0]['rNPS'])
+                self.curves.append(
+                    {'label': 'Visual filter',
+                     'xvals': eye_filter_curve['r'], 'yvals': yvals,
+                     'color': 'darkgray', 'style': '-'})
+                self.default_range_x = [0, nyquist_freq]
+            else:
+                for roi_no, dd in enumerate(details_dict['pr_roi']):
+                    yvals = dd['rNPS']
+                    if roi_no == 0:
+                        self.default_range_y = [0, 1.3 * np.max(yvals[10:])]
+                    xvals = dd['freq']
+                    self.curves.append(
+                        {'label': '_no_legend_',
+                         'xvals': xvals, 'yvals': yvals})
+                eye_filter_curve = details_dict['eye_filter']
+                yvals = eye_filter_curve['V'] * np.median(details_dict[
+                    'pr_roi'][0]['rNPS'])
+                self.curves.append(
+                    {'label': 'Visual filter',
+                     'xvals': eye_filter_curve['r'], 'yvals': yvals,
+                     'color': 'darkgray', 'style': '-'})
+                self.default_range_x = [0, nyquist_freq]
+
+        def plot_filtered_max_avg():
+            xvals = details_dict['pr_roi'][0]['freq']
+            yvals = details_dict['avg_rNPS_filt']
             self.curves.append(
-                {'label': 'Visual filter',
-                 'xvals': eye_filter_curve['r'], 'yvals': yvals,
-                 'color': 'darkgray', 'style': '-'})
+                {'label': 'avg NPS with eye filter',
+                 'xvals': xvals, 'yvals': yvals, 'style': '-b'})
+            yvals = details_dict['avg_rNPS_struct_filt']
+            self.curves.append(
+                {'label': 'avg structured NPS with eye filter',
+                 'xvals': xvals, 'yvals': yvals, 'style': '-r'})
+            idx_max = details_dict['roi_max_idx']
+            yvals = details_dict['pr_roi'][idx_max]['rNPS_filt']
+            self.curves.append(
+                {'label': 'max NPS with eye filter',
+                 'xvals': xvals, 'yvals': yvals, 'style': ':b'})
+            yvals = details_dict['pr_roi'][idx_max]['rNPS_struct_filt']
+            self.curves.append(
+                {'label': 'max structured NPS with eye filter',
+                 'xvals': xvals, 'yvals': yvals, 'style': ':r'})
+
             self.default_range_x = [0, nyquist_freq]
 
         def plot_curve_corr_check():
@@ -1655,7 +1690,10 @@ class ResultPlotCanvas(PlotCanvas):
         if 'SNI' in sel_text:
             plot_SNI_values()
         elif 'Filtered' in sel_text:
-            plot_filtered_NPS(roi_name=sel_text[-2:])
+            if 'max' in sel_text:
+                plot_filtered_max_avg()
+            else:
+                plot_filtered_NPS(roi_name=sel_text[-2:])
         elif 'all' in sel_text:
             plot_all_NPS()
         elif'correction' in sel_text:

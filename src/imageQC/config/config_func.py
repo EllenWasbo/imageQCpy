@@ -114,6 +114,16 @@ def version_control(input_main):
                         msg_width=800
                         )
                     if res.exec():
+                        if len(tags_in_added) > 0:
+                            reply = QMessageBox.question(
+                                input_main, 'Sort tags?',
+                                'Added tags are currently at end om list. '
+                                'Sort tags alphabetically?',
+                                QMessageBox.Yes, QMessageBox.No)
+                            if reply == QMessageBox.Yes:
+                                new_tag_infos = sorted(
+                                    new_tag_infos,
+                                    key=lambda x: x.attribute_name.upper())
                         taginfos_reset_sort_index(new_tag_infos)
                         ok_save, path = save_settings(
                             new_tag_infos, fname='tag_infos')
@@ -869,7 +879,7 @@ def import_settings(import_main):
             )
         res = msgBox.exec_()
         if res == QMessageBox.Yes:
-            tag_infos = sorted(tag_infos, key=lambda x: x.attribute_name)
+            tag_infos = sorted(tag_infos, key=lambda x: x.attribute_name.upper())
 
         taginfos_reset_sort_index(tag_infos)
         status, path = save_settings(tag_infos, fname=fname)
@@ -935,15 +945,8 @@ def get_taginfos_used_in_templates(object_with_templates, specific_attribute=Non
         list of attributes found for each modality
         or list of templates where special attribute is found
     """
-
     status = True
     log = []
-
-    fname = 'tag_infos'
-    if hasattr(object_with_templates, fname):
-        tag_infos = getattr(object_with_templates, fname)
-    else:
-        _, _, templates = load_settings(fname=fname)
 
     modalities = [*QUICKTEST_OPTIONS]
     defined_attributes = {}

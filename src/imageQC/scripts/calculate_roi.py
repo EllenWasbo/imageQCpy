@@ -872,7 +872,10 @@ def get_roi_SNI(image, image_info, paramset):
     -------
     roi : list of ndarray
         2d arrays with type 'bool'
+        if sni_type == 0:
         2 large ROIs (left, rigth), 6 smaller ROIs left to right, top to bottom
+        else
+        list of all rois in grid
     errmsg
     """
     errmsg = None
@@ -892,52 +895,68 @@ def get_roi_SNI(image, image_info, paramset):
     idxs_row = np.where(rows == True)
     first_row = idxs_row[0][0]
 
-    if width_x > width_y:
-        # large ROIs (2)
-        left_large = np.full(roi_full.shape, False)
-        left_large[rows, first_col:first_col + large_dim] = True
-        roi_array.append(left_large)
-        roi_array.append(np.fliplr(left_large))
-        # small ROIs (6)
-        upper_left = np.full(roi_full.shape, False)
-        upper_left[
-            first_row:first_row + small_dim, first_col:first_col + small_dim] = True
-        roi_array.append(upper_left)
-        upper_mid = np.full(roi_full.shape, False)
-        s2 = round(small_dim/2)
-        sz_y, sz_x = image.shape
-        w2 = round(sz_x/2)
-        first_mid = w2-1-s2
-        upper_mid[
-            first_row:first_row + small_dim, first_mid:first_mid + small_dim] = True
-        roi_array.append(upper_mid)
-        roi_array.append(np.fliplr(upper_left))
-        roi_array.append(np.flipud(upper_left))
-        roi_array.append(np.flipud(upper_mid))
-        roi_array.append(np.flipud(np.fliplr(upper_left)))
-    else:
-        # large ROIs (2)
-        first_large = np.full(roi_full.shape, False)
-        first_large[first_row:first_row + large_dim, cols] = True
-        roi_array.append(first_large)
-        roi_array.append(np.flipud(first_large))
-        # small ROIs (6)
-        upper_left = np.full(roi_full.shape, False)
-        upper_left[
-            first_row:first_row + small_dim, first_col:first_col + small_dim] = True
-        roi_array.append(upper_left)
-        mid_left = np.full(roi_full.shape, False)
-        s2 = round(small_dim/2)
-        sz_y, sz_x = image.shape
-        w2 = round(sz_y/2)
-        first_mid = w2-1-s2
-        mid_left[
-            first_mid:first_mid + small_dim, first_col:first_col + small_dim] = True
-        roi_array.append(mid_left)
-        roi_array.append(np.flipud(upper_left))
-        roi_array.append(np.fliplr(upper_left))
-        roi_array.append(np.fliplr(mid_left))
-        roi_array.append(np.flipud(np.fliplr(upper_left)))
+    if paramset.sni_type == 0:
+        if width_x > width_y:
+            # large ROIs (2)
+            left_large = np.full(roi_full.shape, False)
+            left_large[rows, first_col:first_col + large_dim] = True
+            roi_array.append(left_large)
+            roi_array.append(np.fliplr(left_large))
+            # small ROIs (6)
+            upper_left = np.full(roi_full.shape, False)
+            upper_left[
+                first_row:first_row + small_dim, first_col:first_col + small_dim] = True
+            roi_array.append(upper_left)
+            upper_mid = np.full(roi_full.shape, False)
+            s2 = round(small_dim/2)
+            sz_y, sz_x = image.shape
+            w2 = round(sz_x/2)
+            first_mid = w2-1-s2
+            upper_mid[
+                first_row:first_row + small_dim, first_mid:first_mid + small_dim] = True
+            roi_array.append(upper_mid)
+            roi_array.append(np.fliplr(upper_left))
+            roi_array.append(np.flipud(upper_left))
+            roi_array.append(np.flipud(upper_mid))
+            roi_array.append(np.flipud(np.fliplr(upper_left)))
+        else:
+            # large ROIs (2)
+            first_large = np.full(roi_full.shape, False)
+            first_large[first_row:first_row + large_dim, cols] = True
+            roi_array.append(first_large)
+            roi_array.append(np.flipud(first_large))
+            # small ROIs (6)
+            upper_left = np.full(roi_full.shape, False)
+            upper_left[
+                first_row:first_row + small_dim, first_col:first_col + small_dim] = True
+            roi_array.append(upper_left)
+            mid_left = np.full(roi_full.shape, False)
+            s2 = round(small_dim/2)
+            sz_y, sz_x = image.shape
+            w2 = round(sz_y/2)
+            first_mid = w2-1-s2
+            mid_left[
+                first_mid:first_mid + small_dim, first_col:first_col + small_dim] = True
+            roi_array.append(mid_left)
+            roi_array.append(np.flipud(upper_left))
+            roi_array.append(np.fliplr(upper_left))
+            roi_array.append(np.fliplr(mid_left))
+            roi_array.append(np.flipud(np.fliplr(upper_left)))
+    else:  # grid
+        roi_size = int(paramset.sni_roi_ratio * large_dim)
+        n_rois_x = width_x // (0.5 * roi_size) - 1
+        n_rois_y = width_y // (0.5 * roi_size) - 1
+        pos_x = width_x // (n_rois_x + 1) * np.arange(n_rois_x) + first_col
+        pos_y = width_y // (n_rois_y + 1) * np.arange(n_rois_y) + first_row
+        for j in pos_y:
+            roi_row = []
+            for i in pos_x:
+                roi_this = get_roi_rectangle(
+                    image.shape,
+                    coords_x=(int(i), int(i)+roi_size),
+                    coords_y=(int(j), int(j)+roi_size))
+                roi_row.append(roi_this)
+            roi_array.append(roi_row)
 
     return (roi_array, errmsg)
 

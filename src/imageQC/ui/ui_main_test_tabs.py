@@ -222,7 +222,8 @@ class ParamsTabCommon(QTabWidget):
 
     def param_changed_from_gui(self, attribute='', update_roi=True,
                                clear_results=True, update_plot=True,
-                               update_results_table=True, content=None):
+                               update_results_table=True, content=None,
+                               edit_ignore=False):
         """Update current_paramset with value from GUI.
 
         If changes found - update roi and delete results.
@@ -231,16 +232,18 @@ class ParamsTabCommon(QTabWidget):
         ----------
         attribute : str
             attribute name in paramset
-        update_roi : bool
+        update_roi : bool, optional
             True (default) if rois have to be recalculated
-        clear_results : bool
+        clear_results : bool, optional
             True (default) if results have to be cleared
-        update_plot : bool
+        update_plot : bool, optional
             True (default) if plot settings affeccted
-        update_results_table : bool
+        update_results_table : bool, optional
             True (default) if results table affected
-        content : None
+        content : None, optional
             Preset content. Default is None
+        edit_ignore : bool, optional
+            Avoid setting flag_edit to True. Default is False.
         """
         if not self.flag_ignore_signals:
             if content is None:
@@ -263,7 +266,8 @@ class ParamsTabCommon(QTabWidget):
             if content is not None:
                 setattr(self.main.current_paramset, attribute, content)
                 self.update_enabled()
-                self.flag_edit(True)
+                if edit_ignore is False:
+                    self.flag_edit(True)
                 if update_roi:
                     self.main.update_roi()
                 if clear_results:
@@ -1214,9 +1218,13 @@ class GroupBoxCorrectPointSource(QGroupBox):
         testcode = testcode.lower()
         self.parent = parent
         self.setCheckable(True)
-        self.toggled.connect(
-            lambda: parent.param_changed_from_gui(
-                attribute=f'{testcode}_correct'))
+        if testcode == 'sni':
+            self.toggled.connect(
+                lambda: parent.update_sni_display_options(attribute='sni_correct'))
+        else:
+            self.toggled.connect(
+                lambda: parent.param_changed_from_gui(
+                    attribute=f'{testcode}_correct'))
         chk_pos_x.toggled.connect(
             lambda: parent.param_changed_from_gui(
                 attribute=f'{testcode}_correct_pos_x'))
@@ -1369,6 +1377,50 @@ class ParamsTabNM(ParamsTabCommon):
         self.addTab(self.tab_spe, "Scan speed")
         self.addTab(self.tab_bar, "Bar phantom")
 
+    def update_enabled(self):
+        """Update enabled/disabled features."""
+        super().update_enabled()
+        if self.main.current_modality == 'NM':
+            paramset = self.main.current_paramset
+            if paramset.sni_type == 0:
+                self.sni_roi_ratio.setEnabled(False)
+            else:
+                self.sni_roi_ratio.setEnabled(True)
+
+    def update_sni_display_options(self, attribute=''):
+        """Update plot and result image options for SNI."""
+        self.sni_plot.clear()
+        self.sni_result_image.clear()
+
+        items_res_image = []
+        if self.sni_type.currentIndex() == 0:
+            items_plot = ['SNI values',
+                          'NPS all ROIs + human visual filter']
+            roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+            pre_txt = 'Filtered NPS and NPS structure ROI'
+            plot_txts = [f'{pre_txt} {name}' for name in roi_names]
+            items_plot.extend(plot_txts)
+
+            pre_txt = '2d NPS for ROI'
+            img_txts = [f'{pre_txt} {name}' for name in roi_names]
+            items_res_image.extend(img_txts)
+        elif self.sni_type.currentIndex() == 1:
+            items_plot = [
+                'NPS all ROIs + human visual filter',
+                'Filtered NPS and NPS structure max+avg']
+            items_res_image.append('SNI values map')
+        if self.sni_correct.isChecked() is True:
+            items_res_image.append('Curvature corrected image')
+            items_plot.append('Curvature correction check')
+        if self.sni_sum_first.isChecked() is True:
+            items_res_image.append('Summed image')
+        self.sni_plot.addItems(items_plot)
+        self.sni_plot.setCurrentIndex(0)
+        self.sni_result_image.addItems(items_res_image)
+        self.sni_result_image.setCurrentIndex(0)
+        if attribute != '':
+            self.param_changed_from_gui(attribute=attribute)
+
     def create_tab_uni(self):
         """GUI of tab Uniformity."""
         self.tab_uni = ParamsWidget(self, run_txt='Calculate uniformity')
@@ -1461,6 +1513,14 @@ class ParamsTabNM(ParamsTabCommon):
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.sni_area_ratio.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sni_area_ratio'))
+        self.sni_type = QComboBox()
+        self.sni_type.addItems(ALTERNATIVES['NM']['SNI'])
+        self.sni_type.currentIndexChanged.connect(
+            lambda: self.update_sni_display_options(attribute='sni_type'))
+        self.sni_roi_ratio = QDoubleSpinBox(
+            decimals=2, minimum=0.05, maximum=1., singleStep=0.01)
+        self.sni_roi_ratio.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sni_roi_ratio'))
 
         self.sni_correct_pos_x = QCheckBox('x')
         self.sni_correct_pos_y = QCheckBox('y')
@@ -1482,25 +1542,13 @@ class ParamsTabNM(ParamsTabCommon):
 
         self.sni_sum_first = QCheckBox('Sum marked images before analysing sum')
         self.sni_sum_first.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='sni_sum_first'))
+            lambda: self.update_sni_display_options(attribute='sni_sum_first'))
 
         self.sni_plot = QComboBox()
-        self.sni_plot.addItems(['SNI values',
-                                'Curvature correction check',
-                                'NPS all ROIs + human visual filter'])
-        roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
-        pre_txt = 'Filtered NPS and NPS structure ROI'
-        plot_txt = [f'{pre_txt} {name}' for name in roi_names]
-        self.sni_plot.addItems(plot_txt)
+        self.sni_result_image = QComboBox()
+        self.update_sni_display_options()
         self.sni_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
-
-        self.sni_result_image = QComboBox()
-        self.sni_result_image.addItems(
-            ['Curvature corrected image', 'Summed image (if sum marked)'])
-        pre_txt = '2d NPS for ROI'
-        img_txts = [f'{pre_txt} {name}' for name in roi_names]
-        self.sni_result_image.addItems(img_txts)
         self.sni_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
 
@@ -1514,6 +1562,13 @@ class ParamsTabNM(ParamsTabCommon):
         flo.addRow(QLabel('Ratio of nonzero part of image to be analysed'),
                    self.sni_area_ratio)
         vlo_left.addLayout(flo)
+
+        hlo_type = QHBoxLayout()
+        vlo_left.addLayout(hlo_type)
+        hlo_type.addWidget(QLabel('ROI setup'))
+        hlo_type.addWidget(self.sni_type)
+        hlo_type.addWidget(QLabel('ROI size ratio'))
+        hlo_type.addWidget(self.sni_roi_ratio)
 
         vlo_eye = QVBoxLayout()
         vlo_eye.addWidget(QLabel('V(r) = r<sup>1.3</sup> exp[-Cr<sup>2</sup> ]'))
@@ -1844,6 +1899,9 @@ class ParamsTabPET(ParamsTabCommon):
         self.rec_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, maximum=100)
         self.rec_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='rec_roi_size'))
+        self.rec_percent_slices = QDoubleSpinBox(decimals=0, minimum=50, maximum=100)
+        self.rec_percent_slices.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rec_percent_slices'))
         self.rec_sphere_percent = QDoubleSpinBox(decimals=0, minimum=10, maximum=100)
         self.rec_sphere_percent.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='rec_sphere_percent'))
@@ -1933,13 +1991,17 @@ class ParamsTabPET(ParamsTabCommon):
         vlo_right.addWidget(uir.LabelHeader('Background ROIs', 3))
         hlo_bg = QHBoxLayout()
         vlo_right.addLayout(hlo_bg)
-        vlo_bg_roisize = QVBoxLayout()
-        vlo_bg_roisize.addWidget(QLabel('ROI radius background'))
+        vlo_bg_roi = QVBoxLayout()
+        vlo_bg_roi.addWidget(QLabel('ROI radius background'))
         flo_bg = QFormLayout()
         flo_bg.addRow(self.rec_roi_size, QLabel('mm'))
-        vlo_bg_roisize.addLayout(flo_bg)
+        vlo_bg_roi.addLayout(flo_bg)
         hlo_bg.addWidget(self.rec_table_widget)
-        hlo_bg.addLayout(vlo_bg_roisize)
+        hlo_bg.addLayout(vlo_bg_roi)
+        vlo_bg_roi.addWidget(QLabel('Use % of images within phantom'))
+        flo_bg2 = QFormLayout()
+        flo_bg2.addRow(self.rec_percent_slices, QLabel('%'))
+        vlo_bg_roi.addLayout(flo_bg2)
 
         flo_plot = QFormLayout()
         flo_plot.addRow(QLabel('Table values'), self.rec_type)

@@ -51,7 +51,9 @@ def extract_char_blocks(nparr):
         start_char_pos = np.where(diff > 0)[0] + 1
         end_char_pos = np.where(diff < 0)[0] + 1
 
-        if len(start_char_pos) > 0 and len(end_char_pos) > 0:
+        if all([
+                len(start_char_pos) > 0,
+                len(end_char_pos) == len(start_char_pos)]):
             chopping_idxs = [
                 (start_char_pos[i], end_char_pos[i])
                 for i in range(len(start_char_pos))]

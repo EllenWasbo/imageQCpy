@@ -453,6 +453,36 @@ def test_NM_SNI():
         [47., 44., 44., 41., 47., 41., 42., 47., 41.]))
     '''
 
+def test_NM_SNI_grid():
+    input_main = InputMain(
+        current_modality='NM',
+        current_test='SNI',
+        current_paramset=cfc.ParamSetNM(
+            sni_type=1,
+            sni_roi_ratio=0.2
+            ),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['SNI']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_paths = [
+        r'C:\Users\ellen\CloudStation\ImageQCpy\DemoBilder\DemoBilder\NM\fraSilje_StOlav_gmlGE\FLOODS001_DS.dcm'
+        ]
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        file_paths, GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values1 = np.round(100 * np.array(input_main.results['SNI']['values'][1]))
+    assert max(values1) < 20  # random but ish [16.,12.,12.,12.,16.,11.,10.,13.,8.]
+    #TODO fix autoQC calibration images
+    '''
+    values3 = np.round(100 * np.array(input_main.results['SNI']['values'][3]))
+    assert np.array_equal(values3, np.array(
+        [47., 44., 44., 41., 47., 41., 42., 47., 41.]))
+    '''
+
 
 def test_NM_SNI_sum():
     input_main = InputMain(

@@ -247,10 +247,10 @@ class MainWindow(QMainWindow):
             file_list = fnames[0]
         if len(file_list) > 0:
             self.start_wait_cursor()
-            self.status_bar.showMessage('Reading images...')
             new_img_infos, ignored_files, warnings = dcm.read_dcm_info(
                 file_list, tag_infos=self.tag_infos,
-                tag_patterns_special=self.tag_patterns_special)
+                tag_patterns_special=self.tag_patterns_special,
+                statusbar=self.status_bar)
             self.stop_wait_cursor()
             self.status_bar.showMessage('Finished reading image headers', 2000)
             if ignored_files:
@@ -478,9 +478,11 @@ class MainWindow(QMainWindow):
         """Recalculate ROI."""
         errmsg = None
         if self.active_img is not None:
+            self.status_bar.showMessage('Updating ROI...')
             self.current_roi, errmsg = get_rois(
                 self.active_img,
                 self.gui.active_img_no, self)
+            self.status_bar.clearMessage()
         else:
             self.current_roi = None
         self.wid_image_display.canvas.roi_draw()
@@ -805,9 +807,9 @@ class MainWindow(QMainWindow):
                 paramset_output=paramset_output,
                 initial_template_label=initial_template_label)
         dlg.exec()
-        self.update_settings()
+        self.update_settings(after_edit_settings=True)
 
-    def update_settings(self):
+    def update_settings(self, after_edit_settings=False):
         """Refresh data from settings files affecting GUI in main window."""
         self.lastload = time()
         status, path, self.user_prefs = cff.load_user_prefs()
@@ -831,8 +833,13 @@ class MainWindow(QMainWindow):
             self.wid_paramset.modality_dict = {
                 f'{self.current_modality}': self.paramsets}
             self.wid_paramset.fill_template_list(set_label=prev_label)
+
         except AttributeError:
             pass
+
+        if after_edit_settings:
+            self.tab_nm.sni_correct.update_reference_images()
+            self.update_paramset()  # update Num digit templates list
 
     def version_control(self):
         """Compare version number of tag_infos with current saved."""

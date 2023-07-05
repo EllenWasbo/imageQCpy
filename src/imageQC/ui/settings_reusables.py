@@ -1516,7 +1516,10 @@ class DicomCritAddDialog(ImageQCDialog):
     def __init__(self, parent, attr_name='', value=''):
         super().__init__()
         self.parent = parent
-        self.setWindowTitle('Add DICOM criteria')
+        if attr_name == '':
+            self.setWindowTitle('Add DICOM criteria')
+        else:
+            self.setWindowTitle('Edit DICOM criteria')
 
         self.cbox_tags = QComboBox()
         self.txt_value = QLineEdit('')
@@ -1602,7 +1605,7 @@ class DicomCritWidget(QWidget):
             QIcon(f'{os.environ[ENV_ICON_PATH]}clear.png'),
             'Clear table', self)
         act_clear.triggered.connect(self.clear)
-        toolb.addActions([act_add, act_delete, act_clear])
+        toolb.addActions([act_add, act_edit, act_delete, act_clear])
         self.hlo.addWidget(toolb)
 
     def add(self):
@@ -1631,24 +1634,27 @@ class DicomCritWidget(QWidget):
         sel = self.table_crit.selectedIndexes()
         if len(sel) > 0:
             rowno = sel[0].row()
-            dlg = DicomCritAddDialog(self, attr_name='', value='')
+            attr = self.parent.current_template.dicom_crit_attributenames[
+                rowno]
+            val = self.parent.current_template.dicom_crit_values[rowno]
+            dlg = DicomCritAddDialog(
+                self, attr_name=attr, value=val)
             res = dlg.exec()
             if res:
                 attr_name, value = dlg.get_data()
-                already_other = self.parent.current_template.dicom_crit_attributenames
+                already_other = copy.deepcopy(
+                    self.parent.current_template.dicom_crit_attributenames)
                 already_other.pop(rowno)
                 if attr_name in already_other:
                     QMessageBox.warning(
                         self.parent, 'Ignored',
-                        'Attribute name already in table. Edit that row.')
+                        'Attribute name already in table. Edit ignored.')
                 else:
                     self.parent.current_template.dicom_crit_attributenames[
                         rowno] = attr_name
                     self.parent.current_template.dicom_crit_values[rowno] = value
                     self.update_data()
                     self.parent.flag_edit()
-        else:
-            self.add()
 
     def delete(self):
         """Delete selected criterion."""

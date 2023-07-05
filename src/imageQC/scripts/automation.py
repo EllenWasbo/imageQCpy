@@ -762,6 +762,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             current_modality=modality,
                             current_paramset=paramset,
                             current_quicktest=qt_templates[modality][qt_idx],
+                            digit_templates=digit_templates,
                             tag_infos=tag_infos
                             )
                         if len(warnings) > 0:

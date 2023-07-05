@@ -437,6 +437,8 @@ class ParamSetNM(ParamSetCommon):
     uni_radius: float = 330.
     uni_sum_first: bool = False
     sni_area_ratio: float = 0.9
+    sni_type: int = 0  # 0 as Nelson 2013, 1= all same roi_size defined by sni_roi_ratio
+    sni_roi_ratio: float = 0.2  # relative to sni_area defined by sni_area_ratio
     sni_correct: bool = False
     sni_correct_pos_x: bool = False
     sni_correct_pos_y: bool = False
@@ -499,6 +501,7 @@ class ParamSetPET(ParamSetCommon):
     rec_type: int = 0  # 0 = RC avg, 1 = RC max, 2 = RC peak, 3,4,5 Bq/mL avg,max,peak
     rec_auto_select_slices: bool = True
     rec_background_full_phantom: bool = False
+    rec_percent_slices: int = 90  # % within fwhm of background profile to include
     rec_table: RecTable = field(default_factory=RecTable)
     rec_sphere_diameters: list[float] = field(
         default_factory=lambda: [10., 13., 17., 22., 28., 37.])  # in mm NB increasing

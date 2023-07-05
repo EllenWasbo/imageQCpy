@@ -1,0 +1,259 @@
+label: Uniformity_from_AutoQC
+output:
+  include_header: false
+  transpose_table: false
+  decimal_mark: ','
+  include_filename: false
+  group_by: [SeriesInstanceUID]
+  tests:
+    Uni: []
+    SNI: []
+    DCM: []
+    Bar: []
+    Num: []
+dcm_tagpattern:
+  label: default
+  list_tags: [CountsAccumulated, ActualFrameDuration]
+  list_format: ['|:.0f|', '|:.0f|']
+roi_type: 0
+roi_radius: 5.0
+roi_x: 10.0
+roi_y: 10.0
+roi_a: 0.0
+roi_offset_xy: [0.0, 0.0]
+roi_offset_mm: false
+roi_table:
+  labels: []
+  pos_x: []
+  pos_y: []
+roi_read_number: false
+num_roi_size_x: 100
+num_roi_size_y: 50
+num_table:
+  labels: [Det1_IU_UFOV, Det1_DU_UFOV, Det1_IU_CFOV, Det1_DU_CFOV, Det2_IU_UFOV, Det2_DU_UFOV,
+    Det2_IU_CFOV, Det2_DU_CFOV]
+  pos_x:
+  - [979, 1033]
+  - [979, 1033]
+  - [877, 918]
+  - [876, 917]
+  - [974, 1029]
+  - [974, 1030]
+  - [876, 917]
+  - [874, 918]
+  pos_y:
+  - [304, 326]
+  - [358, 378]
+  - [306, 327]
+  - [359, 382]
+  - [650, 670]
+  - [703, 721]
+  - [650, 669]
+  - [703, 724]
+num_digit_label: Siemens_savescreens
+uni_ufov_ratio: 0.95
+uni_cfov_ratio: 0.75
+uni_correct: false
+uni_correct_pos_x: true
+uni_correct_pos_y: true
+uni_lock_radius: false
+uni_radius: -1.0
+uni_sum_first: false
+sni_area_ratio: 0.9
+sni_correct: false
+sni_correct_pos_x: false
+sni_correct_pos_y: false
+sni_lock_radius: false
+sni_radius: 330.0
+sni_sum_first: false
+sni_eye_filter_c: 28.0
+sni_ref_image: ''
+mtf_type: 1
+mtf_roi_size_x: 20.0
+mtf_roi_size_y: 20.0
+mtf_plot: 4
+mtf_gaussian: true
+mtf_cut_lsf: true
+mtf_cut_lsf_w: 3
+mtf_auto_center: false
+mtf_sampling_frequency: 0.01
+bar_roi_size: 50.0
+bar_width_1: 6.3
+bar_width_2: 4.800000190734863
+bar_width_3: 4.0
+bar_width_4: 6.2
+spe_avg: 25
+spe_height: 100.0
+spe_filter_w: 15
+---
+label: HeadAlignment
+output:
+  include_header: false
+  transpose_table: false
+  decimal_mark: ','
+  include_filename: false
+  group_by: [SeriesInstanceUID]
+  tests:
+    Uni: []
+    SNI: []
+    DCM: []
+    Bar: []
+    Num: []
+dcm_tagpattern:
+  label: default
+  list_tags: [CountsAccumulated, ActualFrameDuration]
+  list_format: ['|:.0f|', '|:.0f|']
+roi_type: 0
+roi_radius: 5.0
+roi_x: 10.0
+roi_y: 10.0
+roi_a: 0.0
+roi_offset_xy: [0.0, 0.0]
+roi_offset_mm: false
+roi_table:
+  labels: []
+  pos_x: []
+  pos_y: []
+roi_read_number: false
+num_roi_size_x: 100
+num_roi_size_y: 50
+num_table:
+  labels: [Det1_CenterOfRotation, Det1_AxialShift, Det1_BackProjAngle, Det1_Resolution@20cm,
+    Det2_CenterOfRotation, Det2_AxialShift, Det2_BackProjAngle, Det2_Resolution@20cm]
+  pos_x:
+  - [865, 930]
+  - [865, 930]
+  - [865, 930]
+  - [865, 930]
+  - [865, 930]
+  - [865, 930]
+  - [865, 930]
+  - [865, 930]
+  pos_y:
+  - [157, 177]
+  - [187, 207]
+  - [217, 237]
+  - [249, 269]
+  - [494, 513]
+  - [522, 545]
+  - [554, 575]
+  - [585, 608]
+num_digit_label: Siemens_savescreens
+uni_ufov_ratio: 0.95
+uni_cfov_ratio: 0.75
+uni_correct: false
+uni_correct_pos_x: true
+uni_correct_pos_y: true
+uni_lock_radius: false
+uni_radius: -1.0
+uni_sum_first: false
+sni_area_ratio: 0.9
+sni_correct: false
+sni_correct_pos_x: false
+sni_correct_pos_y: false
+sni_lock_radius: false
+sni_radius: 330.0
+sni_sum_first: false
+sni_eye_filter_c: 28.0
+sni_ref_image: ''
+mtf_type: 1
+mtf_roi_size_x: 20.0
+mtf_roi_size_y: 20.0
+mtf_plot: 4
+mtf_gaussian: true
+mtf_cut_lsf: true
+mtf_cut_lsf_w: 3
+mtf_auto_center: false
+mtf_sampling_frequency: 0.01
+bar_roi_size: 50.0
+bar_width_1: 6.3
+bar_width_2: 4.800000190734863
+bar_width_3: 4.0
+bar_width_4: 6.2
+spe_avg: 25
+spe_height: 100.0
+spe_filter_w: 15
+---
+label: Sensitivity_calibration
+output:
+  include_header: false
+  transpose_table: false
+  decimal_mark: ','
+  include_filename: false
+  group_by: [SeriesInstanceUID]
+  tests:
+    Uni: []
+    SNI: []
+    DCM: []
+    Bar: []
+    Num: []
+dcm_tagpattern:
+  label: default
+  list_tags: [CountsAccumulated, ActualFrameDuration]
+  list_format: ['|:.0f|', '|:.0f|']
+roi_type: 0
+roi_radius: 5.0
+roi_x: 10.0
+roi_y: 10.0
+roi_a: 0.0
+roi_offset_xy: [0.0, 0.0]
+roi_offset_mm: false
+roi_table:
+  labels: []
+  pos_x: []
+  pos_y: []
+roi_read_number: false
+num_roi_size_x: 100
+num_roi_size_y: 50
+num_table:
+  labels: [Det1_SensitivityNominal, Det1_SensitivityMeasured, Det1_Deviation, Det2_SensitivityNominal,
+    Det2_SensitivityMeasured, Det2_Deviation]
+  pos_x:
+  - [290, 350]
+  - [290, 350]
+  - [290, 350]
+  - [850, 900]
+  - [850, 900]
+  - [850, 900]
+  pos_y:
+  - [700, 720]
+  - [734, 757]
+  - [768, 791]
+  - [700, 721]
+  - [734, 752]
+  - [770, 793]
+num_digit_label: Siemens_savescreens
+uni_ufov_ratio: 0.95
+uni_cfov_ratio: 0.75
+uni_correct: false
+uni_correct_pos_x: true
+uni_correct_pos_y: true
+uni_lock_radius: false
+uni_radius: -1.0
+uni_sum_first: false
+sni_area_ratio: 0.9
+sni_correct: false
+sni_correct_pos_x: false
+sni_correct_pos_y: false
+sni_lock_radius: false
+sni_radius: 330.0
+sni_sum_first: false
+sni_eye_filter_c: 28.0
+sni_ref_image: ''
+mtf_type: 1
+mtf_roi_size_x: 20.0
+mtf_roi_size_y: 20.0
+mtf_plot: 4
+mtf_gaussian: true
+mtf_cut_lsf: true
+mtf_cut_lsf_w: 3
+mtf_auto_center: false
+mtf_sampling_frequency: 0.01
+bar_roi_size: 50.0
+bar_width_1: 6.3
+bar_width_2: 4.800000190734863
+bar_width_3: 4.0
+bar_width_4: 6.2
+spe_avg: 25
+spe_height: 100.0
+spe_filter_w: 15

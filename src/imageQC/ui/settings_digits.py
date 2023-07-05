@@ -280,10 +280,6 @@ class DigitTemplateEditDialog(ImageQCDialog):
             QMessageBox.warning(
                 self, 'Zoom to number',
                 'Please zoom to the part of the image with a number.')
-        #elif not self.current_template.images[:-1].all():
-        #    QMessageBox.warning(
-        #        self, 'Missing digits',
-        #        'Please add template image to all digits before testing.')
         else:
             char_imgs, chop_idxs = digit_methods.extract_char_blocks(sub_img)
             if len(char_imgs) == 0:

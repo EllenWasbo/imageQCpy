@@ -57,7 +57,6 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         self.fig = matplotlib.figure.Figure(dpi=150)
         self.fig.subplots_adjust(0., 0., 1., 1.)
         FigureCanvasQTAgg.__init__(self, self.fig)
-        #self.setParent = parent
         self.ax = self.fig.add_subplot(111)
         self.last_clicked_pos = (-1, -1)
         self.profile_length = 20  # assume click drag > length in pix = draw profile
@@ -267,7 +266,8 @@ class ImageCanvas(GenericImageCanvas):
 
     def add_contours_to_all_rois(self, colors=None, reset_contours=True,
                                  roi_indexes=None, filled=False,
-                                 labels=None, hatches=None):
+                                 labels=None, labels_pos='upper_left',
+                                 hatches=None):
         """Draw all ROIs in self.main.current_roi (list) with specific colors.
 
         Parameters
@@ -280,6 +280,8 @@ class ImageCanvas(GenericImageCanvas):
             roi indexes to draw. Default is None = all
         filled : bool
             if true used contourf (filled) instead
+        labels : str, optional
+            'upper_left' or 'center' relative to roi
         hatches : list of str, optional
             Used if filled is True. Default is None.
         """
@@ -301,7 +303,6 @@ class ImageCanvas(GenericImageCanvas):
                     contour = self.ax.contourf(
                         mask, levels=[0, 0.5], colors=colors[color_no], alpha=0.3)
                 else:
-                    #TODO handle IndexError on hatches[color_no]
                     contour = self.ax.contourf(
                         mask, levels=[0, 0.5], colors='none',
                         hatches=hatches[color_no])
@@ -314,19 +315,23 @@ class ImageCanvas(GenericImageCanvas):
                 try:
                     label = labels[color_no]
                     mask_pos = np.where(mask == 0)
-                    xpos = np.min(mask_pos[1])
-                    ypos = np.min(mask_pos[0])
+                    if labels_pos == 'center':
+                        xpos = np.mean(mask_pos[1]) - 2
+                        ypos = np.mean(mask_pos[0]) + 2
+                    else:  # upper left
+                        xpos = np.min(mask_pos[1]) - 5
+                        ypos = np.min(mask_pos[0]) - 5
                     if np.isfinite(xpos) and np.isfinite(ypos):
-                        self.ax.text(xpos-5, ypos-5, label,
+                        self.ax.text(xpos, ypos, label,
                                      fontsize=self.fontsize,
                                      color=colors[color_no])
                 except IndexError:
                     pass
             self.contours.append(contour)
 
-        #if hatches is not None:
-         #   for i, collection in enumerate(self.contours.collections):
-          #      collection.set_edgecolor(colors[i % len(colors)])
+        # if hatches is not None:
+        #   for i, collection in enumerate(self.contours.collections):
+        #      collection.set_edgecolor(colors[i % len(colors)])
 
     def ROI(self):
         """Drow ROIs with labels if any."""
@@ -511,30 +516,41 @@ class ImageCanvas(GenericImageCanvas):
 
     def SNI(self):
         """Draw NM uniformity ROI."""
-        self.add_contours_to_all_rois(
-            colors=['red', 'blue'], roi_indexes=[1, 2],
-            filled=True, hatches=['//', '\\'])  # 2 large
-        self.add_contours_to_all_rois(
-            colors=['lime', 'cyan'], reset_contours=False,
-            roi_indexes=[3, 4],
-            filled=True, hatches=['|||', '---'])  # 2 first small, else only label
+        if self.main.current_paramset.sni_type == 0:
+            self.add_contours_to_all_rois(
+                colors=['red', 'blue'], roi_indexes=[1, 2],
+                filled=True, hatches=['//', '\\'])  # 2 large
+            self.add_contours_to_all_rois(
+                colors=['lime', 'cyan'], reset_contours=False,
+                roi_indexes=[3, 4],
+                filled=True, hatches=['|||', '---'])  # 2 first small, else only label
 
-        for i in range(6):
-            mask = np.where(self.main.current_roi[i+3], 0, 1)
-            color = 'yellow'
-            mask_pos = np.where(mask == 0)
-            xpos = np.mean(mask_pos[1])
-            ypos = np.mean(mask_pos[0])
-            if np.isfinite(xpos) and np.isfinite(ypos):
-                self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
-                             f'S{i+1}',
-                             fontsize=self.fontsize, color=color)
+            for i in range(6):
+                mask = np.where(self.main.current_roi[i+3], 0, 1)
+                color = 'yellow'
+                mask_pos = np.where(mask == 0)
+                xpos = np.mean(mask_pos[1])
+                ypos = np.mean(mask_pos[0])
+                if np.isfinite(xpos) and np.isfinite(ypos):
+                    self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
+                                 f'S{i+1}',
+                                 fontsize=self.fontsize, color=color)
+        else:
+            self.add_contours_to_all_rois(
+                colors=['red'], roi_indexes=[0])  # full
+            self.contours = []
+            for row, col in [(1, 0), (2, 1), (-2, -2), (-1, -1)]:
+                self.contours.append(
+                    self.ax.contourf(
+                        np.where(self.main.current_roi[row][col], 0, 1),
+                        levels=[0, 0.5], colors='red', alpha=0.3))
 
     def Rec(self):
         """Draw PET Rec ROI."""
         labels = self.main.current_paramset.rec_table.labels
         self.add_contours_to_all_rois(
             labels=labels,
+            labels_pos='center',
             roi_indexes=[i for i in range(len(labels))])
         self.add_contours_to_all_rois(
             labels=['center'],
@@ -554,6 +570,14 @@ class ImageCanvas(GenericImageCanvas):
                                     contour = self.ax.contour(
                                         mask, levels=[0.9],
                                         colors='blue', alpha=0.5,
+                                        linewidths=self.linewidth)
+                                    self.contours.append(contour)
+                            for roi in dd['roi_peaks']:
+                                if roi[idx] is not None:
+                                    mask = np.where(roi[idx], 0, 1)
+                                    contour = self.ax.contour(
+                                        mask, levels=[0.9],
+                                        colors='green', alpha=0.5,
                                         linewidths=self.linewidth)
                                     self.contours.append(contour)
 
@@ -610,7 +634,6 @@ class ResultImageCanvas(GenericImageCanvas):
             self.img = self.ax.imshow(
                 self.current_image,
                 cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
-            #self.ax.set_title(self.title)
             self.parent.image_title.setText(self.title)
         else:
             self.img = self.ax.imshow(np.zeros((100, 100)))
@@ -721,16 +744,16 @@ class ResultImageCanvas(GenericImageCanvas):
             except KeyError:
                 details_dict = {}
         self.cmap = 'viridis'
-        type_img = self.main.tab_nm.sni_result_image.currentIndex()
-        if type_img == 0:
+        sel_txt = self.main.tab_nm.sni_result_image.currentText()
+        if 'Curvature' in sel_txt:
             self.title = 'Curvature corrected image'
             if 'corrected_image' in details_dict:
                 self.current_image = details_dict['corrected_image']
-        elif type_img == 1:
+        elif 'Summed' in sel_txt:
             self.title = 'Summed image'
             if 'sum_image' in details_dict:
                 self.current_image = details_dict['sum_image']
-        elif type_img > 1:
+        elif '2d NPS' in sel_txt:
             sel_text = self.main.tab_nm.sni_result_image.currentText()
             roi_txt = sel_text[-2:]
             self.title = f'2d NPS for {roi_txt}'
@@ -738,3 +761,6 @@ class ResultImageCanvas(GenericImageCanvas):
             roi_no = roi_names.index(roi_txt)
             details_this = details_dict['pr_roi'][roi_no]
             self.current_image = details_this['NPS']
+        elif 'SNI values map' in sel_txt:
+            self.title = 'SNI values map'
+            self.current_image = details_dict['SNI_map']

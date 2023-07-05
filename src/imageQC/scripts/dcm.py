@@ -81,7 +81,7 @@ def fix_sop_class(elem, **kwargs):
 
 
 def read_dcm_info(filenames, GUI=True, tag_infos=[],
-                  tag_patterns_special={}):
+                  tag_patterns_special={}, statusbar=None):
     """Read Dicom header into DcmInfo(Gui) objects when opening files.
 
     Parameters
@@ -98,6 +98,8 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         used if GUI is True
         holding info on which tags from tag_infos to read + formating
         for text display or annotation
+    statusbar : StatusBar, optional
+        for messages to screen
 
     Returns
     -------
@@ -112,7 +114,9 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
     ignored_files = []
     warnings = []
 
-    for file in filenames:
+    for fileno, file in enumerate(filenames):
+        if statusbar is not None:
+            statusbar.showMessage(f'Reading file {fileno+1}/{len(filenames)}')
         file_verified = True
         pd = {}
         try:
@@ -178,7 +182,10 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     pass
             if np.sum(attrib['pix']) == 0:
                 attrib['pix'] = [1, 1]  # to avoid ZeroDevisionError
-                serdescr = pd['SeriesDescription'].value
+                try:
+                    serdescr = pd['SeriesDescription'].value
+                except KeyError:
+                    serdescr = ''
                 ignore_strings = ['Save Screen', 'Dose Report']
                 if any([x in serdescr for x in ignore_strings]):
                     pass
@@ -556,8 +563,8 @@ def get_modality(modalityStr):
     variants = {
         'CT': 'CT',
         'DX': 'Xray', 'CR': 'Xray', 'DR': 'Xray', 'RG': 'Xray',
-        'XA': 'Xray', 'RF': 'Xray', 'MG': 'Xray',
-        'MG': 'Xray', 'PX': 'Xray',
+        'XA': 'Xray', 'RF': 'Xray', 'MG': 'Xray', 'PX': 'Xray',
+        'RTIMAGE': 'Xray',
         'NM': 'NM',
         'ST': 'SPECT',
         'PT': 'PET',
@@ -762,6 +769,32 @@ def read_tag_patterns(pd, tag_patterns, tag_infos, frame_number=-1):
         tag_strings = get_dcm_info_list(
             pd, pattern, tag_infos,
             prefix_separator='', suffix_separator='')
+
+        if 'mAs' in pattern.list_tags:  # if not found try mA * exp.time
+            idx = pattern.list_tags.index('mAs')
+            proceed_mA_time = False
+            try:
+                mAs_str = tag_strings[idx]
+                if mAs_str == '':  # not found
+                    proceed_mA_time = True
+            except KeyError:
+                pass
+            if proceed_mA_time:
+                tag_strings_mA_time = get_dcm_info_list(
+                    pd, TagPatternFormat(list_tags=['mA', 'ExposureTime']),
+                    tag_infos,
+                    prefix_separator='', suffix_separator='')
+                if '' not in tag_strings_mA_time:
+                    try:
+                        mA = float(tag_strings_mA_time[0])
+                        sec = 0.001 * float(tag_strings_mA_time[1])
+                        mAs = mA * sec
+                        _, format_string, _ = mmf.get_format_strings(
+                                pattern.list_format[idx])
+                        tag_strings[idx] = mmf.format_val(mAs, format_string)
+                    except (ValueError, KeyError, TypeError, AttributeError):
+                        pass
+
         if frame_number > -1 and len(tag_strings) > 0:
             tag_strings = info_extract_frame(
                 frame_number,  {'dummy': tag_strings})

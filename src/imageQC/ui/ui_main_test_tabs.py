@@ -2528,7 +2528,7 @@ class PositionWidget(QWidget):
                 else:
                     table.pos_x = [float(input_df.iat[row, 1]) for row in range(nrows)]
                     table.pos_y = [float(input_df.iat[row, 2]) for row in range(nrows)]
-            except ValueError as err:
+            except (ValueError, IndexError) as err:
                 table = None
                 QMessageBox.warning(
                     self, 'Validation failed',

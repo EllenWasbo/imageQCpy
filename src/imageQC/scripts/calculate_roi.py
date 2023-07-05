@@ -113,8 +113,9 @@ def get_rois(image, image_number, input_main):
             for i in range(len(paramset.num_table.pos_x)):
                 roi_array.append(get_roi_rectangle(
                     img_shape,
-                    coords_x=paramset.num_table.pos_x[i],
-                    coords_y=paramset.num_table.pos_y[i]
+                    coords_x=paramset.num_table.pos_x[i]+delta_xya[0],
+                    coords_y=paramset.num_table.pos_y[i]+delta_xya[1],
+                    extra_offset=delta_xya[0:2]
                     ))
 
         return roi_array
@@ -477,23 +478,25 @@ def get_max_pos_yx(image):
 
 def get_roi_rectangle(image_shape,
                       roi_width=0, roi_height=0, offcenter_xy=(0, 0),
-                      coords_x=None, coords_y=None):
+                      coords_x=None, coords_y=None, extra_offset=(0, 0)):
     """Generate circular roi given center position and radius or coords_x/y.
 
     Parameters
     ----------
     image_shape : tuple of ints
         image (rows,columns)
-    roi_width : int
+    roi_width : int, optional
         width of ROI in pix
-    roi_height : int
+    roi_height : int, optional
         height of ROI in pix
-    offcenter_xy : arraylike of floats
+    offcenter_xy : arraylike of floats, optional
         center of roi relative to center of image
-    coords_x : tuple or None
+    coords_x : tuple, optional
         if tuple start_x, end_x
-    coords_t : tuple or None
+    coords_y : tuple, optional
         if tuple start_y, end_y
+    extra_offset : tuple, optional
+        sshift to ROI for coords_x, coords_y. Default is (0,0)
 
     Returns
     -------
@@ -518,10 +521,10 @@ def get_roi_rectangle(image_shape,
         if end_y > image_shape[0]:
             end_y = image_shape[0]
     elif coords_x is not None and coords_y is not None:
-        start_x = coords_x[0]
-        start_y = coords_y[0]
-        end_x = coords_x[1] if coords_x[1] < image_shape[1] else image_shape[1] - 1
-        end_y = coords_y[1] if coords_y[1] < image_shape[0] else image_shape[0] - 1
+        start_x = np.max([0, coords_x[0] + extra_offset[0]])
+        start_y = np.max([0, coords_y[0] + extra_offset[1]])
+        end_x = np.min([coords_x[1] + extra_offset[0], image_shape[1] - 1])
+        end_y = np.min([coords_y[1] + extra_offset[1], image_shape[0] - 1])
 
     if start_y is not None:
         inside[start_y:end_y, start_x:end_x] = True

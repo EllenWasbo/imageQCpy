@@ -84,7 +84,7 @@ def extract_values(values, columns=[], calculation='='):
             try:
                 val = float(val)
                 allvals[i] = val
-            except ValueError:
+            except (TypeError, ValueError):
                 pass
 
         is_string = [isinstance(val, str) for val in allvals]
@@ -194,6 +194,7 @@ def quicktest_output(input_main):
                     if input_main.results[test]['alternative'] == sub.alternative:
                         values = input_main.results[test]['values']
                         headers = input_main.results[test]['headers']
+                out_values = []
                 if values is not None:
                     suffixes = []  # _imgno/name or _groupno/name
                     if sub.per_group:
@@ -910,7 +911,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                                 char_imgs, digit_template)
                             if digit is None:
                                 errmsgs.append(
-                                    'Found no match for the blocks of {headers[i]}.')
+                                    f'Found no match for the blocks of {headers[i]}.')
                         values.append(digit)
 
             else:

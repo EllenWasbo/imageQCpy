@@ -325,7 +325,7 @@ class ImageCanvas(GenericImageCanvas):
                         self.ax.text(xpos, ypos, label,
                                      fontsize=self.fontsize,
                                      color=colors[color_no])
-                except IndexError:
+                except (ValueError, IndexError):
                     pass
             self.contours.append(contour)
 

@@ -179,7 +179,7 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         self.gb_quicktest.setChecked(False)
         self.gb_quicktest.toggled.connect(self.update_current_template)
         self.gb_quicktest.setFont(uir.FontItalic())
-        self.cbox_template.setMinimumWidth(150)
+        self.cbox_template.setMinimumWidth(250)
         self.cbox_template.currentIndexChanged.connect(self.update_current_template)
 
         hbox = QHBoxLayout()
@@ -345,7 +345,7 @@ class SelectParamsetWidget(SelectTemplateWidget):
         self.setLayout(h_lo)
 
         h_lo.addWidget(QLabel('Parameter set:'))
-        self.cbox_template.setMinimumWidth(150)
+        self.cbox_template.setMinimumWidth(250)
         self.cbox_template.currentIndexChanged.connect(self.update_current_template)
         h_lo.addWidget(self.cbox_template)
         h_lo.addWidget(self.lbl_edit)

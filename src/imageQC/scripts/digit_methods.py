@@ -112,10 +112,8 @@ def compare_char_blocks_2_template(img_blocks, template):
                     else:
                         diff = np.subtract(img, temp_img)
                         subtr.append(np.abs(np.sum(diff)))
-        if char is None:
-            print(f'subtr {subtr}')
+        if char is None and len(subtr) > 0:
             idx = np.where(subtr == np.min(subtr))
-            print(f'idx {idx}')
             char = chars[idx[0][0]]
         return char
 

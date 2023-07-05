@@ -186,7 +186,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     serdescr = pd['SeriesDescription'].value
                 except KeyError:
                     serdescr = ''
-                ignore_strings = ['Save Screen', 'Dose Report']
+                ignore_strings = ['Save Screen', 'SAVE_SCREEN', 'Dose Report']
                 if any([x in serdescr for x in ignore_strings]):
                     pass
                 else:

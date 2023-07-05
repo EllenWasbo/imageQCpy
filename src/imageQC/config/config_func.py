@@ -1177,7 +1177,7 @@ def tag_infos_difference_default(current_tag_infos):
             changes = True
             added_tags.extend(new_tags)
         else:
-            # find all tags with attr as name and compare tag, sequence and protection
+            # find all tags with attr as name and compare tag except protection
             curr_taginfos = [
                 tag for tag in current_tag_infos if tag.attribute_name == attr]
             curr_vals = []

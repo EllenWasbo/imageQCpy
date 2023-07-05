@@ -113,8 +113,8 @@ def get_rois(image, image_number, input_main):
             for i in range(len(paramset.num_table.pos_x)):
                 roi_array.append(get_roi_rectangle(
                     img_shape,
-                    coords_x=paramset.num_table.pos_x[i]+delta_xya[0],
-                    coords_y=paramset.num_table.pos_y[i]+delta_xya[1],
+                    coords_x=paramset.num_table.pos_x[i],
+                    coords_y=paramset.num_table.pos_y[i],
                     extra_offset=delta_xya[0:2]
                     ))
 

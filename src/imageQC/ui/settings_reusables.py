@@ -35,7 +35,7 @@ from imageQC.scripts.mini_methods_format import valid_template_name
 class StackWidget(QWidget):
     """Class for general widget attributes for the stacked widgets."""
 
-    def __init__(self, dlg_settings=None, header='', subtxt='', typestr='',
+    def __init__(self, dlg_settings=None, header='', subtxt='', temp_alias='template',
                  mod_temp=False, grouped=False, editable=True):
         """Initiate StackWidget.
 
@@ -47,8 +47,8 @@ class StackWidget(QWidget):
             header text
         subtxt : str
             info text under header text
-        typestr : str
-            string to set type of data (parameterset or template)
+        temp_alias : str
+            string to set type of data (parameterset or template +?)
             title over labels and used in tooltip
             for the buttons of ModTempSelector
         mod_temp : bool
@@ -60,7 +60,7 @@ class StackWidget(QWidget):
         """
         super().__init__()
         self.dlg_settings = dlg_settings
-        self.typestr = typestr
+        self.temp_alias = temp_alias
         self.mod_temp = mod_temp
         self.grouped = grouped
         self.edited = False
@@ -116,6 +116,7 @@ class StackWidget(QWidget):
             elif self.fname in ['paramsets', 'quicktest_templates']:
                 _, _, self.auto_templates = cff.load_settings(
                     fname='auto_templates')
+
             if self.fname == 'auto_templates':
                 _, _, self.auto_common = cff.load_settings(fname='auto_common')
                 _, _, self.paramsets = cff.load_settings(fname='paramsets')
@@ -352,10 +353,13 @@ class StackWidget(QWidget):
                     copy.deepcopy(
                         self.current_template))
         else:
-            if self.templates[0].label == '':
-                self.templates[0] = copy.deepcopy(self.current_template)
+            if len(self.templates) == 0:
+                self.templates = [copy.deepcopy(self.current_template)]
             else:
-                self.templates.append(copy.deepcopy(self.current_template))
+                if self.templates[0].label == '':
+                    self.templates[0] = copy.deepcopy(self.current_template)
+                else:
+                    self.templates.append(copy.deepcopy(self.current_template))
         self.save()
         self.refresh_templist(selected_label=label)
 
@@ -441,8 +445,8 @@ class StackWidget(QWidget):
                     label_this = self.current_template.label
                     if label_this in labels_new_mod:
                         text, proceed = QInputDialog.getText(
-                            self, 'Label exist',
-                            'Label exist in target modality. Rename the template:')
+                            self, 'Name exist',
+                            'Name exist in target modality. Rename the template:')
                         if proceed and text != '':
                             label_this = text
                         else:
@@ -557,7 +561,7 @@ class ModTempSelector(QWidget):
         hlo_modality.addWidget(self.cbox_modality)
         hlo_modality.addStretch()
         self.vlo.addSpacing(10)
-        self.vlo.addWidget(uir.LabelItalic(self.parent.typestr.title()+'s'))
+        self.vlo.addWidget(uir.LabelItalic(self.parent.temp_alias.title()+'s'))
         hlo_list = QHBoxLayout()
         self.vlo.addLayout(hlo_list)
         self.list_temps = QListWidget()
@@ -565,7 +569,7 @@ class ModTempSelector(QWidget):
         hlo_list.addWidget(self.list_temps)
 
         if import_review_mode:
-            self.toolbar = ToolBarImportIgnore(self, typestr=self.parent.typestr)
+            self.toolbar = ToolBarImportIgnore(self, temp_alias=self.parent.temp_alias)
             hlo_list.addWidget(self.toolbar)
         else:
             if editable:
@@ -574,23 +578,23 @@ class ModTempSelector(QWidget):
                 hlo_list.addWidget(self.toolbar)
                 self.act_clear = QAction(
                     QIcon(f'{os.environ[ENV_ICON_PATH]}clear.png'),
-                    'Clear ' + self.parent.typestr + ' (reset to default)', self)
+                    'Clear ' + self.parent.temp_alias + ' (reset to default)', self)
                 self.act_clear.triggered.connect(self.clear)
                 self.act_add = QAction(
                     QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
-                    'Add current values as new ' + self.parent.typestr, self)
+                    'Add current values as new ' + self.parent.temp_alias, self)
                 self.act_add.triggered.connect(self.add)
                 self.act_save = QAction(
                     QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'),
-                    'Save current values to ' + self.parent.typestr, self)
+                    'Save current values to ' + self.parent.temp_alias, self)
                 self.act_save.triggered.connect(self.save)
                 self.act_rename = QAction(
                     QIcon(f'{os.environ[ENV_ICON_PATH]}rename.png'),
-                    'Rename ' + self.parent.typestr, self)
+                    'Rename ' + self.parent.temp_alias, self)
                 self.act_rename.triggered.connect(self.rename)
                 self.act_duplicate = QAction(
                     QIcon(f'{os.environ[ENV_ICON_PATH]}duplicate.png'),
-                    'Duplicate ' + self.parent.typestr, self)
+                    'Duplicate ' + self.parent.temp_alias, self)
                 self.act_duplicate.triggered.connect(self.duplicate)
                 self.act_up = QAction(
                     QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
@@ -602,11 +606,11 @@ class ModTempSelector(QWidget):
                 self.act_down.triggered.connect(self.move_down)
                 self.act_delete = QAction(
                     QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
-                    'Delete ' + self.parent.typestr, self)
+                    'Delete ' + self.parent.temp_alias, self)
                 self.act_delete.triggered.connect(self.delete)
                 self.act_move_modality = QAction(
                     QIcon(f'{os.environ[ENV_ICON_PATH]}move_to.png'),
-                    'Move ' + self.parent.typestr + ' to other modality', self)
+                    'Move ' + self.parent.temp_alias + ' to other modality', self)
                 self.act_move_modality.triggered.connect(self.parent.move_modality)
 
                 if self.parent.save_blocked:
@@ -640,21 +644,22 @@ class ModTempSelector(QWidget):
                 self.parent.empty_template)
             self.parent.current_template.label = lbl
             self.parent.update_data()
+            self.parent.flag_edit(True)
         except AttributeError:
             print('Missing empty template (method clear in ModTempSelector)')
 
     def add(self):
         """Add new template to list. Ask for new name and verify."""
         text, proceed = QInputDialog.getText(
-            self, 'New label',
-            'Name the new ' + self.parent.typestr + '                      ')
+            self, 'New name',
+            'Name the new ' + self.parent.temp_alias + '                      ')
         # todo also ask if add as current or as empty
         text = valid_template_name(text)
         if proceed and text != '':
             if text in self.parent.current_labels:
                 QMessageBox.warning(
-                    self, 'Label already in use',
-                    'This label is already in use.')
+                    self, 'Name already in use',
+                    'This name is already in use.')
             else:
                 self.parent.add(text)
         if self.parent.fname == 'digit_templates':
@@ -704,15 +709,15 @@ class ModTempSelector(QWidget):
                     current_text = sel.text()
 
                     text, proceed = QInputDialog.getText(
-                        self, 'New label',
-                        'Rename ' + self.parent.typestr + '                      ',
+                        self, 'New name',
+                        'Rename ' + self.parent.temp_alias + '                      ',
                         text=current_text)
                     text = valid_template_name(text)
                     if proceed and text != '' and current_text != text:
                         if text in self.parent.current_labels:
                             QMessageBox.warning(
-                                self, 'Label already in use',
-                                'This label is already in use.')
+                                self, 'Name already in use',
+                                'This name is already in use.')
                         else:
                             self.parent.rename(text)
 
@@ -741,15 +746,15 @@ class ModTempSelector(QWidget):
                 duplicate_id = self.parent.current_labels.index(current_text)
 
                 text, proceed = QInputDialog.getText(
-                    self, 'New label',
-                    'Name the new ' + self.parent.typestr + '                      ',
+                    self, 'New name',
+                    'Name the new ' + self.parent.temp_alias + '                      ',
                     text=f'{current_text}_')
                 text = valid_template_name(text)
                 if proceed and text != '':
                     if text in self.parent.current_labels:
                         QMessageBox.warning(
-                            self, 'Label already in use',
-                            'This label is already in use.')
+                            self, 'Name already in use',
+                            'This name is already in use.')
                     else:
                         self.parent.duplicate(duplicate_id, text)
 
@@ -863,6 +868,16 @@ class ModTempSelector(QWidget):
                             self.parent.current_template,
                             mod=self.parent.current_modality
                             )
+                        if len(self.parent.current_template.persons_to_notify) > 0:
+                            self.parent.dlg_settings.mark_persons(
+                                self.parent.current_template
+                                )
+                    if self.parent.fname == 'paramsets':
+                        if self.parent.current_template.num_digit_label != '':
+                            self.parent.dlg_settings.mark_digit_temps(
+                                self.parent.current_template,
+                                mod=self.parent.current_modality
+                                )
                 if row in self.parent.marked_ignore[self.parent.current_modality]:
                     self.parent.marked_ignore[self.parent.current_modality].remove(row)
         else:
@@ -883,13 +898,13 @@ class ModTempSelector(QWidget):
 class ToolBarImportIgnore(QToolBar):
     """Toolbar with import or ignore buttons for import mode of dlg_settings."""
 
-    def __init__(self, parent, typestr='template', orientation=Qt.Vertical):
-        """Initiate StackWidget.
+    def __init__(self, parent, temp_alias='template', orientation=Qt.Vertical):
+        """Initiate toolbar.
 
         Parameters
         ----------
         parent: widget with class method 'mark_import'
-        typestr : str
+        temp_alias : str
             string to set type of data (parameterset or template)
         orientation: Qt.Vertical/Horizontal
             Default is Qt.Vertical
@@ -898,11 +913,11 @@ class ToolBarImportIgnore(QToolBar):
         self.setOrientation(orientation)
         self.act_import = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}ok.png'),
-            'Mark ' + typestr + ' for import', parent)
+            'Mark ' + temp_alias + ' for import', parent)
         self.act_import.triggered.connect(parent.mark_import)
         self.act_ignore = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}deleteRed.png'),
-            'Mark ' + typestr + ' to ignore', parent)
+            'Mark ' + temp_alias + ' to ignore', parent)
         self.act_ignore.triggered.connect(
             lambda: parent.mark_import(ignore=True))
 

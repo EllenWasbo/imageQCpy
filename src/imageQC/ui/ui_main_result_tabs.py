@@ -1540,9 +1540,28 @@ class ResultPlotCanvas(PlotCanvas):
             """Plot SNI values as columns pr ROI."""
             self.bars.append({'names': roi_names,
                               'values': self.main.results['SNI']['values'][imgno][1:]})
-            self.title = 'Structured Noise Index pr ROI'
+            self.title = 'Structured Noise Index per image'
             self.ytitle = 'SNI'
-            self.xtitle = 'ROI'
+            self.xtitle = 'Image number'
+            labels = self.main.results['SNI']['headers']
+            img_nos = []
+            colors = ['red', 'blue', 'green', 'cyan', 'k', 'k', 'k', 'k']
+            styles = ['-', '-', '-', '-', '-', '--', ':', '-.']
+
+            yvals_all = [[] for label in labels]
+            for i, row in enumerate(self.main.results['SNI']['values']):
+                if len(row) > 0:
+                    img_nos.append(i)
+                    for j, val in enumerate(row):
+                        yvals_all[j].append(val)
+            if self.main.current_paramset.sni_type == 0:
+                yvals_all.pop(0)  # do not include max in plot
+                labels.pop(0)
+            xvals = img_nos
+            for j, yvals in enumerate(yvals_all):
+                self.curves.append(
+                    {'label': labels[j], 'xvals': xvals,
+                     'yvals': yvals, 'color': colors[j], 'style': styles[j]})
 
         def plot_filtered_NPS(roi_name='L1'):
             """Plot filtered NPS + NPS structure for selected ROI +quantum noise txt."""
@@ -1751,31 +1770,40 @@ class ResultPlotCanvas(PlotCanvas):
                  'yvals': details_dict['values'][rec_type][:-1], 'style': '-bo'})
             if rec_type < 3:
                 self.ytitle = 'Recovery coefficient'
-                if roi_sizes == [10., 13., 17., 22., 28., 37.]:  # EARL tolerances
-                    idx = test_widget.rec_earl.currentIndex()
-                    if idx == 1:  # EARL 1
-                        yvals = [[.27, .44, .57, .63, .72, .76],  # lower A50
-                                 [.43, .6, .73, .78, .85, .89],  # upper A50
-                                 [.34, .59, .73, .83, .91, .95],  # lower max
-                                 [.57, .85, 1.01, 1.09, 1.13, 1.16],  # upper max
-                                 ]
-                    elif idx == 2:  # EARL 2
-                        yvals = [[.39, .63, .76, .8, .82, .85],  # lower A50
-                                 [.61, .86, .97, .99, .97, 1.],  # upper A50
-                                 [.52, .85, 1., 1.01, 1.01, 1.05],  # lower max
-                                 [.88, 1.22, 1.38, 1.32, 1.26, 1.29],  # upper max
-                                 ]
-                    idx_lower = 0 if 'average' in title else 1
-                    tolmin = {'label': f'EARL{idx} lower',
-                              'xvals': roi_sizes,
-                              'yvals': yvals[idx_lower],
-                              'style': '--k'}
-                    tolmax = {'label': f'EARL{idx} upper',
-                              'xvals': roi_sizes,
-                              'yvals': yvals[idx_lower + 2],
-                              'style': '--k'}
-                    self.curves.append(tolmin)
-                    self.curves.append(tolmax)
+                idx = test_widget.rec_earl.currentIndex()
+                if idx > 0:
+                    proceed = True
+                    if idx == 1 and rec_type == 2:
+                        proceed = False
+                    if roi_sizes != [10., 13., 17., 22., 28., 37.]:  # EARL tolerances
+                        proceed = False
+                    if proceed:
+                        if idx == 1:  # EARL 1
+                            yvals = [[.27, .44, .57, .63, .72, .76],  # lower A50
+                                     [.43, .6, .73, .78, .85, .89],  # upper A50
+                                     [.34, .59, .73, .83, .91, .95],  # lower max
+                                     [.57, .85, 1.01, 1.09, 1.13, 1.16],  # upper max
+                                     [None] * 6, [None] * 6  # peak
+                                     ]
+                        elif idx == 2:  # EARL 2
+                            yvals = [[.39, .63, .76, .8, .82, .85],  # lower A50
+                                     [.61, .86, .97, .99, .97, 1.],  # upper A50
+                                     [.52, .85, 1., 1.01, 1.01, 1.05],  # lower max
+                                     [.88, 1.22, 1.38, 1.32, 1.26, 1.29],  # upper max
+                                     [.3, .46, 0.75, 0.9, 0.9, 0.9],  # lower peak
+                                     [.43, .7, 0.98, 1.1, 1.1, 1.1]  # upper peak
+                                     ]
+                        idx_lower = 2 * (rec_type % 3)
+                        tolmin = {'label': f'EARL{idx} lower',
+                                  'xvals': roi_sizes,
+                                  'yvals': yvals[idx_lower],
+                                  'style': '--k'}
+                        tolmax = {'label': f'EARL{idx} upper',
+                                  'xvals': roi_sizes,
+                                  'yvals': yvals[idx_lower + 1],
+                                  'style': '--k'}
+                        self.curves.append(tolmin)
+                        self.curves.append(tolmax)
             else:
                 self.ytitle = 'Image values (Bq/ml)'
 

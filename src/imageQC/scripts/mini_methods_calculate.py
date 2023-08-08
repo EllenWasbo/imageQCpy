@@ -9,6 +9,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter
 from scipy.ndimage.interpolation import geometric_transform
+from scipy.signal import convolve2d
 
 
 def get_distance_map_point(shape, center_dx=0., center_dy=0.):
@@ -948,3 +949,62 @@ def topolar(img, order=1):
     angs = np.linspace(0, 2*np.pi, img.shape[1])
 
     return polar, (rads, angs)
+
+
+def masked_convolve2d(in1, in2, correct_missing=True, norm=True,
+                      valid_ratio=1./3., *args, **kwargs):
+    """Workaround for np.ma.MaskedArray in scipy.signal.convolve.
+
+    From:
+    https://stackoverflow.com/questions/38318362/2d-convolution-in-python-with-missing-data
+    Converts the masked values to complex values=1j.
+    The complex space allows to set a limit for the imaginary convolution.
+    The function use a ratio `valid_ratio` of np.sum(in2) to
+    set a lower limit on the imaginary part to mask the values.
+    I.e. in1=[[1.,1.,--,--]] in2=[[1.,1.]]
+     -> imaginary_part/sum(in2): [[1., 1., .5, 0.]]
+     -> valid_ratio=.5 -> out:[[1., 1., .5, --]].
+
+    Parameters
+    ----------
+    in1 : array_like
+        First input.
+    in2 : array_like
+        Second input. Should have the same number of dimensions as `in1`.
+    correct_missing : bool, optional
+        correct the value of the convolution as a sum over valid data only,
+        as masked values account 0 in the real space of the convolution.
+    norm : bool, optional
+        if the output should be normalized to np.sum(in2).
+    valid_ratio: float, optional
+        the upper limit of the imaginary convolution to mask values.
+        Defined by the ratio of np.sum(in2).
+    *args, **kwargs: optional
+        parsed to scipy.signal.convolve(..., *args, **kwargs)
+    """
+    if not isinstance(in1, np.ma.MaskedArray):
+        in1 = np.ma.array(in1)
+
+    # np.complex128 -> stores real as np.float64
+    con = convolve2d(
+        in1.astype(np.complex128).filled(fill_value=1j),
+        in2.astype(np.complex128), *args, **kwargs
+        )
+
+    # split complex128 to two float64s
+    con_imag = con.imag
+    con = con.real
+    mask = np.abs(con_imag/np.sum(in2)) > valid_ratio
+
+    # con_east.real / (1. - con_east.imag): correction,
+    #   to get the mean over all valid values
+    # con_east.imag > percent: how many percent of the single convolution
+    #   value have to be from valid values
+    if correct_missing:
+        correction = np.sum(in2) - con_imag
+        con[correction != 0] *= np.sum(in2) / correction[correction != 0]
+
+    if norm:
+        con /= np.sum(in2)
+
+    return np.ma.array(con, mask=mask)

@@ -1032,11 +1032,29 @@ def get_roi_recovery_curve(summed_image, image_info, paramset):
     """
     errmsg = None
 
+    # get mean of first background ROI
+    roi_array = []
+    radius = paramset.rec_roi_size / image_info.pix[0]
+    assumed_bg_sum = 0.5 * np.max(summed_image)
+    try:
+        pos_x = paramset.rec_table.pos_x[0] / image_info.pix[0]
+        pos_y = paramset.rec_table.pos_y[0] / image_info.pix[1]
+        roi_first = get_roi_circle(
+            summed_image.shape, (pos_x, pos_y), radius)
+        arr = np.ma.masked_array(summed_image, mask=np.invert(roi_first))
+        assumed_bg_sum = np.mean(arr)
+    except (IndexError, AttributeError):  # if rec_table is None (maybe fixed)
+        pass
+
     # search (lung insert in) center of image
     search_radius_mm = 50.
     roi_search_central_cylinder = get_roi_circle(
         summed_image.shape, (0, 0), search_radius_mm/image_info.pix[0])
-    cx, cy = mmcalc.center_xy_of_disc(summed_image, roi=roi_search_central_cylinder)
+    # allow for only a few images with the spheres
+    high_vals = np.where(summed_image > assumed_bg_sum)
+    topped_image = np.copy(summed_image)
+    topped_image[high_vals] = assumed_bg_sum
+    cx, cy = mmcalc.center_xy_of_disc(topped_image, roi=roi_search_central_cylinder)
     dx, dy = (0, 0)
     if cx is not None and cy is not None:
         dx, dy = (cx - summed_image.shape[1] // 2, cy - summed_image.shape[0] // 2)
@@ -1046,9 +1064,7 @@ def get_roi_recovery_curve(summed_image, image_info, paramset):
             cx, cy, _, _ = res
             dx, dy = (cx - summed_image.shape[1] // 2, cy - summed_image.shape[0] // 2)
 
-    # background ROIs
-    roi_array = []
-    radius = paramset.rec_roi_size / image_info.pix[0]
+    # background ROIs with adjusted center
     try:
         for i in range(len(paramset.rec_table.pos_x)):
             pos_x = paramset.rec_table.pos_x[i] / image_info.pix[0]

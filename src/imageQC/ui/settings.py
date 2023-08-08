@@ -153,6 +153,10 @@ class SettingsDialog(ImageQCDialog):
                    title='Tag patterns - sort',
                    widget=settings_dicom_tags.TagPatternSortWidget(self))
 
+        add_widget(parent=self.item_shared_settings, snake='digit_templates',
+                   title='Digit templates',
+                   widget=settings_digits.DigitWidget(self))
+
         add_widget(parent=self.item_shared_settings, snake='paramsets',
                    title='Parameter sets / output',
                    widget=ParamSetsWidget(self))
@@ -214,9 +218,21 @@ class SettingsDialog(ImageQCDialog):
                            widget=settings_automation.AutoVendorTemplateWidget(self),
                            exclude_if_empty=False)
 
-        add_widget(parent=self.item_shared_settings, snake='digit_templates',
-                   title='Digit templates',
-                   widget=settings_digits.DigitWidget(self))
+            add_widget(parent=self.item_auto_info, snake='dash_settings',
+                       title='Dashboard settings',
+                       widget=settings_automation.DashSettingsWidget(self),
+                       exclude_if_empty=False)
+
+            proceed = True
+            if import_review_mode:
+                if len(self.main.persons_to_notify) == 0:
+                    proceed = False
+
+            if proceed:
+                add_widget(parent=self.item_auto_info, snake='persons_to_notify',
+                           title='Persons to notify',
+                           widget=settings_automation.PersonsToNotifyWidget(self),
+                           exclude_if_empty=False)
 
         item, widget = self.get_item_widget_from_txt(initial_view)
         self.tree_settings.setCurrentItem(item)
@@ -329,16 +345,6 @@ class SettingsDialog(ImageQCDialog):
             dlg = SelectImportFilesDialog(filenames)
             if dlg.exec():
                 filenames = dlg.get_checked_files()
-                '''
-                # if any paramsets fname - add all mods to get default for each
-                f_paramsets = [x for x in filenames if 'paramsets' in x]
-                if len(f_paramsets) > 0:
-                    mods = [*QUICKTEST_OPTIONS]
-                    if len(f_paramsets) != len(mods):
-                        f_paramsets = [f'paramsets_{m}' for m in mods]
-                        filenames.extend(f_paramsets)
-                        filenames = list(set(filenames))
-                '''
             else:
                 filenames = []
             return filenames
@@ -457,28 +463,63 @@ class SettingsDialog(ImageQCDialog):
             widget.update_data()
             widget.flag_edit(False)
 
+        self.widget_persons_to_notify.templates = self.main.persons_to_notify
+        self.widget_persons_to_notify.update_data()
+        self.widget_dash_settings.templates = self.main.dash_settings
+        self.widget_dash_settings.update_data()
+
+    def mark_extra(self, widget, label_this, mod):
+        """Also mark coupled templates within modality_dict."""
+        all_labels = [
+            temp.label for temp in widget.templates[mod]]
+        if label_this in all_labels:
+            idxs = get_all_matches(all_labels, label_this)
+            try:
+                marked_idxs = widget.marked[mod]
+            except AttributeError:
+                empty = {}
+                for key in QUICKTEST_OPTIONS:
+                    empty[key] = []
+                widget.marked = empty
+                widget.marked_ignore = copy.deepcopy(empty)
+                marked_idxs = []
+            for idx in idxs:
+                if idx not in marked_idxs:
+                    marked_idxs.append(idx)
+                    if hasattr(widget.templates[mod][idx], 'num_digit_label'):
+                        self.mark_digit_temps(widget.templates[mod][idx], mod=mod)
+            widget.marked[mod] = marked_idxs
+
     def mark_qt_param(self, auto_template, mod='CT'):
-        """Also mark quicktest and paramset when auto_template is marked."""
+        """Also mark used quicktest and paramset when auto_template is marked."""
         label_this = [auto_template.quicktemp_label, auto_template.paramset_label]
         for dict_no, snake in enumerate(['quicktest_templates', 'paramsets']):
             widget = getattr(self, f'widget_{snake}')
-            all_labels = [
-                temp.label for temp in widget.templates[mod]]
-            if label_this[dict_no] in all_labels:
-                idxs = get_all_matches(all_labels, label_this[dict_no])
-                try:
-                    marked_idxs = widget.marked[mod]
-                except AttributeError:
-                    empty = {}
-                    for key in QUICKTEST_OPTIONS:
-                        empty[key] = []
-                    widget.marked = empty
-                    widget.marked_ignore = copy.deepcopy(empty)
-                    marked_idxs = []
-                for idx in idxs:
-                    if idx not in marked_idxs:
-                        marked_idxs.append(idx)
-                widget.marked[mod] = marked_idxs
+            self.mark_extra(widget, label_this[dict_no], mod)
+
+    def mark_digit_temps(self, paramset, mod='CT'):
+        """Also mark digit_template when paramset is marked."""
+        if paramset.num_digit_label != '':
+            widget = self.widget_digit_templates
+            self.mark_extra(widget, paramset.num_digit_label, mod)
+
+    def mark_persons(self, auto_template):
+        """Also mark coupled persons to notify."""
+        if len(auto_template.persons_to_notify) > 0:
+            widget = self.widget_persons_to_notify
+            all_labels = [temp.label for temp in widget.templates]
+            for label_this in auto_template.persons_to_notify:
+                if label_this in all_labels:
+                    idxs = get_all_matches(all_labels, label_this)
+                    try:
+                        marked_idxs = widget.marked
+                    except AttributeError:
+                        widget.marked_ignore = []
+                        marked_idxs = []
+                    for idx in idxs:
+                        if idx not in marked_idxs:
+                            marked_idxs.append(idx)
+                    widget.marked = marked_idxs
 
     def set_marked(self, marked=True, import_all=False):
         """Set type of marking to ImportMain."""
@@ -558,21 +599,25 @@ class SettingsDialog(ImageQCDialog):
                     if marked:
                         setattr(import_main, snake, {})
 
-            proceed = True
-            try:
-                widget = self.widget_auto_common
-            except AttributeError:
-                import_main.auto_common = None
-                proceed = False
-            if proceed:
+            list_objects = [fname for fname, item in CONFIG_FNAMES.items()
+                          if item['saved_as'] == 'object']
+            list_objects.pop('last_modified')
+            for snake in list_objects:
+                proceed = True
                 try:
-                    if marked is False and widget.marked_ignore:
-                        import_main.auto_common = None
-                    elif marked and widget.marked is False:
-                        import_main.auto_common = None
-                except AttributeError:  # widget.marked not set
-                    if marked:
-                        import_main.auto_common = None
+                    widget = getattr(self, f'widget_{snake}')
+                except AttributeError:
+                    setattr(import_main, snake, None)
+                    proceed = False
+                if proceed:
+                    try:
+                        if marked is False and widget.marked_ignore:
+                            setattr(import_main, snake, None)
+                        elif marked and widget.marked is False:
+                            setattr(import_main, snake, None)
+                    except AttributeError:  # widget.marked not set
+                        if marked:
+                            setattr(import_main, snake, None)
 
         return import_main
 
@@ -788,10 +833,13 @@ class SharedSettingsWidget(StackWidget):
         _, _, tag_patterns_format = cff.load_settings(fname='tag_patterns_format')
         _, _, tag_patterns_sort = cff.load_settings(fname='tag_patterns_sort')
         _, _, rename_patterns = cff.load_settings(fname='rename_patterns')
+        _, _, digit_templates = cff.load_settings(fname='digit_templates')
         _, _, quicktest_templates = cff.load_settings(fname='quicktest_templates')
         _, _, paramsets = cff.load_settings(fname='paramsets')
         _, _, auto_common = cff.load_settings(fname='auto_common')
         _, _, auto_templates = cff.load_settings(fname='auto_templates')
+        # _, _, dash_settings = cff.load_settings(fname='dash_settings')
+        _, _, persons_to_notify = cff.load_settings(fname='persons_to_notify')
 
         all_temps = ImportMain(
             tag_infos=tag_infos,
@@ -799,10 +847,13 @@ class SharedSettingsWidget(StackWidget):
             tag_patterns_format=tag_patterns_format,
             tag_patterns_sort=tag_patterns_sort,
             rename_patterns=rename_patterns,
+            digit_templates=digit_templates,
             quicktest_templates=quicktest_templates,
             paramsets=paramsets,
             auto_common=auto_common,
-            auto_templates=auto_templates
+            auto_templates=auto_templates,
+            # dash_settings=dash_settings,
+            persons_to_notify=persons_to_notify
             )
 
         status_ti, log_ti, _ = cff.get_taginfos_used_in_templates(all_temps)
@@ -926,7 +977,6 @@ class QuickTestTemplatesWidget(StackWidget):
         A group is by default images with the same seriesUID, but this can be edited in
         parameter set - output.'''
         super().__init__(dlg_settings, header, subtxt,
-                         typestr='template',
                          mod_temp=True, grouped=True)
         self.fname = 'quicktest_templates'
         self.empty_template = cfc.QuickTestTemplate()
@@ -1017,11 +1067,14 @@ class ImportMain:
     tag_patterns_format: dict = field(default_factory=dict)
     tag_patterns_sort: dict = field(default_factory=dict)
     rename_patterns: dict = field(default_factory=dict)
+    digit_templates: dict = field(default_factory=dict)
     quicktest_templates: dict = field(default_factory=dict)
     paramsets: dict = field(default_factory=dict)
     auto_common: cfc.AutoCommon = field(default_factory=cfc.AutoCommon)
     auto_templates: dict = field(default_factory=dict)
     auto_vendor_templates: dict = field(default_factory=dict)
+    dash_settings: cfc.DashSettings = field(default_factory=cfc.DashSettings)
+    persons_to_notify: list = field(default_factory=list)
 
 
 class SelectImportFilesDialog(ImageQCDialog):

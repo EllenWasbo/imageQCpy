@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Functions for extracting text from images
+Functions for extracting text from images.
 
 @author: Ellen Wasbo
 """
@@ -39,7 +39,8 @@ def extract_char_blocks(nparr):
     chopping_idxs = []
     if len(nparr.shape) == 2 and np.min(nparr.shape) > 2:
         nparr = nparr - np.min(nparr)
-        nparr = nparr / np.max(nparr)
+        if np.max(nparr) != 0:
+            nparr = nparr / np.max(nparr)
         background = nparr[0][0]
         if background > 0:
             nparr = 1 - nparr
@@ -50,6 +51,8 @@ def extract_char_blocks(nparr):
         diff = np.diff(prof_x)
         start_char_pos = np.where(diff > 0)[0] + 1
         end_char_pos = np.where(diff < 0)[0] + 1
+
+        breakpoint()
 
         if all([
                 len(start_char_pos) > 0,

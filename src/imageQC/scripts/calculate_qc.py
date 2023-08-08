@@ -384,8 +384,6 @@ def calculate_qc(input_main,
             input_main.gui.delta_x,
             input_main.gui.delta_y,
             input_main.gui.delta_a]
-    elif wid_auto is not None:
-        wid_auto.status_label.showMessage(f'{auto_template_label}: Preparing...')
 
     paramset = input_main.current_paramset
     if wid_auto is not None:
@@ -503,8 +501,9 @@ def calculate_qc(input_main,
                     input_main.status_bar.showMessage(
                         f'Reading/calculating image {i}/{n_img}')
                 elif wid_auto is not None:
-                    wid_auto.status_label.showMessage(
-                        f'{auto_template_label}: Reading/calculating image {i}/{n_img}')
+                    wid_auto.progress_modal.setLabelText(
+                        f'{auto_template_label}: Reading/calculating image {i}/{n_img}'
+                        f' ({auto_template_session})')
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
                 image = None
@@ -599,10 +598,10 @@ def calculate_qc(input_main,
                                     canv_main.current_test = test
                                     canv_main.current_roi = prev_roi[test]
                                     wid_auto.wid_image_display.canvas.roi_draw()
-                                wid_auto.status_label.showMessage((
+                                wid_auto.progress_modal.setLabelText(
                                     f'{auto_template_label}: Calculating '
                                     f'img {i+1}/{n_img} ({auto_template_session})'
-                                    ))
+                                    )
                                 qApp.processEvents()
 
                             result = calculate_2d(
@@ -730,8 +729,6 @@ def calculate_qc(input_main,
         if 'MainWindow' in str(type(input_main)):
             if input_main.automation_active is False:
                 input_main.status_bar.showMessage('Finished', 1000)
-            elif wid_auto is not None:
-                wid_auto.status_label.showMessage(f'{auto_template_label}: Finished')
 
     if 'MainWindow' in str(type(input_main)):
         if input_main.automation_active is False:
@@ -756,7 +753,9 @@ def calculate_qc(input_main,
                 if paramset.mtf_type == 2:
                     input_main.refresh_img_display()
             elif 'Rec' in input_main.results:
-                input_main.refresh_img_display()
+                input_main.wid_window_level.set_window_level('min_max', set_tools=True)
+                input_main.set_active_img(
+                    input_main.results['Rec']['details_dict']['max_slice_idx'])
             input_main.stop_wait_cursor()
 
 
@@ -1407,9 +1406,11 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 details_dict = res
             else:
                 image_input = image2d
+
             res = calculate_NM_uniformity(
-                image_input, roi_array, image_info.pix[0])
+                image_input, roi_array, image_info.pix[0], paramset.uni_scale_factor)
             details_dict['matrix'] = res['matrix']
+            details_dict['matrix_ufov'] = res['matrix_ufov']
             details_dict['du_matrix'] = res['du_matrix']
             values = res['values']
 
@@ -1820,8 +1821,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             errmsgs.append(
                 'Automation not available for Recovery Curve, GUI input needed')
             proceed = False
-        if len(images_to_test) == 0:
-            res = Results(headers=headers, headers_sup=headers_sup)
+        if len(images_to_test) < 3:
+            if len(images_to_test) > 0:
+                errmsgs.append('Too few images to analyse.')
+            res = Results(headers=headers, headers_sup=headers_sup, errmsg=errmsgs)
         elif proceed is False:
             res = Results(headers=headers, headers_sup=headers_sup, errmsg=errmsgs)
         else:
@@ -1856,7 +1859,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                             'All images used for background.')
                     else:
                         center_slice = round(center)
-                        width = width * paramset.rec_percent_slices
+                        width = 0.01 * width * paramset.rec_percent_slices
                         start_slice = center_slice - round(width/2)
                         stop_slice = center_slice + round(width/2)
                         avgs_bg = avgs_bg[start_slice:stop_slice + 1]
@@ -1883,6 +1886,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             zpos_sph = zpos[start_slice:stop_slice]
             details_dict['used_roi_maxs'] = maxs_sph
             details_dict['used_zpos_spheres'] = zpos_sph
+            details_dict['max_slice_idx'] = np.where(zpos == zpos_max)[0][0]
 
             # get background from each roi
             if paramset.rec_background_full_phantom:
@@ -3087,7 +3091,6 @@ def get_corrections_point_source(
             if popt is not None:
                 C, A, x0, sigma = popt
                 offset[a] = x0 - 0.5*len(sum_vector)
-
     dx, dy = offset
 
     # calculate distances from center in plane
@@ -3148,7 +3151,7 @@ def get_corrections_point_source(
              'dx': dx, 'dy': dy, 'distance': distance}, errmsg)
 
 
-def calculate_NM_uniformity(image2d, roi_array, pix):
+def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
     """Calculate uniformity parameters.
 
     Parameters
@@ -3158,6 +3161,8 @@ def calculate_NM_uniformity(image2d, roi_array, pix):
         2d mask for ufov [0] and cfov [1]
     pix : float
         pixel size of image2d
+    scale_factor : int
+        scale factor to get 6.4 mm/pix. 0 = Auto, 1 = none, 2... = scale factor
 
     Returns
     -------
@@ -3172,45 +3177,70 @@ def calculate_NM_uniformity(image2d, roi_array, pix):
         sz_y, sz_x = image.shape
         du_cols = np.zeros(image.shape)
         for x in range(sz_x):
-            for y in range(2, sz_y - 2):
-                sub = image[y-2:y+2, x]
+            for y in range(2, sz_y - 3):
+                sub = image[y-2:y+3, x]
                 max_val = np.max(sub)
                 min_val = np.min(sub)
                 du_cols[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
         du_rows = np.zeros(image.shape)
         for y in range(sz_y):
-            for x in range(2, sz_x - 2):
-                sub = image[y, x-2:x+2]
+            for x in range(2, sz_x - 3):
+                sub = image[y, x-2:x+3]
                 max_val = np.max(sub)
                 min_val = np.min(sub)
                 du_rows[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
         du_matrix = np.maximum(du_cols, du_rows)
         return {'du_matrix': du_matrix, 'du': np.max(du_matrix)}
 
-    # resize to 6.4+/-30% mm pixels
-    pix_range = [6.4*0.7, 6.4*1.3]
-    scale_factors = np.array([2, 4, 8, 16, 32])
-    possible_pix = pix*scale_factors
-    selected_pix = np.where(possible_pix >= pix_range[0])
-    scale_factor = scale_factors[selected_pix[0][0]]
-    image64 = skimage.measure.block_reduce(
-        image2d, (scale_factor, scale_factor), np.sum)  # scale down to ~6.4mm/pix
-    roi64 = []
-    for i in range(2):
+    if scale_factor == 1:
+        image = image2d
+        cfov = roi_array[1]
+        ufov = roi_array[0]
+    else:
+        # resize to 6.4+/-30% mm pixels according to NEMA
+        # pix_range = [6.4*0.7, 6.4*1.3]
+        if scale_factor == 0:  # Auto scale
+            scale_factors = [(np.floor(64/pix)), (np.ceil(6.4/pix))]
+            pix_diff = np.abs(pix*np.array(scale_factors) - 6.4)
+            selected_pix = np.where(pix_diff == np.min(pix_diff))
+            scale_factor = int(scale_factors[selected_pix[0][0]])
+        image = skimage.measure.block_reduce(
+            image2d, (scale_factor, scale_factor), np.sum)  # scale down to ~6.4mm/pix
+
+        # cfov, NEMA - at least 50% of the pixel should be inside UFOV to be included
         reduced_roi = skimage.measure.block_reduce(
-            roi_array[i], (scale_factor, scale_factor), np.mean)
-        roi64.append(np.where(reduced_roi > 0.5, True, False))
+            roi_array[1], (scale_factor, scale_factor), np.mean)
+        cfov = np.where(reduced_roi > 0.5, True, False)
+
+        # ufov, NEMA
+        # - at least 50% of the pixel should be inside UFOV to be included
+        arr = np.ma.masked_array(image, mask=np.invert(cfov))
+        cfov_mean = np.mean(arr)  # TODO test against minimum 10000 (NEMA)
+        reduced_roi = skimage.measure.block_reduce(
+            roi_array[0], (scale_factor, scale_factor), np.mean)
+        ufov = np.where(reduced_roi > 0.5, True, False)
+
+        # ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
+        rows = np.max(ufov, axis=1)
+        cols = np.max(ufov, axis=0)
+        sub = image[rows][:, cols]
+        sub_above_75 = np.where(sub > 0.75*cfov_mean, True, False)
+        sub_above_75[1:-1][:, 1:-1] = True  # only outer rows/cols
+        if False in sub_above_75:
+            ufov[rows][:, cols] = sub_above_75
+        # TODO also ignore pixels with zero counts as nearest neighbour (NEMA)?
 
     # smooth (after subarr to avoid edge effects)
     kernel = np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]])
     kernel = kernel / np.sum(kernel)
-    smooth64 = sp.signal.convolve2d(image64, kernel, boundary='symm', mode='same')
+    arr = np.ma.masked_array(image, mask=np.invert(ufov))
+    smooth64 = mmcalc.masked_convolve2d(arr, kernel, boundary='symm', mode='same')
 
-    rows = np.max(roi64[0], axis=1)
-    cols = np.max(roi64[0], axis=0)
+    rows = np.max(ufov, axis=1)
+    cols = np.max(ufov, axis=0)
     smooth64ufov = smooth64[rows][:, cols]
-    rows = np.max(roi64[1], axis=1)
-    cols = np.max(roi64[1], axis=0)
+    rows = np.max(cfov, axis=1)
+    cols = np.max(cfov, axis=0)
     smooth64cfov = smooth64[rows][:, cols]
     # differential uniformity
     du_ufov_dict = get_differential_uniformity(smooth64ufov)
@@ -3226,7 +3256,12 @@ def calculate_NM_uniformity(image2d, roi_array, pix):
     min_val = np.min(smooth64cfov)
     iu_cfov = 100. * (max_val - min_val) / (max_val + min_val)
 
-    return {'matrix': smooth64, 'du_matrix': du_ufov_dict['du_matrix'],
+    # remove mask to avoid warnings on display (widget position and value)
+    smooth64 = smooth64.data
+    smooth64ufov = smooth64ufov.data
+
+    return {'matrix': smooth64, 'matrix_ufov': smooth64ufov,
+            'du_matrix': du_ufov_dict['du_matrix'],
             'values': [iu_ufov, du_ufov, iu_cfov, du_cfov]}
 
 
@@ -3462,6 +3497,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         eye_filter = get_eye_filter(
             np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c)
         details_dict['eye_filter'] = eye_filter['curve']
+
         SNI_map = np.zeros((len(roi_array)-1, len(roi_array[1])))
         SNI_vals = []
         rNPS_filt_sum = None
@@ -3487,7 +3523,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         details_dict['avg_rNPS_filt'] = rNPS_filt_sum / len(SNI_vals)
         details_dict['avg_rNPS_struct_filt'] = rNPS_struct_filt_sum / len(SNI_vals)
         details_dict['SNI_map'] = SNI_map
-        values = [np.max(SNI_map), np.mean(SNI_map)]
+        values = [np.max(SNI_map), np.mean(SNI_map), np.median(SNI_map)]
 
     return (values, values_sup, details_dict, errmsgs)
 

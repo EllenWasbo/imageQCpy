@@ -202,8 +202,8 @@ class ConfigIdl2Py():
             acNames = ac.dtype.names  # [key for key, val in ac.items()]
             if 'AUTOIMPORTPATH' in acNames:
                 self.auto_common.import_path = try_decode(ac.AUTOIMPORTPATH[0])
-            if 'AUTOCONTINUE' in acNames:
-                self.auto_common.auto_continue = bool(ac.AUTOCONTINUE[0])
+            #if 'AUTOCONTINUE' in acNames:
+            #    self.auto_common.auto_continue = bool(ac.AUTOCONTINUE[0])
             if 'IGNORESINCE' in acNames:
                 self.auto_common.ignore_since = ac.IGNORESINCE[0]
 

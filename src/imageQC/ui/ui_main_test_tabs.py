@@ -1406,6 +1406,7 @@ class ParamsTabNM(ParamsTabCommon):
             items_res_image.extend(img_txts)
         elif self.sni_type.currentIndex() == 1:
             items_plot = [
+                'SNI values',
                 'NPS all ROIs + human visual filter',
                 'Filtered NPS and NPS structure max+avg']
             items_res_image.append('SNI values map')
@@ -1448,6 +1449,12 @@ class ParamsTabNM(ParamsTabCommon):
         self.uni_sum_first.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='uni_sum_first'))
 
+        self.uni_scale_factor = QComboBox()
+        self.uni_scale_factor.addItems(
+            ['Auto to 6.4mm/pix'] + [str(i) for i in range(1, 15)])
+        self.uni_scale_factor.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='uni_scale_factor'))
+
         self.uni_plot = QComboBox()
         self.uni_plot.addItems(['Uniformity result for all images',
                                 'Curvature correction check'])
@@ -1459,6 +1466,7 @@ class ParamsTabNM(ParamsTabCommon):
             [
                 'Differential uniformity map',
                 'Processed image (6.4mm pix, smoothed, corrected)',
+                'Processed image (as above) within UFOV',
                 'Curvature corrected image',
                 'Summed image (if sum marked)'
              ])
@@ -1480,6 +1488,21 @@ class ParamsTabNM(ParamsTabCommon):
         hlo_fov.addSpacing(100)
         vlo_left.addLayout(hlo_fov)
         vlo_left.addWidget(self.uni_sum_first)
+        hlo_scale = QHBoxLayout()
+        vlo_left.addLayout(hlo_scale)
+        hlo_scale.addWidget(QLabel('Scale by factor'))
+        hlo_scale.addWidget(self.uni_scale_factor)
+        info_txt = '''
+        According to NEMA NU-1 the matrix should be scaled to 6.4mm/pix +/-30%<br>
+        For Siemens gamma camera the "curvature corrected" dicom file have incorrect<br>
+        pixel size defined in header (the original pixel size is not updated).<br>
+        For calculating uniformity from these images you should use scale factor 3.<br>
+        Original pix 0.6 mm/pix, correction matrix reduced from 1024 to 256 =
+        2.4 mm/pix.<br>
+        To get 6.4 +/- 30% mm/pix you could combine 2x2 or 3x3 pixels = scale factor
+        2 or 3.
+        '''
+        hlo_scale.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         vlo_right.addWidget(self.uni_correct)
 
@@ -1984,7 +2007,7 @@ class ParamsTabPET(ParamsTabCommon):
         flo1b.addRow(QLabel('Volume background (mL)'), self.rec_background_volume)
 
         flo_avg_perc = QFormLayout()
-        flo_avg_perc.addRow(QLabel('Agerage in sphere threshold (%)'),
+        flo_avg_perc.addRow(QLabel('Average in sphere within threshold (%)'),
                             self.rec_sphere_percent)
         vlo_right.addLayout(flo_avg_perc)
 
@@ -2613,6 +2636,12 @@ class PositionWidget(QWidget):
 
     def get_zoomed_area(self):
         """Get coordinates af zoomed area in image."""
+        if self.main.gui.delta_x != 0 or self.main.gui.delta_y != 0:
+            QMessageBox.information(
+                self, 'Offset is reset',
+                'You have set an offset, this offset will be reset to prevent '
+                'unexpected results defining these ROIs.')
+            self.main.wid_center.reset_delta()
         sel = self.table.selectedIndexes()
         add_row = False
         if len(sel) == 0:

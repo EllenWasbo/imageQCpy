@@ -29,6 +29,7 @@ class LastModified:
     tag_patterns_format: list = field(default_factory=list)
     tag_patterns_sort: list = field(default_factory=list)
     rename_patterns: list = field(default_factory=list)
+    digit_templates: list = field(default_factory=list)
     paramsets_CT: list = field(default_factory=list)
     paramsets_Xray: list = field(default_factory=list)
     paramsets_NM: list = field(default_factory=list)
@@ -39,7 +40,8 @@ class LastModified:
     auto_common: list = field(default_factory=list)
     auto_templates: list = field(default_factory=list)
     auto_vendor_templates: list = field(default_factory=list)
-    digit_templates: list = field(default_factory=list)
+    dash_settings: list = field(default_factory=list)
+    persons_to_notify: list = field(default_factory=list)
 
 
 @dataclass
@@ -169,6 +171,16 @@ class RenamePattern:
     # file / img
     list_tags2: list = field(default_factory=list)  # list[str]
     list_format2: list = field(default_factory=list)  # list[str]
+
+
+@dataclass
+class DigitTemplate:
+    """Dataclass for text identify (digit) templates."""
+
+    label: str = ''
+    images: list = field(default_factory=list)
+    # list of numpy arrays for the digits 0-9 and . and -
+    active: bool = False  # flag to tell if it is ready for use (all digits set)
 
 
 @dataclass
@@ -436,6 +448,7 @@ class ParamSetNM(ParamSetCommon):
     uni_lock_radius: bool = False
     uni_radius: float = 330.
     uni_sum_first: bool = False
+    uni_scale_factor: int = 0  # 0 = Auto, 1= no scale, 2... = scale factor
     sni_area_ratio: float = 0.9
     sni_type: int = 0  # 0 as Nelson 2013, 1= all same roi_size defined by sni_roi_ratio
     sni_roi_ratio: float = 0.2  # relative to sni_area defined by sni_area_ratio
@@ -639,7 +652,6 @@ class AutoCommon:
 
     import_path: str = ''
     log_mode: str = 'w'
-    auto_continue: bool = True  # ignored if without GUI
     display_images: bool = True  # ignored if without GUI
     last_import_date: str = ''  # yyyymmdd
     ignore_since: int = -1  # ignore importing images older than X days, -1 if not used
@@ -650,6 +662,18 @@ class AutoCommon:
     auto_delete_empty_folders: bool = False
     filename_pattern: TagPatternFormat = field(
         default_factory=TagPatternFormat)
+
+
+@dataclass
+class PersonToNotify:
+    """Dataclass for name, email, notes on persons to notify on automation results."""
+
+    label: str = ''  # name
+    email: str = ''
+    note: str = ''
+    all_notifications_mods: list = field(default_factory=list)  # list of str
+    # this person should get all notifications for the selected modalities
+    mute: bool = False
 
 
 @dataclass
@@ -665,10 +689,15 @@ class AutoTemplate:
     sort_pattern: TagPatternSort = field(default_factory=TagPatternSort)
     paramset_label: str = ''
     quicktemp_label: str = ''
+    visualization_label: str = ''
     archive: bool = True
     delete_if_not_image: bool = False
     delete_if_too_many: bool = False
     active: bool = True
+    persons_to_notify: list = field(default_factory=list)
+    # list of names (label) of PersonToNotify for this specific template
+    min_max: list = field(default_factory=list)
+    # [min, max] for each column in output
 
 
 @dataclass
@@ -679,17 +708,34 @@ class AutoVendorTemplate:
     path_input: str = ''
     path_output: str = ''
     station_name: str = ''
+    visualization_label: str = ''
     archive: bool = False
     file_type: str = ''
     file_suffix: str = ''  # starting with . e.g. '.pdf'
     active: bool = True
+    persons_to_notify: list = field(default_factory=list)
+    # list of names (label) of PersonToNotify for this specific template
+    min_max: list = field(default_factory=list)
+    # tuples (min, max) for each column in output
 
 
 @dataclass
-class DigitTemplate:
-    """Dataclass for text identify (digit) templates."""
+class VisualizationSub:
+    """Dataclass for the automation output trend visualization."""
+
+    columns: list = field(default_factory=list)  # list of ints
+    legends: list = field(default_factory=list)  # list of str (default is header)
+    styles: list = field(default_factory=list)  # '-bo' and similar
+    ytitle: str = ''
+    lower_upper: list = field(default_factory=list)  # set min/max to display optional
+    hide: bool = False
+
+
+@dataclass
+class DashSettings:
+    """Dataclass for dash settings (display of automation results)."""
 
     label: str = ''
-    images: list = field(default_factory=list)
-    # list of numpy arrays for the digits 0-9 and . and -
-    active: bool = False  # flag to tell if it is ready for use (all digits set)
+    host: str = '127.0.0.1'
+    port: int = 8050
+    subs: list = field(default_factory=list)  # list of VisualizationSub

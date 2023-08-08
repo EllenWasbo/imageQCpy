@@ -16,7 +16,7 @@ import imageQC.config.config_classes as cfc
 
 @dataclass
 class InputMain:
-    """Dataclass with values as MainWindow when without main window."""
+    """Dataclass with values as MainWindow when calculate_qc without main window."""
 
     current_modality: str = 'CT'
     current_test: str = 'DCM'

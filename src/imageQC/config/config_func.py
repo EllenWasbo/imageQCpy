@@ -536,6 +536,10 @@ def load_settings(fname='', temp_config_folder=''):
                             if fname == 'tag_infos':
                                 updated_doc = verify_input_dict(doc, cfc.TagInfo())
                                 settings.append(cfc.TagInfo(**updated_doc))
+                            elif fname == 'persons_to_notify':
+                                updated_doc = verify_input_dict(
+                                    doc, cfc.PersonToNotify())
+                                settings.append(cfc.PersonToNotify(**updated_doc))
                     if fname == 'tag_infos':
                         taginfos_reset_sort_index(settings)
 
@@ -668,6 +672,10 @@ def load_settings(fname='', temp_config_folder=''):
                         doc['filename_pattern'] = (cfc.TagPatternFormat(**upd))
                         upd = verify_input_dict(doc, cfc.AutoCommon())
                         settings = cfc.AutoCommon(**upd)
+                    elif fname == 'dash_settings':
+                        upd = verify_input_dict(doc, cfc.DashSettings())
+                        # todo list of subs?
+                        settings = cfc.DashSettings(**upd)
                     elif fname == 'last_modified':
                         upd = verify_input_dict(doc, cfc.LastModified())
                         settings = cfc.LastModified(**upd)
@@ -1040,7 +1048,7 @@ def get_ref_label_used_in_auto_templates(auto_templates, ref_attr='paramset_labe
     auto_templates : dict
         key = modalitystring
         value = AutoTemplate
-    ref_fname : str
+    ref_attr : str
         'paramset_label' or 'quicktemp_label'  ##TODO 'digit_label'
 
     Returns
@@ -1065,6 +1073,7 @@ def verify_auto_templates(main):
     status = True
     log = []
     if hasattr(main, 'auto_templates'):
+        linked_persons = []
         for fname in ['paramsets', 'quicktest_templates']:
             ref_attr = 'paramset_label' if fname == 'paramset' else 'quicktemp_label'
             temp_in_auto = get_ref_label_used_in_auto_templates(
@@ -1088,6 +1097,25 @@ def verify_auto_templates(main):
                                 log.append(
                                     f'{mod}: missing definition of {fname} {missing}')
                             status = False
+                    if fname == 'paramsets':  # just once
+                        try:
+                            for temp in templist:
+                                if len(temp.persons_to_notify) > 0:
+                                    linked_persons.extend(temp.persons_to_notify)
+                        except AttributeError:
+                            pass
+        if len(linked_persons) > 0:
+            linked_persons = list(set(linked_persons))
+            if hasattr(main, 'persons_to_notify'):
+                all_persons = [temp.label for temp in main.persons_to_notify]
+                missing = []
+                for person in linked_persons:
+                    if person not in all_persons:
+                        missing.append(person)
+                if len(missing) > 0:
+                    log.append(
+                        'Automation templates set to notify undefined persons: '
+                        f'{missing}')
 
     return (status, log)
 

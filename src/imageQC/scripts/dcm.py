@@ -168,6 +168,10 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 if attrib['slice_thickness'] is not None:
                     attrib['modality'] = 'SPECT'
                     mod = 'SPECT'
+            elif mod == 'Xray':  # test if slicethickness - CBCT
+                if attrib['slice_thickness'] is not None:
+                    attrib['modality'] = 'CT'
+                    mod = 'CT'
 
             attrib['pix'] = [0, 0]
             if isinstance(pix, list):
@@ -185,8 +189,12 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 try:
                     serdescr = pd['SeriesDescription'].value
                 except KeyError:
-                    serdescr = ''
-                ignore_strings = ['Save Screen', 'SAVE_SCREEN', 'Dose Report']
+                    try:
+                        serdescr = pd['ImageComments'].value
+                    except KeyError:
+                        serdescr = ''
+                ignore_strings = ['Save Screen', 'SAVE_SCREEN',
+                                  'Dose Report', 'Dose Rapport', 'DOSE MAP PHOTO']
                 if any([x in serdescr for x in ignore_strings]):
                     pass
                 else:
@@ -422,13 +430,14 @@ def get_dcm_info_list(
                         else:
                             if value_id > data_element.VM:
                                 value_id = -1
-                    multi_val = False
+                    multi_val = False  # true if combine values to text
                     if value_id == -1:
                         if not isinstance(val, list):
-                            multi_val = True  # combine values to text
+                            multi_val = True
                         val_text = val
                     elif value_id == -2:
                         val_text = val
+                        multi_frame = True
                     elif value_id == -3:
                         val_combined = []
                         try:
@@ -437,11 +446,13 @@ def get_dcm_info_list(
                             val_text = val_combined
                         except TypeError:
                             val_text = val
+                        multi_frame = True
                     else:
                         if multi_frame:
                             val_text = val
                         else:
-                            val_text = val[value_id]
+                            val = val[value_id]
+                            val_text = val
 
                     if format_string != '':
                         val_text = mmf.format_val(val, format_string)
@@ -453,11 +464,17 @@ def get_dcm_info_list(
                             )
                         info = info.replace("'", "")
                     else:
-                        info = [
-                            f'{prefix}{prefix_separator}',
-                            val_text,
-                            f'{suffix_separator}{suffix}'
-                            ]
+                        if multi_frame:
+                            info = [
+                                f'{prefix}{prefix_separator}',
+                                val_text,
+                                f'{suffix_separator}{suffix}'
+                                ]
+                        else:
+                            info = (
+                                f'{prefix}{prefix_separator}'
+                                f'{val_text}{suffix_separator}{suffix}'
+                                )
                 else:
                     val_text = mmf.format_val(val, format_string)
                     info = (
@@ -987,6 +1004,8 @@ def find_all_valid_dcm_files(
                         dcm_files.append(file)
                     except pydicom.errors.InvalidDicomError:
                         pass
+                    except AttributeError:
+                        pass
             if len(dcm_files) == 0 and parent_widget is not None:
                 QMessageBox.information(
                     parent_widget, 'No valid DICOM',
@@ -1031,10 +1050,12 @@ def sort_imgs(img_infos, tag_pattern_sort, tag_infos):
     Returns
     -------
     sorted_img_infos : list of dict
-
+    sort_order : list of int
+        sort order used
     """
     if len(tag_pattern_sort.list_tags) == 0:
         sorted_img_infos = img_infos
+        sort_order = np.arange(len(img_infos))
     else:
         infos = []
         for i in range(len(img_infos)):
@@ -1074,8 +1095,9 @@ def sort_imgs(img_infos, tag_pattern_sort, tag_infos):
         sorted_img_infos = []
         for idx in sorted_infos.index:
             sorted_img_infos.append(img_infos[idx])
+        sort_order = sorted_infos.index
 
-    return sorted_img_infos
+    return (sorted_img_infos, sort_order)
 
 
 def dump_dicom(parent_widget, filename=''):

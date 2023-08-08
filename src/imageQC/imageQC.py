@@ -6,6 +6,7 @@
 url: https://github.com/EllenWasbo/imageQC
 """
 import sys
+import argparse
 import os
 from pathlib import Path
 import logging
@@ -62,7 +63,7 @@ if __name__ == '__main__':
     os.environ[ENV_CONFIG_FOLDER] = user_prefs.config_folder
 
     log_mode = 'w'
-    if os.environ[ENV_CONFIG_FOLDER] == '':
+    if os.environ[ENV_CONFIG_FOLDER] != '':
         ok, path, auto_common = cff.load_settings(fname='auto_common')
         if ok:
             log_mode = auto_common.log_mode
@@ -82,7 +83,55 @@ if __name__ == '__main__':
         if os.environ[ENV_CONFIG_FOLDER] == '':
             print('Config folder not specified. Run GUI version to configure imageQC.')
         else:
-            automation.run_automation_non_gui(sys.argv)
+            parser = argparse.ArgumentParser(prog='imageQC')
+            parser.add_argument('-i', '--import_images', action='store_true',
+                                help='Import new files from the image pool')
+            parser.add_argument('-n', '--ndays', type=int, default=-2,
+                                help='Override configured setting on maximum age '
+                                '(days) of the files to import. Default (-2) keep '
+                                'saved settings. -1 = ignore none.')
+            parser.add_argument('-a', '--auto',
+                                choices=['none', 'all', 'dicom', 'vendor'],
+                                default='none',
+                                help='Run templates in both DICOM and vendor based '
+                                'templates (all) or just from DICOM based '
+                                'or vendor base templates.')
+            parser.add_argument('modality_temp', nargs='*',
+                                help='Limit the run for specified modalities '
+                                'or the specified modality/templatename '
+                                'e.g. CT Xray/template1 MR/template3.')
+            #try:
+            args = parser.parse_args()
+            '''
+            except AttributeError:  # run exe
+                print(f'sys.argv[1:] {sys.argv[1:]}')
+                argvals = sys.argv[1:]
+                import_images = True if '-i' in argvals else False
+                ndays = -2
+                auto_string = 'none'
+                list_mod_temp = []
+                if '-n' in argvals:
+                    idx = argvals.index('-n') + 1
+                    try:
+                        ndays = int(argvals[idx])
+                    except (ValueError, TypeError):
+                        pass
+                if '-a' in argvals:
+                    idx = argvals.index('-a') + 1
+                    if argvals[idx] in ['none', 'all', 'dicom', 'vendor']:
+                        auto_string = argvals[idx]
+
+                    if len(argvals) > idx + 1:
+                        list_mod_temp = argvals[idx+1:]
+                args = {
+                    'import_images': import_images,
+                    'ndays': ndays,
+                    'auto': auto_string,
+                    'modality_temp': list_mod_temp
+                    }
+                print(f'args {args}')
+                '''
+            automation.run_automation_non_gui(args)
 
         sys.exit('Program exits')
     else:

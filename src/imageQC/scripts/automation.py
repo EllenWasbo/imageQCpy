@@ -28,14 +28,17 @@ from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.scripts.mini_methods_format import valid_path, val_2_str
 import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
+from imageQC.ui import reusable_widgets as uir
 # imageQC block end
 
 pydicom.config.future_behavior(True)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('imageQC')
 
 
-def run_automation_non_gui(sysargv):
+def run_automation_non_gui(args):
     """Run automation without GUI based on sys.argv."""
+    actual_modalities = [*QUICKTEST_OPTIONS]
+
     def append_log(log_this, not_written=[]):
         if len(log_this) > 0:
             for msg in log_this:
@@ -45,8 +48,62 @@ def run_automation_non_gui(sysargv):
             for row in not_written:
                 logger.info(row)
 
+    def validate_modality_temps():
+        """Validate modalities and template names.
+
+        Returns
+        -------
+        status : bool
+            True if validated for proceeding to next step.
+        string: list of str
+            List of arguments starting with -
+        mods : list of str
+            list of valid <modality> arguments
+        temps : list of str
+            list of <modality>/<templabel> arguments. <modality> validated
+        msgs : list of str
+            Error/warnings
+        """
+        modalities = []
+        templates = []  # [modality, templatename]
+        status = True
+
+        for elem in args.modality_temp:
+            if '/' in elem:
+                elemsplit = elem.split('/')
+                if len(elemsplit) == 2:
+                    if elemsplit[0] in actual_modalities:
+                        if len(elemsplit[1]) > 0:
+                            templates.append(elemsplit)  # [mod, templabel]
+                        else:
+                            logger.error(f'Argument {elem} not accepted.')
+                            status = False
+                    else:
+                        logger.error(f'Argument {elem} not accepted or valid as '
+                                     f'{elemsplit[0]} not used as modality string in '
+                                     'imageQC.')
+                        status = False
+                else:
+                    logger.error(
+                        f'Argument {elem} not accepted or valid as <modality>/<temp>.')
+                    status = False
+            else:
+                if elem in actual_modalities:
+                    modalities.append(elem)
+                else:
+                    logger.error(
+                        f'Argument {elem} not accepted or valid as modality.')
+                    status = False
+
+        if status is False:
+            print('python imageQC.py [-i [-ndays=n] [-a|-v|-d] [<mod>] [<mod>/<temp>]')
+
+        return (status, modalities, templates)
+
     logger.info('-----------------Automation started from command-----------------')
-    ok, args, ndays, mods, temps = validate_args(sysargv)
+    ok = True
+    if len(args.modality_temp) > 0:
+        ok, set_modalities, set_templates = validate_modality_temps()
 
     if ok:
         # load from yaml
@@ -56,7 +113,8 @@ def run_automation_non_gui(sysargv):
         run_auto = False
         run_auto_vendor = False
         lastload_auto_common = time()
-        if '-i' in args or '-d' in args or '-a' in args:
+        ndays = args.ndays
+        if args.import_images or args.auto in ['all', 'dicom']:
             ok_common, path, auto_common = cff.load_settings(
                 fname='auto_common')
             if ndays == -2:
@@ -65,19 +123,19 @@ def run_automation_non_gui(sysargv):
                 fname='tag_infos')
             ok_temps, path, auto_templates = cff.load_settings(
                 fname='auto_templates')
-            if '-d' in args or '-a' in args:
+            if args.auto in ['all', 'dicom']:
                 if ok_temps:
                     run_auto = True
-        if '-v' in args or '-a' in args:
+        if args.auto in ['all', 'vendor']:
             ok_temps_v, path, auto_vendor_templates = cff.load_settings(
                 fname='auto_vendor_templates')
             if ok_temps_v:
                 run_auto_vendor = True
 
         # import from image pool
-        if '-i' in args and auto_common is None:
+        if args.import_images and auto_common is None:
             logger.info(f'Could not find or read import settings from {path}')
-        elif '-i' in args and auto_common is not None:
+        elif args.import_images and auto_common is not None:
             if os.path.isdir(auto_common.import_path):
                 import_status, log_import = import_incoming(
                     auto_common,
@@ -102,8 +160,6 @@ def run_automation_non_gui(sysargv):
                              f'not valid dir: {auto_common.import_path}')
 
         # run templates
-        modalities = [*QUICKTEST_OPTIONS]
-        vendor = True  # first vendor templates if any
         ok_params, path, paramsets = cff.load_settings(
             fname='paramsets')
         ok_qt, path, qt_templates = cff.load_settings(
@@ -111,18 +167,19 @@ def run_automation_non_gui(sysargv):
         _, _, digit_templates = cff.load_settings(
             fname='digit_templates')
         decimal_mark = '.'
+        vendor = True  # first vendor templates if any
         for templates in [auto_vendor_templates, auto_templates]:
             run_this = run_auto_vendor if vendor else run_auto
             if run_this:
                 labels = {}
-                for mod in modalities:
+                for mod in actual_modalities:
                     arr = []
                     for temp in templates[mod]:
                         arr.append(temp.label)
                     labels[mod] = arr
 
-                if len(temps) > 0:
-                    for t_id, mod_temp in enumerate(temps):
+                if len(set_templates) > 0:
+                    for t_id, mod_temp in enumerate(set_templates):
                         mod, templabel = mod_temp
                         if vendor:
                             decimal_mark = paramsets[mod][0].output.decimal_mark
@@ -146,16 +203,16 @@ def run_automation_non_gui(sysargv):
                             v_txt = ('Automation template (vendor)' if vendor
                                      else 'Automation template')
                             logger.warning(f'{v_txt} {mod}/{templabel} not found.')
-                if len(mods) == 0 and len(temps) == 0:
-                    mods = modalities  # all if not specified
-                if len(mods) > 0:
-                    for mod in mods:
+                if len(set_modalities) == 0 and len(set_templates) == 0:
+                    set_modalities = actual_modalities  # all if not specified
+                if len(set_modalities) > 0:
+                    for mod in set_modalities:
                         if labels[mod][0] != '':
                             for t_id, label in enumerate(labels[mod]):
                                 if vendor:
                                     template = auto_vendor_templates[mod][t_id]
                                     log_this, not_written = run_template_vendor(
-                                        template, mod)
+                                        template, mod, decimal_mark=decimal_mark)
                                 else:
                                     template = auto_templates[mod][t_id]
                                     log_this, not_written = run_template(
@@ -163,107 +220,11 @@ def run_automation_non_gui(sysargv):
                                         mod,
                                         paramsets,
                                         qt_templates,
+                                        digit_templates,
                                         tag_infos
                                     )
                                 append_log(log_this, not_written)
             vendor = False
-
-
-def validate_args(sysargv):
-    """Validate sys.argv and return list of interpreted args.
-
-    Parameters
-    ----------
-    sysargv : sys.argv
-
-    Returns
-    -------
-    status : bool
-        True if validated for proceeding to next step.
-    args : list of str
-        List of arguments starting with -
-    ndays : int
-        Int after -ndays if present, -2 = not given
-    mods : list of str
-        list of valid <modality> arguments
-    temps : list of str
-        list of <modality>/<templabel> arguments. <modality> validated
-    msgs : list of str
-        Error/warnings
-    """
-    args = []
-    ndays = -2
-    mods = []
-    temps = []
-
-    actmods = [*QUICKTEST_OPTIONS]
-
-    status = True
-    n_accepted_argcodes = 0  # number of accepted argument codes (-X)
-
-    sysargv.pop(0)  # ignore imageQC.py
-    for arg in sysargv:  # validate args
-        if arg[0] == '-':
-            argcode = arg[1]
-            accepted_argcodes = 'inavd'
-            if argcode in accepted_argcodes:
-                if argcode == 'n':
-                    argsplit = arg.split('=')
-                    if len(argsplit) == 2:
-                        try:
-                            ndays = int(argsplit[1])
-                        except ValueError:
-                            logger.error('-ndays=XX could not convert XX to integer.')
-                            status = False
-                else:
-                    args.append(arg[0:2])   # keep short form only (-i not -import)
-                    n_accepted_argcodes += 1
-            else:
-                logger.error(f'Argument {arg} not accepted.')
-                status = False
-        else:
-            if '/' in arg:
-                argsplit = arg.split('/')
-                if len(argsplit) == 2:
-                    if argsplit[0] in actmods:
-                        if len(argsplit[1]) > 0:
-                            temps.append(argsplit)  # [mod, templabel]
-                        else:
-                            logger.error(f'Argument {arg} not accepted.')
-                            status = False
-                    else:
-                        logger.error(f'''Argument {arg} not accepted or valid as
-                                      {argsplit[0]} not used as modality string in
-                                      imageQC.''')
-                        status = False
-                else:
-                    logger.error(
-                        f'Argument {arg} not accepted or valid as <modality>/<temp>.')
-                    status = False
-            else:
-                if arg in actmods:
-                    mods.append(arg)
-                else:
-                    logger.error(
-                        f'Argument {arg} not accepted or valid as modality.')
-                    status = False
-
-    if n_accepted_argcodes == 0:
-        logger.error('Failed finding enough accepted arguments.')
-        status = False
-    else:
-        n_a_v_d = args.count('-a') + args.count('-v') + args.count('-d')
-        if n_a_v_d > 1:
-            logger.error('Expected only one -a or -v or -d argument. Found more.')
-            status = False
-        if len(temps) > 0 and '-a' in args:
-            logger.error('When specifying templates -v or -d has to be used, not -a.')
-            status = False
-
-    if status is False:
-        print('python imageQC.py [-i [-ndays=n] [-a|-v|-d] [<mod>] [<mod>/<temp>]')
-
-    return (status, args, ndays, mods, temps)
 
 
 def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
@@ -279,7 +240,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
     override_path : str
         temporary import path if GUI
     ignore_since: int
-        Override saved AutoCommon.ignore_since. Default is -1 (=not override)
+        Override saved AutoCommon.ignore_since. Default is -1 (=none ignored)
 
     Returns
     -------
@@ -309,8 +270,6 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
             f'Failed to read import path {p}')
 
     if proceed:
-        if parent_widget is not None:
-            parent_widget.start_wait_cursor()
         import_log.append(
             f'Found {len(files)} files in import path {p}')
 
@@ -357,12 +316,18 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
 
         today = date.today()
 
+        progress_modal = None
+        progress_max = len(files) * 2
         if parent_widget is not None:
-            parent_widget.progress_bar.setRange(0, len(files))
-            
+            progress_modal = uir.ProgressModal(
+                "Importing files...                            ", "Cancel",
+                0, progress_max, parent_widget)  # 0-100 within each temp
+
         for f_id, file in enumerate(files):
             if parent_widget is not None:
-                parent_widget.progress_bar.setValue(f_id)
+                progress_modal.setValue(f_id)
+                progress_modal.setLabelText(
+                    f'Reading DICOM header of files: {f_id + 1} / {len(files)}')
             pd = {}
             try:
                 pd = pydicom.dcmread(file, stop_before_pixels=True)
@@ -380,26 +345,32 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                     pd, auto_common.filename_pattern, tag_infos,
                     prefix_separator='', suffix_separator='',
                     not_found_text='')
-                new_name = "_".join(name_parts)
-                new_name = valid_path(new_name)  # + '.dcm'
-
-                # check for auto delete
-                match_strings = dcm.get_dcm_info_list(
-                    pd, delete_pattern, tag_infos,
-                    prefix_separator='', suffix_separator='',
-                    not_found_text='')
                 delete_this = False
-                for i, val in enumerate(auto_common.auto_delete_criterion_values):
-                    if match_strings[i] == val:
-                        match_rule = (
-                            f'{auto_common.auto_delete_criterion_attributenames[i]} = '
-                            f'{val}')
-                        delete_files.append(file)
-                        delete_rules.append(match_rule)
-                        delete_this = True
-                        break
+                ignore_this = False
+                if any(name_parts):  # not valit if not
+                    new_name = "_".join(name_parts)
+                    new_name = valid_path(new_name)  # + '.dcm'
 
-                if delete_this is False:
+                    # check for auto delete
+                    match_strings = dcm.get_dcm_info_list(
+                        pd, delete_pattern, tag_infos,
+                        prefix_separator='', suffix_separator='',
+                        not_found_text='')
+
+                    for i, val in enumerate(auto_common.auto_delete_criterion_values):
+                        if match_strings[i] == val:
+                            match_rule = (
+                                f'{auto_common.auto_delete_criterion_attributenames[i]}'
+                                f' = {val}')
+                            delete_files.append(file)
+                            delete_rules.append(match_rule)
+                            delete_this = True
+                            break
+                else:
+                    not_dicom_files.append(f_id)
+                    ignore_this = True
+
+                if delete_this is False and ignore_this is False:
                     file_renames[f_id] = new_name
 
                     # older than ignore since?
@@ -488,111 +459,142 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
             if parent_widget is None:
                 print_progress('Reading DICOM header of files:', f_id + 1, len(files))
             else:
-                parent_widget.status_label.showMessage(
-                    f'Reading DICOM header of file {f_id + 1} / {len(files)}')
-        if parent_widget is not None:
-            parent_widget.status_label.clearMessage()
-            parent_widget.progress_bar.reset()
+                if progress_modal.wasCanceled():
+                    proceed = False
+                    import_log.append('Import was cancelled.')
+                    break
 
-        # ensure uniq new file names
-        fullpaths = [
-            os.path.join(
-                file_new_folder[f_id], file_renames[f_id]
-                ) for f_id in range(len(files))]
+        if proceed is False:  # canceled
+            if parent_widget is not None:
+                progress_modal.close()
+                parent_widget.status_label.clearMessage()
+        else:
+            if progress_modal is not None:
+                progress_modal.setLabelText('Ensuring unique file names')
+            # ensure uniq new file names
+            fullpaths = [
+                os.path.join(
+                    file_new_folder[f_id], file_renames[f_id]
+                    ) for f_id in range(len(files))]
 
-        uniq_fullpaths = list(set(fullpaths))
-        if len(uniq_fullpaths) < len(fullpaths):
-            for path in uniq_fullpaths:
-                n_equal = fullpaths.count(path)
-                if n_equal > 1:
-                    for i in range(n_equal):
-                        idx = fullpaths.index(path)
-                        fullpaths[idx] += f'_{i:03}'  # add suffix _XXX
+            uniq_fullpaths = list(set(fullpaths))
+            if len(uniq_fullpaths) < len(fullpaths):
+                for path in uniq_fullpaths:
+                    n_equal = fullpaths.count(path)
+                    if n_equal > 1:
+                        for i in range(n_equal):
+                            idx = fullpaths.index(path)
+                            fullpaths[idx] += f'_{i:03}'  # add suffix _XXX
 
-        for f_id, file in enumerate(files):
-            if file_renames[f_id] != '':
-                new_path = (Path(file_new_folder[f_id]) != file.parent
-                            or file_renames[f_id] != file.stem)
-                if new_path:
-                    status, errmsg = move_rename_file(file, fullpaths[f_id] + '.dcm')
-                    if status is False:
-                        import_log.append(errmsg)
+            if progress_modal is not None:
+                progress_modal.setLabelText('Moving files')
+            move_errors = []
+            for f_id, file in enumerate(files):
+                progress_modal.setValue(int(len(files) + f_id * 0.5))
+                if file_renames[f_id] != '':
+                    new_path = (Path(file_new_folder[f_id]) != file.parent
+                                or file_renames[f_id] != file.stem)
+                    if new_path:
+                        status, errmsg = move_rename_file(
+                            file, fullpaths[f_id] + '.dcm')
+                        if status is False:
+                            move_errors.append(errmsg)
+            if len(move_errors) > 0:
+                import_log.append(f'Failed moving {len(move_errors)} files. '
+                                  'See details to end of this log.')
 
-        if templates is not None:
-            import_log.append('\n')
-            tot_found = 0
-            for mod, temps in templates.items():
-                temp_no = 0
-                for temp in temps:
-                    n_found = n_files_template[mod][temp_no]
-                    if n_found > 0:
-                        import_log.append(f'\t{mod}/{temp.label}: {n_found} new files')
-                        tot_found += n_found
-                    temp_no += 1
-            import_log.append(
-                f'\t In total {tot_found}/{len(files)} files matching templates')
-            import_log.append('\n')
+            if progress_modal is not None:
+                progress_modal.setLabelText('Generating log...')
+                progress_modal.setValue(int(len(files) * 1.6))
+            if templates is not None:
+                import_log.append('\n')
+                tot_found = 0
+                for mod, temps in templates.items():
+                    temp_no = 0
+                    for temp in temps:
+                        n_found = n_files_template[mod][temp_no]
+                        if n_found > 0:
+                            import_log.append(
+                                f'\t{mod}/{temp.label}: {n_found} new files')
+                            tot_found += n_found
+                        temp_no += 1
+                import_log.append(
+                    f'\t In total {tot_found}/{len(files)} files matching templates')
+                import_log.append('\n')
 
-        if len(not_dicom_files) > 0:
-            import_log.append(
-                f'{len(not_dicom_files)} files not valid DICOM.'
-            )
-        if len(too_old_files) > 0:
-            import_log.append(
-                f'{len(too_old_files)} files older than specified limit. Left renamed '
-                'in import path.'
-            )
-        if len(no_date_files) > 0:
-            import_log.append(
-                f'{len(no_date_files)} files without image content or acquisition date.'
-                ' Left renamed in import path.'
-            )
-            import_log.append(
-                '\t Consider adding autodelete rules for these in import settings.'
-            )
-            for filename in no_date_files:
-                import_log.append(f'\t {filename}')
-        if len(no_template_match) > 0:
-            import_log.append(
-                f'{len(no_template_match)} files without match on any '
-                'automation template. Left renamed in import path.'
-            )
-        if len(multiple_match) > 0:
-            import_log.append(
-                f'{len(multiple_match)} files matching more than one '
-                'automation template. Left renamed in import path.'
-            )
-        if len(no_input_path) > 0:
-            import_log.append(
-                f'{len(no_input_path)} files matching automation '
-                'template, but no input path defined for the template. '
-                'Left renamed in import path.'
-            )
-        if len(delete_files) > 0:
-            ndel = len(delete_files)
-            del_files = []
-            for file in delete_files:
-                try:
-                    os.remove(file)
-                    del_files.append(file)
-                except (PermissionError, OSError, FileNotFoundError) as e:
-                    import_log.append(f'Failed to autodelete {file}\n{e}')
-                    ndel -= 1
-            import_log.append(
-                f'{len(delete_files)} files auto deleted according to import settings.')
-            rules = list(set(delete_rules))
-            for rule in rules:
-                delete_rules.count(rule)
-                import_log.append(f'\t {delete_rules.count(rule)} files where {rule}')
+            if len(not_dicom_files) > 0:
+                import_log.append(
+                    f'{len(not_dicom_files)} files not valid DICOM.'
+                )
+            if len(too_old_files) > 0:
+                import_log.append(
+                    f'{len(too_old_files)} files older than specified limit. '
+                    'Left renamed in import path.'
+                )
+            if len(no_date_files) > 0:
+                import_log.append(
+                    f'{len(no_date_files)} files without image content or acquisition '
+                    'date. Left renamed in import path.'
+                )
+                import_log.append(
+                    '\t Consider adding autodelete rules for these in import settings.'
+                )
+                for filename in no_date_files:
+                    import_log.append(f'\t {filename}')
+            if len(no_template_match) > 0:
+                import_log.append(
+                    f'{len(no_template_match)} files without match on any '
+                    'automation template. Left renamed in import path.'
+                )
+            if len(multiple_match) > 0:
+                import_log.append(
+                    f'{len(multiple_match)} files matching more than one '
+                    'automation template. Left renamed in import path.'
+                )
+            if len(no_input_path) > 0:
+                import_log.append(
+                    f'{len(no_input_path)} files matching automation '
+                    'template, but no input path defined for the template. '
+                    'Left renamed in import path.'
+                )
+            if len(delete_files) > 0:
+                if progress_modal is not None:
+                    progress_modal.setLabelText('Auto deleting files...')
+                    progress_modal.setValue(int(len(files) * 1.7))
+                ndel = len(delete_files)
+                del_files = []
+                for file in delete_files:
+                    try:
+                        os.remove(file)
+                        del_files.append(file)
+                    except (PermissionError, OSError, FileNotFoundError) as e:
+                        import_log.append(f'Failed to autodelete {file}\n{e}')
+                        ndel -= 1
+                import_log.append(
+                    f'{len(delete_files)} files auto deleted according to import '
+                    'settings.')
+                rules = list(set(delete_rules))
+                for rule in rules:
+                    delete_rules.count(rule)
+                    import_log.append(
+                        f'\t {delete_rules.count(rule)} files where {rule}')
 
-        if auto_common.auto_delete_empty_folders:
-            dirs = [str(x) for x in p.glob('**/*') if x.is_dir()]
-            dirs = sorted(dirs, key=len, reverse=True)
-            for d in dirs:
-                try:
-                    Path(d).rmdir()
-                except OSError:  # error if folder not empty
-                    pass  # not empty
+            if progress_modal is not None:
+                progress_modal.setLabelText('Deleting empty folders...')
+                progress_modal.setValue(int(len(files) * 1.9))
+            if auto_common.auto_delete_empty_folders:
+                dirs = [str(x) for x in p.glob('**/*') if x.is_dir()]
+                dirs = sorted(dirs, key=len, reverse=True)
+                for d in dirs:
+                    try:
+                        Path(d).rmdir()
+                    except OSError:  # error if folder not empty
+                        pass  # not empty
+            if len(move_errors) > 0:
+                import_log.append('Files failed moving:')
+                import_log.extend(move_errors)
+            if progress_modal is not None:
+                progress_modal.close()
 
     return (proceed, import_log)
 
@@ -754,6 +756,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                         print(f'Reading {len(files)} new files for template ',
                               f'{modality}/{auto_template.label} ...',
                               sep='', end='', flush=True)
+                    else:
+                        parent_widget.progress_modal.setLabelText(
+                            f'Reading {len(files)} new files for template '
+                            f'{modality}/{auto_template.label} ...')
                     img_infos, _, warnings = dcm.read_dcm_info(
                         files, GUI=False, tag_infos=tag_infos)
 
@@ -772,6 +778,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             print(f'\rSorting {len(img_infos)} files for template ',
                                   f'{modality}/{auto_template.label} ...',
                                   sep='', end='', flush=True)
+                        else:
+                            parent_widget.progress_modal.setLabelText(
+                                f'Sorting {len(img_infos)} files by date for template '
+                                f'{modality}/{auto_template.label} ...')
 
                         # sort into groups of same acq_date, study uid
                         date_uid_list = ['_'.join([info.acq_date, info.studyUID]) for
@@ -801,7 +811,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                     img_infos_this.append(img_info)
 
                             if len(auto_template.sort_pattern.list_tags) > 0:
-                                img_infos_this = dcm.sort_imgs(
+                                img_infos_this, _ = dcm.sort_imgs(
                                     img_infos_this, auto_template.sort_pattern,
                                     tag_infos)
 
@@ -814,9 +824,9 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                          auto_template_label=auto_template.label,
                                          auto_template_session=f'Session {d+1}/{nd}')
                             if parent_widget is not None:
-                                curr_val = parent_widget.progress_bar.value()
+                                curr_val = parent_widget.progress_modal.value()
                                 new_val = curr_val + int(100/nd)
-                                parent_widget.progress_bar.setValue(new_val)
+                                parent_widget.progress_modal.setValue(new_val)
                             value_list, header_list = quicktest_output(input_main_this)
                             header_list = ['Date'] + header_list
                             value_list = [date_str] + value_list
@@ -864,8 +874,7 @@ def run_template_vendor(auto_template, modality, decimal_mark='.',
         log.append('Deactivated template')
     else:
         if parent_widget is not None:
-            parent_widget.status_label.showMessage(
-                f'{log_pre} Finding files...')
+            parent_widget.progress_modal.setLabelText(f'{log_pre} Finding files...')
         proceed = os.path.exists(auto_template.path_input)
         if proceed is False:
             log.append('\t Input path not defined or do not exist.')
@@ -891,11 +900,11 @@ def run_template_vendor(auto_template, modality, decimal_mark='.',
                     {auto_template.path_output}''')
             for fileno, file in enumerate(files):
                 if parent_widget is not None:
-                    parent_widget.status_label.showMessage(
+                    parent_widget.progress_modal.setLabelText(
                         f'{log_pre} Extracting data from file {fileno}/{len(files)}...')
-                    curr_val = parent_widget.progress_bar.value()
+                    curr_val = parent_widget.progress_modal.value()
                     new_val = curr_val + int(100/len(files))
-                    parent_widget.progress_bar.setValue(new_val)
+                    parent_widget.progress_modal.setValue(new_val)
                 res = read_vendor_QC_reports.read_vendor_template(auto_template, file)
                 if res is None:
                     log.append(f'\t Found no expected content in {file}')

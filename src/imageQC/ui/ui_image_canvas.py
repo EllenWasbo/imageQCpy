@@ -151,8 +151,18 @@ class ImageCanvas(GenericImageCanvas):
 
     def img_draw(self, auto=False, window_level=[]):
         """Refresh image."""
-        self.ax.cla()
+        # keep previous zoom if same size image
+        xlim = None
+        ylim = None
+        try:
+            prev_img = self.ax.get_images()[0].get_array()
+            if prev_img.shape == self.main.active_img.shape:
+                xlim = self.ax.get_xlim()
+                ylim = self.ax.get_ylim()
+        except (AttributeError, IndexError):
+            pass
 
+        self.ax.cla()
         nparr = self.main.active_img
         if auto is False:
             wl_min, wl_max = self.main.wid_window_level.get_min_max()
@@ -169,6 +179,9 @@ class ImageCanvas(GenericImageCanvas):
 
         self.img = self.ax.imshow(
             nparr, cmap='gray', vmin=wl_min, vmax=wl_max)
+        if xlim is not None:
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
 
         self.ax.axis('off')
         if annotate:
@@ -241,6 +254,11 @@ class ImageCanvas(GenericImageCanvas):
             if n_lines > 2:
                 for i in range(n_lines - 2):
                     self.ax.lines[-1].remove()
+
+        try:
+            self.ax.get_legend().remove()
+        except AttributeError:
+            pass
 
         try:
             self.ax.texts.clear()
@@ -527,14 +545,14 @@ class ImageCanvas(GenericImageCanvas):
 
             for i in range(6):
                 mask = np.where(self.main.current_roi[i+3], 0, 1)
-                color = 'yellow'
+                colors = ['lime', 'cyan', 'k', 'k', 'k', 'k']
                 mask_pos = np.where(mask == 0)
                 xpos = np.mean(mask_pos[1])
                 ypos = np.mean(mask_pos[0])
                 if np.isfinite(xpos) and np.isfinite(ypos):
                     self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
                                  f'S{i+1}',
-                                 fontsize=self.fontsize, color=color)
+                                 fontsize=self.fontsize, color=colors[i])
         else:
             self.add_contours_to_all_rois(
                 colors=['red'], roi_indexes=[0])  # full
@@ -555,31 +573,45 @@ class ImageCanvas(GenericImageCanvas):
         self.add_contours_to_all_rois(
             labels=['center'],
             roi_indexes=[len(labels)], reset_contours=False)
-        if 'Rec' in self.main.results:
-            if 'details_dict' in self.main.results['Rec']:
-                zpos_this = self.main.imgs[self.main.gui.active_img_no].zpos
-                dd = self.main.results['Rec']['details_dict']
-                if 'used_zpos' in dd:
-                    if zpos_this in dd['used_zpos_spheres']:
-                        idx = np.where(dd['used_zpos_spheres'] == zpos_this)
-                        idx = idx[0][0]
-                        if 'roi_spheres' in dd:
-                            for roi in dd['roi_spheres']:
-                                if roi[idx] is not None:
-                                    mask = np.where(roi[idx], 0, 1)
-                                    contour = self.ax.contour(
-                                        mask, levels=[0.9],
-                                        colors='blue', alpha=0.5,
+        if self.main.results:
+            if 'Rec' in self.main.results:
+                if self.main.results['Rec']:
+                    if 'details_dict' in self.main.results['Rec']:
+                        zpos_this = self.main.imgs[self.main.gui.active_img_no].zpos
+                        dd = self.main.results['Rec']['details_dict']
+                        if 'used_zpos' in dd:
+                            if zpos_this in dd['used_zpos_spheres']:
+                                idx = np.where(dd['used_zpos_spheres'] == zpos_this)
+                                idx = idx[0][0]
+                                if 'roi_spheres' in dd:
+                                    for roi in dd['roi_spheres']:
+                                        if roi[idx] is not None:
+                                            mask = np.where(roi[idx], 0, 1)
+                                            contour = self.ax.contour(
+                                                mask, levels=[0.9],
+                                                colors='blue', alpha=0.5,
+                                                linewidths=self.linewidth)
+                                            self.contours.append(contour)
+                                    for roi in dd['roi_peaks']:
+                                        if roi[idx] is not None:
+                                            mask = np.where(roi[idx], 0, 1)
+                                            contour = self.ax.contour(
+                                                mask, levels=[0.9],
+                                                colors='green', alpha=0.5,
+                                                linewidths=self.linewidth)
+                                            self.contours.append(contour)
+                                    mask = np.where(
+                                        np.zeros(self.main.active_img.shape) == 0)
+                                    c1 = self.ax.contour(
+                                        mask, colors='blue', alpha=0.5,
                                         linewidths=self.linewidth)
-                                    self.contours.append(contour)
-                            for roi in dd['roi_peaks']:
-                                if roi[idx] is not None:
-                                    mask = np.where(roi[idx], 0, 1)
-                                    contour = self.ax.contour(
-                                        mask, levels=[0.9],
-                                        colors='green', alpha=0.5,
+                                    h1, _ = c1.legend_elements()
+                                    c2 = self.ax.contour(
+                                        mask, colors='green', alpha=0.5,
                                         linewidths=self.linewidth)
-                                    self.contours.append(contour)
+                                    h2, _ = c2.legend_elements()
+                                    self.ax.legend(
+                                        [h1[0], h2[0]], ['Sphere VOI', 'Peak VOI'])
 
     def PIU(self):
         """Draw MR PIU ROI."""
@@ -718,14 +750,18 @@ class ResultImageCanvas(GenericImageCanvas):
             if 'du_matrix' in details_dict:
                 self.current_image = details_dict['du_matrix']
         elif type_img == 1:
-            self.title = 'Processed image minimum 6.4 mm pr pix'
+            self.title = 'Processed image ~ 6.4 mm pr pix'
             if 'matrix' in details_dict:
                 self.current_image = details_dict['matrix']
         elif type_img == 2:
+            self.title = 'Processed image ~ 6.4 mm pr pix, UFOV part'
+            if 'matrix_ufov' in details_dict:
+                self.current_image = details_dict['matrix_ufov']
+        elif type_img == 3:
             self.title = 'Curvature corrected image'
             if 'corrected_image' in details_dict:
                 self.current_image = details_dict['corrected_image']
-        elif type_img == 3:
+        elif type_img == 4:
             self.title = 'Summed image'
             if 'sum_image' in details_dict:
                 self.current_image = details_dict['sum_image']
@@ -743,24 +779,29 @@ class ResultImageCanvas(GenericImageCanvas):
                     self.main.gui.active_img_no]
             except KeyError:
                 details_dict = {}
-        self.cmap = 'viridis'
-        sel_txt = self.main.tab_nm.sni_result_image.currentText()
-        if 'Curvature' in sel_txt:
-            self.title = 'Curvature corrected image'
-            if 'corrected_image' in details_dict:
-                self.current_image = details_dict['corrected_image']
-        elif 'Summed' in sel_txt:
-            self.title = 'Summed image'
-            if 'sum_image' in details_dict:
-                self.current_image = details_dict['sum_image']
-        elif '2d NPS' in sel_txt:
-            sel_text = self.main.tab_nm.sni_result_image.currentText()
-            roi_txt = sel_text[-2:]
-            self.title = f'2d NPS for {roi_txt}'
-            roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
-            roi_no = roi_names.index(roi_txt)
-            details_this = details_dict['pr_roi'][roi_no]
-            self.current_image = details_this['NPS']
-        elif 'SNI values map' in sel_txt:
-            self.title = 'SNI values map'
-            self.current_image = details_dict['SNI_map']
+        if details_dict:
+            self.cmap = 'viridis'
+            sel_txt = self.main.tab_nm.sni_result_image.currentText()
+            if 'Curvature' in sel_txt:
+                self.title = 'Curvature corrected image'
+                if 'corrected_image' in details_dict:
+                    self.current_image = details_dict['corrected_image']
+            elif 'Summed' in sel_txt:
+                self.title = 'Summed image'
+                if 'sum_image' in details_dict:
+                    self.current_image = details_dict['sum_image']
+            elif '2d NPS' in sel_txt:
+                sel_text = self.main.tab_nm.sni_result_image.currentText()
+                roi_txt = sel_text[-2:]
+                self.title = f'2d NPS for {roi_txt}'
+                roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+                roi_no = roi_names.index(roi_txt)
+                details_this = details_dict['pr_roi'][roi_no]
+                self.current_image = details_this['NPS']
+            elif 'SNI values map' in sel_txt:
+                self.title = 'SNI values map'
+                self.current_image = details_dict['SNI_map']
+                self.min_val = 0
+                max_in_res = np.max(self.main.results['SNI']['values'])
+                if max_in_res > 0:
+                    self.max_val = max_in_res

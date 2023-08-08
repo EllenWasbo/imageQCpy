@@ -112,6 +112,7 @@ class MainWindow(QMainWindow):
         self.gui.char_width = char_width
         self.gui.annotations_line_thick = self.user_prefs.annotations_line_thick
         self.gui.annotations_font_size = self.user_prefs.annotations_font_size
+
         self.status_bar = StatusBar(self)
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage('Starting up', 1000)
@@ -203,6 +204,7 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(scroll)
         self.reset_split_sizes()
+
         self.update_mode()
 
     def clear_all_images(self):
@@ -294,7 +296,7 @@ class MainWindow(QMainWindow):
                 self.current_modality = self.imgs[0].modality
                 self.update_mode()
             if self.wid_window_level.chk_wl_update.isChecked() is False:
-                self.wid_window_level.set_window_level('dcm')
+                self.wid_window_level.set_window_level('dcm', set_tools=True)
 
         if self.wid_quicktest.gb_quicktest.isChecked():
             self.wid_quicktest.set_current_template_to_imgs()
@@ -562,7 +564,7 @@ class MainWindow(QMainWindow):
                 for key in del_keys:
                     del self.results[key]
 
-        if sort_idxs:
+        if sort_idxs is not None:
             orig_res = copy.deepcopy(self.results)
             self.results = {}
             for test, res_dict in orig_res.items():
@@ -677,9 +679,12 @@ class MainWindow(QMainWindow):
         res = dlg.exec()  # returning TagPatternSort
         if res:
             sort_template = dlg.get_pattern()
-            self.imgs = dcm.sort_imgs(self.imgs, sort_template, self.tag_infos)
+            self.imgs, order = dcm.sort_imgs(self.imgs, sort_template, self.tag_infos)
             self.tree_file_list.update_file_list()
             self.current_sort_pattern = sort_template
+            if self.results:
+                self.update_results(sort_idxs=order)
+                self.refresh_selected_table_row()
 
     def reset_split_sizes(self):
         """Set and reset QSplitter sizes."""
@@ -799,6 +804,8 @@ class MainWindow(QMainWindow):
     def run_settings(self, initial_view='', initial_template_label='',
                      paramset_output=False):
         """Display settings dialog."""
+        _, _, self.persons_to_notify = cff.load_settings(
+            fname='persons_to_notify')
         if initial_view == '':
             dlg = settings.SettingsDialog(self)
         else:
@@ -811,18 +818,20 @@ class MainWindow(QMainWindow):
 
     def update_settings(self, after_edit_settings=False):
         """Refresh data from settings files affecting GUI in main window."""
+        if after_edit_settings is False:
+            print('Reading configuration settings...')
         self.lastload = time()
-        status, path, self.user_prefs = cff.load_user_prefs()
+        _, _, self.user_prefs = cff.load_user_prefs()
         if self.user_prefs.dark_mode:
             plt.style.use('dark_background')
-        status, path, self.paramsets = cff.load_settings(
+        _, _, self.paramsets = cff.load_settings(
             fname=f'paramsets_{self.current_modality}')
-        status, path, self.quicktest_templates = cff.load_settings(
+        _, _, self.quicktest_templates = cff.load_settings(
             fname='quicktest_templates')
-        status, path, self.tag_infos = cff.load_settings(fname='tag_infos')
-        status, path, self.tag_patterns_special = cff.load_settings(
+        _, _, self.tag_infos = cff.load_settings(fname='tag_infos')
+        _, _, self.tag_patterns_special = cff.load_settings(
             fname='tag_patterns_special')
-        status, path, self.digit_templates = cff.load_settings(
+        _, _, self.digit_templates = cff.load_settings(
             fname='digit_templates')
 
         try:  # avoid error before gui ready
@@ -959,26 +968,36 @@ class MainWindow(QMainWindow):
         QApplication.restoreOverrideCursor()
 
     def finish_cleanup(self):
+        """Cleanup/save before exit."""
+        proceed_to_close = True
         if self.wid_paramset.lbl_edit.text() == '*':
-            self.wid_paramset.ask_to_save_changes()
-        try:
-            cff.remove_user_from_active_users()
-            # save current settings to user prefs
-            self.user_prefs.annotations_line_thick = self.gui.annotations_line_thick
-            self.user_prefs.annotations_font_size = self.gui.annotations_font_size
-            ok, path = cff.save_user_prefs(self.user_prefs, parentwidget=self)
-        except:  # on pytest
-            pass
+            proceed_to_close = messageboxes.proceed_question(
+                self,
+                f'Unsaved changes to {self.wid_paramset.fname}. Exit without saving?')
+        if proceed_to_close:
+            try:
+                cff.remove_user_from_active_users()
+                # save current settings to user prefs
+                self.user_prefs.annotations_line_thick = self.gui.annotations_line_thick
+                self.user_prefs.annotations_font_size = self.gui.annotations_font_size
+                ok, path = cff.save_user_prefs(self.user_prefs, parentwidget=self)
+            except:  # on pytest
+                pass
+        return proceed_to_close
 
     def closeEvent(self, event):
         """Exit app by x in the corner."""
-        self.finish_cleanup()
-        event.accept()
+        proceed = self.finish_cleanup()
+        if proceed:
+            event.accept()
+        else:
+            event.ignore()
 
     def exit_app(self):
         """Exit app by menu."""
-        self.finish_cleanup()
-        sys.exit()
+        proceed = self.finish_cleanup()
+        if proceed:
+            sys.exit()
 
     def clicked_resultsize(self, tool=None):
         """Maximize or reset results size."""

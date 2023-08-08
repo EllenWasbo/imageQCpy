@@ -215,7 +215,9 @@ class OpenMultiDialog(ImageQCDialog):
                 dcm_files = dcm_dict['files']
                 img_infos, _, warnings = read_dcm_info(
                     dcm_files, tag_infos=self.main.tag_infos,
-                    tag_patterns_special=self.main.tag_patterns_special)
+                    tag_patterns_special=self.main.tag_patterns_special,
+                    statusbar=self.status_label)
+                self.main.stop_wait_cursor()
                 if len(warnings) > 0:
                     dlg = messageboxes.MessageBoxWithDetails(
                         self, title='Some files read with warnings',

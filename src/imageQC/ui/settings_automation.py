@@ -6,18 +6,21 @@
 """
 import os
 from time import time
+import webbrowser
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication, qApp, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QToolBar, QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox,
-    QListWidget, QComboBox, QMessageBox, QDialogButtonBox, QFileDialog
+    QListWidget, QTableWidget, QTableWidgetItem, QComboBox,
+    QMessageBox, QDialogButtonBox, QFileDialog
     )
 
 # imageQC block start
-from imageQC.config.iQCconstants import ENV_ICON_PATH, LOG_FILENAME, VENDOR_FILE_OPTIONS
+from imageQC.config.iQCconstants import (
+    ENV_ICON_PATH, LOG_FILENAME, VENDOR_FILE_OPTIONS, QUICKTEST_OPTIONS)
 from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
 from imageQC.ui.settings_reusables import (
@@ -58,9 +61,15 @@ class AutoInfoWidget(StackWidget):
             These templates are meant for vendor-report based inputs.<br>
             Define where to find the reports, type of report and output path.
             <br><br>
-            Currently imageQC have no visualization tools for the trends.
+            <b>Dashboard settings</b><br>
+            This is work in progress. Currently imageQC have no visualization tools
+            for the trends (output of automation templates above).<br>
             Until that is in place, use f.x. Excel or PowerBI to visualize
-            the trends.
+            the trends.<br>
+            <b>Persons to notify</b><br>
+            This is work in progress too. Persons can be added to the automation
+            templates to recieve email if values outside set limits. <br>
+            This functionality is under construction.
             '''
             )
         super().__init__(dlg_settings, header, subtxt)
@@ -255,15 +264,11 @@ class AutoCommonWidget(StackWidget):
 
         vlo_left.addWidget(uir.LabelHeader(
             'Default appearance if Automation run with GUI', 4))
-        self.chk_pause_between = QCheckBox(
-            'Pause between each template (option to cancel)')
-        self.chk_pause_between.stateChanged.connect(
-            lambda: self.flag_edit(True))
+
         self.chk_display_images = QCheckBox(
             'Display images/rois while tests are run')
         self.chk_display_images.stateChanged.connect(
             lambda: self.flag_edit(True))
-        vlo_left.addWidget(self.chk_pause_between)
         vlo_left.addWidget(self.chk_display_images)
 
         hlo.addWidget(uir.VLine())
@@ -277,7 +282,7 @@ class AutoCommonWidget(StackWidget):
         if self.import_review_mode:
             wid_common.setEnabled(False)
         else:
-            btn_save = QPushButton('Save general automation settings')
+            btn_save = QPushButton('Save import settings')
             btn_save.setIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'))
             btn_save.clicked.connect(self.save_auto_common)
             if self.save_blocked:
@@ -312,7 +317,6 @@ class AutoCommonWidget(StackWidget):
         self.ignore_since.setValue(self.templates.ignore_since)
         self.chk_ignore_since.setChecked(self.templates.ignore_since > 0)
         self.chk_display_images.setChecked(self.templates.display_images)
-        self.chk_pause_between.setChecked(not self.templates.auto_continue)
         self.fill_auto_delete_list()
 
     def save_auto_common(self):
@@ -329,7 +333,6 @@ class AutoCommonWidget(StackWidget):
         self.templates.auto_delete_empty_folders = (
             self.chk_auto_delete_empty_folders.isChecked())
         self.templates.display_images = self.chk_display_images.isChecked()
-        self.templates.auto_continue = not self.chk_pause_between.isChecked()
         self.save()
 
     def fill_auto_delete_list(self):
@@ -434,12 +437,94 @@ class AutoCommonWidget(StackWidget):
             self.import_review_mark_txt.setText('Import and overwrite current')
 
 
+class LimitEditDialog(ImageQCDialog):
+    """Dialog for editing limits."""
+
+    def __init__(self, headers=None, first_values=None, min_max=None):
+        super().__init__()
+        self.headers = headers
+        self.min_max = min_max
+
+        self.setWindowTitle('Edit limits')
+        self.setMinimumWidth(800)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        self.table = QTableWidget(self)
+        self.table.setColumnCount(len(self.headers))
+        self.table.setHorizontalHeaderLabels(self.headers)
+        n_rows = 2 if first_values is None else 3
+        self.table.setRowCount(n_rows)
+
+        for col in range(len(self.headers)):
+            col_vals = [None, None, None]
+            try:
+                col_vals[:2] = min_max[col]
+            except IndexError:
+                pass
+            try:
+                col_vals[2] = first_values[col]
+            except (IndexError, TypeError):
+                pass
+            for r in range(n_rows):
+                twi = QTableWidgetItem(str(col_vals[r]))
+                twi.setTextAlignment(4)
+                self.table.setItem(r, col, twi)
+
+        labels = ['min', 'max', 'sample value']
+        self.table.setVerticalHeaderLabels(labels[0:n_rows])
+        self.table.resizeRowsToContents()
+        vlo.addWidget(self.table)
+        self.table.cellChanged.connect(self.edit_current_table)
+
+        hlo_dlg_btns = QHBoxLayout()
+        vlo.addLayout(hlo_dlg_btns)
+        hlo_dlg_btns.addStretch()
+        btn_ok = QPushButton('OK')
+        btn_ok.clicked.connect(self.accept)
+        hlo_dlg_btns.addWidget(btn_ok)
+        btn_cancel = QPushButton('Cancel')
+        btn_cancel.clicked.connect(self.reject)
+        hlo_dlg_btns.addWidget(btn_cancel)
+
+    def edit_current_table(self, row, col):
+        """Verify input."""
+        if row < 2:
+            val = self.table.item(row, col).text()
+            if '.' in val or ',' in val:
+                try:
+                    val = float(val.replace(',', '.'))
+                except (ValueError, TypeError):
+                    val = None
+            else:
+                try:
+                    val = int(val)
+                except (ValueError, TypeError):
+                    val = None
+            if len(self.min_max) == 0:
+                self.min_max = [[None, None] for i in range(len(self.headers))]
+
+            try:
+                self.min_max[col][row] = val
+            except IndexError:
+                pass #TODO handle mismatch saved limits vs headers from output file
+
+            twi = QTableWidgetItem(str(val))
+            twi.setTextAlignment(4)
+            self.table.blockSignals(True)
+            self.table.setItem(row, col, twi)
+            self.table.blockSignals(False)
+
+    def get_min_max(self):
+        """Return set values when closing."""
+        return self.min_max
+
+
 class AutoTempWidgetBasic(StackWidget):
     """Common settings for AutoTemplates and AutoVendorTemplates."""
 
     def __init__(self, dlg_settings, header, subtxt):
         super().__init__(dlg_settings, header, subtxt,
-                         typestr='template',
                          mod_temp=True, grouped=True)
 
         self.txt_input_path = QLineEdit('')
@@ -470,6 +555,35 @@ class AutoTempWidgetBasic(StackWidget):
         self.hlo.addWidget(self.wid_temp)
         self.vlo_temp = QVBoxLayout()
         self.wid_temp.setLayout(self.vlo_temp)
+
+        self.gb_limits = QGroupBox('Limits')
+        self.gb_limits.setFont(uir.FontItalic())
+        vlo_limits = QVBoxLayout()
+        self.gb_limits.setLayout(vlo_limits)
+
+        vlo_limits.addWidget(uir.LabelItalic(
+            'Set limits (min/max) for visualization and to trigger notifications'))
+        hlo_limits = QHBoxLayout()
+        vlo_limits.addLayout(hlo_limits)
+        self.lbl_limits = QLabel('No limit set')
+        self.tb_edit_limits = uir.ToolBarEdit(tooltip='Edit limits')
+        hlo_limits.addWidget(self.lbl_limits)
+        hlo_limits.addWidget(self.tb_edit_limits)
+        hlo_limits.addStretch()
+        self.tb_edit_limits.act_edit.triggered.connect(self.edit_limits)
+        hlo_persons = QHBoxLayout()
+        vlo_limits.addLayout(hlo_persons)
+        self.list_persons = QListWidget()
+        self.list_persons.setFixedWidth(200)
+        self.tb_edit_persons = uir.ToolBarEdit(
+            edit_button=False, add_button=True, delete_button=True)
+        self.tb_edit_persons.act_add.triggered.connect(self.add_persons)
+        self.tb_edit_persons.act_delete.triggered.connect(self.delete_person)
+        hlo_persons.addWidget(QLabel('Notify:'))
+        hlo_persons.addWidget(self.list_persons)
+        hlo_persons.addWidget(self.tb_edit_persons)
+        hlo_persons.addStretch()
+        hlo_persons.addWidget(uir.UnderConstruction(txt='Under construction...'))
 
         hlo_input_path = QHBoxLayout()
         self.vlo_temp.addLayout(hlo_input_path)
@@ -510,6 +624,13 @@ class AutoTempWidgetBasic(StackWidget):
         self.txt_statname.setText(self.current_template.station_name)
         self.chk_archive.setChecked(self.current_template.archive)
         self.chk_deactivate.setChecked(not self.current_template.active)
+        if len(self.current_template.min_max) > 0:
+            self.lbl_limits.setText('Edit to view limits')
+        else:
+            self.lbl_limits.setText('No limit set')
+        self.list_persons.clear()
+        if len(self.current_template.persons_to_notify) > 0:
+            self.list_person.addItems(self.current_template.persons_to_notify)
 
     def get_current_template(self):
         """Get self.current_template where not dynamically set."""
@@ -529,6 +650,43 @@ class AutoTempWidgetBasic(StackWidget):
         """View output file as txt."""
         if os.path.exists(self.txt_output_path.text()):
             os.startfile(self.txt_output_path.text())
+
+    def edit_limits(self):
+        """Edit min/max limits."""
+        # headers from output or qt results on sample images?
+        headers = []
+        first_values = None
+        if os.path.exists(self.txt_output_path.text()):
+            with open(self.txt_output_path.text()) as f:
+                headers = f.readline().strip('\n').split('\t')
+                first_values = f.readline().strip('\n').split('\t')
+        if len(headers) < 2:
+            QMessageBox.information(
+                self, 'Not output yet',
+                'To set the limits there should be column headers to extract from '
+                'the output text file. Output file is empty or missing columns.')
+        else:
+            dlg = LimitEditDialog(
+                headers=headers[1:],
+                min_max=self.current_template.min_max,
+                first_values=first_values[1:])
+            res = dlg.exec()
+            if res:
+                self.current_template.min_max = dlg.get_min_max()
+                self.flag_edit(True)
+                self.lbl_limits.setText('Edit to view limits')
+
+    def add_persons(self):
+        """Add to persons list."""
+        QMessageBox.information(
+            self, 'Not implemented yet',
+            'This functionality is not yet finished. To be continued....')
+
+    def delete_person(self):
+        """Delete from persons list."""
+        QMessageBox.information(
+            self, 'Not implemented yet',
+            'This functionality is not yet finished. To be continued....')
 
 
 class AutoTemplateWidget(AutoTempWidgetBasic):
@@ -594,21 +752,15 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
             'Additional DICOM criteria'))
         vlo_import.addWidget(self.tree_crit)
 
+        vlo_right = QVBoxLayout()
+        hlo_temp.addLayout(vlo_right)
+
         gb_analyse = QGroupBox('Image analysis settings')
         gb_analyse.setFont(uir.FontItalic())
         vlo_analyse = QVBoxLayout()
         gb_analyse.setLayout(vlo_analyse)
-        hlo_temp.addWidget(gb_analyse)
+        vlo_right.addWidget(gb_analyse)
 
-        flo_analyse = QFormLayout()
-        vlo_analyse.addLayout(flo_analyse)
-        flo_analyse.addRow(
-            QLabel('Use parameter set: '),
-            self.cbox_paramset)
-        flo_analyse.addRow(
-            QLabel('Use QuickTest template: '),
-            self.cbox_quicktest)
-        vlo_analyse.addStretch()
         vlo_analyse.addWidget(uir.LabelItalic(
             'Sort images for each date/studyUID by:'))
         hlo_sort_list = QHBoxLayout()
@@ -618,6 +770,17 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         self.tb_edit_sort_by = uir.ToolBarEdit(tooltip='Edit sort list')
         hlo_sort_list.addWidget(self.tb_edit_sort_by)
         self.tb_edit_sort_by.act_edit.triggered.connect(self.edit_sort_by)
+
+        flo_analyse = QFormLayout()
+        vlo_analyse.addLayout(flo_analyse)
+        flo_analyse.addRow(
+            QLabel('Use parameter set: '),
+            self.cbox_paramset)
+        flo_analyse.addRow(
+            QLabel('Use QuickTest template: '),
+            self.cbox_quicktest)
+
+        vlo_right.addWidget(self.gb_limits)
 
         hlo_btm = QHBoxLayout()
         self.vlo_temp.addLayout(hlo_btm)
@@ -799,6 +962,8 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         hlo_options.addStretch()
         self.vlo_temp.addLayout(hlo_options)
         self.vlo_temp.addStretch()
+        self.vlo_temp.addWidget(self.gb_limits)
+        self.vlo_temp.addStretch()
         self.vlo_temp.addWidget(self.chk_archive)
         self.vlo_temp.addWidget(self.chk_deactivate)
         self.vlo_temp.addStretch()
@@ -885,3 +1050,213 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         self.cbox_file_type.clear()
         self.cbox_file_type.addItems(
             VENDOR_FILE_OPTIONS[self.current_modality])
+
+
+class DashWorker(QThread):
+    """Refresh dash and display in webbrowser."""
+
+    def __init__(self, host='127.0.0.1', port=8050):
+        super().__init__()
+        self.host = host
+        self.port = port
+
+    def run(self):
+        """Run worker if possible."""
+        from imageQC.dash_app import dash_app
+        dash_app.run_dash_app(host=self.host, port=self.port)
+
+
+class DashSettingsWidget(StackWidget):
+    """Widget holding settings for dashboard visualization."""
+
+    def __init__(self, dlg_settings):
+        header = 'Dashboard settings'
+        subtxt = (
+            'Define where to run the dash application to visualize the output'
+            ' from automation templates.<br>'
+            'Default host is on your local computer (127.x.x.x). <br>'
+            'If the dashboard is always updated from the same computer and this is '
+            ' accessable for other computers in the same network, set host to '
+            '"0.0.0.0"<br>'
+            'If your IT-department allows it the dashboard can then be accessed from '
+            ' http:\\xxx.x.x.x:port where xxx.x.x.x is the IP address of the computer'
+            ' updating the dashboard.<br>'
+            'NOT TESTED YET - THIS IS THE THEORY.....'
+            )
+        super().__init__(dlg_settings, header, subtxt)
+        self.fname = 'dash_settings'
+
+        if self.import_review_mode:
+            tb_marked = ToolBarImportIgnore(self, orientation=Qt.Horizontal)
+            self.import_review_mark_txt = QLabel('Import and overwrite current')
+            tb_marked.addWidget(self.import_review_mark_txt)
+            hlo_import_tb = QHBoxLayout()
+            hlo_import_tb.addStretch()
+            hlo_import_tb.addWidget(tb_marked)
+            hlo_import_tb.addStretch()
+            self.vlo.addLayout(hlo_import_tb)
+
+        wid_settings = QWidget()
+        self.vlo.addWidget(wid_settings)
+        vlo_settings = QVBoxLayout()
+        hlo_settings = QHBoxLayout()
+        vlo_settings.addLayout(hlo_settings)
+        wid_settings.setLayout(vlo_settings)
+        vlo_right = QVBoxLayout()
+        vlo_left = QVBoxLayout()
+        hlo_settings.addLayout(vlo_left)
+        hlo_settings.addLayout(vlo_right)
+
+        vlo_left.addWidget(uir.UnderConstruction(txt='Under construction...'))
+
+        self.host = QLineEdit()
+        self.host.textChanged.connect(lambda: self.flag_edit(True))
+
+        self.port = QSpinBox(minimum=0, maximum=9999)
+        self.port.valueChanged.connect(lambda: self.flag_edit(True))
+
+        flo = QFormLayout()
+        vlo_left.addLayout(flo)
+        flo.addRow(QLabel('Host:'), self.host)
+        flo.addRow(QLabel('Port:'), self.port)
+
+        vlo_left.addStretch()
+
+        if self.import_review_mode:
+            wid_settings.setEnabled(False)
+        else:
+            btn_dash = QPushButton('Start dash_app')
+            btn_dash.clicked.connect(self.run_dash)
+            vlo_settings.addWidget(btn_dash)
+            btn_save = QPushButton('Save dashboard settings')
+            btn_save.setIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'))
+            btn_save.clicked.connect(self.save_dashboard_settings)
+            if self.save_blocked:
+                btn_save.setEnabled(False)
+            vlo_settings.addWidget(btn_save)
+
+        self.vlo.addWidget(uir.HLine())
+        self.vlo.addWidget(self.status_label)
+
+    def update_from_yaml(self, initial_template_label=''):
+        """Refresh settings from yaml file.
+
+        Using self.templates as auto_common single template and
+        self.current_template as TagPatternFormat to work smoothly
+        with general code.
+        """
+        self.lastload = time()
+        _, _, self.templates = cff.load_settings(fname=self.fname)
+        self.update_data()
+        self.flag_edit(False)
+
+    def update_data(self):
+        """Fill GUI with current data."""
+        self.host.setText(self.templates.host)
+        self.port.setValue(self.templates.port)
+
+    def save_dashboard_settings(self):
+        """Get current settings and save to yaml file."""
+        self.templates.host = self.host.text()
+        self.templates.port = self.port.value()
+        self.save()
+
+    def mark_import(self, ignore=False):
+        """If import review mode: Mark AutoCommon for import or ignore."""
+        if ignore:
+            self.marked = False
+            self.marked_ignore = True
+            self.import_review_mark_txt.setText('Ignore')
+        else:
+            self.marked = True
+            self.marked_ignore = False
+            self.import_review_mark_txt.setText('Import and overwrite current')
+
+    def run_dash(self):
+        """Show results in browser."""
+        proceed = True
+        try:
+            from imageQC.dash_app import dash_app
+        except (ImportError, ModuleNotFoundError):
+            QMessageBox.warning(
+                self, 'Failed importing the dash app',
+                'You should probably try installing imageQC again after the '
+                'introduction of dash app (pip install -e .) with updated '
+                'requirements.txt.')
+            proceed = False
+        if proceed:
+            host = self.host.text()
+            port = self.port.value()
+            self.dash_worker = DashWorker(host=host, port=port)
+            self.dash_worker.start()
+            url = f'http://{host}:{port}'
+            webbrowser.open(url=url, new=1)
+
+
+class PersonsToNotifyWidget(StackWidget):
+    """Widget holding settings for FollowUpPersons."""
+
+    def __init__(self, dlg_settings=None):
+        header = 'Persons to notify'
+        subtxt = (
+            'Set up email adresses as receipents for a warning when set limits '
+            'for automation outputs are violated.'
+            )
+        super().__init__(dlg_settings, header, subtxt,
+                         temp_alias='person',
+                         mod_temp=True, grouped=False
+                         )
+        self.fname = 'persons_to_notify'
+
+        self.empty_template = cfc.PersonToNotify()
+        self.current_template = self.empty_template
+
+        self.txt_email = QLineEdit('')
+        self.txt_email.textChanged.connect(self.flag_edit)
+        self.txt_email.setMinimumWidth(200)
+
+        self.txt_note = QLineEdit('')
+        self.txt_note.textChanged.connect(self.flag_edit)
+        self.txt_note.setMinimumWidth(200)
+        self.list_mod = uir.ListWidgetCheckable(texts=[*QUICKTEST_OPTIONS])
+        self.chk_mute = QCheckBox()
+        self.chk_mute.stateChanged.connect(
+            lambda: self.flag_edit(True))
+
+        self.wid_temp = QWidget(self)
+        self.hlo.addWidget(self.wid_temp)
+        self.vlo_temp = QVBoxLayout()
+        self.wid_temp.setLayout(self.vlo_temp)
+
+        self.vlo_temp.addWidget(uir.UnderConstruction(txt='Under construction...'))
+
+        flo = QFormLayout()
+        self.vlo_temp.addLayout(flo)
+        flo.addRow(QLabel('E-mail:'), self.txt_email)
+        flo.addRow(QLabel('Note/comment:'), self.txt_note)
+        flo.addRow(QLabel('Send all notifications for modalities:'), self.list_mod)
+        flo.addRow(QLabel('Stop sending emails to this person.'), self.chk_mute)
+        self.vlo_temp.addStretch()
+
+        if not self.import_review_mode:
+            self.wid_mod_temp.toolbar.removeAction(self.wid_mod_temp.act_move_modality)
+        else:
+            self.wid_temp.setEnabled(False)
+
+        self.vlo.addWidget(uir.HLine())
+        self.vlo.addWidget(self.status_label)
+
+    def update_data(self):
+        """Update GUI with the selected template."""
+        self.txt_email.setText(self.current_template.email)
+        self.txt_note.setText(self.current_template.note)
+        self.list_mod.set_checked_texts(self.current_template.all_notifications_mods)
+        self.chk_mute.setChecked(self.current_template.mute)
+        self.flag_edit(False)
+
+    def get_current_template(self):
+        """Get self.current_template where not dynamically set."""
+        self.current_template.email = self.txt_email.text()
+        self.current_template.note = self.txt_note.text()
+        self.current_template.mute = self.chk_mute.isChecked()
+        self.current_template.all_notifications_mods = self.list_mod.get_checked_texts()

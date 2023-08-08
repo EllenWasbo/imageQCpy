@@ -46,7 +46,6 @@ class DigitWidget(StackWidget):
             'Templates can be duplicated or moved between modalities.'
             )
         super().__init__(dlg_settings, header, subtxt,
-                         typestr='template',
                          mod_temp=True, grouped=True, editable=editable
                          )
         self.fname = 'digit_templates'

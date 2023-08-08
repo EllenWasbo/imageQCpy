@@ -16,15 +16,18 @@ import imageQC.config.iQCconstants_functions as iQCconstants_functions
 
 USERNAME = os.getlogin()
 
-upper_path = os.path.dirname(
-    os.path.dirname(
-        os.path.dirname(
-            os.path.dirname(
-                __file__))))
+'''
+if getattr(sys, 'frozen', False):
+    APPLICATION_PATH = sys._MEIPASS  # if exe bundeled with pyinstaller
+    APP_TYPE = 'exe'
+else:
+    APPLICATION_PATH = Path(__file__).resolve().parent.parent
+    APP_TYPE = 'py'
+'''
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.0-b11'
+VERSION = '3.0.0-b13'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -165,7 +168,7 @@ HEADERS = {
         'SNI': {
             'alt0': ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', 'SNI S2',
                      'SNI S3', 'SNI S4', 'SNI S5', 'SNI S6'],
-            'alt1': ['SNI max', 'SNI avg']
+            'alt1': ['SNI max', 'SNI avg', 'SNI median']
             },
         'Bar': {
             'alt0': ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',
@@ -341,6 +344,11 @@ CONFIG_FNAMES = {
         'default': iQCconstants_functions.empty_template_dict(
             QUICKTEST_OPTIONS, dummy=cfc.RenamePattern())
         },
+    'digit_templates': {
+        'saved_as': 'modality_dict',
+        'default': iQCconstants_functions.empty_template_dict(
+            QUICKTEST_OPTIONS, dummy=cfc.DigitTemplate()),
+        },
     'quicktest_templates': {
         'saved_as': 'modality_dict',
         'default': iQCconstants_functions.empty_template_dict(
@@ -360,10 +368,13 @@ CONFIG_FNAMES = {
         'default': iQCconstants_functions.empty_template_dict(
             QUICKTEST_OPTIONS, dummy=cfc.AutoVendorTemplate()),
         },
-    'digit_templates': {
-        'saved_as': 'modality_dict',
-        'default': iQCconstants_functions.empty_template_dict(
-            QUICKTEST_OPTIONS, dummy=cfc.DigitTemplate()),
+    'dash_settings': {
+        'saved_as': 'object',
+        'default': cfc.DashSettings()
+        },
+    'persons_to_notify': {
+        'saved_as': 'object_list',
+        'default': []
         },
     'active_users': {
         'saved_as': 'dict',

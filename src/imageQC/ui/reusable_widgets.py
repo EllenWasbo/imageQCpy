@@ -244,12 +244,24 @@ class ToolBarBrowse(QToolBar):
 class ToolBarEdit(QToolBar):
     """Toolbar for reuse with edit button."""
 
-    def __init__(self, tooltip=''):
+    def __init__(self, tooltip='',
+                 edit_button=True, add_button=False, delete_button=False):
         super().__init__()
-        self.act_edit = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
-            tooltip, self)
-        self.addActions([self.act_edit])
+        if edit_button:
+            self.act_edit = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
+                tooltip, self)
+            self.addAction(self.act_edit)
+        if add_button:
+            self.act_add = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+                'Add', self)
+            self.addAction(self.act_add)
+        if delete_button:
+            self.act_delete = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+                'Delete', self)
+            self.addAction(self.act_delete)
 
 
 class ToolBarTableExport(QToolBar):
@@ -410,6 +422,15 @@ class ListWidgetCheckable(QListWidget):
             if self.item(i).checkState() == Qt.Checked:
                 checked_texts.append(txt)
         return checked_texts
+
+    def set_checked_texts(self, set_texts):
+        """Set checked strings in list."""
+        for i, text in enumerate(self.texts):
+            item = self.item(i)
+            if text in set_texts:
+                item.setCheckState(Qt.Checked)
+            else:
+                item.setCheckState(Qt.Unchecked)
 
 
 class CheckCell(QCheckBox):

@@ -126,7 +126,6 @@ class TreeFileList(QTreeWidget):
                         self.topLevelItem(i).setSelected(False)
                 self.blockSignals(False)
 
-
     def dragEnterEvent(self, event):
         """Handle drag enter event. Opening files by drag/drop."""
         if event.mimeData().hasUrls:
@@ -315,7 +314,6 @@ class TreeFileList(QTreeWidget):
                 if self.main.results:
                     self.main.update_results(sort_idxs=order)
                     self.main.refresh_selected_table_row()
-
 
     def set_image_or_group_name(self, image_or_group='image'):
         """Set name of selected image for QuickTestTemplate."""
@@ -898,7 +896,13 @@ class WindowLevelWidget(QGroupBox):
         return (self.min_wl.value(), self.max_wl.value())
 
     def clicked_window_level(self, arg):
-        """When one of the window level toolbuttons is toggled."""
+        """When one of the window level toolbuttons is toggled.
+
+        Parameters
+        ----------
+        arg : str
+            type of window level 'dcm', 'min_max', 'mean_stdev'
+        """
         if self.chk_wl_update.isChecked() is False:
             # unCheck others, check selected
             if arg == 'min_max':
@@ -930,8 +934,20 @@ class WindowLevelWidget(QGroupBox):
             self.chk_wl_update.setChecked(lock)
             self.update_window_level_mode()
 
-    def set_window_level(self, arg):
-        """Set window level based on active image conte t."""
+    def set_window_level(self, arg, set_tools=False):
+        """Set window level based on active image content.
+
+        Parameters
+        ----------
+        arg : str
+            type of window level 'dcm', 'min_max', 'mean_stdev'
+        set_tools : bool, optional
+            Also set the tool-buttons to change. Default is False.
+        """
+        if set_tools:
+            self.tool_min_max_wl.setChecked(arg == 'min_max')
+            self.tool_range_wl.setChecked(arg == 'mean_stdev')
+            self.tool_dcm_wl.setChecked(arg == 'dcm')
         if self.main.active_img is not None:
             minval = 0
             maxval = 0
@@ -963,7 +979,13 @@ class WindowLevelWidget(QGroupBox):
             self.main.wid_image_display.canvas.draw()
 
     def update_window_level(self, minval, maxval):
-        """Update GUI for window level sliders."""
+        """Update GUI for window level sliders.
+
+        Parameters
+        ----------
+        minval : float
+        maxval : float
+        """
         self.min_wl.setValue(round(minval))
         self.max_wl.setValue(round(maxval))
         self.lbl_min_wl.setText(f'{minval:.0f}')

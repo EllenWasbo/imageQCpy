@@ -202,7 +202,7 @@ class ParamSetsWidget(StackWidget):
         To edit the test settings use the main window to set and save
         the parameters.'''
         super().__init__(dlg_settings, header, subtxt,
-                         typestr='parameterset',
+                         temp_alias='parameterset',
                          mod_temp=True, grouped=True)
         self.main_current_modality = self.dlg_settings.main.current_modality
         self.main_current_paramset = self.dlg_settings.main.current_paramset

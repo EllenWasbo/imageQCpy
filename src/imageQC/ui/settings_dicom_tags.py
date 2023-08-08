@@ -444,7 +444,7 @@ class DicomTagsWidget(StackWidget):
         hlo_table.addWidget(self.table_tags)
 
         if self.import_review_mode:
-            toolb = ToolBarImportIgnore(self, typestr='tag')
+            toolb = ToolBarImportIgnore(self, temp_alias='tag')
         else:
             toolb = QToolBar()
             toolb.setOrientation(Qt.Vertical)
@@ -895,7 +895,7 @@ class TagPatternSpecialWidget(StackWidget):
         subtxt = '''These tag patterns each have a specific function
         and can not be renamed or deleted, just edited.'''
         super().__init__(dlg_settings, header, subtxt,
-                         typestr='tag pattern',
+                         temp_alias='tag pattern',
                          mod_temp=True, grouped=True)
 
         self.fname = 'tag_patterns_special'
@@ -946,7 +946,6 @@ class TagPatternFormatWidget(StackWidget):
         - renaming DICOM files based on the DICOM tags<br>
         - exporting specific DICOM tags as tabular data'''
         super().__init__(dlg_settings, header, subtxt,
-                         typestr='template',
                          mod_temp=True, grouped=True)
 
         self.fname = 'tag_patterns_format'
@@ -974,7 +973,6 @@ class TagPatternSortWidget(StackWidget):
         subtxt = ('These tag patterns can be used for '
                   'sorting DICOM files based on the tags.')
         super().__init__(dlg_settings, header, subtxt,
-                         typestr='template',
                          mod_temp=True, grouped=True)
 
         self.fname = 'tag_patterns_sort'
@@ -1011,7 +1009,6 @@ class RenamePatternWidget(StackWidget):
                 'with advanced open files options).'
                 )
         super().__init__(dlg_settings, header, subtxt,
-                         typestr='template',
                          mod_temp=True, grouped=True, editable=editable)
 
         self.fname = 'rename_patterns'

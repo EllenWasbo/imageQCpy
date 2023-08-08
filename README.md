@@ -1,10 +1,10 @@
 # imageQCpy
 Python version of imageQC
 
-v3.0.0-b1 (beta-version as all functions not fully finished yet). Please report [issues](https://github.com/EllenWasbo/imageQCpy/issues).
+v3.0.0-bXX (beta-version as all functions not fully finished yet). Please report [issues](https://github.com/EllenWasbo/imageQCpy/issues).
 
 imageQC is a software-tool for the Medical Physicist performing quality control on medical imaging devices or extracting specific DICOM header data. The software exists in IDL-code, but is currently converted and upgraded to Python code.
-Get notified when a beta version is available. Send me an e-mail ellen.wasbo(-the-curly-a-)sus.no and I'll put you on the notify-list.
+Get notified when a beta version is available. Send me an e-mail ellen.wasbo(-the-curly-a-)sus.no and I'll put you on the notify-list (or create an account on GitHub, watch the repository and setup email notifications for your account).
 
 A user manual is under construction (find the [Wiki-tab](https://github.com/EllenWasbo/imageQCpy/wiki) above).
 Please find the chapter [1 Getting started](https://github.com/EllenWasbo/imageQCpy/wiki/1-Getting-started) to ... get started.

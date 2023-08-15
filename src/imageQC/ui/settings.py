@@ -864,8 +864,14 @@ class SharedSettingsWidget(StackWidget):
         status_au, log_au = cff.verify_auto_templates(all_temps)
         if status_au is False:
             details.append(
-                'Automation templates with undefined paramsets or quicktest_templates:')
+                'Automation templates linked to undefined parameter sets or QuickTest '
+                'templates:')
             details.extend(log_au)
+        status_param, log_param = cff.verify_paramsets(all_temps)
+        if status_param is False:
+            details.append(
+                'Parameter sets linked to undefined Digit Templates')
+            details.extend(log_param)
         if len(details) > 0:
             msg = 'Found issues with the templates. See details.'
             icon = QMessageBox.Warning

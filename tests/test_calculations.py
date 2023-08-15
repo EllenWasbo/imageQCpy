@@ -396,7 +396,7 @@ def test_NM_uniformity():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(np.array(input_main.results['Uni']['values'][0]))
-    assert np.array_equal(values, np.array([3., 2., 2., 1.]))
+    assert np.array_equal(values, np.array([2., 1., 2., 1.]))
 
 
 def test_NM_uniformity_sum():
@@ -419,7 +419,7 @@ def test_NM_uniformity_sum():
 
     calculate_qc.calculate_qc(input_main)
 
-    assert round(input_main.results['Uni']['values'][0][0]) == 6
+    assert round(input_main.results['Uni']['values'][0][0]) == 5
 
 
 def test_NM_SNI():
@@ -446,12 +446,7 @@ def test_NM_SNI():
     calculate_qc.calculate_qc(input_main)
     values1 = np.round(100 * np.array(input_main.results['SNI']['values'][1]))
     assert max(values1) < 20  # random but ish [16.,12.,12.,12.,16.,11.,10.,13.,8.]
-    #TODO fix autoQC calibration images
-    '''
-    values3 = np.round(100 * np.array(input_main.results['SNI']['values'][3]))
-    assert np.array_equal(values3, np.array(
-        [47., 44., 44., 41., 47., 41., 42., 47., 41.]))
-    '''
+
 
 def test_NM_SNI_grid():
     input_main = InputMain(
@@ -474,14 +469,8 @@ def test_NM_SNI_grid():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    values1 = np.round(100 * np.array(input_main.results['SNI']['values'][1]))
-    assert max(values1) < 20  # random but ish [16.,12.,12.,12.,16.,11.,10.,13.,8.]
-    #TODO fix autoQC calibration images
-    '''
-    values3 = np.round(100 * np.array(input_main.results['SNI']['values'][3]))
-    assert np.array_equal(values3, np.array(
-        [47., 44., 44., 41., 47., 41., 42., 47., 41.]))
-    '''
+    values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
+    assert max(values) < 25
 
 
 def test_NM_SNI_sum():

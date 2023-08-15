@@ -849,62 +849,12 @@ class MainWindow(QMainWindow):
         if after_edit_settings:
             self.tab_nm.sni_correct.update_reference_images()
             self.update_paramset()  # update Num digit templates list
+        else:
+            print('imageQC is ready')
 
     def version_control(self):
         """Compare version number of tag_infos with current saved."""
         cff.version_control(self)
-        '''TODO delete? moved to config_func.py
-        _, _, last_mod = cff.load_settings(fname='last_modified')
-        res = getattr(last_mod, 'tag_infos')
-        if len(res) > 0:
-            if len(res) == 2:
-                user, modtime = res
-                version_string = ''
-            else:
-                user, modtime, version_string = res
-
-            version_diff = cff.calculate_version_difference(version_string)
-            if version_diff > 0:  # current version newer than saved tag_infos
-                # compare protected tags in current versus saved version
-                res = cff.tag_infos_difference_default(self.tag_infos)
-                change, added, protected, new_tag_infos = res
-                tags_in_added = [
-                    '\t' + str((tag.attribute_name, tag.tag, tag.sequence))
-                    for tag in added]
-                tags_in_protected = [
-                    '\t' + str((tag.attribute_name, tag.tag, tag.sequence))
-                    for tag in protected]
-                if change:
-                    if len(tags_in_added):
-                        tags_in_added.insert(0, 'Add tags:')
-                    if len(tags_in_protected):
-                        tags_in_protected.insert(0, 'Changed protection:')
-                    res = messageboxes.QuestionBox(
-                        parent=self, title='Update tag infos with new defaults?',
-                        msg=(
-                            'The current version of imageQC is newer than the '
-                            'version previously used to save DICOM tag settings. '
-                            'Found default tags missing in your saved version '
-                            'and/or changes to protection settings. '
-                            'Add default tags and update protection settings?'
-                            ),
-                        info='Find added and protection changed tags in details.',
-                        details=(tags_in_added + tags_in_protected),
-                        msg_width=800
-                        )
-                    if res.exec():
-                        cff.taginfos_reset_sort_index(new_tag_infos)
-                        ok_save, path = cff.save_settings(
-                            new_tag_infos, fname='tag_infos')
-                    else:
-                        reply = QMessageBox.question(
-                            self, 'Keep asking?',
-                            'Ask again next time on startup?',
-                            QMessageBox.Yes, QMessageBox.No)
-                        if reply == QMessageBox.No:
-                            # update version number
-                            ok_save, path = cff.save_settings(
-                                self.tag_infos, fname='tag_infos')'''
 
     def display_clipboard(self, title='Clipboard content'):
         """Display clipboard content e.g. when testing QuickTest output."""

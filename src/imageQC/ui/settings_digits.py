@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QToolBar, QLabel, QLineEdit, QPushButton, QAction,
+    QToolBar, QLabel, QLineEdit, QPushButton, QAction, QListWidget,
     QMessageBox, QDialogButtonBox, QFileDialog
     )
 import matplotlib
@@ -70,6 +70,11 @@ class DigitWidget(StackWidget):
             act_edit.triggered.connect(self.edit_template)
             self.wid_mod_temp.toolbar.addAction(act_edit)
 
+        self.wid_mod_temp.vlo.addWidget(
+            QLabel('Selected template used in Parameter set(s):'))
+        self.list_used_in = QListWidget()
+        self.wid_mod_temp.vlo.addWidget(self.list_used_in)
+
         if editable:
             self.vlo.addWidget(uir.HLine())
             self.vlo.addWidget(self.status_label)
@@ -78,6 +83,22 @@ class DigitWidget(StackWidget):
         """Update GUI with the selected template."""
         self.wid_temp.canvas.draw_template()
         self.flag_edit(False)
+
+        self.update_used_in()
+
+    def update_used_in(self):
+        """Update list of parmsets where this template is used."""
+        self.list_used_in.clear()
+        if self.current_template.label != '':
+            try:
+                param_labels = [
+                    temp.label for temp in self.paramsets[self.current_modality]
+                    if temp.num_digit_label == self.current_template.label
+                    ]
+            except KeyError:
+                param_labels = []
+            if len(param_labels) > 0:
+                self.list_used_in.addItems(param_labels)
 
     def edit_template(self):
         """Start dialog to edit template."""

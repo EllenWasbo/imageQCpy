@@ -1481,48 +1481,51 @@ class ResultPlotCanvas(PlotCanvas):
         elif plot_idx == 1:
             self.title = 'Curvature correction check'
             imgno = self.main.gui.active_img_no
-            details_dict = self.main.results['Uni']['details_dict'][imgno]
-            if 'correction_matrix' in details_dict:
-                # averaging central 10% rows/cols
-                temp_img = self.main.active_img
-                corrected_img = details_dict['corrected_image']
-                sz_y, sz_x = corrected_img.shape
-                nx = round(0.05 * sz_x)
-                ny = round(0.05 * sz_y)
-                xhalf = round(sz_x/2)
-                yhalf = round(sz_y/2)
-                prof_y = np.mean(temp_img[:, xhalf-nx:xhalf+nx], axis=1)
-                prof_x = np.mean(temp_img[yhalf-ny:yhalf+ny, :], axis=0)
-                corr_prof_y = np.mean(
-                    corrected_img[:, xhalf-nx:xhalf+nx], axis=1)
-                corr_prof_x = np.mean(
-                    corrected_img[yhalf-ny:yhalf+ny, :], axis=0)
-                self.curves.append({'label': 'Central 10% rows corrected',
-                                    'xvals': np.arange(len(corr_prof_x)),
-                                    'yvals': corr_prof_x,
-                                    'style': 'r'})
-                self.curves.append({'label': 'Central 10% rows original',
-                                    'xvals': np.arange(len(prof_x)),
-                                    'yvals': prof_x,
-                                    'style': ':r'})
-                self.curves.append({'label': 'Central 10% columns corrected',
-                                    'xvals': np.arange(len(corr_prof_y)),
-                                    'yvals': corr_prof_y,
-                                    'style': 'b'})
-                self.curves.append({'label': 'Central 10% columns original',
-                                    'xvals': np.arange(len(prof_y)),
-                                    'yvals': prof_y,
-                                    'style': ':b'})
-                self.xtitle = 'pixel number'
-                self.ytitle = 'Average pixel value'
-                self.legend_location = 'lower center'
-            else:
-                at = matplotlib.offsetbox.AnchoredText(
-                    'No curvature correction applied',
-                    prop=dict(size=self.main.gui.annotations_font_size,
-                              color='red'),
-                    frameon=False, loc='upper left')
-                self.ax.add_artist(at)
+            try:
+                details_dict = self.main.results['Uni']['details_dict'][imgno]
+                if 'correction_matrix' in details_dict:
+                    # averaging central 10% rows/cols
+                    temp_img = self.main.active_img
+                    corrected_img = details_dict['corrected_image']
+                    sz_y, sz_x = corrected_img.shape
+                    nx = round(0.05 * sz_x)
+                    ny = round(0.05 * sz_y)
+                    xhalf = round(sz_x/2)
+                    yhalf = round(sz_y/2)
+                    prof_y = np.mean(temp_img[:, xhalf-nx:xhalf+nx], axis=1)
+                    prof_x = np.mean(temp_img[yhalf-ny:yhalf+ny, :], axis=0)
+                    corr_prof_y = np.mean(
+                        corrected_img[:, xhalf-nx:xhalf+nx], axis=1)
+                    corr_prof_x = np.mean(
+                        corrected_img[yhalf-ny:yhalf+ny, :], axis=0)
+                    self.curves.append({'label': 'Central 10% rows corrected',
+                                        'xvals': np.arange(len(corr_prof_x)),
+                                        'yvals': corr_prof_x,
+                                        'style': 'r'})
+                    self.curves.append({'label': 'Central 10% rows original',
+                                        'xvals': np.arange(len(prof_x)),
+                                        'yvals': prof_x,
+                                        'style': ':r'})
+                    self.curves.append({'label': 'Central 10% columns corrected',
+                                        'xvals': np.arange(len(corr_prof_y)),
+                                        'yvals': corr_prof_y,
+                                        'style': 'b'})
+                    self.curves.append({'label': 'Central 10% columns original',
+                                        'xvals': np.arange(len(prof_y)),
+                                        'yvals': prof_y,
+                                        'style': ':b'})
+                    self.xtitle = 'pixel number'
+                    self.ytitle = 'Average pixel value'
+                    self.legend_location = 'lower center'
+                else:
+                    at = matplotlib.offsetbox.AnchoredText(
+                        'No curvature correction applied',
+                        prop=dict(size=self.main.gui.annotations_font_size,
+                                  color='red'),
+                        frameon=False, loc='upper left')
+                    self.ax.add_artist(at)
+            except IndexError:
+                pass
 
     def SNI(self):
         """Prepare plot for test NM SNI test."""

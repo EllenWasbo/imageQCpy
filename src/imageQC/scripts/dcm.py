@@ -432,7 +432,9 @@ def get_dcm_info_list(
                                 value_id = -1
                     multi_val = False  # true if combine values to text
                     if value_id == -1:
-                        if not isinstance(val, list):
+                        if isinstance(val, list):
+                            multi_frame = True
+                        else:
                             multi_val = True
                         val_text = val
                     elif value_id == -2:

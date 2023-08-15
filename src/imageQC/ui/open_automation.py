@@ -16,7 +16,7 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAbstractItemView,
     QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox, QListWidget,
-    QFileDialog, QMessageBox
+    QComboBox, QFileDialog, QMessageBox
     )
 
 # imageQC block start
@@ -29,6 +29,7 @@ from imageQC.ui import ui_image_canvas
 from imageQC.config.iQCconstants import ENV_ICON_PATH, QUICKTEST_OPTIONS
 from imageQC.ui import settings
 from imageQC.scripts import automation
+from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.scripts.dcm import sort_imgs
 # imageQC block end
 
@@ -48,7 +49,8 @@ def reset_auto_template(auto_template=None, parent_widget=None):
         move_dirs = []
         dirs = [x for x in archive_path.glob('*') if x.is_dir()]
         if len(dirs) > 0:
-            dlg = ResetAutoTemplateDialog(parent_widget, directories=dirs)
+            dlg = ResetAutoTemplateDialog(parent_widget, directories=dirs,
+                                          template_name=auto_template.label)
             res = dlg.exec()
             if res:
                 idxs = dlg.get_idxs()
@@ -83,6 +85,7 @@ def reset_auto_template(auto_template=None, parent_widget=None):
                         folder.rmdir()
             if parent_widget is not None:
                 parent_widget.main.stop_wait_cursor()
+                parent_widget.status_label.clearMessage()
             QMessageBox.information(
                 parent_widget, 'Finished moving files',
                 f'{len(move_files)} files moved out of Archive.')
@@ -114,11 +117,11 @@ class OpenAutomationDialog(ImageQCDialog):
         self.setWindowTitle('Initiate automated analysis')
         self.main = main
 
-        self.templates_mod = []  # list of modality for all templates in list (all)
-        self.templates_is_vendor = []  # bool type vendor for all templ in list (all)
-        self.templates_id = []  # id within each template list for (all)
-        self.templates_displayed_names_all = []  # name without count in list all
-        self.templates_displayed_ids = []  # currently displayed ids (index in all)
+        self.templates_mod = []  # list of modality for all templates in unfiltered list
+        self.templates_is_vendor = []  # bool type vendor for all templ in unfilt list
+        self.templates_id = []  # id within each template list
+        self.templates_displayed_names_all = []  # name without count in unfilt list
+        self.templates_displayed_ids = []  # curr displayed ids (ids of unfilt list)
 
         self.wid_image_display = ImageWidget()
         self.txt_import_path = QLineEdit('')
@@ -182,6 +185,9 @@ class OpenAutomationDialog(ImageQCDialog):
 
         self.list_templates = QListWidget()
         self.list_templates.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.cbox_filter = QComboBox()
+        self.cbox_filter.addItems(['None'] + [*QUICKTEST_OPTIONS])
+        self.cbox_filter.currentIndexChanged.connect(self.refresh_list)
 
         hlo_temps = QHBoxLayout()
         vlo.addLayout(hlo_temps)
@@ -210,7 +216,11 @@ class OpenAutomationDialog(ImageQCDialog):
             [act_refresh, act_open_result_file, act_reset_template, act_settings])
 
         vlo_list = QVBoxLayout()
-        # TODO some filter option (text?)
+        hlo_filter = QHBoxLayout()
+        vlo_list.addLayout(hlo_filter)
+        hlo_filter.addWidget(QLabel('Filter:'))
+        hlo_filter.addWidget(self.cbox_filter)
+
         vlo_list.addWidget(self.list_templates)
         hlo_temps.addLayout(vlo_list)
         vlo_buttons = QVBoxLayout()
@@ -224,7 +234,7 @@ class OpenAutomationDialog(ImageQCDialog):
         vlo_buttons.addWidget(btn_run_selected)
         vlo_buttons.addWidget(btn_run_selected_files)
         vlo_buttons.addWidget(self.chk_display_images)
-        btn_run_all.clicked.connect(self.run_all)
+        btn_run_all.clicked.connect(self.run_templates)
         btn_run_selected.clicked.connect(self.run_selected)
         btn_run_selected_files.clicked.connect(self.run_selected_files)
 
@@ -238,7 +248,7 @@ class OpenAutomationDialog(ImageQCDialog):
         vlo.addWidget(self.progress_bar)
 
         QTimer.singleShot(300, lambda: self.update_settings())
-        # allow timse to show dialog before updating list
+        # allow time to show dialog before updating list
 
     def update_settings(self):
         """Read settings from saved data at start and after settings edited."""
@@ -413,6 +423,9 @@ class OpenAutomationDialog(ImageQCDialog):
         modalities = [*QUICKTEST_OPTIONS]
         errormsgs = []
         self.templates_displayed_names_all = []
+        self.templates_mod = []
+        self.templates_is_vendor = []
+        self.templates_id = []
         counter = 0
         n_temps = sum(
             [len(temps) for key, temps in self.templates.items()])
@@ -430,18 +443,25 @@ class OpenAutomationDialog(ImageQCDialog):
                     name = mod + ' - ' + temp.label
                     self.templates_displayed_names_all.append(name)
                     arr.append(name)
-                    if temp.active:
-                        if temp.path_input != '':
-                            n_files, err = self.count_files(temp.path_input)
-                            if n_files > 0:
-                                arr[-1] = arr[-1] + ' (' + str(n_files) + ')'
-                            else:
-                                if err is not None:
-                                    errormsgs.append(f'{err}')
+                    if temp.import_only:
+                        if temp.active:
+                            arr[-1] = arr[-1] + ' (import_only)'
                         else:
-                            arr[-1] = arr[-1] + ' (input path unknown)'
-                    elif temp.active is False:
-                        arr[-1] = arr[-1] + ' (deactivated)'
+                            arr[-1] = arr[-1] + ' (import_only and deactivated)'
+                    else:
+                        if temp.active:
+                            if temp.path_input != '':
+                                n_files, err = self.count_files(temp.path_input)
+                                if n_files > 0:
+                                    arr[-1] = arr[-1] + ' (' + str(n_files) + ')'
+                                else:
+                                    if err is not None:
+                                        errormsgs.append(f'{err}')
+                            else:
+                                arr[-1] = arr[-1] + ' (input path unknown)'
+                        else:
+                            arr[-1] = arr[-1] + ' (deactivated)'
+
                     counter = counter + 1
                     self.progress_bar.setValue(counter)
 
@@ -503,26 +523,33 @@ class OpenAutomationDialog(ImageQCDialog):
             templist = self.get_template_list()
             self.list_templates.clear()
             if len(templist) > 0:
-                # TODO search text to select templates from self.templates_displayed_names
-                # and set self.templates_displayed_ids
-                self.list_templates.addItems(templist)
-        else:
-            for i, row in enumerate(rows):
-                mod = self.templates_mod[row]
-                if self.templates_is_vendor[row]:
-                    temp_this = self.templates_vendor[mod][self.templates_id[row]]
+                if self.cbox_filter.currentText() != 'None':
+                    self.templates_displayed_ids = get_all_matches(
+                        self.templates_mod, self.cbox_filter.currentText())
+                    filt_templist = [templist[i] for i in self.templates_displayed_ids]
+                    templist = filt_templist
                 else:
-                    temp_this = self.templates[mod][self.templates_id[row]]
+                    self.templates_displayed_ids = list(range(len(templist)))
+                self.list_templates.addItems(templist)
+
+        else:
+            ids = [self.templates_displayed_ids[row] for row in rows]
+            for no, idx in enumerate(ids):
+                mod = self.templates_mod[idx]
+                if self.templates_is_vendor[idx]:
+                    temp_this = self.templates_vendor[mod][self.templates_id[idx]]
+                else:
+                    temp_this = self.templates[mod][self.templates_id[idx]]
 
                 if temp_this.active and temp_this.path_input != '':
                     n_files, err = self.count_files(temp_this.path_input)
                     if n_files > 0:
                         txt = (
-                            self.templates_displayed_names_all[row]
+                            self.templates_displayed_names_all[idx]
                             + ' (' + str(n_files) + ')')
                     else:
-                        txt = self.templates_displayed_names_all[row]
-                    item = self.list_templates.item(row)
+                        txt = self.templates_displayed_names_all[idx]
+                    item = self.list_templates.item(rows[no])
                     item.setText(txt)
         self.main.stop_wait_cursor()
 
@@ -530,12 +557,12 @@ class OpenAutomationDialog(ImageQCDialog):
         """Display result file."""
         sel = self.list_templates.selectedIndexes()
         if len(sel) > 0:
-            tempno = sel[0].row()
-            mod = self.templates_mod[tempno]
-            if self.templates_is_vendor[tempno]:
-                temp = self.templates_vendor[mod][self.templates_id[tempno]]
+            mods, is_vendors, ids = self.get_selected_templates_mod_id()
+            if is_vendors[0]:
+                temp = self.templates_vendor[mods[0]][self.templates_id[ids[0]]]
             else:
-                temp = self.templates[mod][self.templates_id[tempno]]
+                temp = self.templates[mods[0]][self.templates_id[ids[0]]]
+
             path = temp.path_output
             if os.path.exists(path):
                 os.startfile(path)
@@ -550,30 +577,31 @@ class OpenAutomationDialog(ImageQCDialog):
         """Move files from Archive to path_input."""
         sel = self.list_templates.selectedIndexes()
         if len(sel) > 0:
-            for sno in sel:
-                tempno = sno.row()
-                mod = self.templates_mod[tempno]
-                id_this = self.templates_id[tempno]
-                temp = self.templates[mod][id_this]
+            mods, is_vendors, ids = self.get_selected_templates_mod_id()
+            for i in range(len(ids)):
+                if is_vendors[i]:
+                    temp = self.templates_vendor[mods[i]][ids[i]]
+                else:
+                    temp = self.templates[mods[i]][ids[i]]
                 reset_auto_template(auto_template=temp, parent_widget=self)
-                self.refresh_list(rows=[tempno])
+                self.refresh_list(rows=[sel[i].row()])
+
             self.list_templates.setCurrentRow(sel[0].row())
 
     def edit_template(self):
         """Run settings with current template selected."""
         view = 'Templates DICOM'
-        sel = self.list_templates.selectedIndexes()
-        if len(sel) > 0:
-            tempno = sel[0].row()
-            if self.templates_is_vendor[tempno]:
+        mods, is_vendors, ids = self.get_selected_templates_mod_id()
+        if len(is_vendors) > 0:
+            if is_vendors[0]:
                 view = 'Templates vendor files'
-        else:
-            tempno = 0
         try:
-            mod = self.templates_mod[tempno]
-            temp_this = self.templates[mod][self.templates_id[tempno]]
+            if is_vendors[0]:
+                temp_this = self.templates_vendor[mods[0]][self.templates_id[ids[0]]]
+            else:
+                temp_this = self.templates[mods[0]][self.templates_id[ids[0]]]
             dlg = settings.SettingsDialog(
-                self.main, initial_view=view, initial_modality=mod,
+                self.main, initial_view=view, initial_modality=mods[0],
                 initial_template_label=temp_this.label
                 )
         except IndexError:
@@ -582,17 +610,11 @@ class OpenAutomationDialog(ImageQCDialog):
         if res == 0:  # when closing
             self.update_settings()
 
-    def run_all(self):
-        """Run all templates."""
-        tempno_list = list(range(len(self.templates_mod)))
-        self.run_templates(tempnos=tempno_list)
-
     def run_selected(self):
         """Run selected templates."""
         sels = self.list_templates.selectedIndexes()
         if len(sels) > 0:
-            tempno_list = [sel.row() for sel in sels]
-            self.run_templates(tempnos=tempno_list)
+            self.run_templates(selected_only=True)
             self.list_templates.setCurrentRow(sels[-1].row())
 
     def run_selected_files(self):
@@ -604,75 +626,97 @@ class OpenAutomationDialog(ImageQCDialog):
                 'Select one template to run with manually selected files.'
                 )
         else:
-            tempno = sels[0].row()
-            mod = self.templates_mod[tempno]
-            if self.templates_is_vendor[tempno]:
-                temp_this = self.templates_vendor[mod][self.templates_id[tempno]]
+            mods, is_vendors, ids = self.get_selected_templates_mod_id()
+            if is_vendors[0]:
+                temp_this = self.templates_vendor[
+                    mods[0]][self.templates_id[ids[0]]]
                 filt = f'File *.{temp_this.file_type}'
                 open_txt = 'Open vendor QC files'
             else:
-                temp_this = self.templates[mod][self.templates_id[tempno]]
+                temp_this = self.templates[mods[0]][self.templates_id[ids[0]]]
                 filt = 'DICOM files (*.dcm);;All files (*)'
                 open_txt = 'Open DICOM files'
 
-            if temp_this.path_input == '':
-                fnames = QFileDialog.getOpenFileNames(self, open_txt, filter=filt)
+            if temp_this.import_only:
+                QMessageBox.warning(
+                    self, 'Template import only',
+                    'The selected template is marked as import only, no analysis.'
+                    )
             else:
-                fnames = QFileDialog.getOpenFileNames(
-                    self, open_txt, temp_this.path_input, filter=filt)
-            pre_selected_files = fnames[0]
-
-            if len(pre_selected_files) > 0:
-                if self.templates_is_vendor[tempno]:
-                    self.main.clear_all_images()
-                    self.main.btn_read_vendor_file.setChecked(True)
-                    self.main.current_modality = mod
-                    self.main.update_mode()
-                    self.main.tab_vendor.run_template(template=temp_this, files=fnames)
+                if temp_this.path_input == '':
+                    fnames = QFileDialog.getOpenFileNames(self, open_txt, filter=filt)
                 else:
-                    self.main.start_wait_cursor()
-                    self.main.gui.current_auto_template = temp_this.label
-                    self.main.chk_append.setChecked(False)
-                    self.main.open_files(file_list=pre_selected_files)
-                    self.main.imgs, _ = sort_imgs(
-                        self.main.imgs, temp_this.sort_pattern, self.tag_infos)
-                    self.main.tree_file_list.update_file_list()
-                    paramset_labels = [temp.label for temp in self.main.paramsets]
-                    quicktemp_labels = [
-                        temp.label for temp in self.main.quicktest_templates[
-                            self.main.current_modality]]
-                    proceed = True
-                    if temp_this.paramset_label in paramset_labels:
-                        self.main.wid_paramset.cbox_template.setCurrentText(
-                            temp_this.paramset_label)
-                    else:
-                        proceed = False
-                    if temp_this.quicktemp_label in quicktemp_labels:
-                        self.main.wid_quicktest.gb_quicktest.setChecked(True)
-                        self.main.wid_quicktest.cbox_template.setCurrentText(
-                            temp_this.quicktemp_label)
-                    else:
-                        proceed = False
-                    if proceed:
-                        self.main.wid_quicktest.run_quicktest()
-                    self.main.stop_wait_cursor()
-                self.close()
+                    fnames = QFileDialog.getOpenFileNames(
+                        self, open_txt, temp_this.path_input, filter=filt)
+                pre_selected_files = fnames[0]
 
-    def run_templates(self, tempnos=[]):
+                if len(pre_selected_files) > 0:
+                    if is_vendors[0]:
+                        self.main.clear_all_images()
+                        self.main.btn_read_vendor_file.setChecked(True)
+                        self.main.current_modality = mods[0]
+                        self.main.update_mode()
+                        self.main.tab_vendor.run_template(
+                            template=temp_this, files=fnames)
+                    else:
+                        self.main.start_wait_cursor()
+                        self.main.gui.current_auto_template = temp_this.label
+                        self.main.chk_append.setChecked(False)
+                        self.main.open_files(file_list=pre_selected_files)
+                        self.main.imgs, _ = sort_imgs(
+                            self.main.imgs, temp_this.sort_pattern, self.tag_infos)
+                        self.main.tree_file_list.update_file_list()
+                        paramset_labels = [temp.label for temp in self.main.paramsets]
+                        quicktemp_labels = [
+                            temp.label for temp in self.main.quicktest_templates[
+                                self.main.current_modality]]
+                        proceed = True
+                        if temp_this.paramset_label in paramset_labels:
+                            self.main.wid_paramset.cbox_template.setCurrentText(
+                                temp_this.paramset_label)
+                        else:
+                            proceed = False
+                        if temp_this.quicktemp_label in quicktemp_labels:
+                            self.main.wid_quicktest.gb_quicktest.setChecked(True)
+                            self.main.wid_quicktest.cbox_template.setCurrentText(
+                                temp_this.quicktemp_label)
+                        else:
+                            proceed = False
+                        if proceed:
+                            self.main.wid_quicktest.run_quicktest()
+                        self.main.stop_wait_cursor()
+                    self.close()
+
+    def run_templates(self, selected_only=False):
         """Run selected templates.
 
         Parameters
         ----------
-        tempnos : list of int, optional
-            The template numbers (in widget list) to run. The default is [].
+        selected_only : bool, optional
+            Limit to selected templates in list. The default is False.
+            Filter will be used also if selected_only is False.
         """
+        tempnos = []
+        mods, is_vendors, ids = self.get_selected_templates_mod_id()
+        if selected_only:
+            sel = self.list_templates.selectedIndexes()
+            tempnos = [self.templates_displayed_ids[idx.row()] for idx in sel]
+        else:
+            tempnos = self.templates_displayed_ids
         if len(tempnos) > 0:
             log = []
             self.automation_active = True
-            max_progress = 100*len(tempnos)
-            self.progress_modal = uir.ProgressModal(
-                "Running templates...", "Stop",
-                0, max_progress, self)  # 0-100 within each temp
+            max_progress = 100*len(tempnos)  # 0-100 within each temp
+            if len(tempnos) > 1:
+                self.progress_modal = uir.ProgressModal(
+                    "Running templates...", "Stop after currently running template",
+                    0, max_progress, self, minimum_duration=0)
+            else:
+                self.progress_modal = uir.ProgressModal(
+                    "Running template.", "Stop",
+                    0, max_progress, self, minimum_duration=0)
+                ch = self.progress_modal.findChildren(QPushButton)
+                ch[0].hide()
 
             for i, tempno in enumerate(tempnos):
                 mod = self.templates_mod[tempno]
@@ -681,8 +725,12 @@ class OpenAutomationDialog(ImageQCDialog):
                 else:
                     temp_this = self.templates[mod][self.templates_id[tempno]]
 
-                if temp_this.active:
-                    self.progress_modal.setValue(100 * i)
+                if temp_this.active and temp_this.import_only is False:
+                    if i == 0:
+                        self.progress_modal.setLabelText("Preparing data...")
+                        self.progress_modal.setValue(1)
+                    else:
+                        self.progress_modal.setValue(100 * i)
                     if self.templates_is_vendor[tempno]:
                         pre_msg = f'Template {mod}/{temp_this.label}:'
                         self.progress_modal.setLabelText(
@@ -724,4 +772,9 @@ class OpenAutomationDialog(ImageQCDialog):
                 if res:
                     pass  # just to wait for user to close message
 
-            self.refresh_list(rows=tempnos)
+            if selected_only:
+                sels = self.list_templates.selectedIndexes()
+                rows = [sel.row() for sel in sels]
+                self.refresh_list(rows=rows)
+            else:
+                self.refresh_list()

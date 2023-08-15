@@ -201,7 +201,8 @@ class ProgressBar(QProgressBar):
 class ProgressModal(QProgressDialog):
     """Redefine QProgressDialog to set wanted behaviour."""
 
-    def __init__(self, text, cancel_text, start, stop, parent):
+    def __init__(self, text, cancel_text, start, stop, parent,
+                 minimum_duration=200):
         super().__init__(text, cancel_text, start, stop, parent)
         self.setWindowModality(Qt.WindowModal)
         self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
@@ -209,7 +210,7 @@ class ProgressModal(QProgressDialog):
             self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setWindowTitle('Wait while processing...')
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setMinimumDuration(200)
+        self.setMinimumDuration(minimum_duration)
         self.setAutoClose(True)
         self.setStyleSheet(
             """

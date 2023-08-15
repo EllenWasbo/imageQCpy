@@ -269,6 +269,13 @@ class SelectQuickTestWidget(SelectTemplateWidget):
                     self.current_template.group_names[imgno]
             except IndexError:
                 img.quicktest_group_name = ''
+        if len(self.current_template.tests) > len(self.main.imgs):
+            if any(self.current_template.tests[len(self.main.imgs):]):
+                QMessageBox.warning(
+                    self, 'Less images than expected',
+                    f'QuickTest template {self.current_template.label} specified for '
+                    f'{len(self.current_template.tests)} images. '
+                    f'Only {len(self.main.imgs)} images loaded.')
 
     def get_current_template(self):
         """Fill current_template with values for imgs."""

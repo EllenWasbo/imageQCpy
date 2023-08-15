@@ -350,8 +350,8 @@ def convert_taglists_to_numbers(taglists):
     return taglists
 
 
-def calculate_qc(input_main,
-                 wid_auto=None, auto_template_label='', auto_template_session=''):
+def calculate_qc(input_main, wid_auto=None,
+                 auto_template_label='', auto_template_session=''):
     """Calculate tests according to current info in main.
 
     Parameters
@@ -392,9 +392,20 @@ def calculate_qc(input_main,
     tag_infos = input_main.tag_infos
     quicktest = input_main.current_quicktest
 
+    if len(quicktest.tests) > len(img_infos):
+        if any(quicktest.tests[len(img_infos):]):
+            errmsgs.append(
+                f'QuickTest template {quicktest.label} specified for '
+                f'{len(quicktest.tests)} images. Only {len(img_infos)} images loaded.')
+
     proceed = True
     if len(img_infos) == 0:
         proceed = False
+    else:
+        if not any(quicktest.tests):
+            errmsgs.append(
+                f'QuickTest template {quicktest.label} have no test specified.')
+            proceed = False
 
     flattened_marked = []
     if proceed:
@@ -723,15 +734,17 @@ def calculate_qc(input_main,
                     msgs.extend([err for err in suberr if err not in [None, '']])
                 else:
                     msgs.append(suberr)  # str
-    if len(msgs) > 0:
-        input_main.display_errmsg(msgs)
-    else:
-        if 'MainWindow' in str(type(input_main)):
-            if input_main.automation_active is False:
-                input_main.status_bar.showMessage('Finished', 1000)
+
+        if len(msgs) > 0 and input_main.automation_active:
+            input_main.errmsgs = msgs
 
     if 'MainWindow' in str(type(input_main)):
         if input_main.automation_active is False:
+            if len(msgs) > 0:
+                input_main.display_errmsg(msgs)
+            else:
+                input_main.status_bar.showMessage('Finished', 1000)
+
             if 'Cro' in input_main.results:  # refresh output to widgets
                 old_calib = input_main.tab_pet.cro_calibration_factor.value()
                 try:
@@ -2017,7 +2030,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             roi_array, errmsg = get_rois(
                 image_input, images_to_test[0], input_main)
             res = calculate_NM_uniformity(
-                image_input, roi_array, img_infos[0].pix[0])
+                image_input, roi_array, img_infos[0].pix[0], paramset.uni_scale_factor)
             details_dict = {
                 'sum_image': image_input,
                 'matrix': res['matrix'],

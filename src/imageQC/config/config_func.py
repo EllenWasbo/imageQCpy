@@ -1049,7 +1049,7 @@ def get_ref_label_used_in_auto_templates(auto_templates, ref_attr='paramset_labe
         key = modalitystring
         value = AutoTemplate
     ref_attr : str
-        'paramset_label' or 'quicktemp_label'  ##TODO 'digit_label'
+        'paramset_label' or 'quicktemp_label' or 'persons_to_notify' (list)
 
     Returns
     -------
@@ -1069,7 +1069,10 @@ def get_ref_label_used_in_auto_templates(auto_templates, ref_attr='paramset_labe
 
 
 def verify_auto_templates(main):
-    """Verify all paramsets and quicktest templates in auto_templates are defined."""
+    """Verify all paramsets + quicktest templates in auto_templates are defined.
+
+    Also verify that persons to notify are defined (if any).
+    """
     status = True
     log = []
     if hasattr(main, 'auto_templates'):
@@ -1116,6 +1119,40 @@ def verify_auto_templates(main):
                     log.append(
                         'Automation templates set to notify undefined persons: '
                         f'{missing}')
+
+    return (status, log)
+
+
+def verify_paramsets(main):
+    """Verify all digit templates in paramsets are defined."""
+    status = True
+    log = []
+    if hasattr(main, 'paramsets'):
+        fname = 'digit_templates'
+
+        if hasattr(main, fname):
+            mod_dict = getattr(main, fname)
+            for mod, templist in mod_dict.items():
+                all_digit_labels = [t.label for t in templist]
+                missing = []
+                used_in = []
+                digit_in_params = [
+                    [temp.label, temp.num_digit_label]
+                    for temp in main.paramset[mod] if temp.num_digit_label != '']
+                if len(digit_in_params) > 0:
+                    param_labels, digit_labels = np.array(digit_in_params).T.tolist()
+                    for label in digit_labels:
+                        if label not in all_digit_labels:
+                            missing.append(label)
+                            idxs = get_all_matches(digit_labels, label)
+                            par_list = [param_labels[idx] for idx in idxs]
+                            used_in.extend(par_list)
+                    if len(missing) > 0:
+                        if len(missing) > 0:
+                            log.append(
+                                f'{mod}: missing definition of {fname} {missing} '
+                                f'used in paramset(s) {used_in}')
+                        status = False
 
     return (status, log)
 
@@ -1195,6 +1232,8 @@ def tag_infos_difference_default(current_tag_infos):
     protected_tags = []
     current_attr = [tag.attribute_name for tag in current_tag_infos]
     default_tag_infos = CONFIG_FNAMES['tag_infos']['default']
+    tag_attr = [*asdict(default_tag_infos[0])]
+    unit_idx = tag_attr.index('unit')
 
     default_attr = [tag.attribute_name for tag in default_tag_infos]
     adjusted_tag_infos = copy.deepcopy(current_tag_infos)
@@ -1211,16 +1250,18 @@ def tag_infos_difference_default(current_tag_infos):
             curr_vals = []
             for tag in curr_taginfos:
                 this_vals = [val for key, val in asdict(tag).items()][1:]
+                this_vals.pop(unit_idx-1)  # ignore unit
                 curr_vals.append(this_vals)
 
             default_idxs = get_all_matches(default_attr, attr)
             for idx in default_idxs:
                 def_vals = [
                     val for key, val in asdict(default_tag_infos[idx]).items()][1:]
+                def_vals.pop(unit_idx-1)
 
                 if def_vals not in curr_vals:
                     curr_wo_prot = [vals[:-1] for vals in curr_vals]
-                    try:  # replace if only protection differ
+                    try:  # replace if only protection (and possibly unit) differ
                         idx_curr_this = curr_wo_prot.index(def_vals[:-1])
                         curr_idxs = [
                             i for i, tag in enumerate(current_tag_infos)

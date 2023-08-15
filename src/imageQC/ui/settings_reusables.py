@@ -113,9 +113,15 @@ class StackWidget(QWidget):
             _, _, self.templates = cff.load_settings(fname=self.fname)
             if 'patterns' in self.fname or self.fname == 'auto_templates':
                 _, _, self.tag_infos = cff.load_settings(fname='tag_infos')
-            elif self.fname in ['paramsets', 'quicktest_templates']:
+            elif self.fname in [
+                    'paramsets', 'quicktest_templates', 'persons_to_notify']:
                 _, _, self.auto_templates = cff.load_settings(
                     fname='auto_templates')
+                if self.fname == 'persons_to_notify':
+                    _, _, self.auto_vendor_templates = cff.load_settings(
+                        fname='auto_vendor_templates')
+            elif self.fname == 'digit_templates':
+                _, _, self.paramsets = cff.load_settings(fname='paramsets')
 
             if self.fname == 'auto_templates':
                 _, _, self.auto_common = cff.load_settings(fname='auto_common')
@@ -396,34 +402,81 @@ class StackWidget(QWidget):
 
         save_more = False
         more = None
-        more_fname = ''
+        more_fnames = None
         log = []
-        if self.fname in ['paramsets', 'quicktest_templates']:
-            _, path, auto_templates = cff.load_settings(
-                fname='auto_templates')
-            more_fname = 'auto_templates'
-            mod = self.current_modality
+        mod = self.current_modality
+        if self.fname in ['paramsets', 'quicktest_templates', 'persons_to_notify']:
+            more_fnames = ['auto_templates']
+            if self.fname == 'persons_to_notify':
+                more_fnames.append('auto_vendor_templates')
+            for more_fname in more_fnames:
+                _, path, auto_templates = cff.load_settings(fname=more_fname)
+
+                if path != '':
+                    if self.fname == 'paramsets':
+                        ref_attr = 'paramset_label'
+                    elif self.fname == 'quicktest_templates':
+                        ref_attr = 'quicktemp_label'
+                    else:
+                        ref_attr = 'persons_to_notify'
+                    temp_auto = cff.get_ref_label_used_in_auto_templates(
+                        auto_templates, ref_attr=ref_attr)
+                    _, temp_labels = np.array(temp_auto[mod]).T.tolist()
+
+                    changed = False
+                    if ref_attr == 'persons_to_notify':
+                        flat_list = [item for sub in temp_labels for item in sub]
+                        if oldlabel in flat_list:
+                            for i, templist in enumerate(temp_labels):
+                                if oldlabel in templist:
+                                    newlist = list(map(
+                                        lambda x: x.replace(oldlabel, newlabel),
+                                        templist))
+                                    setattr(auto_templates[mod][i], ref_attr, newlist)
+                                    changed = True
+                                    #log.append(temp)
+                    else:
+                        if oldlabel in temp_labels:
+                            for i, temp in enumerate(temp_labels):
+                                if temp == oldlabel:
+                                    setattr(auto_templates[mod][i], ref_attr, newlabel)
+                                    changed = True
+                                    #log.append(temp)
+
+                    if changed:
+                        log.append(
+                            f'{self.fname[:-1]} {oldlabel} used in auto_templates. '
+                            'Label updated.')
+                        save_more = True
+                        if more is None:
+                            more = [auto_templates]
+                        else:
+                            more.append(auto_templates)
+        elif self.fname == 'digit_templates':
+            more_fname = f'paramsets_{mod}'
+            more_fnames = [more_fname]
+            _, path, paramsets = cff.load_settings(fname=more_fname)
+
             if path != '':
-                ref_attr = ('paramset_label' if self.fname == 'paramsets'
-                            else 'quicktemp_label')
-                temp_auto = cff.get_ref_label_used_in_auto_templates(
-                    auto_templates, ref_attr=ref_attr)
-                _, temp_labels = np.array(temp_auto[mod]).T.tolist()
+                digit_labels_used = [temp.num_digit_label for temp in paramsets]
+
                 changed = False
-                if oldlabel in temp_labels:
-                    for i, temp in enumerate(temp_labels):
+                if oldlabel in digit_labels_used:
+                    for i, temp in enumerate(digit_labels_used):
                         if temp == oldlabel:
-                            setattr(auto_templates[mod][i], ref_attr, newlabel)
+                            paramsets[i].num_digit_label = newlabel
                             changed = True
-                            log.append(temp)
+                            #log.append(temp)
 
                 if changed:
-                    log = [(f'{self.fname[:-1]} {oldlabel} used in auto_templates. '
-                            'Label updated.')]
+                    log.append(
+                        f'{self.fname[:-1]} {oldlabel} used in paramsets. '
+                        'Label updated.')
                     save_more = True
-                    more = auto_templates
+                    more = [auto_templates]
+
         self.save(save_more=save_more, more=more,
-                  more_fname=more_fname, log=log)
+                  more_fnames=more_fnames, log=log)
         self.refresh_templist(selected_label=newlabel)
 
     def move_modality(self):
@@ -468,17 +521,17 @@ class StackWidget(QWidget):
                         self.save()
                         self.wid_mod_temp.cbox_modality.setCurrentText(new_mod)
 
-    def save(self, save_more=False, more=None, more_fname='', log=[]):
+    def save(self, save_more=False, more=None, more_fnames=None, log=[]):
         """Save template and other connected templates if needed.
 
         Parameters
         ----------
         save_more : bool, optional
             Connected templates to be saved exist. The default is False.
-        more : template, optional
-            Connected template to save. The default is None.
-        more_fname : str, optional
-            fname of connected template. The default is ''.
+        more : list of templates, optional
+            Connected templates to save. The default is None.
+        more_fnames : list of str, optional
+            fnames of connected templates. The default is None.
         log : list of str, optional
             Log from process of connected templates. The default is [].
         """
@@ -506,14 +559,18 @@ class StackWidget(QWidget):
                 ok_save, path = cff.save_settings(templates, fname=fname)
                 if ok_save:
                     if save_more:
-                        proceed, errmsg = cff.check_save_conflict(
-                            more_fname, self.lastload)
-                        if errmsg != '':
-                            proceed = messageboxes.proceed_question(self, errmsg)
-                        if proceed:
-                            ok_save, path = cff.save_settings(
-                                more, fname=more_fname)
-                            if ok_save:
+                        ok_save = []
+                        for i, more_fname in enumerate(more_fnames):
+                            proceed, errmsg = cff.check_save_conflict(
+                                more_fname, self.lastload)
+                            if errmsg != '':
+                                proceed = messageboxes.proceed_question(self, errmsg)
+                            if proceed:
+                                ok_save_this, path = cff.save_settings(
+                                    more[i], fname=more_fname)
+                                ok_save.append(ok_save_this)
+                        if len(ok_save) > 0:
+                            if all(ok_save):
                                 dlg = messageboxes.MessageBoxWithDetails(
                                     self, title='Updated related templates',
                                     msg=('Related templates also updated. '

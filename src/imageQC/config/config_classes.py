@@ -694,6 +694,7 @@ class AutoTemplate:
     delete_if_not_image: bool = False
     delete_if_too_many: bool = False
     active: bool = True
+    import_only: bool = False  # if used only during import supplement, not analyse
     persons_to_notify: list = field(default_factory=list)
     # list of names (label) of PersonToNotify for this specific template
     min_max: list = field(default_factory=list)
@@ -738,4 +739,6 @@ class DashSettings:
     label: str = ''
     host: str = '127.0.0.1'
     port: int = 8050
+    url_logo: str = ''
+    header: str = 'Constancy controls'
     subs: list = field(default_factory=list)  # list of VisualizationSub

@@ -6,6 +6,7 @@ Functions for extracting text from images.
 @author: Ellen Wasbo
 """
 import numpy as np
+from skimage.transform import resize
 
 
 def extract_char_blocks(nparr):
@@ -45,14 +46,13 @@ def extract_char_blocks(nparr):
         if background > 0:
             nparr = 1 - nparr
         # now signal from 0 to 1, background is assumed zero
+        nparr[nparr < 0.3] = 0  # set low signal to background
         prof_x = np.sum(nparr, axis=0)
         signal = np.where(prof_x > 0)
         prof_x[signal[0]] = 1
         diff = np.diff(prof_x)
         start_char_pos = np.where(diff > 0)[0] + 1
         end_char_pos = np.where(diff < 0)[0] + 1
-
-        breakpoint()
 
         if all([
                 len(start_char_pos) > 0,
@@ -105,17 +105,20 @@ def compare_char_blocks_2_template(img_blocks, template):
     def match_block(img):
         char = None
         chars = [str(i) for i in range(10)] + ['.', '-']
-        subtr = []
+        subtr = [None for i in range(12)]
         for i, temp_img in enumerate(template_images):
             if isinstance(temp_img, np.ndarray):
-                if img.shape == temp_img.shape:
-                    if np.array_equal(img, temp_img):
-                        char = chars[i]
-                        break
-                    else:
-                        diff = np.subtract(img, temp_img)
-                        subtr.append(np.abs(np.sum(diff)))
-        if char is None and len(subtr) > 0:
+                if img.shape != temp_img.shape:
+                    temp_img = resize(temp_img, img.shape)
+
+                if np.array_equal(img, temp_img):
+                    char = chars[i]
+                    break
+                else:
+                    diff = np.subtract(img, temp_img)
+                    subtr[i] = np.abs(np.sum(diff))
+
+        if char is None and any(subtr):
             idx = np.where(subtr == np.min(subtr))
             char = chars[idx[0][0]]
         return char

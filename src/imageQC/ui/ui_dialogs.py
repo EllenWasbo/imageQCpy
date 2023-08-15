@@ -340,9 +340,9 @@ class QuickTestClipboardDialog(ImageQCDialog):
 class ResetAutoTemplateDialog(ImageQCDialog):
     """Dialog to move directories/files in input_path/Archive to input_path."""
 
-    def __init__(self, parent_widget, files=[], directories=[]):
+    def __init__(self, parent_widget, files=[], directories=[], template_name=''):
         super().__init__()
-        self.setWindowTitle('Reset Automation template')
+        self.setWindowTitle(f'Reset Automation template {template_name}')
         self.setMinimumHeight(300)
         self.setMinimumWidth(300)
         files_or_folders = 'files'

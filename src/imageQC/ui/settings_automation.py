@@ -5,6 +5,7 @@
 @author: Ellen Wasbo
 """
 import os
+import copy
 from time import time
 import webbrowser
 from pathlib import Path
@@ -28,9 +29,11 @@ from imageQC.ui.settings_reusables import (
 from imageQC.ui.tag_patterns import TagPatternWidget, TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui.ui_dialogs import ImageQCDialog, TextDisplay
+from imageQC.ui import messageboxes
 from imageQC.scripts.mini_methods import create_empty_file, create_empty_folder
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm
+from imageQC.dash_app import dash_app
 # imageQC block end
 
 
@@ -594,16 +597,16 @@ class AutoTempWidgetBasic(StackWidget):
             lambda: self.locate_folder(self.txt_input_path))
         hlo_input_path.addWidget(toolb)
 
-        hlo_output_path = QHBoxLayout()
-        self.vlo_temp.addLayout(hlo_output_path)
-        hlo_output_path.addWidget(QLabel('Output path '))
-        hlo_output_path.addWidget(self.txt_output_path)
+        self.hlo_output_path = QHBoxLayout()
+        self.vlo_temp.addLayout(self.hlo_output_path)
+        self.hlo_output_path.addWidget(QLabel('Output path '))
+        self.hlo_output_path.addWidget(self.txt_output_path)
         toolb = uir.ToolBarBrowse('Browse to file')
         toolb.act_browse.triggered.connect(
             lambda: self.locate_file(
                 self.txt_output_path, title='Locate output file',
                 filter_str="Text file (*.txt)"))
-        hlo_output_path.addWidget(toolb)
+        self.hlo_output_path.addWidget(toolb)
         act_output_view = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}file.png'),
             'Display output file', toolb)
@@ -681,6 +684,7 @@ class AutoTempWidgetBasic(StackWidget):
         QMessageBox.information(
             self, 'Not implemented yet',
             'This functionality is not yet finished. To be continued....')
+        #TODO - only possible to add those with email address defined? 
 
     def delete_person(self):
         """Delete from persons list."""
@@ -721,6 +725,10 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         self.cbox_quicktest.currentIndexChanged.connect(lambda: self.flag_edit(True))
         self.list_sort_by = QListWidget()
 
+        self.chk_import_only = QCheckBox(
+            'Use template for import only (e.g. as supplement) - no analysis)')
+        self.chk_import_only.clicked.connect(self.import_only_changed)
+
         hlo_temp = QHBoxLayout()
         self.vlo_temp.addLayout(hlo_temp)
 
@@ -755,11 +763,11 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         vlo_right = QVBoxLayout()
         hlo_temp.addLayout(vlo_right)
 
-        gb_analyse = QGroupBox('Image analysis settings')
-        gb_analyse.setFont(uir.FontItalic())
+        self.gb_analyse = QGroupBox('Image analysis settings')
+        self.gb_analyse.setFont(uir.FontItalic())
         vlo_analyse = QVBoxLayout()
-        gb_analyse.setLayout(vlo_analyse)
-        vlo_right.addWidget(gb_analyse)
+        self.gb_analyse.setLayout(vlo_analyse)
+        vlo_right.addWidget(self.gb_analyse)
 
         vlo_analyse.addWidget(uir.LabelItalic(
             'Sort images for each date/studyUID by:'))
@@ -787,6 +795,7 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         vlo_chk = QVBoxLayout()
         hlo_btm.addLayout(vlo_chk)
         vlo_chk.addWidget(self.chk_archive)
+        vlo_chk.addWidget(self.chk_import_only)
         vlo_chk.addWidget(self.chk_deactivate)
 
         self.vlo.addWidget(uir.HLine())
@@ -811,9 +820,11 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
                  'template, but not defined in quicktest_templates.yaml.'))
             self.cbox_quicktest.setCurrentText('')
         self.fill_list_sort_by()
+        self.chk_import_only.setChecked(self.current_template.import_only)
 
         self.sample_filepath = ''
         self.flag_edit(False)
+        self.update_import_enabled()
 
         # update used_in
         self.list_same_input.clear()
@@ -842,6 +853,7 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         super().get_current_template()
         self.current_template.paramset_label = self.cbox_paramset.currentText()
         self.current_template.quicktemp_label = self.cbox_quicktest.currentText()
+        self.current_template.import_only = self.chk_import_only.isChecked()
 
     def fill_lists(self):
         """Fill all lists on modality change."""
@@ -922,6 +934,46 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
             self.current_template.sort_pattern = sort_pattern
             self.flag_edit(True)
             self.fill_list_sort_by()
+
+    def import_only_changed(self):
+        """Click import only checkbox."""
+        self.current_template.import_only = self.chk_import_only.isChecked()
+        if self.current_template.import_only:
+            self.get_current_template()
+            params = self.current_template.paramset_label
+            qt = self.current_template.quicktemp_label
+            outp = self.current_template.path_output
+            sort = '' if len(self.current_template.sort_pattern.list_tags) == 0 else '-'
+            limits = '' if len(self.current_template.min_max) == 0 else '-'
+            notify = '' if len(self.current_template.persons_to_notify) == 0 else '-'
+            if params + qt + outp + sort + limits + notify != '':
+                res = messageboxes.QuestionBox(
+                    parent=self, title='Remove inactive settings?',
+                    msg='Reset settings that only affect analysis or just deactivate',
+                    yes_text='Yes, reset',
+                    no_text='No, just deactivate')
+                if res.exec():
+                    self.current_template.paramset_label = ''
+                    self.current_template.quicktemp_label = ''
+                    self.current_template.path_output = ''
+                    self.current_template.sort_pattern = copy.deepcopy(
+                        self.empty_template.sort_pattern)
+                    self.current_template.min_max = []
+                    self.current_template.persons_to_notify = []
+                    self.update_data()
+        else:
+            self.update_import_enabled()
+        self.flag_edit(True)
+
+    def update_import_enabled(self):
+        """Update enabled guis whether import only or not."""
+        self.gb_analyse.setEnabled(not self.current_template.import_only)
+        self.gb_limits.setEnabled(not self.current_template.import_only)
+        idx = self.hlo_output_path.count() - 1
+        while(idx >= 0):
+            this_widget = self.hlo_output_path.itemAt(idx).widget()
+            this_widget.setEnabled(not self.current_template.import_only)
+            idx -= 1
 
 
 class AutoVendorTemplateWidget(AutoTempWidgetBasic):
@@ -1055,15 +1107,13 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
 class DashWorker(QThread):
     """Refresh dash and display in webbrowser."""
 
-    def __init__(self, host='127.0.0.1', port=8050):
+    def __init__(self, widget_parent=None):
         super().__init__()
-        self.host = host
-        self.port = port
+        self.widget_parent = widget_parent
 
     def run(self):
         """Run worker if possible."""
-        from imageQC.dash_app import dash_app
-        dash_app.run_dash_app(host=self.host, port=self.port)
+        dash_app.run_dash_app(widget=self.widget_parent)
 
 
 class DashSettingsWidget(StackWidget):
@@ -1078,10 +1128,10 @@ class DashSettingsWidget(StackWidget):
             'If the dashboard is always updated from the same computer and this is '
             ' accessable for other computers in the same network, set host to '
             '"0.0.0.0"<br>'
-            'If your IT-department allows it the dashboard can then be accessed from '
-            ' http:\\xxx.x.x.x:port where xxx.x.x.x is the IP address of the computer'
+            'The dashboard can then be accessed from http:\\xxx.x.x.x:port where '
+            'xxx.x.x.x is the IP address of the computer'
             ' updating the dashboard.<br>'
-            'NOT TESTED YET - THIS IS THE THEORY.....'
+            'Content and customizable parameters not finished yet...'
             )
         super().__init__(dlg_settings, header, subtxt)
         self.fname = 'dash_settings'
@@ -1111,14 +1161,19 @@ class DashSettingsWidget(StackWidget):
 
         self.host = QLineEdit()
         self.host.textChanged.connect(lambda: self.flag_edit(True))
-
         self.port = QSpinBox(minimum=0, maximum=9999)
         self.port.valueChanged.connect(lambda: self.flag_edit(True))
+        self.url_logo = QLineEdit()
+        self.url_logo.textChanged.connect(lambda: self.flag_edit(True))
+        self.header = QLineEdit()
+        self.header.textChanged.connect(lambda: self.flag_edit(True))
 
         flo = QFormLayout()
         vlo_left.addLayout(flo)
         flo.addRow(QLabel('Host:'), self.host)
         flo.addRow(QLabel('Port:'), self.port)
+        flo.addRow(QLabel('Header logo url:'), self.url_logo)
+        flo.addRow(QLabel('Header:'), self.header)
 
         vlo_left.addStretch()
 
@@ -1154,15 +1209,23 @@ class DashSettingsWidget(StackWidget):
         """Fill GUI with current data."""
         self.host.setText(self.templates.host)
         self.port.setValue(self.templates.port)
+        self.url_logo.setText(self.templates.url_logo)
+        self.header.setText(self.templates.header)
+
+    def get_current_template(self):
+        """Update self.templates with current values."""
+        self.templates.host = self.host.text()
+        self.templates.port = self.port.value()
+        self.templates.url_logo = self.url_logo.text()
+        self.templates.header = self.header.text()
 
     def save_dashboard_settings(self):
         """Get current settings and save to yaml file."""
-        self.templates.host = self.host.text()
-        self.templates.port = self.port.value()
+        self.get_current_template()
         self.save()
 
     def mark_import(self, ignore=False):
-        """If import review mode: Mark AutoCommon for import or ignore."""
+        """If import review mode: Mark Dash Settings for import or ignore."""
         if ignore:
             self.marked = False
             self.marked_ignore = True
@@ -1174,23 +1237,11 @@ class DashSettingsWidget(StackWidget):
 
     def run_dash(self):
         """Show results in browser."""
-        proceed = True
-        try:
-            from imageQC.dash_app import dash_app
-        except (ImportError, ModuleNotFoundError):
-            QMessageBox.warning(
-                self, 'Failed importing the dash app',
-                'You should probably try installing imageQC again after the '
-                'introduction of dash app (pip install -e .) with updated '
-                'requirements.txt.')
-            proceed = False
-        if proceed:
-            host = self.host.text()
-            port = self.port.value()
-            self.dash_worker = DashWorker(host=host, port=port)
-            self.dash_worker.start()
-            url = f'http://{host}:{port}'
-            webbrowser.open(url=url, new=1)
+        self.get_current_template()
+        self.dash_worker = DashWorker(widget_parent=self)
+        self.dash_worker.start()
+        url = f'http://{self.templates.host}:{self.templates.port}'
+        webbrowser.open(url=url, new=1)
 
 
 class PersonsToNotifyWidget(StackWidget):
@@ -1243,6 +1294,11 @@ class PersonsToNotifyWidget(StackWidget):
         else:
             self.wid_temp.setEnabled(False)
 
+        self.wid_mod_temp.vlo.addWidget(
+            QLabel('Selected person added to Automation template(s):'))
+        self.list_used_in = QListWidget()
+        self.wid_mod_temp.vlo.addWidget(self.list_used_in)
+
         self.vlo.addWidget(uir.HLine())
         self.vlo.addWidget(self.status_label)
 
@@ -1253,6 +1309,31 @@ class PersonsToNotifyWidget(StackWidget):
         self.list_mod.set_checked_texts(self.current_template.all_notifications_mods)
         self.chk_mute.setChecked(self.current_template.mute)
         self.flag_edit(False)
+
+        self.update_used_in()
+
+    def update_used_in(self):
+        """Update list of auto-templates with link to this person."""
+        self.list_used_in.clear()
+        if self.current_template.label != '':
+            try:
+                auto_labels = [
+                    temp.label for temp in self.auto_templates[self.current_modality]
+                    if self.current_template.label in temp.persons_to_notify
+                    ]
+            except KeyError:
+                auto_labels = []
+            try:
+                auto_labels_vendor = [
+                    temp.label for temp in self.auto_vendor_templates[
+                        self.current_modality]
+                    if self.current_template.label in temp.persons_to_notify
+                    ]
+                auto_labels.extend(auto_labels_vendor)
+            except KeyError:
+                pass
+            if len(auto_labels) > 0:
+                self.list_used_in.addItems(auto_labels)
 
     def get_current_template(self):
         """Get self.current_template where not dynamically set."""

@@ -28,17 +28,10 @@ class InputMain:
     digit_templates: dict = field(default_factory=dict)
     imgs: list = field(default_factory=list)
     results: dict = field(default_factory=dict)
+    errmsgs: list = field(default_factory=list)
     current_group_indicators: list = field(default_factory=list)
     # string for each image if output set pr group with quicktest (paramset.output)
     automation_active: bool = True
     active_img: np.ndarray = field(default_factory=lambda: np.zeros((2, 2)))
     current_roi: list = field(default_factory=list)
     summed_img: np.ndarray = field(default_factory=lambda: np.zeros((2, 2)))
-
-    def display_errmsg(self, errmsg):
-        """Display error messages on console."""
-        if errmsg is not None:
-            if isinstance(errmsg, str):
-                print(errmsg)
-            elif isinstance(errmsg, list):
-                print('/n'.join(errmsg))

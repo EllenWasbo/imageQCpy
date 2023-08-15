@@ -60,8 +60,7 @@ class OpenMultiDialog(ImageQCDialog):
         info_text = (
             'All DICOM files in the selected folder listed as series '
             'according to series number + series description.<br>'
-            'Manually select and push images to open or use the selection '
-            'rules.<br>'
+            'Use the selection rules or manually select images to open.<br>'
             'Images will be displayed in the list as defined in Settings - '
             'Special tag patterns - File list display.'
         )

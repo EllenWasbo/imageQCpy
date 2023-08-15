@@ -716,6 +716,9 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
         proceed = os.path.exists(auto_template.path_input)
         if auto_template.quicktemp_label == '':
             proceed = False
+        if auto_template.import_only:
+            proceed = False
+            log.append('Template marked as import only. No analysis.')
         if proceed:
             qt_labels = [temp.label for temp in qt_templates[modality]]
             qt_idx = qt_labels.index(auto_template.quicktemp_label)
@@ -737,7 +740,14 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
             if proceed:
                 err_exist = False
                 p = Path(auto_template.path_input)
+                start_progress_val = 0
+                if parent_widget is not None:
+                    start_progress_val = parent_widget.progress_modal.value()
                 if p.exists():
+                    if parent_widget is not None:
+                        parent_widget.progress_modal.setLabelText(
+                            f'{auto_template.label}: Finding new files...')
+                        parent_widget.progress_modal.setValue(start_progress_val + 2)
                     files = [x for x in p.glob('*') if x.is_file()]
                 else:
                     files = []
@@ -758,8 +768,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                               sep='', end='', flush=True)
                     else:
                         parent_widget.progress_modal.setLabelText(
-                            f'Reading {len(files)} new files for template '
-                            f'{modality}/{auto_template.label} ...')
+                            f'{auto_template.label}: Reading {len(files)} new files...')
+                        parent_widget.progress_modal.setValue(start_progress_val + 3)
                     img_infos, _, warnings = dcm.read_dcm_info(
                         files, GUI=False, tag_infos=tag_infos)
 
@@ -780,8 +790,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                   sep='', end='', flush=True)
                         else:
                             parent_widget.progress_modal.setLabelText(
-                                f'Sorting {len(img_infos)} files by date for template '
-                                f'{modality}/{auto_template.label} ...')
+                                f'{auto_template.label}: Sorting {len(img_infos)} '
+                                'files by date')
+                            parent_widget.progress_modal.setValue(
+                                start_progress_val + 4)
 
                         # sort into groups of same acq_date, study uid
                         date_uid_list = ['_'.join([info.acq_date, info.studyUID]) for
@@ -825,11 +837,16 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                          auto_template_session=f'Session {d+1}/{nd}')
                             if parent_widget is not None:
                                 curr_val = parent_widget.progress_modal.value()
-                                new_val = curr_val + int(100/nd)
+                                diff = curr_val - start_progress_val
+                                new_val = curr_val + int((100-diff)/nd)
                                 parent_widget.progress_modal.setValue(new_val)
                             value_list, header_list = quicktest_output(input_main_this)
                             header_list = ['Date'] + header_list
                             value_list = [date_str] + value_list
+
+                            if len(input_main_this.errmsgs) > 0:
+                                log.append(f'{date_str}: WARNING')
+                                log.extend(input_main_this.errmsgs)
 
                             status, print_array = append_auto_res(
                                 auto_template, header_list, value_list,
@@ -851,12 +868,13 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             f'Finished analysing template ({nd} sessions)'
                             )
         else:
-            if os.path.exists(auto_template.path_input) is False:
-                log.append(f'Input path not found ({auto_template.path_input})')
-            if auto_template.quicktemp_label == '':
-                log.append(
-                    ('No QuickTest template was linked to the automation template. '
-                     'Template ignored'))
+            if auto_template.import_only is False:
+                if os.path.exists(auto_template.path_input) is False:
+                    log.append(f'Input path not found ({auto_template.path_input})')
+                if auto_template.quicktemp_label == '':
+                    log.append(
+                        ('No QuickTest template was linked to the automation template. '
+                         'Template ignored'))
     if len(log) > 0:
         log.insert(0, log_pre)
     return (log, not_written)

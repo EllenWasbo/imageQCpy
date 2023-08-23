@@ -724,12 +724,13 @@ class ResultPlotCanvas(PlotCanvas):
                                     'yvals': details_dict['profiles'][l_idx],
                                     'color': colors[l_idx]})
                 try:
-                    self.curves.append({'label': details_dict['labels'][l_idx],
-                                        'xvals': xvals,
-                                        'yvals': details_dict[
-                                            'envelope_profiles'][l_idx],
-                                        'style': '--',
-                                        'color': colors[l_idx]})
+                    self.curves.append(
+                        {'label': f'{details_dict["labels"][l_idx]} envelope',
+                         'xvals': xvals,
+                         'yvals': details_dict[
+                             'envelope_profiles'][l_idx],
+                         'style': '--',
+                         'color': colors[l_idx]})
                 except IndexError:
                     pass
                 self.curves.append({

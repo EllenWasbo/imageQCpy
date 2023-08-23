@@ -20,6 +20,8 @@ from PyQt5.QtWidgets import (
 from imageQC.ui.ui_dialogs import ImageQCDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.scripts.dcm import find_all_valid_dcm_files, read_dcm_info
+from imageQC.config.config_classes import TagPatternFormat
+from imageQC.ui.tag_patterns import TagPatternWidget
 from imageQC.ui import messageboxes
 # imageQC block end
 
@@ -27,7 +29,7 @@ from imageQC.ui import messageboxes
 class OpenMultiDialog(ImageQCDialog):
     """GUI for opening images using selection rules.
 
-    Reads all images also in subfolder and sort these into series.
+    Reads all images also in subfolder and sort these into groups.
     Select which files to open by selecting in list or use selection patterns
     for consistency with repetitive tasks.
     """
@@ -38,6 +40,14 @@ class OpenMultiDialog(ImageQCDialog):
         self.main = main
         self.imgs = []
         self.open_imgs = []
+        self.current_template = TagPatternFormat(
+            list_tags=['AcquisitionDate', 'SeriesNumber', 'SeriesDescription'],
+            list_format=['|:8|', '|:04.0f|', ''])
+        self.wid_series_pattern = TagPatternWidget(self, typestr='format',
+                                                   lock_on_general=True)
+        self.tag_infos = self.main.tag_infos
+        self.wid_series_pattern.fill_list_tags('', avoid_special_tags=True)
+        self.wid_series_pattern.update_data()
 
         vlo = QVBoxLayout()
         self.setLayout(vlo)
@@ -58,13 +68,18 @@ class OpenMultiDialog(ImageQCDialog):
         vlo.addLayout(hlo_status)
 
         info_text = (
-            'All DICOM files in the selected folder listed as series '
-            'according to series number + series description.<br>'
+            'All DICOM files in the selected folder listed as groups '
+            'defined by the DICOM tag pattern below.<br>'
             'Use the selection rules or manually select images to open.<br>'
             'Images will be displayed in the list as defined in Settings - '
             'Special tag patterns - File list display.'
         )
+        # TODO Special tag pattern "Group open advanced" as default - modality selection option
         vlo.addWidget(uir.LabelItalic(info_text))
+        hlo_pattern = QHBoxLayout()
+        vlo.addLayout(hlo_pattern)
+        hlo_pattern.addWidget(self.wid_series_pattern)
+        hlo_pattern.addStretch()
 
         vlo.addWidget(uir.HLine())
 
@@ -76,7 +91,7 @@ class OpenMultiDialog(ImageQCDialog):
 
         vlo_series = QVBoxLayout()
         hlo_lists.addLayout(vlo_series)
-        lbl_series = uir.LabelHeader('Series', 4)
+        lbl_series = uir.LabelHeader('Groups', 4)
         lbl_series.setAlignment(Qt.AlignCenter)
         vlo_series.addWidget(lbl_series)
         self.list_series = QListWidget()
@@ -85,6 +100,9 @@ class OpenMultiDialog(ImageQCDialog):
         self.list_series.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list_series.currentRowChanged.connect(self.update_list_images)
         vlo_series.addWidget(self.list_series)
+        btn_send_all = QPushButton('Open all images >>')
+        btn_send_all.clicked.connect(self.push_all)
+        vlo_series.addWidget(btn_send_all)
         vlo_series.addStretch()
 
         vlo_images = QVBoxLayout()
@@ -140,7 +158,7 @@ class OpenMultiDialog(ImageQCDialog):
         vlo_gb.addLayout(hlo_sel2)
 
         btn_test_pattern = QPushButton(
-            'Test pattern on current series')
+            'Test pattern on current groups')
         btn_test_pattern.clicked.connect(self.test_pattern)
         vlo_gb.addWidget(btn_test_pattern)
         btn_push_pattern = QPushButton(
@@ -184,7 +202,7 @@ class OpenMultiDialog(ImageQCDialog):
         btns.setOrientation(Qt.Horizontal)
         btns.setStandardButtons(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Ok).setText('Open selected')
+        btns.button(QDialogButtonBox.Ok).setText('Open images in list above')
         btns.button(QDialogButtonBox.Ok).clicked.connect(self.accept)
         btns.button(QDialogButtonBox.Cancel).clicked.connect(self.reject)
         hlo_dlg_btns.addWidget(btns)
@@ -202,12 +220,15 @@ class OpenMultiDialog(ImageQCDialog):
         """Find all DICOM files and list these according to the pattern."""
         path = self.path.text()
         if path != '':
-            self.main.start_wait_cursor()
             self.imgs = []
             self.open_imgs = []
-            self.status_label.showMessage('Finding valid dicom images in folder...')
+            progress_modal = uir.ProgressModal(
+                "Finding valid dicom images in folder...",
+                "Stop", 0, 100, self, hide_cancel=True)
             dcm_dict = find_all_valid_dcm_files(
-                path, parent_widget=self, grouped=False)
+                path, parent_widget=self, progress_modal=progress_modal, grouped=False)
+            progress_modal.reset()
+            self.main.start_wait_cursor()
             self.status_label.showMessage(
                 f'Reading header of {len(dcm_dict["files"])} dicom files...')
             if len(dcm_dict['files']) > 0:
@@ -215,7 +236,8 @@ class OpenMultiDialog(ImageQCDialog):
                 img_infos, _, warnings = read_dcm_info(
                     dcm_files, tag_infos=self.main.tag_infos,
                     tag_patterns_special=self.main.tag_patterns_special,
-                    statusbar=self.status_label)
+                    statusbar=self.status_label,
+                    series_pattern=self.current_template)
                 self.main.stop_wait_cursor()
                 if len(warnings) > 0:
                     dlg = messageboxes.MessageBoxWithDetails(
@@ -223,32 +245,36 @@ class OpenMultiDialog(ImageQCDialog):
                         msg='See details for warning messages',
                         details=warnings, icon=QMessageBox.Warning)
                     dlg.exec()
-                series_nmb_name = [' '.join(img.series_list_strings)
-                                   for img in img_infos]
-                series_nmb_name = list(set(series_nmb_name))
-                series_nmb_name.sort()
-                self.imgs = [[] for i in range(len(series_nmb_name))]
-                for img in img_infos:
-                    ser = ' '.join(img.series_list_strings)
-                    serno = series_nmb_name.index(ser)
-                    self.imgs[serno].append(img)
+                if len(img_infos) > 0:
+                    series_nmb_name = [' '.join(img.series_list_strings)
+                                       for img in img_infos]
+                    series_nmb_name = list(set(series_nmb_name))
+                    series_nmb_name.sort()
+                    self.imgs = [[] for i in range(len(series_nmb_name))]
+                    for img in img_infos:
+                        ser = ' '.join(img.series_list_strings)
+                        serno = series_nmb_name.index(ser)
+                        self.imgs[serno].append(img)
 
-                # sort by zpos if available
-                for serno, imgs in enumerate(self.imgs):
-                    zs = [img.zpos for img in imgs]
-                    if all(zs):
-                        imgs_temp = sorted(zip(imgs, zs), key=lambda t: t[1])
-                        self.imgs[serno] = [img[0] for img in imgs_temp]
+                    # sort by zpos if available
+                    for serno, imgs in enumerate(self.imgs):
+                        zs = [img.zpos for img in imgs]
+                        if all(zs):
+                            imgs_temp = sorted(zip(imgs, zs), key=lambda t: t[1])
+                            self.imgs[serno] = [img[0] for img in imgs_temp]
 
-                self.list_series.clear()
-                self.list_series.addItems(series_nmb_name)
-                self.list_series.setCurrentRow(0)
-                self.update_list_images(0)
+                    self.list_series.clear()
+                    self.list_series.addItems(series_nmb_name)
+                    self.list_series.setCurrentRow(0)
+                    self.update_list_images(0)
+                else:
+                    QMessageBox.warning(self, 'Found no images',
+                                        'Found no images in the selcted path.')
             self.status_label.clearMessage()
             self.main.stop_wait_cursor()
 
     def update_list_images(self, serno):
-        """Fill list_images with all images in selected series."""
+        """Fill list_images with all images in selected groups."""
         if serno >= 0:
             img_strings = [
                 ' '.join(img.file_list_strings) for img in self.imgs[serno]]
@@ -338,6 +364,14 @@ class OpenMultiDialog(ImageQCDialog):
     def test_pattern(self):
         """Highlight images in list_images that fit the pattern."""
         self.use_pattern()
+
+    def push_all(self):
+        """Add all found images to list_open_images."""
+        if len(self.imgs) > 0:
+            self.open_imgs = []
+            for ser in self.imgs:
+                self.open_imgs.extend(ser)
+            self.update_list_open_images()
 
     def push_pattern(self):
         """Add images according to defined pattern to the list_open_images."""

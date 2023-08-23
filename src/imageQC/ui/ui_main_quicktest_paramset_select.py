@@ -76,7 +76,8 @@ class SelectTemplateWidget(QWidget):
             self.get_current_template()
         elif 'paramsets' in self.fname:
             self.current_template = self.main.current_paramset
-        text, proceed = QInputDialog.getText(self, 'New label', 'Name the new template')
+        text, proceed = QInputDialog.getText(
+            self, 'New label', 'Name the new template                  ')
         if proceed and text != '':
             templates = self.modality_dict[self.main.current_modality]
             current_labels = [obj.label for obj in templates]
@@ -199,6 +200,12 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         if self.main.save_blocked:
             act_save.setEnabled(False)
 
+        act_reload = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}refresh.png'),
+            'Reload selected QuickTest pattern e.g. after sorting or changing number '
+            'of images)', self)
+        act_reload.triggered.connect(self.update_current_template)
+
         act_settings_qt = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}gears.png'),
             'Edit/manage QuickTest templates', self)
@@ -218,7 +225,7 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         act_clipboard_qt.triggered.connect(self.extract_results)
 
         toolb = QToolBar()
-        toolb.addActions([act_add, act_save, act_settings_qt])
+        toolb.addActions([act_add, act_save, act_reload, act_settings_qt])
         toolb.addSeparator()
         toolb.addActions([act_exec_qt, act_clipboard_qt])
 
@@ -251,6 +258,25 @@ class SelectQuickTestWidget(SelectTemplateWidget):
 
     def set_current_template_to_imgs(self):
         """Set image-dict values according to current template."""
+        if self.gb_quicktest.isChecked():
+            if len(self.current_template.tests) > len(self.main.imgs):
+                if any(self.current_template.tests[len(self.main.imgs):]):
+                    diff = len(self.current_template.tests) - len(self.main.imgs)
+                    reply = QMessageBox.question(
+                        self, 'Less images than expected',
+                        f'QuickTest template {self.current_template.label} '
+                        f'specified for {len(self.current_template.tests)} images. '
+                        f'Only {len(self.main.imgs)} images loaded. Add {diff} '
+                        'dummy image(s) to fill template?',
+                        QMessageBox.Yes, QMessageBox.No)
+                    if reply == QMessageBox.Yes:
+                        self.main.add_dummy(n_dummies=diff)
+                        QMessageBox.information(
+                            self, 'Reload after sorting',
+                            'Dummy images now added to end of file list. '
+                            'If sorting the dummy images you should probably reload '
+                            'the QuickTest template before running the template.')
+
         for imgno, img in enumerate(self.main.imgs):
             try:
                 img.marked_quicktest = self.current_template.tests[imgno]
@@ -269,13 +295,6 @@ class SelectQuickTestWidget(SelectTemplateWidget):
                     self.current_template.group_names[imgno]
             except IndexError:
                 img.quicktest_group_name = ''
-        if len(self.current_template.tests) > len(self.main.imgs):
-            if any(self.current_template.tests[len(self.main.imgs):]):
-                QMessageBox.warning(
-                    self, 'Less images than expected',
-                    f'QuickTest template {self.current_template.label} specified for '
-                    f'{len(self.current_template.tests)} images. '
-                    f'Only {len(self.main.imgs)} images loaded.')
 
     def get_current_template(self):
         """Fill current_template with values for imgs."""

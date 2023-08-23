@@ -27,7 +27,7 @@ else:
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.0-b14'
+VERSION = '3.0.0-b15'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -88,6 +88,9 @@ ALTERNATIVES = {
         },
     'MR': {
         'ROI': ALTERNATIVES_ROI,
+        'SNR': [
+            'Noise from subtraction of two images (NEMA method 1)',
+            'Noise from background ROIs per image (NEMA method 4)'],
         'Sli': ['Ramp', 'Wedge']
         }
     }
@@ -220,7 +223,11 @@ HEADERS = {
     'MR': {
         'ROI': {'alt0': roi_headers},
         'Num': {},
-        'SNR': {'alt0': ['S img 1', 'S img 2', 'S mean', 'stdev diff', 'SNR']},
+        'SNR': {
+            'alt0': ['S img 1', 'S img 2', 'S mean', 'stdev diff', 'SNR'],
+            'alt1': ['Central ROI mean', 'SD background ROIs',
+                     'Estimated image noise', 'SNR'],
+            },
         'PIU': {'alt0': ['min', 'max', 'PIU']},
         'Gho': {'alt0': ['Center', 'top', 'bottom', 'left', 'right', 'PSG']},
         'Geo': {
@@ -291,6 +298,7 @@ HEADERS_SUP = {
         },
     'MR': {
         'ROI': {'alt0': roi_headers_sup},
+        'SNR': {'alt0': [], 'alt1': ['Number of background pixels']},
         'PIU': {
             'altAll': ['x min (pix from lower left)', 'y min',
                        'x max', 'y max']

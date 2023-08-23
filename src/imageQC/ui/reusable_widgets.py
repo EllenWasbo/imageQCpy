@@ -202,7 +202,7 @@ class ProgressModal(QProgressDialog):
     """Redefine QProgressDialog to set wanted behaviour."""
 
     def __init__(self, text, cancel_text, start, stop, parent,
-                 minimum_duration=200):
+                 minimum_duration=200, hide_cancel=False):
         super().__init__(text, cancel_text, start, stop, parent)
         self.setWindowModality(Qt.WindowModal)
         self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
@@ -212,6 +212,9 @@ class ProgressModal(QProgressDialog):
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
         self.setMinimumDuration(minimum_duration)
         self.setAutoClose(True)
+        if hide_cancel:
+            ch = self.findChildren(QPushButton)
+            ch[0].hide()
         self.setStyleSheet(
             """
             QProgressBar {
@@ -224,6 +227,7 @@ class ProgressModal(QProgressDialog):
                 }
             """
             )
+        self.sub_interval = 0  # used to communicate subprosess range within setRange
 
 
 class ToolBarBrowse(QToolBar):

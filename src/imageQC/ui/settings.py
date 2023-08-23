@@ -425,7 +425,11 @@ class SettingsDialog(ImageQCDialog):
                 # TODO DELETE? fails? self.widget_shared_settings.verify_config_files()
 
     def update_import_main(self):
-        """Update templates of all widgets according to import_main (on initiate)."""
+        """Update templates of all widgets according to import_main.
+
+        Similar to settings_reusables.py - StackWidget def update_from_yaml.
+        TODO: syncronize these two better...?
+        """
         if self.main.tag_infos != []:
             self.widget_dicom_tags.templates = self.main.tag_infos
             self.widget_dicom_tags.update_data()
@@ -440,16 +444,23 @@ class SettingsDialog(ImageQCDialog):
                     widget.templates = temps
                     try:
                         widget.current_template = temps[widget.current_modality][0]
-                        if snake == 'quicktest_templates':
+                        if snake in [
+                                'paramsets',
+                                'quicktest_templates',
+                                'persons_to_notify']:
                             widget.auto_templates = self.main.auto_templates
-                        elif snake == 'paramsets':
-                            widget.auto_templates = self.main.auto_templates
+                            if snake == 'persons_to_notify':
+                                widget.auto_vendor_templates = (
+                                    self.main.auto_vendor_templates)
+                        elif snake == 'digit_templates':
+                            widget.paramsets = self.main.paramsets
                         elif snake == 'auto_templates':
                             widget.paramsets = self.main.paramsets
                             widget.quicktest_templates = self.main.quicktest_templates
                             widget.fill_lists()
                         elif snake == 'auto_vendor_templates':
                             widget.update_file_types()
+
                         widget.refresh_templist()
                     except IndexError:
                         pass
@@ -463,10 +474,16 @@ class SettingsDialog(ImageQCDialog):
             widget.update_data()
             widget.flag_edit(False)
 
-        self.widget_persons_to_notify.templates = self.main.persons_to_notify
-        self.widget_persons_to_notify.update_data()
-        self.widget_dash_settings.templates = self.main.dash_settings
-        self.widget_dash_settings.update_data()
+        try:
+            self.widget_persons_to_notify.templates = self.main.persons_to_notify
+            self.widget_persons_to_notify.update_data()
+        except AttributeError:
+            pass
+        try:
+            self.widget_dash_settings.templates = self.main.dash_settings
+            self.widget_dash_settings.update_data()
+        except AttributeError:
+            pass
 
     def mark_extra(self, widget, label_this, mod):
         """Also mark coupled templates within modality_dict."""
@@ -806,6 +823,21 @@ class SharedSettingsWidget(StackWidget):
                                 self.list_files.addItem(string)
                         except AttributeError:
                             pass
+                    if cfn == 'paramsets':
+                        for mod in [*QUICKTEST_OPTIONS]:
+                            try:
+                                res = getattr(last_modified, f'{cfn}_{mod}')
+                                if len(res) > 0:
+                                    self.list_files.addItem(f'{cfn}_{mod}:')
+                                    string = ' '.join(
+                                        ['    last edited by',
+                                         res[0], time_diff_string(res[1]),
+                                         '(', ctime(res[1]), ')'])
+                                    if len(res) > 2:  # with version number
+                                        string = string + ' in version ' + res[2]
+                                    self.list_files.addItem(string)
+                            except AttributeError:
+                                pass
         else:
             self.lbl_config_folder.setText('-- not defined --')
 

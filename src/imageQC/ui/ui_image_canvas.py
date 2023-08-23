@@ -488,7 +488,7 @@ class ImageCanvas(GenericImageCanvas):
                                 colors='blue', alpha=0.5, linewidths=self.linewidth,
                                 linestyles='dotted')
                             self.contours.append(contour)
-                except TypeError:
+                except (TypeError, KeyError, IndexError):
                     pass
 
     def Uni(self):
@@ -612,6 +612,13 @@ class ImageCanvas(GenericImageCanvas):
                                     h2, _ = c2.legend_elements()
                                     self.ax.legend(
                                         [h1[0], h2[0]], ['Sphere VOI', 'Peak VOI'])
+
+    def SNR(self):
+        """Draw MR SNR ROI(s)."""
+        if self.main.current_paramset.snr_type == 0:
+            self.add_contours_to_all_rois()
+        else:
+            self.add_contours_to_all_rois(colors=['red', 'lime'])
 
     def PIU(self):
         """Draw MR PIU ROI."""

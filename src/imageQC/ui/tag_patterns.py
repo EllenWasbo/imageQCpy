@@ -143,7 +143,10 @@ class TagPatternTree(QWidget):
                         self.parent.list_tags.item(row).text())
                     self.parentabove.current_template.list_format2.append('')
         self.update_data(set_selected=-1)
-        self.parentabove.flag_edit()
+        try:
+            self.parentabove.flag_edit()
+        except AttributeError:
+            pass
 
     def sort(self):
         """Change between ASC / DESC for selected tag."""
@@ -155,7 +158,10 @@ class TagPatternTree(QWidget):
             self.parentabove.current_template.list_sort[row] = \
                 not self.parentabove.current_template.list_sort[row]
             self.update_data(set_selected=row)
-            self.parentabove.flag_edit()
+            try:
+                self.parentabove.flag_edit()
+            except AttributeError:
+                pass
 
     def format_output(self):
         """Edit f-string for selected tag."""
@@ -180,7 +186,10 @@ class TagPatternTree(QWidget):
                     self.parentabove.current_template.list_format2[
                         row] = new_str
                 self.update_data(set_selected=row)
-                self.parentabove.flag_edit()
+                try:
+                    self.parentabove.flag_edit()
+                except AttributeError:
+                    pass
         else:
             QMessageBox.information(
                 self, 'No tag selected',
@@ -221,7 +230,10 @@ class TagPatternTree(QWidget):
                     self.parentabove.current_template.list_format2.insert(
                         row - 1, popped_format)
             self.update_data(set_selected=row-1)
-            self.parentabove.flag_edit()
+            try:
+                self.parentabove.flag_edit()
+            except AttributeError:
+                pass
 
     def move_down(self):
         """Move tag down if possible."""
@@ -261,7 +273,10 @@ class TagPatternTree(QWidget):
                     self.parentabove.current_template.list_format2.insert(
                         row + 1, popped_format)
             self.update_data(set_selected=row+1)
-            self.parentabove.flag_edit()
+            try:
+                self.parentabove.flag_edit()
+            except AttributeError:
+                pass
 
     def delete(self):
         """Delete selected tag(s)."""
@@ -281,7 +296,10 @@ class TagPatternTree(QWidget):
                 else:
                     self.parentabove.current_template.list_format2.pop(row)
             self.update_data(set_selected=-1)
-            self.parentabove.flag_edit()
+            try:
+                self.parentabove.flag_edit()
+            except AttributeError:
+                pass
 
     def update_data(self, set_selected=0):
         """Update table_pattern with data from current_template."""

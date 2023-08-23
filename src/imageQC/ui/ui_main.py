@@ -279,17 +279,24 @@ class MainWindow(QMainWindow):
             if len(dlg.open_imgs) > 0:
                 self.update_on_new_images(dlg.open_imgs)
 
-    def update_on_new_images(self, new_img_info_list):
+    def add_dummy(self, n_dummies=1):
+        """Add place-holder / dummy image when missing images for QuickTest temp."""
+        dummy_list = [dcm.DcmInfoGui(modality=self.current_modality)] * n_dummies
+        self.update_on_new_images(dummy_list, append=True)
+
+    def update_on_new_images(self, new_img_info_list, append=False):
         """Update GUI on new images."""
         n_img_before = len(self.imgs)
         if self.chk_append.isChecked():
+            append = True
+        if append:
             self.imgs = self.imgs + new_img_info_list
             self.update_results(n_added_imgs=len(new_img_info_list))
         else:
             self.imgs = new_img_info_list
             self.results = {}
 
-        if self.chk_append.isChecked() is False or n_img_before == 0:
+        if append is False or n_img_before == 0:
             self.gui.active_img_no = 0
             # update GUI according to first image
             if self.current_modality != self.imgs[0].modality:
@@ -452,6 +459,7 @@ class MainWindow(QMainWindow):
                 self.current_quicktest = cfc.QuickTestTemplate()
                 self.refresh_img_display()
         self.gui.current_auto_template = ''
+        self.wid_center.reset_delta()
         self.reset_results()
 
     def update_current_test(self, reset_index=False, refresh_display=True):
@@ -1021,6 +1029,15 @@ class MainWindow(QMainWindow):
             'Move selected images to bottom', self)
         act_to_bottom.triggered.connect(
             lambda: self.tree_file_list.move_file(direction='bottom'))
+        act_to_pos = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}moveTo.png'),
+            'Move selected images specific position', self)
+        act_to_pos.triggered.connect(
+            lambda: self.tree_file_list.move_file(direction='to'))
+        act_add_dummy = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}add_dummy.png'),
+            'Add dummy image(s) if missing images for QuickTest templates', self)
+        act_add_dummy.triggered.connect(self.add_dummy)
         act_sort = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}sortAZ.png'),
             'Sort images from patterns based on DICOM header', self)
@@ -1071,7 +1088,8 @@ class MainWindow(QMainWindow):
         tool_bar.addWidget(self.chk_append)
         tool_bar.addSeparator()
         tool_bar.addActions([
-            act_to_top, act_to_up, act_to_down, act_to_bottom, act_sort])
+            act_to_top, act_to_up, act_to_down, act_to_bottom, act_to_pos, act_sort,
+            act_add_dummy])
         self.lbl_n_loaded = QLabel('0    ')
         tool_bar.addWidget(QLabel('Loaded images:'))
         tool_bar.addWidget(self.lbl_n_loaded)

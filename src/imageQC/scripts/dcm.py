@@ -66,7 +66,7 @@ class DcmInfoGui(DcmInfo):
     file_list_strings: list = field(default_factory=list)
     # for file list display if not path
     series_list_strings: list = field(default_factory=list)
-    # for seriesnumber / seriesdescription used in open multi
+    # for groups used in open multi
     window_width: int = 0
     window_center: int = 0
 
@@ -81,7 +81,8 @@ def fix_sop_class(elem, **kwargs):
 
 
 def read_dcm_info(filenames, GUI=True, tag_infos=[],
-                  tag_patterns_special={}, statusbar=None):
+                  tag_patterns_special={}, statusbar=None,
+                  series_pattern=None):
     """Read Dicom header into DcmInfo(Gui) objects when opening files.
 
     Parameters
@@ -100,6 +101,8 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         for text display or annotation
     statusbar : StatusBar, optional
         for messages to screen
+    series_pattern : TagPatternFormat, optional
+        used for ui/open_multi.py. Default is None.
 
     Returns
     -------
@@ -125,6 +128,8 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
             if columns == 0:
                 file_verified = False
         except pydicom.errors.InvalidDicomError:
+            file_verified = False
+        except FileNotFoundError:
             file_verified = False
         except AttributeError:
             pydicom.config.data_element_callback = fix_sop_class
@@ -251,7 +256,8 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                         pd,
                         tag_infos=tag_infos,
                         tag_patterns_special=tag_patterns_special,
-                        modality=mod))
+                        modality=mod,
+                        series_pattern=series_pattern))
                     dcm_obj = DcmInfoGui(**attrib)
                 else:
                     dcm_obj = DcmInfo(**attrib)
@@ -261,7 +267,8 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     gui_info = get_dcm_gui_info_lists(
                         pd, tag_infos=tag_infos,
                         tag_patterns_special=tag_patterns_special,
-                        modality=mod)
+                        modality=mod,
+                        series_pattern=series_pattern)
                 frames = int(frames)
                 for frame in range(frames):
                     attrib.update({'frame_number': frame})
@@ -493,7 +500,8 @@ def get_dcm_info_list(
 
 
 def get_dcm_gui_info_lists(
-        pydict, tag_infos=[], tag_patterns_special={}, modality=''):
+        pydict, tag_infos=[], tag_patterns_special={}, modality='',
+        series_pattern=None):
     """Get Dicom header info for display in Gui.
 
     Parameters
@@ -506,6 +514,8 @@ def get_dcm_gui_info_lists(
         as defined in settings (default in iQCconstants_functions.py)
     modality : str
         current modality
+    series_pattern : TagPatternFormat, optional
+        used for ui/open_multi.py. Default is None.
 
     Returns
     -------
@@ -551,11 +561,9 @@ def get_dcm_gui_info_lists(
             file_list_strings = get_dcm_info_list(
                 pydict, tag_patterns_special[modality][2], tag_infos)
 
-        series_pattern = TagPatternFormat(
-            list_tags=['SeriesNumber', 'SeriesDescription'],
-            list_format=['|:04.0f|', ''])
-        series_list_strings = get_dcm_info_list(
-            pydict, series_pattern, tag_infos)
+        if series_pattern is not None:
+            series_list_strings = get_dcm_info_list(
+                pydict, series_pattern, tag_infos)
 
     return {
         'info_list_general': info_list_general,
@@ -762,6 +770,8 @@ def get_tags(filepath, frame_number=-1, tag_patterns=[], tag_infos=None):
             pd = pydicom.dcmread(filepath, stop_before_pixels=True)
         except pydicom.errors.InvalidDicomError:
             pass
+        except FileNotFoundError:
+            pass  # TODO show errormessage
         if pd is not None:
             tag_strings = read_tag_patterns(
                 pd, tag_patterns, tag_infos, frame_number=frame_number)
@@ -968,7 +978,7 @@ def get_special_tag_data(pd, tag_info=None):
 
 def find_all_valid_dcm_files(
         path_str, parent_widget=None, grouped=True,
-        search_subfolders=True):
+        search_subfolders=True, progress_modal=None):
     """Find all valid DICOM files in a directory.
 
     Parameters
@@ -981,6 +991,8 @@ def find_all_valid_dcm_files(
         group files in lists for each (sub)folder. Default is True
     search_subfolders : bool
         search is recursive. Default is True.
+    progress_modal : ui/reusable_widgets.ProgressModal, Optional
+        modal progress bar to update. Default is None
 
     Returns
     -------
@@ -996,19 +1008,35 @@ def find_all_valid_dcm_files(
         p = Path(path_str)
         if p.is_dir():
             glob_string = '**/*' if search_subfolders else '*'
+            if progress_modal is not None:
+                progress_modal.setLabelText('Searching for files with .dcm extension')
             dcm_files = [x for x in p.glob(glob_string) if x.suffix == '.dcm']
             if len(dcm_files) == 0:
+                if progress_modal is not None:
+                    progress_modal.setLabelText(
+                        'Searching for files with any file extension')
                 files = [x for x in p.glob(glob_string) if x.is_file()]
                 dcm_files = []
-                for file in files:
+                if progress_modal is not None:
+                    progress_modal.setRange(0, len(files))
+                for i, file in enumerate(files):
                     try:
                         pydicom.dcmread(file, specific_tags=[(0x8, 0x60)])
                         dcm_files.append(file)
                     except pydicom.errors.InvalidDicomError:
                         pass
+                    except FileNotFoundError:
+                        pass  # TODO show errormessage
                     except AttributeError:
                         pass
+                    if progress_modal is not None:
+                        progress_modal.setLabelText(
+                            f'Validated {len(dcm_files)} out of {len(files)} files as '
+                            'DICOM files ... so far')
+                        progress_modal.setValue(i+1)
             if len(dcm_files) == 0 and parent_widget is not None:
+                if progress_modal is not None:
+                    progress_modal.reset()
                 QMessageBox.information(
                     parent_widget, 'No valid DICOM',
                     'Found no valid DICOM files in the given folder.')
@@ -1133,6 +1161,10 @@ def dump_dicom(parent_widget, filename=''):
             dlg.show()
 
         except pydicom.errors.InvalidDicomError:
+            QMessageBox.warning(
+                parent_widget, 'Dicom read failed',
+                'Failed to read selected file as dicom.')
+        except FileNotFoundError:
             QMessageBox.warning(
                 parent_widget, 'Dicom read failed',
                 'Failed to read selected file as dicom.')

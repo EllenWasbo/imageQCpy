@@ -7,7 +7,7 @@ Collection of small functions used in ImageQC.
 """
 import numpy as np
 from scipy.optimize import curve_fit
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, rotate
 from scipy.ndimage.interpolation import geometric_transform
 from scipy.signal import convolve2d
 
@@ -761,6 +761,39 @@ def rotate_point(xy, rotation_axis_xy, angle):
     new_x = xr + np.cos(rad_angle) * (x - xr) - np.sin(rad_angle) * (y - yr)
     new_y = yr + np.sin(rad_angle) * (x - xr) + np.cos(rad_angle) * (y - yr)
     return (new_x, new_y)
+
+
+def rotate2d_offcenter(array2d, angle, offcenter):
+    """Rotate 2d array around offcenter position.
+
+    from stackoverflow.com/questions/25458442/
+    rotate-a-2d-image-around-specified-origin-in-python
+
+    Parameters
+    ----------
+    array2d : np.array
+        Array to rotate
+    angle : int
+        Rotation angle.
+    offcenter : tuple of ints
+        (x, y) relative to image(array) center
+
+    Returns
+    -------
+    rotated_2darray : np.array
+    """
+    arrshape = array2d.shape
+    center = (offcenter[0] + arrshape[1] // 2, offcenter[1] + arrshape[0] // 2)
+    pad_x = [arrshape[1] - round(center[0]), round(center[0])]
+    pad_y = [arrshape[0] - round(center[1]), round(center[1])]
+    try:
+        padded_image = np.pad(array2d, [pad_y, pad_x], 'constant')
+        rotated_padded = rotate(padded_image, angle, reshape=False)
+        rotated_2darray = rotated_padded[pad_y[0]:-pad_y[1], pad_x[0]:-pad_x[1]]
+    except ValueError:  # TODO errmsg (e.g. negative pad_width )
+        rotated_2darray = array2d
+
+    return rotated_2darray
 
 
 def get_curve_values(x, y, y_values, force_first_below=False):

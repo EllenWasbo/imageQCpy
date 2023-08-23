@@ -159,8 +159,12 @@ class RenameDicomDialog(ImageQCDialog):
 
     def gather_files(self):
         """Move all dicom files in subfolders to this folder."""
+        progress_modal = uir.ProgressModal(
+            "Searching...", "Stop", 0, 100, self, hide_cancel=True)
         dcm_dict = find_all_valid_dcm_files(
-            self.path.text(), parent_widget=self, grouped=False)
+            self.path.text(), parent_widget=self, grouped=False,
+            progress_modal=progress_modal)
+        progress_modal.reset()
         if len(dcm_dict['files']) > 0:
             # check if parent is the specified folder? Else no need to move
             proceed = True
@@ -178,7 +182,9 @@ class RenameDicomDialog(ImageQCDialog):
             if proceed:
                 count_renamed = 0
                 failed_paths = []
-                for file in dcm_dict['files']:
+                n_files = len(dcm_dict['files'])
+                progress_modal.setRange(0, n_files)
+                for i, file in enumerate(dcm_dict['files']):
                     path = Path(file)
                     new_file = Path(self.path.text()) / path.name
                     new_file_str = generate_uniq_filepath(new_file.resolve())
@@ -188,9 +194,11 @@ class RenameDicomDialog(ImageQCDialog):
                             count_renamed += 1
                         except FileExistsError as err:
                             failed_paths.append(file.resolve())
-                            print(f'Failed renameing {file} to {new_file_str}/n{err}')
+                            print(f'Failed renaming {file} to {new_file_str}/n{err}')
                     else:
                         failed_paths.append(file.resolve())
+                    progress_modal.setValue(i+1)
+                    progress_modal.setLabelText(f'Renaming file {i+1}/{n_files}...')
                 self.reset_names()
                 if count_renamed != len(dcm_dict['files']):
                     dlg = messageboxes.MessageBoxWithDetails(
@@ -201,8 +209,7 @@ class RenameDicomDialog(ImageQCDialog):
                     dlg.exec()
 
                 proceed = messageboxes.proceed_question(
-                    self,
-                    'Remove empty folders?')
+                    self, 'Remove empty folders?')
 
             if proceed:
                 for root, dirs, _ in os.walk(
@@ -235,9 +242,12 @@ class RenameDicomDialog(ImageQCDialog):
             errmsg = ['No writing permissing for given path.']
 
         if proceed:
+            progress_modal = uir.ProgressModal(
+                "Searching...", "Stop", 0, 100, self, hide_cancel=True)
             dcm_dict = find_all_valid_dcm_files(
-                self.path.text(), parent_widget=self,
+                self.path.text(), parent_widget=self, progress_modal=progress_modal,
                 grouped=False, search_subfolders=False)
+            progress_modal.reset()
             if len(dcm_dict['files']) > 0:
 
                 if series_uid:
@@ -258,15 +268,15 @@ class RenameDicomDialog(ImageQCDialog):
                     new_filenames = []
                     dcm_files = dcm_dict['files']
                     max_val = len(dcm_files)
-                    progress = uir.ProgressModal(
+                    progress_modal = uir.ProgressModal(
                         "Building new subfolder names...", "Stop",
                         0, max_val, self)
                     if series_uid:
                         new_folders, dcm_files = self.sort_seriesUID(
-                            dcm_files, progress_widget=progress)
+                            dcm_files, progress_widget=progress_modal)
                     else:
                         for i, file in enumerate(dcm_files):
-                            progress.setValue(i)
+                            progress_modal.setValue(i)
                             pd = pydicom.dcmread(
                                 file.resolve(), stop_before_pixels=True)
                             name_parts = get_dcm_info_list(
@@ -286,11 +296,11 @@ class RenameDicomDialog(ImageQCDialog):
                                 new_name_file = valid_path(new_name_file) + '.dcm'
                                 new_filenames.append(new_folders[-1] / new_name_file)
 
-                            if progress.wasCanceled():
+                            if progress_modal.wasCanceled():
                                 new_folders = []
                                 break
 
-                    progress.setValue(max_val)
+                    progress_modal.reset()
                     if len(new_folders) > 0:
                         uniq_new_folders = list(set(new_folders))
 
@@ -315,11 +325,11 @@ class RenameDicomDialog(ImageQCDialog):
 
                     if proceed:
                         max_val = len(dcm_files)
-                        progress = uir.ProgressModal(
+                        progress_modal = uir.ProgressModal(
                             "Moving files into subfolders...", "Stop",
                             0, max_val, self)
                         for i, file in enumerate(dcm_files):
-                            progress.setValue(i)
+                            progress_modal.setValue(i)
                             new_folder = new_folders[i]
                             if new_folder.exists() is False:
                                 try:
@@ -336,9 +346,9 @@ class RenameDicomDialog(ImageQCDialog):
                             except (PermissionError, OSError) as e:
                                 errmsg.append(f'{file.resolve}: {e}')
 
-                            if progress.wasCanceled():
+                            if progress_modal.wasCanceled():
                                 break
-                        progress.setValue(max_val)
+                        progress_modal.reset()
 
         if len(errmsg) > 0:
             dlg = messageboxes.MessageBoxWithDetails(
@@ -353,8 +363,12 @@ class RenameDicomDialog(ImageQCDialog):
 
     def generate_names(self, limit=0):
         """Generate names for folders or files."""
+        progress_modal = uir.ProgressModal(
+            "Searching for files...", "Stop", 0, 100, self, hide_cancel=True)
         self.valid_dict = find_all_valid_dcm_files(
-            self.path.text(), parent_widget=self, grouped=True)
+            self.path.text(), parent_widget=self,
+            progress_modal=progress_modal,grouped=True)
+        progress_modal.reset()
         dcm_folders = self.valid_dict['folders']
         dcm_files = self.valid_dict['files']
         if len(dcm_folders) > 0:
@@ -374,7 +388,10 @@ class RenameDicomDialog(ImageQCDialog):
                     if limit > 0:
                         if len(dcm_folders) > limit:
                             dcm_folders = dcm_folders[:limit]
+                    progress_modal.setRange(0, len(dcm_folders))
+                    progress_modal.setLabelText('Generate new folder names...')
                     for i, folder in enumerate(dcm_folders):
+                        progress_modal.setValue(i)
                         pd = pydicom.dcmread(
                             dcm_files[i][0].resolve(), stop_before_pixels=True)
                         name_parts = get_dcm_info_list(
@@ -384,6 +401,7 @@ class RenameDicomDialog(ImageQCDialog):
                         new_name = "_".join(name_parts)
                         new_name = valid_path(new_name, folder=True)
                         self.new_names.append(folder.parent / new_name)
+                    progress_modal.reset()
                 else:
                     empty_tag_pattern = True
 
@@ -398,7 +416,10 @@ class RenameDicomDialog(ImageQCDialog):
                     if limit > 0:
                         if len(dcm_files) > limit:
                             dcm_files = dcm_files[:limit]
-                    for file in dcm_files:
+                    progress_modal.setRange(0, len(dcm_files))
+                    progress_modal.setLabelText('Generate new file names...')
+                    for i, file in enumerate(dcm_files):
+                        progress_modal.setValue(i)
                         pd = pydicom.dcmread(
                             file.resolve(), stop_before_pixels=True)
                         name_parts = get_dcm_info_list(
@@ -408,6 +429,7 @@ class RenameDicomDialog(ImageQCDialog):
                         new_name = "_".join(name_parts)
                         new_name = valid_path(new_name) + '.dcm'
                         self.new_names.append(file.parent / new_name)
+                    progress_modal.reset()
                 else:
                     empty_tag_pattern = True
 
@@ -419,17 +441,6 @@ class RenameDicomDialog(ImageQCDialog):
 
             if len(self.new_names) > 0:  # ensure unique names
                 self.new_names = self.get_uniq_filenames(self.new_names)
-                '''delete
-                uniq_names = list(set(self.new_names))
-                for name in uniq_names:
-                    n_same = self.new_names.count(name)
-                    if n_same > 1:
-                        idxs = get_all_matches(self.new_names, name)
-                        base_name = str(name.parent / name.stem)
-                        for i in enumerate(idxs):
-                            new_name = f'{base_name}_({i:03}).dcm'
-                            self.new_names[i] = Path(new_name)
-                '''
 
             self.fill_table()
             if limit == 0 and len(self.new_names) > 0:
@@ -445,17 +456,17 @@ class RenameDicomDialog(ImageQCDialog):
 
         if proceed:  # rename first step
             max_val = len(self.original_names)
-            progress = uir.ProgressModal(
+            progress_modal = uir.ProgressModal(
                 "Renaming ...", "Stop", 0, max_val, self)
             for i, path in enumerate(self.original_names):
-                progress.setValue(i)
+                progress_modal.setValue(i)
                 try:
                     path.rename(self.new_names[i])
                 except (PermissionError, OSError) as err:
                     errmsg.append(f'{path.resolve}: {err}')
-                if progress.wasCanceled():
+                if progress_modal.wasCanceled():
                     break
-            progress.setValue(max_val)
+            progress_modal.reset()
 
         tag_pattern = cfc.TagPatternFormat(
             list_tags=self.wid_rename_pattern.current_template.list_tags2,
@@ -472,7 +483,7 @@ class RenameDicomDialog(ImageQCDialog):
 
         if proceed:  # rename files in subfolders
             max_val = sum(len(li) for li in self.valid_dict['files'])
-            progress = uir.ProgressModal(
+            progress_modal = uir.ProgressModal(
                 "Renaming files in subfolders...", "Stop",
                 0, max_val, self)
 
@@ -481,7 +492,7 @@ class RenameDicomDialog(ImageQCDialog):
                 new_folder = self.new_names[folder_no]
                 if new_folder.exists():
                     for file in file_list:
-                        progress.setValue(counter)
+                        progress_modal.setValue(counter)
                         file_new_loc = new_folder / file.name
                         try:
                             pd = pydicom.dcmread(
@@ -499,12 +510,12 @@ class RenameDicomDialog(ImageQCDialog):
                             pass  # should be validated already
                         except (PermissionError, OSError) as err:
                             errmsg.append(f'{file.resolve}: {err}')
-                        if progress.wasCanceled():
+                        if progress_modal.wasCanceled():
                             break
                         counter += 1
-                if progress.wasCanceled():
+                if progress_modal.wasCanceled():
                     break
-            progress.setValue(max_val)
+            progress_modal.reset()
 
         if len(errmsg) > 0:
             dlg = messageboxes.MessageBoxWithDetails(
@@ -560,7 +571,7 @@ class RenameDicomDialog(ImageQCDialog):
             folder_names = []
             for uid in uniq_uids:
                 idx_this = uids.index(uid)
-                ser_descr_this = series_descr[idx_this]
+                ser_descr_this = valid_path(series_descr[idx_this], folder=True)
                 if ser_descr_this in folder_names:
                     n_already = folder_names.count(ser_descr_this)
                     ser_descr_this_mod = f'{ser_descr_this}_{n_already:03}'

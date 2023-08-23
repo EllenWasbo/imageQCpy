@@ -96,7 +96,8 @@ def run_automation_non_gui(args):
                     status = False
 
         if status is False:
-            print('python imageQC.py [-i [-ndays=n] [-a|-v|-d] [<mod>] [<mod>/<temp>]')
+            print('python imageQC.py [-i [-ndays=n] [-a all/dicom/vendor] '
+                  '[<mod>] [<mod>/<temp>]')
 
         return (status, modalities, templates)
 
@@ -490,7 +491,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                 progress_modal.setLabelText('Moving files')
             move_errors = []
             for f_id, file in enumerate(files):
-                progress_modal.setValue(int(len(files) + f_id * 0.5))
+                if progress_modal is not None:
+                    progress_modal.setValue(int(len(files) + f_id * 0.5))
                 if file_renames[f_id] != '':
                     new_path = (Path(file_new_folder[f_id]) != file.parent
                                 or file_renames[f_id] != file.stem)
@@ -807,6 +809,12 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                 )
 
                         nd = len(uniq_date_uids)
+                        if parent_widget is not None:
+                            curr_val = parent_widget.progress_modal.value()
+                            diff = curr_val - start_progress_val
+                            sub_interval = int((100-diff)/nd)
+                            parent_widget.progress_modal.sub_interval = sub_interval
+
                         for d, uniq_date_uid in enumerate(uniq_date_uids):
                             if parent_widget is None:
                                 print(f'\rAnalysing image set {d}/{nd} for template ',
@@ -835,11 +843,13 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             calculate_qc(input_main_this, wid_auto=parent_widget,
                                          auto_template_label=auto_template.label,
                                          auto_template_session=f'Session {d+1}/{nd}')
-                            if parent_widget is not None:
-                                curr_val = parent_widget.progress_modal.value()
-                                diff = curr_val - start_progress_val
-                                new_val = curr_val + int((100-diff)/nd)
-                                parent_widget.progress_modal.setValue(new_val)
+                            #if parent_widget is not None:
+                            #    curr_val = parent_widget.progress_modal.value()
+                            #    diff = curr_val - start_progress_val
+                            #    sub_interval = int((100-diff)/nd)
+                            #    new_val = curr_val + sub_interval
+                            #    parent_widget.progress_modal.sub_interval = sub_interval
+                            #    parent_widget.progress_modal.setValue(new_val)
                             value_list, header_list = quicktest_output(input_main_this)
                             header_list = ['Date'] + header_list
                             value_list = [date_str] + value_list

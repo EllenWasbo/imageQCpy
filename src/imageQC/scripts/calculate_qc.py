@@ -251,12 +251,18 @@ def quicktest_output(input_main):
 
                     else:  # each image individually (or 3d res)
                         for r, row in enumerate(values):
+                            force_include = False
                             if row is None:
                                 row = [None] * len(headers)
-                            force_include = False
-                            if len(values) == len(marked):  # not 3d
-                                if test in marked[r]:
-                                    force_include = True  # also if all None
+                                force_include = True
+                            if len(values) == len(input_main.imgs):  # not 3d CHANGED from marked to input_main.imgs and added if len(row)=0
+                                try:
+                                    if test in marked[r]:
+                                        force_include = True  # also if all None
+                                        if len(row) == 0:
+                                            row = [None] * len(headers)
+                                except IndexError:
+                                    pass
                             if any(row) or force_include:
                                 if all([test == 'MTF',
                                         input_main.current_modality == 'CT']):
@@ -496,7 +502,8 @@ def calculate_qc(input_main, wid_auto=None,
                         read_tags[i] = True
                 elif modality == 'MR':
                     if 'SNR' in marked[i]:
-                        marked_3d[i].append('SNR')
+                        if paramset.snr_type == 0:
+                            marked_3d[i].append('SNR')
 
             # list of shape + pix for testing if new roi need to be calculated
             xypix = []
@@ -507,14 +514,15 @@ def calculate_qc(input_main, wid_auto=None,
             prev_image_xypix = {}
             prev_roi = {}
             err_extra = False
+            if wid_auto is not None:
+                curr_progress_val = wid_auto.progress_modal.value()
+                progress_increment = round(
+                    wid_auto.progress_modal.sub_interval / n_analyse)
             for i in range(n_analyse):
                 if 'MainWindow' in str(type(input_main)):
                     input_main.status_bar.showMessage(
                         f'Reading/calculating image {i}/{n_img}')
-                elif wid_auto is not None:
-                    wid_auto.progress_modal.setLabelText(
-                        f'{auto_template_label}: Reading/calculating image {i}/{n_img}'
-                        f' ({auto_template_session})')
+
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
                 image = None
@@ -530,14 +538,15 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_infos=tag_infos, NM_count=NM_count[i],
                             get_window_level=any(auto_template_label)
                             )
-                        if isinstance(tags[0], dict):
-                            tag_lists[i] = tags[0]['dummy']
-                            if extra_tag_pattern is not None:
-                                extra_tag_list.append(tags[2]['dummy'])
-                        else:
-                            tag_lists[i] = tags[0]
-                            if extra_tag_pattern is not None:
-                                extra_tag_list.append(tags[2])
+                        if len(tags) > 0:
+                            if isinstance(tags[0], dict):
+                                tag_lists[i] = tags[0]['dummy']
+                                if extra_tag_pattern is not None:
+                                    extra_tag_list.append(tags[2]['dummy'])
+                            else:
+                                tag_lists[i] = tags[0]
+                                if extra_tag_pattern is not None:
+                                    extra_tag_list.append(tags[2])
                         if extra_tag_pattern is not None:
                             if len(extra_tag_list) == 2:
                                 if extra_tag_list_compare is None:
@@ -558,11 +567,13 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_patterns=[paramset.dcm_tagpattern, group_pattern],
                             tag_infos=tag_infos
                             )
-                        if isinstance(tags[0], dict):
-                            tag_lists[i] = tags[0]['dummy']
-                        else:
-                            tag_lists[i] = tags[0]
-                    input_main.current_group_indicators[i] = '_'.join(tags[1])
+                        if len(tags) > 0:
+                            if isinstance(tags[0], dict):
+                                tag_lists[i] = tags[0]['dummy']
+                            else:
+                                tag_lists[i] = tags[0]
+                    if len(tags) > 0:
+                        input_main.current_group_indicators[i] = '_'.join(tags[1])
                 else:
                     if read_image[i]:
                         image, tags = dcm.get_img(
@@ -572,8 +583,15 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_infos=tag_infos,
                             get_window_level=any(auto_template_label)
                             )
-                        input_main.current_group_indicators[i] = '_'.join(tags[0])
+                        if len(tags) > 0:
+                            input_main.current_group_indicators[i] = '_'.join(tags[0])
                 if wid_auto is not None:
+                    wid_auto.progress_modal.setLabelText(
+                        f'{auto_template_label}: Calculating '
+                        f'img {i+1}/{n_img} ({auto_template_session})'
+                        )
+                    wid_auto.progress_modal.setValue(
+                        curr_progress_val + (i+1) * progress_increment)
                     if image is not None and wid_auto.chk_display_images.isChecked():
                         wid_auto.wid_image_display.canvas.main.active_img = image
                         wid_auto.wid_image_display.canvas.img_draw(
@@ -609,11 +627,7 @@ def calculate_qc(input_main, wid_auto=None,
                                     canv_main.current_test = test
                                     canv_main.current_roi = prev_roi[test]
                                     wid_auto.wid_image_display.canvas.roi_draw()
-                                wid_auto.progress_modal.setLabelText(
-                                    f'{auto_template_label}: Calculating '
-                                    f'img {i+1}/{n_img} ({auto_template_session})'
-                                    )
-                                qApp.processEvents()
+                                    qApp.processEvents()
 
                             result = calculate_2d(
                                 image, prev_roi[test], img_infos[i],
@@ -654,6 +668,16 @@ def calculate_qc(input_main, wid_auto=None,
                                 test]['values_sup'][i] = result.values_sup
                             input_main.results[
                                 test]['details_dict'][i] = result.details_dict
+                            '''
+                            if len(result.values) != len(result.headers):
+                                input_main.results[
+                                    test]['values'][i] = [
+                                        None for i in range(len(result.headers))]
+                            if len(result.values_sup) != len(result.headers_sup):
+                                input_main.results[
+                                    test]['values_sup'][i] = [
+                                        None for i in range(len(result.headers_sup))]
+                            '''
 
             if err_extra:
                 if extra_tag_list_compare is not None:
@@ -933,6 +957,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Noi():
+        values = []
         if image2d is not None:
             arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
             avg_val = np.mean(arr)
@@ -950,6 +975,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Hom():
+        values = []
         headers_sup = []
         values_sup = []
         avgs = []
@@ -1510,6 +1536,26 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
         return res
 
+    def SNR():
+        headers = HEADERS[modality][test_code]['alt1']
+        headers_sup = HEADERS_SUP[modality][test_code]['alt1']
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[0]))
+            central_mean = np.mean(arr)
+            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[1]))
+            background_stdev = np.std(arr)
+            image_noise = background_stdev/0.66  # NEMA MS 1-2008 method 4
+            snr = central_mean / image_noise
+            values = [central_mean, background_stdev, image_noise, snr]
+            values_sup = [np.count_nonzero(roi_array[1])]
+
+            res = Results(headers=headers, values=values,
+                          headers_sup=headers_sup, values_sup=values_sup)
+
+        return res
+
     def PIU():
         headers = HEADERS[modality][test_code]['alt0']
         # ['min', 'max', 'PIU'],
@@ -1620,7 +1666,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
     Parameters
     ----------
-    matrix : np.arrau
+    matrix : np.array
         list length = all images, [] if not marked for 3d else 2d image
     marked_3d : list of list of str
         for each image which 3d tests to perform
@@ -1712,15 +1758,21 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 values = None
                 values_sup = None
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
-                values = details_dict[0][prefix + 'MTF_details']['values']
-                values_sup = list(details_dict[0][
-                    'gMTF_details']['LSF_fit_params'])
+                try:
+                    values = details_dict[0][prefix + 'MTF_details']['values']
+                except TypeError:
+                    pass
+                try:
+                    values_sup = list(details_dict[0][
+                        'gMTF_details']['LSF_fit_params'])
+                except TypeError:
+                    pass
                 try:  # x-dir, y-dir
                     values.extend(
                         details_dict[1][prefix + 'MTF_details']['values'])
                     values_sup.extend(list(
                         details_dict[1]['gMTF_details']['LSF_fit_params']))
-                except (IndexError, KeyError):
+                except (IndexError, KeyError, AttributeError):
                     pass
                 res = Results(headers=headers, values=[values],
                               headers_sup=headers_sup, values_sup=[values_sup],
@@ -2070,7 +2122,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         images_to_test = []
         for i, tests in enumerate(marked_3d):
             if test_code in tests:
-                images_to_test.append(i)
+                if matrix[i] is not None:
+                    images_to_test.append(i)
 
         try:
             input_main.current_test = test_code
@@ -2155,14 +2208,16 @@ def calculate_slicethickness(
         details_dict['background'].append(background)
         profile = profile - background
         if sli_signal_low_density:
-            peak_value = np.min(profile)
             profile = -1. * profile
             background = -1. * background
-        else:
-            peak_value = np.max(profile)
-        details_dict['peak'].append(peak_value + background)
+        peak_value = np.max(profile)
         halfmax = 0.5 * peak_value
-        details_dict['halfpeak'].append(halfmax + background)
+        if sli_signal_low_density:
+            details_dict['peak'].append(-(peak_value + background))
+            details_dict['halfpeak'].append(-(halfmax + background))
+        else:
+            details_dict['peak'].append(peak_value + background)
+            details_dict['halfpeak'].append(halfmax + background)
 
         if modality == 'CT':
             if paramset.sli_type == 0:  # wire ramp Catphan
@@ -2183,11 +2238,20 @@ def calculate_slicethickness(
             else:  # beaded ramp, find envelope curve
                 # find upper envelope curve
                 local_max = (np.diff(np.sign(np.diff(profile))) < 0).nonzero()[0] + 1
-                new_x, envelope_y = mmcalc.resample(profile[local_max], local_max, 1,
-                                                    n_steps=len(profile))
-                width, center = mmcalc.get_width_center_at_threshold(
-                    envelope_y, halfmax)
-                details_dict['envelope_profiles'].append(envelope_y + background)
+                if local_max.size > 0:
+                    new_x, envelope_y = mmcalc.resample(profile[local_max], local_max, 1,
+                                                        n_steps=len(profile))
+                    width, center = mmcalc.get_width_center_at_threshold(
+                        envelope_y, halfmax)
+                    if sli_signal_low_density:
+                        details_dict['envelope_profiles'].append(
+                            -(envelope_y + background))
+                    else:
+                        details_dict['envelope_profiles'].append(
+                            envelope_y + background)
+                else:
+                    width = None
+
                 if width is not None:
                     xy_increment = 2  # mm spacing between beads in xy-direction
                     z_increment = 1  # mm spacing between beads in z-direction

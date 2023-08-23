@@ -1181,6 +1181,7 @@ class DashSettingsWidget(StackWidget):
             wid_settings.setEnabled(False)
         else:
             btn_dash = QPushButton('Start dash_app')
+            btn_dash.setIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}globe.png'))
             btn_dash.clicked.connect(self.run_dash)
             vlo_settings.addWidget(btn_dash)
             btn_save = QPushButton('Save dashboard settings')
@@ -1286,7 +1287,7 @@ class PersonsToNotifyWidget(StackWidget):
         flo.addRow(QLabel('E-mail:'), self.txt_email)
         flo.addRow(QLabel('Note/comment:'), self.txt_note)
         flo.addRow(QLabel('Send all notifications for modalities:'), self.list_mod)
-        flo.addRow(QLabel('Stop sending emails to this person.'), self.chk_mute)
+        flo.addRow(QLabel('Pause emails to this person.'), self.chk_mute)
         self.vlo_temp.addStretch()
 
         if not self.import_review_mode:

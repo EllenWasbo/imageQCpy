@@ -10,7 +10,6 @@ from scipy import ndimage
 from scipy.signal import find_peaks
 from skimage import feature
 
-
 # imageQC block start
 import imageQC.scripts.mini_methods_calculate as mmcalc
 import imageQC.scripts.dcm as dcm
@@ -86,11 +85,15 @@ def get_rois(image, image_number, input_main):
                 roi_array = [get_roi_rectangle(
                     img_shape, roi_width=w, roi_height=h,
                     offcenter_xy=off_xy) for off_xy in off_center_xys]
-                if paramset.roi_type == 2:  # rotated ROI
+                if paramset.roi_type == 2 and paramset.roi_a != 0:  # rotated ROI
                     roi_array_rotated = []
-                    for roi in roi_array:
-                        roi = ndimage.rotate(
-                            roi.astype(float), -paramset.roi_a, reshape=False)
+                    for i, roi in enumerate(roi_array):
+                        if any(off_center_xys[i]):
+                            roi = mmcalc.rotate2d_offcenter(
+                                roi.astype(float), -paramset.roi_a, off_center_xys[i])
+                        else:
+                            roi = ndimage.rotate(
+                                roi.astype(float), -paramset.roi_a, reshape=False)
                         roi = np.round(roi)
                         roi = np.array(roi, dtype=bool)
                         roi_array_rotated.append(roi)
@@ -435,9 +438,30 @@ def get_rois(image, image_number, input_main):
         return get_roi_recovery_curve(summed_img, image_info, paramset)
 
     def SNR():
-        return get_roi_circle_MR(
+        central_ROI = get_roi_circle_MR(
             image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
             )
+        if paramset.snr_type == 1:  # singel image with background ROIs
+            roi_sz = round(paramset.snr_background_size / image_info.pix[0])
+            roi_dist = round(paramset.snr_background_dist / image_info.pix[0])
+            bg_ROI = np.full(image_info.shape, False)
+            bg_ROI[roi_dist:roi_dist+roi_sz, roi_dist:roi_dist+roi_sz] = True
+            bg_ROI[
+                image_info.shape[0]-roi_dist-roi_sz:image_info.shape[0]-roi_dist,
+                image_info.shape[1]-roi_dist-roi_sz:image_info.shape[1]-roi_dist
+                ] = True
+            bg_ROI[
+                roi_dist:roi_dist+roi_sz,
+                image_info.shape[1]-roi_dist-roi_sz:image_info.shape[1]-roi_dist
+                ] = True
+            bg_ROI[
+                image_info.shape[0]-roi_dist-roi_sz:image_info.shape[0]-roi_dist,
+                roi_dist:roi_dist+roi_sz
+                ] = True
+            roi_array = [central_ROI, bg_ROI]
+        else:
+            roi_array = central_ROI
+        return roi_array
 
     def PIU():
         return get_roi_circle_MR(
@@ -454,14 +478,15 @@ def get_rois(image, image_number, input_main):
             image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
             )
 
-    try:
-        res = locals()[test_code]()
-        if isinstance(res, tuple):
-            roi_array, errmsg = res
-        else:
-            roi_array = res
-    except KeyError:
-        pass
+    if image is not None:
+        try:
+            res = locals()[test_code]()
+            if isinstance(res, tuple):
+                roi_array, errmsg = res
+            else:
+                roi_array = res
+        except KeyError:
+            pass
 
     return (roi_array, errmsg)
 

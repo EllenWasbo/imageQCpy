@@ -1900,7 +1900,7 @@ class ParamsTabPET(ParamsTabCommon):
             self.clear_results_current_test)
 
         flo0 = QFormLayout()
-        flo0.addRow(QLabel('ROI size (mm)'), self.cro_roi_size)
+        flo0.addRow(QLabel('ROI radius (mm)'), self.cro_roi_size)
         flo0.addRow(QLabel('Volume of container (ml)'), self.cro_volume)
         flo0.addRow(QLabel('Current calibration factor'), self.cro_calibration_factor)
         flo0.addRow(QLabel('           '),
@@ -2111,15 +2111,19 @@ class ParamsTabMR(ParamsTabCommon):
         self.tab_snr.hlo_top.addWidget(uir.LabelItalic('Signal to noise ratio (SNR)'))
         info_txt = '''
         Based on NEMA MS-1 2008<br>
-        (SNR = S mean * sqrt(2) / stdev difference image)<br>
+        Noise method 1 (subtraction image):
+        (SNR = S mean / [stdev difference image) / sqrt(2)]<br>
+        <br>
+        Noise method 4 (noise from artifact free background):
+        (SNR = S mean / [stdev background / 0.66]<br>
         <br>
         Center and size of phantom will be found from maximum x and y profiles.
         <br><br>
+        Noise method 1:<br>
         Difference image is calculated from image2 - image1,
         image4 - image3 ...<br>
         If some images are marked, only marked images are considered.<br>
         If odd number of images, the last image will be ignored.<br>
-        <br>
         Results in table and result image will be linked to the first of
         each two images.
         '''
@@ -2135,9 +2139,30 @@ class ParamsTabMR(ParamsTabCommon):
         self.snr_roi_cut_top.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='snr_roi_cut_top'))
 
+        self.snr_type = QComboBox()
+        self.snr_type.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='snr_type'))
+        self.snr_type.addItems(ALTERNATIVES['MR']['SNR'])
+
+        self.snr_background_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=200., singleStep=1)
+        self.snr_background_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='snr_background_size'))
+
+        self.snr_background_dist = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=200., singleStep=1)
+        self.snr_background_dist.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='snr_background_dist'))
+
         flo = QFormLayout()
         flo.addRow(QLabel('ROI % of circular phantom area'), self.snr_roi_percent)
         flo.addRow(QLabel('Cut top of ROI by (mm)'), self.snr_roi_cut_top)
+        flo.addRow(QLabel('SNR method'), self.snr_type)
+        flo.addRow(QLabel('Background ROI width/height (mm)'),
+                   self.snr_background_size)
+        flo.addRow(QLabel('Background ROI distance from image border (mm)'),
+                   self.snr_background_dist)
+
         self.tab_snr.hlo.addLayout(flo)
         self.tab_snr.hlo.addStretch()
 
@@ -2867,7 +2892,7 @@ class CTnTableWidget(QWidget):  # TODO PositionWidget
                 labels = [*table_dict]
                 label, ok = QInputDialog.getItem(
                     self.main, "Select predefined table",
-                    "Predefined tables:", labels, 0, False)
+                    "Predefined tables:                     ", labels, 0, False)
                 if ok and label:
                     ctn_table = table_dict[label]
 

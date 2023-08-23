@@ -531,6 +531,9 @@ class ParamSetMR(ParamSetCommon):
 
     snr_roi_percent: float = 75.
     snr_roi_cut_top: int = 0
+    snr_type: int = 0  # 0 from two images, from single image
+    snr_background_size: float = 10.  # mm width/height
+    snr_background_dist: float = 10.  # mm from image border
     piu_roi_percent: float = 75.
     piu_roi_cut_top: int = 0
     gho_roi_central: float = 80.

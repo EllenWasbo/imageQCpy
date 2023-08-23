@@ -83,7 +83,10 @@ if __name__ == '__main__':
         if os.environ[ENV_CONFIG_FOLDER] == '':
             print('Config folder not specified. Run GUI version to configure imageQC.')
         else:
-            parser = argparse.ArgumentParser(prog='imageQC')
+            parser = argparse.ArgumentParser(
+                prog='imageQC',
+                # desription=''
+                )
             parser.add_argument('-i', '--import_images', action='store_true',
                                 help='Import new files from the image pool')
             parser.add_argument('-n', '--ndays', type=int, default=-2,
@@ -94,12 +97,12 @@ if __name__ == '__main__':
                                 choices=['none', 'all', 'dicom', 'vendor'],
                                 default='none',
                                 help='Run templates in both DICOM and vendor based '
-                                'templates (all) or just from DICOM based '
-                                'or vendor base templates.')
-            parser.add_argument('modality_temp', nargs='*',
+                                'templates (-a all) or just from DICOM based '
+                                '(-a dicom) or vendor base templates (-a vendor).')
+            parser.add_argument('modality_temp', metavar='modality1 modality2/temp7', nargs='*',
                                 help='Limit the run for specified modalities '
                                 'or the specified modality/templatename '
-                                'e.g. CT Xray/template1 MR/template3.')
+                                'e.g. CT Xray/lab9 MR/lab3.')
             #try:
             args = parser.parse_args()
             '''

@@ -104,10 +104,13 @@ class TreeFileList(QTreeWidget):
                     test_string = 'x' if img.marked else ''
                 frameno = f'{img.frame_number}' if img.frame_number > -1 else ''
 
-                if self.main.cbox_file_list_display.currentIndex() == 0:
-                    file_text = img.filepath
+                if img.filepath == '':
+                    file_text = ' -- dummy -- '
                 else:
-                    file_text = ' '.join(img.file_list_strings)
+                    if self.main.cbox_file_list_display.currentIndex() == 0:
+                        file_text = img.filepath
+                    else:
+                        file_text = ' '.join(img.file_list_strings)
                 QTreeWidgetItem(self, [file_text, frameno, test_string])
             self.main.lbl_n_loaded.setText(str(len(self.main.imgs)))
             try:
@@ -286,17 +289,32 @@ class TreeFileList(QTreeWidget):
         """
         selrows, _ = self.get_selected_imgs()
         if len(selrows) > 0:
-            if direction in ['top', 'down', 'up', 'bottom']:
+            if direction in ['top', 'down', 'up', 'bottom', 'to']:
                 selrows_rev = sorted(selrows, reverse=True)
                 selrows_ord = sorted(selrows)
                 n_imgs = len(self.main.imgs)
                 n_moved = len(selrows)
                 popped_imgs = []
                 order = [i for i in range(n_imgs)]
+                set_selected = None
                 for i in selrows_rev:
                     popped_imgs.insert(0, self.main.imgs.pop(i))
                     order.pop(i)
-                if direction == 'bottom':
+                if direction == 'to':
+                    if len(selrows) == 1:
+                        msg = 'Let the selected image be number:'
+                    else:
+                        msg = 'Let the selected images start at image number:'
+                    num, proceed = QInputDialog.getInt(
+                        self, "Move image(s) to...",
+                        msg, value=1, min=1, max=len(self.main.imgs))
+                    if proceed:
+                        num -= 1
+                        for i, selidx in enumerate(selrows_ord):
+                            self.main.imgs.insert(num + i, popped_imgs[i])
+                            order.insert(num + i, selidx)
+                        set_selected = list(range(num, num + len(selrows), 1))
+                elif direction == 'bottom':
                     self.main.imgs.extend(popped_imgs)
                     set_selected = [i for i in range(n_imgs-n_moved, n_imgs)]
                     order = order + selrows_ord
@@ -310,10 +328,11 @@ class TreeFileList(QTreeWidget):
                         self.main.imgs.insert(selidx + addidx, popped_imgs[i])
                         order.insert(selidx + addidx, selidx)
                     set_selected = list(np.array(selrows) + addidx)
-                self.update_file_list(set_selected=set_selected)
-                if self.main.results:
-                    self.main.update_results(sort_idxs=order)
-                    self.main.refresh_selected_table_row()
+                if set_selected is not None:
+                    self.update_file_list(set_selected=set_selected)
+                    if self.main.results:
+                        self.main.update_results(sort_idxs=order)
+                        self.main.refresh_selected_table_row()
 
     def set_image_or_group_name(self, image_or_group='image'):
         """Set name of selected image for QuickTestTemplate."""

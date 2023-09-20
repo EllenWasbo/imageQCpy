@@ -807,8 +807,9 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.current_image = details_this['NPS']
             elif 'SNI values map' in sel_txt:
                 self.title = 'SNI values map'
-                self.current_image = details_dict['SNI_map']
-                self.min_val = 0
-                max_in_res = np.max(self.main.results['SNI']['values'])
-                if max_in_res > 0:
-                    self.max_val = max_in_res
+                if 'SNI_map' in details_dict:
+                    self.current_image = details_dict['SNI_map']
+                    self.min_val = 0
+                    max_in_res = np.max(self.main.results['SNI']['values'])
+                    if max_in_res > 0:
+                        self.max_val = max_in_res

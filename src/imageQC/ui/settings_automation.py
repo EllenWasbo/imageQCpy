@@ -11,17 +11,17 @@ import webbrowser
 from pathlib import Path
 
 from PyQt5.QtCore import Qt, QThread
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QIcon, QBrush, QColor
 from PyQt5.QtWidgets import (
     QApplication, qApp, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QToolBar, QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox,
-    QListWidget, QTableWidget, QTableWidgetItem, QComboBox,
-    QMessageBox, QDialogButtonBox, QFileDialog
+    QListWidget, QComboBox, QDoubleSpinBox,
+    QMessageBox, QDialogButtonBox, QInputDialog, QFileDialog
     )
 
 # imageQC block start
 from imageQC.config.iQCconstants import (
-    ENV_ICON_PATH, LOG_FILENAME, VENDOR_FILE_OPTIONS, QUICKTEST_OPTIONS)
+    ENV_ICON_PATH, LOG_FILENAME, VENDOR_FILE_OPTIONS)
 from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
 from imageQC.ui.settings_reusables import (
@@ -30,7 +30,9 @@ from imageQC.ui.tag_patterns import TagPatternWidget, TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui.ui_dialogs import ImageQCDialog, TextDisplay
 from imageQC.ui import messageboxes
-from imageQC.scripts.mini_methods import create_empty_file, create_empty_folder
+from imageQC.scripts.mini_methods import (
+    create_empty_file, create_empty_folder, find_value_in_sublists)
+from imageQC.scripts.mini_methods_format import valid_template_name
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm
 from imageQC.dash_app import dash_app
@@ -69,12 +71,15 @@ class AutoInfoWidget(StackWidget):
             for the trends (output of automation templates above).<br>
             Until that is in place, use f.x. Excel or PowerBI to visualize
             the trends.<br>
-            <b>Persons to notify</b><br>
-            This is work in progress too. Persons can be added to the automation
-            templates to recieve email if values outside set limits. <br>
-            This functionality is under construction.
             '''
             )
+        #TODO delete:
+        '''
+        <b>Persons to notify</b><br>
+        This is work in progress too. Persons can be added to the automation
+        templates to recieve email if values outside set limits. <br>
+        This functionality is under construction.
+        '''
         super().__init__(dlg_settings, header, subtxt)
         self.vlo.addStretch()
 
@@ -440,87 +445,694 @@ class AutoCommonWidget(StackWidget):
             self.import_review_mark_txt.setText('Import and overwrite current')
 
 
-class LimitEditDialog(ImageQCDialog):
-    """Dialog for editing limits."""
+class LimitsAndPlotRow(QWidget):
+    """Widget for each parameter to set or unset."""
 
-    def __init__(self, headers=None, first_values=None, min_max=None):
+    def __init__(self, parent, text=''):
         super().__init__()
-        self.headers = headers
-        self.min_max = min_max
+        self.parent = parent
+        hlo = QHBoxLayout()
+        self.gb_enable = QGroupBox()
+        hlo_enable = QHBoxLayout()
+        self.gb_enable.setLayout(hlo_enable)
+        self.setLayout(hlo)
+        self.checkbox = QCheckBox(text)
+        self.checkbox.clicked.connect(self.state_edited)
+        self.spin = QDoubleSpinBox()
+        self.spin.editingFinished.connect(self.parent.flag_edit)
+        self.ref_float = None
 
-        self.setWindowTitle('Edit limits')
-        self.setMinimumWidth(800)
+        hlo.addWidget(self.checkbox)
+        hlo.addWidget(self.gb_enable)
+        hlo_enable.addWidget(self.spin)
+
+    def set_data(self, value, min_value=None, max_value=100,
+                 decimals=1, ref_value=None):
+        """Set data based on input. Validate ref_value if float.
+
+        Parameters
+        ----------
+        value : float or None
+            from defined group limits or ranges
+        min_value : float, optional
+            minimum value for the spinbox. The default is None.
+            if None, minimum = -maximum
+        max_value : float, optional
+            maximum value for the spinbox. The default is 100.
+        decimals : int, optional
+            number of decimals to display. The default is 1.
+        ref_value : float or None, optional
+            sample value. The default is None.
+        """
+        self.blockSignals(True)
+        self.checkbox.setChecked(value is not None)
+
+        if value is None:
+            self.gb_enable.setEnabled(False)
+        else:
+            self.gb_enable.setEnabled(True)
+        self.spin.setDecimals(decimals)
+        self.spin.setMaximum(max_value)
+        if min_value is None:
+            self.spin.setMinimum(-max_value)
+        else:
+            self.spin.setMinimum(min_value)
+        if isinstance(value, (int, float)):
+            self.spin.setValue(value)
+        else:
+            self.spin.setValue(0)
+        self.ref_float = ref_value
+        self.blockSignals(False)
+
+    def state_edited(self):
+        """Actions when checkbox state change by user."""
+        if self.checkbox.isChecked():
+            if self.ref_float is None:
+                self.gb_enable.setEnabled(False)
+            else:
+                self.gb_enable.setEnabled(True)
+        else:
+            self.gb_enable.setEnabled(False)
+        self.parent.flag_edit()
+
+    def get_data(self):
+        """Return value of spinbox.
+
+        Returns
+        -------
+        value : float
+        """
+        value = None
+        if self.checkbox.isChecked():
+            value = self.spin.value()
+        return value
+
+
+class LimitsAndPlotContent(QWidget):
+    """Widget for limits and plot settings used for both StackWidget and edit dialog."""
+
+    def __init__(self, parent, sample_file_path='', initial_template_label='',
+                 type_vendor=False):
+        """Generate widget content to edit limits template.
+
+        Parameters
+        ----------
+        parent : StackWidget or None
+            if StackWidget register changes with parent.flag_edit(True)
+        sample_file_path : str, optional
+            Result file used to get column headers and sample values. The default is ''.
+        initial_template_label : str, optional
+            limits template label to watch or edit (start with). The default is ''.
+        type_vendor : bool, optional
+            Is the limits template used for vendor type automation?
+            The default is False.
+        """
+        super().__init__()
         vlo = QVBoxLayout()
         self.setLayout(vlo)
+        self.initial_template_label = initial_template_label
+        self.type_vendor = type_vendor
+        self.parent = parent
 
-        self.table = QTableWidget(self)
-        self.table.setColumnCount(len(self.headers))
-        self.table.setHorizontalHeaderLabels(self.headers)
-        n_rows = 2 if first_values is None else 3
-        self.table.setRowCount(n_rows)
+        self.headers = []  # column headers flattened from template.groups
+        self.group_numbers = []  # group number for each element in headers
 
-        for col in range(len(self.headers)):
-            col_vals = [None, None, None]
+        self.txt_sample_file_path = QLineEdit(sample_file_path)
+        self.txt_sample_file_path.textChanged.connect(self.update_from_sample_file)
+
+        self.list_headers = QListWidget()
+        self.list_headers.setFixedWidth(300)
+        self.list_headers.setSelectionMode(QListWidget.ExtendedSelection)
+        self.list_headers.currentItemChanged.connect(self.item_selected)
+        self.list_headers.itemClicked.connect(self.update_data_selected)
+
+        self.lbl_sample_value = uir.LabelItalic('')
+        self.txt_title = QLineEdit('')
+        self.txt_title.editingFinished.connect(self.flag_edit)
+        self.min_tolerance = LimitsAndPlotRow(self, text='Tolerance (min)')
+        self.max_tolerance = LimitsAndPlotRow(self, text='Tolerance (max)')
+        self.min_range = LimitsAndPlotRow(self, text='Y plot range (min)')
+        self.max_range = LimitsAndPlotRow(self, text='Y plot range (max)')
+        self.chk_hide = QCheckBox('Hide from plots in results dashboard')
+        self.chk_hide.clicked.connect(self.flag_edit)
+
+        btn_group_selected = QPushButton('Group selected')
+        btn_group_selected.clicked.connect(self.group_selected)
+        btn_ungroup_selected = QPushButton('Ungroup selected')
+        btn_ungroup_selected.clicked.connect(self.ungroup_selected)
+
+        hlo_sample = QHBoxLayout()
+        vlo.addLayout(hlo_sample)
+        self.txt_sample_file_path.setMinimumWidth(500)
+        hlo_sample.addWidget(self.txt_sample_file_path)
+        toolb = uir.ToolBarBrowse('Locate sample results file')
+        toolb.act_browse.triggered.connect(self.locate_sample_file)
+        hlo_sample.addWidget(toolb)
+
+        hlo_content = QHBoxLayout()
+        vlo.addLayout(hlo_content)
+        vlo_list = QVBoxLayout()
+        hlo_content.addLayout(vlo_list)
+        vlo_list.addWidget(uir.LabelItalic('Column headers'))
+        vlo_list.addWidget(self.list_headers)
+        vlo_list.addWidget(btn_group_selected)
+        vlo_list.addWidget(btn_ungroup_selected)
+
+        toolb = QToolBar()
+        toolb.setOrientation(Qt.Vertical)
+        act_up = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
+            'Move tag(s) up in pattern list', self)
+        act_up.triggered.connect(lambda: self.move_group(direction='up'))
+        act_down = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}moveDown.png'),
+            'Move tag(s) down in pattern list', self)
+        act_down.triggered.connect(lambda: self.move_group(direction='down'))
+        toolb.addSeparator()
+        toolb.addActions([act_up, act_down])
+        hlo_content.addWidget(toolb)
+
+        gb_rows = QGroupBox('Settings for selected header/group')
+        gb_rows.setFont(uir.FontItalic())
+        vlo_rows = QVBoxLayout()
+        gb_rows.setLayout(vlo_rows)
+        vlo_gb = QVBoxLayout()
+        hlo_content.addLayout(vlo_gb)
+        vlo_gb.addWidget(gb_rows)
+        vlo_rows.addWidget(self.lbl_sample_value)
+        hlo_limits = QHBoxLayout()
+        vlo_rows.addLayout(hlo_limits)
+        hlo_limits.addWidget(self.min_tolerance)
+        hlo_limits.addWidget(self.max_tolerance)
+        hlo_ranges = QHBoxLayout()
+        vlo_rows.addLayout(hlo_ranges)
+        hlo_ranges.addWidget(self.min_range)
+        hlo_ranges.addWidget(self.max_range)
+        hlo_title = QHBoxLayout()
+        vlo_rows.addLayout(hlo_title)
+        hlo_title.addWidget(QLabel('Plot title'))
+        hlo_title.addWidget(self.txt_title)
+        vlo_rows.addWidget(self.chk_hide)
+        vlo_gb.addStretch()
+        hlo_content.addStretch()
+
+    def flag_edit(self, flag=True):
+        """Update current_template and send flag edited info to parent widget.
+
+        Parameters
+        ----------
+        flag : bool, optional
+            The default is True.
+        """
+        sels = self.list_headers.selectedIndexes()
+        row = sels[0].row()
+        group_idx = self.group_numbers[row]
+        self.parent.current_template.groups_limits[group_idx] = [
+            self.min_tolerance.get_data(), self.max_tolerance.get_data()]
+        self.parent.current_template.groups_ranges[group_idx] = [
+            self.min_range.get_data(), self.max_range.get_data()]
+        self.parent.current_template.groups_hide[group_idx] = self.chk_hide.isChecked()
+        self.parent.current_template.groups_title[group_idx] = self.txt_title.text()
+        self.parent.flag_edit(flag)
+
+    def get_current_modality(self):
+        """Find current modality from self.parent."""
+        if 'LimitsAndPlotWidget' in str(type(self.parent)):
+            current_modality = self.parent.current_modality
+        else:
             try:
-                col_vals[:2] = min_max[col]
-            except IndexError:
+                current_modality = self.parent.current_modality
+            except AttributeError:
                 pass
-            try:
-                col_vals[2] = first_values[col]
-            except (IndexError, TypeError):
-                pass
-            for r in range(n_rows):
-                twi = QTableWidgetItem(str(col_vals[r]))
-                twi.setTextAlignment(4)
-                self.table.setItem(r, col, twi)
+        return current_modality
 
-        labels = ['min', 'max', 'sample value']
-        self.table.setVerticalHeaderLabels(labels[0:n_rows])
-        self.table.resizeRowsToContents()
-        vlo.addWidget(self.table)
-        self.table.cellChanged.connect(self.edit_current_table)
+    def locate_sample_file(self):
+        """Locate sample output file from selecting auto_(vendor)_template."""
+        type_vendor = self.type_vendor
+        current_modality = self.get_current_modality()
+        if 'LimitsAndPlotWidget' in str(type(self.parent)):
+            res = messageboxes.QuestionBox(
+                parent=self, title='Locate output file',
+                msg='Locate output file from DICOM or vendor templates?',
+                yes_text='DICOM based templates',
+                no_text='Vendor report templates')
+            if res.exec():
+                type_vendor = False
+            else:
+                type_vendor = True
+
+        if type_vendor:
+            temps = self.parent.auto_vendor_templates[current_modality]
+        else:
+            temps = self.parent.auto_templates[current_modality]
+
+        temp_outs = [
+            (temp.label, temp.path_output)
+            for temp in temps if temp.path_output != '']
+        labels = [x[0] for x in temp_outs]
+        label, ok = QInputDialog.getItem(
+            self, "Select automation template",
+            "Output file from automation template:   ", labels, 0, False)
+        if ok:
+            ok = True if label in labels else False
+
+        if ok and label:
+            paths = [x[1] for x in temp_outs]
+            path = paths[labels.index(label)]
+            self.txt_sample_file_path.setText(path)
+
+    def generate_empty_template(self):
+        """Generate empty template based on available headers."""
+        groups = [[header] for header in self.headers]
+        self.parent.current_template = cfc.LimitsAndPlotTemplate(
+            groups=groups, type_vendor=self.type_vendor)
+        self.group_numbers = list(range(len(self.headers)))
+
+    def set_template_from_label(self, label=''):
+        """Set current template to already defined template with given label."""
+        if label == '':
+            self.generate_empty_template()
+        else:
+            current_modality = self.get_current_modality()
+            labels = [temp.label for temp in self.parent.templates[current_modality]]
+            if label in labels:
+                idx = labels.index(label)
+                self.parent.current_template = copy.deepcopy(
+                    self.parent.templates[current_modality][idx])
+
+    def update_header_order(self):
+        """Update self.header/group_numbers/first_values after (un)grouping+.
+
+        Return
+        ------
+        ignored_headers : list of tuple
+            tuple = (group_index, header)
+            if any header in original header list not in updated template
+        """
+        orig_headers = copy.deepcopy(self.headers)
+        orig_first_values = copy.deepcopy(self.first_values)
+        ignored = []
+        self.headers = []
+        self.group_numbers = []
+        self.first_values = []
+        for idx, group in enumerate(self.parent.current_template.groups):
+            self.group_numbers.extend([idx] * len(group))
+            for header in group:
+                if header in orig_headers:
+                    self.headers.append(header)
+                    orig_idx = orig_headers.index(header)
+                    self.first_values.append(orig_first_values[orig_idx])
+                else:
+                    ignored.append((idx, header))
+        return ignored
+
+    def validate_headers(self):
+        """Validate that all headers in sample file can be found in template.
+
+        Missing headers in sample file are ignored (deleted if accepted).
+        """
+        flatten_groups = [
+            elem for sublist in self.parent.current_template.groups for elem in sublist]
+        if flatten_groups != self.headers:
+            missing = []
+            for header in self.headers:
+                if header not in flatten_groups:
+                    missing.append(header)
+
+            ignored = self.update_header_order()
+            if len(ignored) > 0:
+                # TODO warning + remove headers from template
+                ignored.sort(key=lambda x: x[0], reverse=True)
+                for group_idx, header in ignored:
+                    group = self.parent.current_template.groups[group_idx]
+                    if len(group) == 1:
+                        self.parent.current_template.delete_group(group_idx)
+                    else:
+                        self.parent.current_template.groups[group_idx].pop(
+                            group.index(header))
+                self.parent.flag_edit(True)
+            if len(missing) > 0:
+                # missing headers in template
+                # TODO information
+                for header in missing:
+                    self.parent.current_template.add_group(group=[header])
+                self.parent.flag_edit(True)
+        self.group_numbers = []
+        for idx, group in enumerate(self.parent.current_template.groups):
+            self.group_numbers.extend([idx] * len(group))
+
+    def update_from_sample_file(self, silent=False):
+        """Find headers and sample data from sample file."""
+        self.headers = []
+        self.first_values = None
+        if os.path.exists(self.txt_sample_file_path.text()):
+            with open(self.txt_sample_file_path.text()) as f:
+                self.headers = f.readline().strip('\n').split('\t')
+                self.first_values = f.readline().strip('\n').split('\t')
+            if len(self.headers) > 0:
+                self.headers.pop(0)  # date not included
+                if self.first_values is not None:
+                    self.first_values.pop(0)
+        elif self.txt_sample_file_path.text() == '':
+            if self.parent.current_template is not None:
+                self.headers = [
+                    elem for sublist in self.parent.current_template.groups
+                    for elem in sublist]
+        if self.first_values is None:
+            if silent is False:
+                QMessageBox.information(
+                    self, 'No output yet',
+                    'To set the limits and plot settings there should be column headers'
+                    ' to extract from the a sample text file. Output file is empty or '
+                    'missing columns.')
+            self.first_values = ['' for i in range(len(self.headers))]
+            self.group_numbers = []
+            for idx, group in enumerate(self.parent.current_template.groups):
+                self.group_numbers.extend([idx] * len(group))
+        else:
+            if all([self.initial_template_label == '',
+                   self.parent.current_template is None]):
+                # startup no input template
+                self.generate_empty_template()
+            elif all([self.initial_template_label != '',
+                     self.parent.current_template is None]):
+                # startup with input template
+                self.set_template_from_label(label=self.initial_template_label)
+                self.validate_headers()
+            else:
+                if len(self.parent.current_template.groups) == 0:  # empty template
+                    self.generate_empty_template()
+                else:
+                    # changed sample file
+                    self.validate_headers()
+        self.update_data()
+
+    def reset_data_display(self):
+        """Set all data back to default."""
+        self.min_tolerance.set_data(None)
+        self.max_tolerance.set_data(None)
+        self.min_range.set_data(None)
+        self.max_range.set_data(None)
+        self.blockSignals(True)
+        self.chk_hide.setChecked(False)
+        self.txt_title.setText('')
+        self.blockSignals(False)
+
+    def update_data(self, set_selected_idx=0):
+        """Refresh list and trigger refresh of selected list item data."""
+        self.list_headers.clear()
+        if len(self.headers) > 0:
+            self.list_headers.addItems(self.headers)
+            self.list_headers.setCurrentRow(set_selected_idx)
+
+    def item_selected(self, new, old):
+        """When item is selected in list - make sure actually selected."""
+        if new is not None:
+            if new.isSelected():
+                self.update_data_selected()
+
+    def update_data_selected(self):
+        """Refresh data for selected column header and highlight all in same group."""
+        sels = self.list_headers.selectedIndexes()
+        if len(sels) > 0:
+            sel_rows = [sel.row() for sel in sels]
+            header_first_select = self.headers[sel_rows[0]]
+            idx_in_sublists = find_value_in_sublists(
+                self.parent.current_template.groups, header_first_select)
+            group_idx = idx_in_sublists[0]
+
+            brush = QBrush(QColor(110, 148, 192))
+            brush_default = QBrush(QColor(255, 255, 255, 0))
+            for row, header in enumerate(self.headers):
+                if header in self.parent.current_template.groups[group_idx]:
+                    self.list_headers.item(row).setBackground(brush)
+                else:
+                    self.list_headers.item(row).setBackground(brush_default)
+
+            # show current values
+            sample_val = self.first_values[sel_rows[0]]
+            self.lbl_sample_value.setText(f'Sample value: {sample_val}')
+            decimals = 0
+            max_val = 100
+            try:
+                sample_val = sample_val.replace(',', '.')
+                sample_split = sample_val.split('.')
+                sample_val = float(sample_val)
+                if len(sample_split) == 2:
+                    decimals = len(sample_split[1])
+                if abs(sample_val) > 100:
+                    max_val = 10 * sample_val
+                else:
+                    max_val = 200
+            except ValueError:
+                sample_val = None
+
+            limits = self.parent.current_template.groups_limits[group_idx]
+            ranges = self.parent.current_template.groups_ranges[group_idx]
+            self.min_tolerance.set_data(limits[0], max_value=max_val,
+                                        decimals=decimals, ref_value=sample_val)
+            self.max_tolerance.set_data(limits[1], max_value=max_val,
+                                        decimals=decimals, ref_value=sample_val)
+            self.min_range.set_data(ranges[0], max_value=max_val,
+                                    decimals=decimals, ref_value=sample_val)
+            self.max_range.set_data(ranges[1], max_value=max_val,
+                                    decimals=decimals, ref_value=sample_val)
+            self.blockSignals(True)
+            self.chk_hide.setChecked(
+                self.parent.current_template.groups_hide[group_idx])
+            self.txt_title.setText(self.parent.current_template.groups_title[group_idx])
+            self.blockSignals(False)
+        else:
+            self.reset_data_display()
+
+    def group_selected(self):
+        """Group selected headers."""
+        sels = self.list_headers.selectedIndexes()
+        sel_rows = [sel.row() for sel in sels]
+        sel_headers = [self.headers[row] for row in sel_rows]
+        self.parent.current_template.group_headers(sel_headers)
+        _ = self.update_header_order()
+        self.update_data(set_selected_idx=sel_rows[0])
+        self.parent.flag_edit(True)
+
+    def ungroup_selected(self):
+        """Group selected headers."""
+        sels = self.list_headers.selectedIndexes()
+        sel_rows = [sel.row() for sel in sels]
+        sel_headers = [self.headers[row] for row in sel_rows]
+        self.parent.current_template.ungroup_headers(sel_headers)
+        _ = self.update_header_order()
+        self.update_data(set_selected_idx=sel_rows[0])
+        self.parent.flag_edit(True)
+
+    def move_group(self, direction='up'):
+        """Move selected group up or down in list.
+
+        Parameters
+        ----------
+        direction : str, optional
+            'up' or 'down. The default is 'up'.
+        """
+        sels = self.list_headers.selectedIndexes()
+        sel_row = sels[0].row()
+        selected_header = self.headers[sel_row]
+        self.group_numbers[sel_row]
+        val = 1 if direction == 'up' else -1
+        self.parent.current_template.move_group(
+            old_group_number=self.group_numbers[sel_row],
+            new_group_number=self.group_numbers[sel_row] + val)
+        _ = self.update_header_order()
+        self.update_data(set_selected_idx=self.headers.index(selected_header))
+        self.parent.flag_edit(True)
+
+
+class LimitsAndPlotEditDialog(ImageQCDialog):
+    """Dialog for editing limits and plot settings."""
+
+    def __init__(self, parent, templates, add=False):
+        super().__init__()
+        self.setWindowTitle('Edit limits and plot settings')
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        self.parent = parent
+        self.edited = False
+        self.current_modality = self.parent.current_modality
+        self.current_template = None
+        self.type_vendor = ('vendor' in self.parent.fname)
+        self.auto_templates = self.parent.templates
+        self.templates = templates
+        self.lastload = time()
+        if add:
+            initial_template_label = ''
+        else:
+            initial_template_label = self.parent.cbox_limits_and_plot.currentText()
+        self.wid_content = LimitsAndPlotContent(
+            self,
+            sample_file_path=self.parent.txt_output_path.text(),
+            initial_template_label=initial_template_label,
+            type_vendor=self.type_vendor)
+        self.wid_content.update_from_sample_file(silent=True)
+        vlo.addWidget(self.wid_content)
 
         hlo_dlg_btns = QHBoxLayout()
         vlo.addLayout(hlo_dlg_btns)
         hlo_dlg_btns.addStretch()
-        btn_ok = QPushButton('OK')
+        btn_ok = QPushButton('Save and close')
         btn_ok.clicked.connect(self.accept)
         hlo_dlg_btns.addWidget(btn_ok)
         btn_cancel = QPushButton('Cancel')
         btn_cancel.clicked.connect(self.reject)
         hlo_dlg_btns.addWidget(btn_cancel)
 
-    def edit_current_table(self, row, col):
-        """Verify input."""
-        if row < 2:
-            val = self.table.item(row, col).text()
-            if '.' in val or ',' in val:
-                try:
-                    val = float(val.replace(',', '.'))
-                except (ValueError, TypeError):
-                    val = None
-            else:
-                try:
-                    val = int(val)
-                except (ValueError, TypeError):
-                    val = None
-            if len(self.min_max) == 0:
-                self.min_max = [[None, None] for i in range(len(self.headers))]
+    def flag_edit(self, flag=True):
+        """Indicate whether template has changed."""
+        self.edited = flag
 
+    def save_current_template(self):
+        """Save current limits_and_plot template."""
+        if self.edited:
+            fname = 'limits_and_plot_templates'
+            proceed, errmsg = cff.check_save_conflict(fname, self.lastload)
+            if errmsg != '':
+                proceed = messageboxes.proceed_question(self, errmsg)
+            if proceed:
+                save_new = False
+                if self.templates[self.current_modality][0].label == '':
+                    save_new = True
+                    save_index = 0
+                else:
+                    curr_label = self.current_template.label
+                    if curr_label != '':
+                        used_labels = [temp.limits_and_plot_label for temp
+                                       in self.auto_templates[self.current_modality]]
+                        if used_labels.count(curr_label) > 1:
+                            res = messageboxes.QuestionBox(
+                                parent=self, title='Overwrite or save new?',
+                                msg='The template is used by other automation templates.',
+                                yes_text='Overwrite limits and plot template',
+                                no_text='Save as new template')
+                            if res.exec():  # overwrite
+                                labels = [temp.label for temp
+                                          in self.templates[self.current_modality]]
+                                idx = labels.index(curr_label)
+                                self.templates[self.current_modality][idx] = (
+                                    self.current_template)
+                            else:
+                                save_new = True
+                                save_index = -1
+                    else:
+                        save_new = True
+                        save_index = -1
+                if save_new:
+                    text, proceed = QInputDialog.getText(
+                        self, 'Set name ',
+                        'Name the new limits and plot template                      ',
+                        text=self.parent.current_template.label)
+                    text = valid_template_name(text)
+                    if proceed and text != '':
+                        already = [temp.label for temp
+                                   in self.auto_templates[self.current_modality]]
+                        if text in already:
+                            QMessageBox.warning(
+                                self, 'Name already in use',
+                                ('This name is already in use. _RENAME added to '
+                                 'template name. Please rename in Limits and plot '
+                                 'widget.'))
+                            text = text + '_RENAME'
+                        self.current_template.label = text
+                    if save_index != -1:
+                        self.templates[self.current_modality][
+                            save_index] = self.current_template
+                    else:
+                        self.templates[self.current_modality].append(
+                            self.current_template)
+                ok_save, path = cff.save_settings(self.templates, fname=fname)
+        return self.current_template.label
+
+
+class LimitsAndPlotWidget(StackWidget):
+    """Widget holding limits and plot settings."""
+
+    def __init__(self, dlg_settings):
+        header = 'Limits and plot templates'
+        subtxt = '''Configure tolerance limits and plot settings for the results from
+        Automation templates. <br>
+        After running automation templates linked to a LimitsAndPlot template the
+        results will be compared to the tolerance limits set for the diffent
+        columns.<br>
+        Results from different columns can be grouped together to have the same settings.
+        If outside tolerance a warning will be displayed in the automation log. <br>
+        There are still some work/testing to do to automatically send emails.<br>
+        The limits and y-ranges and naming will be used if displaying the dashboard
+        for the results<br>
+        '''
+        super().__init__(dlg_settings, header, subtxt,
+                         mod_temp=True, grouped=True)
+        self.fname = 'limits_and_plot_templates'
+        self.empty_template = cfc.LimitsAndPlotTemplate()
+        self.current_template = None
+        self.sample_file_used_in = ''
+
+        if self.import_review_mode is False:
+            self.wid_mod_temp.toolbar.removeAction(self.wid_mod_temp.act_move_modality)
+        self.wid_mod_temp.vlo.addWidget(
+            QLabel('Selected template used in Automation template:'))
+        self.list_used_in = QListWidget()
+        self.wid_mod_temp.vlo.addWidget(self.list_used_in)
+
+        vlo = QVBoxLayout()
+        self.hlo.addLayout(vlo)
+
+        self.wid_content = LimitsAndPlotContent(self)
+        vlo.addWidget(self.wid_content)
+
+        if self.import_review_mode:
+            self.content.setEnabled(False)
+
+        self.vlo.addWidget(uir.HLine())
+        self.vlo.addWidget(self.status_label)
+
+    def clear(self):
+        """Replace the clear method of ModTempSelector."""
+        # Reset to trigger new empty template based on sample file.
+        self.wid_content.initial_template_label = ''
+        self.current_template = None
+        self.wid_content.update_from_sample_file()
+
+    def update_data(self):
+        """Update GUI with selected template."""
+        self.update_used_in()
+        self.wid_content.blockSignals(True)
+        self.wid_content.txt_sample_file_path.setText(self.sample_file_used_in)
+        self.wid_content.blockSignals(False)
+        self.wid_content.update_from_sample_file(silent=True)
+
+    def update_used_in(self):
+        """Update list of auto-templates where this template is used."""
+        self.sample_file_used_in = ''
+        self.list_used_in.clear()
+        auto_labels = []
+        auto_labels_all = []
+        if self.current_template.label != '':
+            mod_temps = []
             try:
-                self.min_max[col][row] = val
-            except IndexError:
-                pass #TODO handle mismatch saved limits vs headers from output file
+                if self.current_template.type_vendor:
+                    mod_temps = self.auto_vendor_templates[self.current_modality]
+                else:
+                    mod_temps = self.auto_templates[self.current_modality]
+            except KeyError:
+                pass
 
-            twi = QTableWidgetItem(str(val))
-            twi.setTextAlignment(4)
-            self.table.blockSignals(True)
-            self.table.setItem(row, col, twi)
-            self.table.blockSignals(False)
+            auto_labels = [
+                temp.label for temp in mod_temps
+                if temp.limits_and_plot_label == self.current_template.label
+                ]
+            auto_labels_all = [temp.label for temp in mod_temps]
 
-    def get_min_max(self):
-        """Return set values when closing."""
-        return self.min_max
+            if len(auto_labels) > 0:
+                self.list_used_in.addItems(auto_labels)
+                first_idx = auto_labels_all.index(auto_labels[0])
+                self.sample_file_used_in = mod_temps[first_idx].path_output
 
 
 class AutoTempWidgetBasic(StackWidget):
@@ -542,6 +1154,26 @@ class AutoTempWidgetBasic(StackWidget):
         self.txt_statname.textChanged.connect(self.flag_edit)
         self.txt_statname.setMinimumWidth(200)
 
+        self.txt_warnings_path = QLineEdit('')
+        self.txt_warnings_path.textChanged.connect(self.flag_edit)
+        self.txt_warnings_path.setMinimumWidth(500)
+
+        self.wid_mod_temp.vlo.addWidget(
+            QLabel('Automation templates with same input path:'))
+        self.list_same_input = QListWidget()
+        self.list_same_input.setFixedHeight(80)
+        self.wid_mod_temp.vlo.addWidget(self.list_same_input)
+        self.wid_mod_temp.vlo.addWidget(
+            QLabel('Automation templates with same output path:'))
+        self.list_same_output = QListWidget()
+        self.list_same_output.setFixedHeight(80)
+        self.wid_mod_temp.vlo.addWidget(self.list_same_output)
+        self.wid_mod_temp.vlo.addWidget(
+            QLabel('Automation templates with same limits:'))
+        self.list_same_limits = QListWidget()
+        self.list_same_limits.setFixedHeight(80)
+        self.wid_mod_temp.vlo.addWidget(self.list_same_limits)
+
         self.chk_archive = QCheckBox(
             'Archive files when analysed (Archive folder in input path).')
         self.chk_archive.stateChanged.connect(
@@ -559,34 +1191,49 @@ class AutoTempWidgetBasic(StackWidget):
         self.vlo_temp = QVBoxLayout()
         self.wid_temp.setLayout(self.vlo_temp)
 
-        self.gb_limits = QGroupBox('Limits')
-        self.gb_limits.setFont(uir.FontItalic())
-        vlo_limits = QVBoxLayout()
-        self.gb_limits.setLayout(vlo_limits)
+        self.gb_limits_and_plot = QGroupBox('Limits and plot settings')
+        self.gb_limits_and_plot.setFont(uir.FontItalic())
+        vlo_limits_and_plot = QVBoxLayout()
+        self.gb_limits_and_plot.setLayout(vlo_limits_and_plot)
 
-        vlo_limits.addWidget(uir.LabelItalic(
-            'Set limits (min/max) for visualization and to trigger notifications'))
-        hlo_limits = QHBoxLayout()
-        vlo_limits.addLayout(hlo_limits)
-        self.lbl_limits = QLabel('No limit set')
-        self.tb_edit_limits = uir.ToolBarEdit(tooltip='Edit limits')
-        hlo_limits.addWidget(self.lbl_limits)
-        hlo_limits.addWidget(self.tb_edit_limits)
-        hlo_limits.addStretch()
-        self.tb_edit_limits.act_edit.triggered.connect(self.edit_limits)
+        vlo_limits_and_plot.addWidget(uir.LabelItalic(
+            'Configure tolerance limits to trigger notifications and '
+            'visualization settings for the results dashboard.'))
+        hlo_limits_and_plot = QHBoxLayout()
+        vlo_limits_and_plot.addLayout(hlo_limits_and_plot)
+        hlo_limits_and_plot.addWidget(QLabel('Use LimitsAndPlot template:'))
+        self.cbox_limits_and_plot = QComboBox()
+        self.cbox_limits_and_plot.setMinimumWidth(300)
+        self.cbox_limits_and_plot.currentIndexChanged.connect(
+            lambda: self.flag_edit(True))
+        hlo_limits_and_plot.addWidget(self.cbox_limits_and_plot)
+        self.tb_edit_limits_and_plot = uir.ToolBarEdit(
+            tooltip='Edit limits and plot settings', add_button=True)
+        hlo_limits_and_plot.addWidget(self.tb_edit_limits_and_plot)
+        hlo_limits_and_plot.addStretch()
+        self.tb_edit_limits_and_plot.act_edit.triggered.connect(
+            self.edit_limits_and_plot)
+        self.tb_edit_limits_and_plot.act_add.triggered.connect(
+            lambda: self.edit_limits_and_plot(add=True))
+        vlo_limits_and_plot.addWidget(uir.HLine())
+        '''
         hlo_persons = QHBoxLayout()
-        vlo_limits.addLayout(hlo_persons)
+        vlo_limits_and_plot.addLayout(hlo_persons)
         self.list_persons = QListWidget()
         self.list_persons.setFixedWidth(200)
         self.tb_edit_persons = uir.ToolBarEdit(
             edit_button=False, add_button=True, delete_button=True)
+        self.tb_edit_persons.setOrientation(Qt.Vertical)
         self.tb_edit_persons.act_add.triggered.connect(self.add_persons)
         self.tb_edit_persons.act_delete.triggered.connect(self.delete_person)
         hlo_persons.addWidget(QLabel('Notify:'))
         hlo_persons.addWidget(self.list_persons)
         hlo_persons.addWidget(self.tb_edit_persons)
+        hlo_persons.addWidget(uir.UnderConstruction(
+            txt=('Under developement. '
+                 'No email warnings will be sent yet.')))
         hlo_persons.addStretch()
-        hlo_persons.addWidget(uir.UnderConstruction(txt='Under construction...'))
+        '''
 
         hlo_input_path = QHBoxLayout()
         self.vlo_temp.addLayout(hlo_input_path)
@@ -611,7 +1258,7 @@ class AutoTempWidgetBasic(StackWidget):
             QIcon(f'{os.environ[ENV_ICON_PATH]}file.png'),
             'Display output file', toolb)
         act_output_view.triggered.connect(
-            self.view_output_file)
+            lambda: self.view_file(filetype='output'))
         act_new_file = QAction(QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
                                'Create an empty file', toolb)
         act_new_file.triggered.connect(
@@ -620,20 +1267,101 @@ class AutoTempWidgetBasic(StackWidget):
                 filter_str="Text file (*.txt)", opensave=True))
         toolb.addActions([act_new_file, act_output_view])
 
+        hlo_warnings_path = QHBoxLayout()
+        vlo_limits_and_plot.addLayout(hlo_warnings_path)
+        hlo_warnings_path.addWidget(QLabel('Warnings path '))
+        hlo_warnings_path.addWidget(self.txt_warnings_path)
+        toolb = uir.ToolBarBrowse('Browse to file')
+        toolb.act_browse.triggered.connect(
+            lambda: self.locate_file(
+                self.txt_warnings_path, title='Locate warnings file',
+                filter_str="Text file (*.txt)"))
+        hlo_warnings_path.addWidget(toolb)
+        act_warnings_view = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}file.png'),
+            'Display warnings file', toolb)
+        act_warnings_view.triggered.connect(
+            lambda: self.view_file(filetype='warning'))
+        act_new_warn_file = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+            'Create an empty file', toolb)
+        act_new_warn_file.triggered.connect(
+            lambda: self.locate_file(
+                self.txt_warnings_path, title='Locate warning file',
+                filter_str="Text file (*.txt)", opensave=True))
+        toolb.addActions([act_new_warn_file, act_warnings_view])
+        vlo_limits_and_plot.addWidget(uir.LabelItalic(
+            'Append warnings to file if limits are violated.'))
+
     def update_data(self):
         """Refresh GUI after selecting template."""
         self.txt_input_path.setText(self.current_template.path_input)
         self.txt_output_path.setText(self.current_template.path_output)
+        self.txt_warnings_path.setText(self.current_template.path_warnings)
         self.txt_statname.setText(self.current_template.station_name)
+        self.cbox_limits_and_plot.setCurrentText(
+            self.current_template.limits_and_plot_label)
         self.chk_archive.setChecked(self.current_template.archive)
         self.chk_deactivate.setChecked(not self.current_template.active)
-        if len(self.current_template.min_max) > 0:
-            self.lbl_limits.setText('Edit to view limits')
-        else:
-            self.lbl_limits.setText('No limit set')
+        self.cbox_limits_and_plot.setCurrentText(
+            self.current_template.limits_and_plot_label)
+        if (
+                self.cbox_limits_and_plot.currentText()
+                != self.current_template.limits_and_plot_label):
+            QMessageBox.warning(
+                self, 'Warning',
+                ('Limits and plot template '
+                 f'{self.current_template.limits_and_plot_label} set for this '
+                 'template, but not defined in limits_and_plot_templates.yaml.'))
+            self.cbox_limits_and_plot.setCurrentText('')
+
+        # update used_in
+        self.list_same_input.clear()
+        self.list_same_output.clear()
+        self.list_same_limits.clear()
+        if self.current_template.label != '':
+            if self.current_template.path_input != '':
+                auto_labels = [
+                    temp.label for temp in self.templates[self.current_modality]
+                    if temp.path_input == self.current_template.path_input
+                    ]
+                if len(auto_labels) > 1:
+                    auto_labels.remove(self.current_template.label)
+                    self.list_same_input.addItems(auto_labels)
+
+            if self.current_template.path_output != '':
+                auto_labels = [
+                    temp.label for temp in self.templates[self.current_modality]
+                    if temp.path_output == self.current_template.path_output
+                    ]
+                if len(auto_labels) > 1:
+                    auto_labels.remove(self.current_template.label)
+                    self.list_same_output.addItems(auto_labels)
+
+            if self.current_template.limits_and_plot_label != '':
+                auto_labels = [
+                    temp.label for temp in self.templates[self.current_modality]
+                    if temp.limits_and_plot_label == self.current_template.limits_and_plot_label
+                    ]
+                if len(auto_labels) > 1:
+                    auto_labels.remove(self.current_template.label)
+                    self.list_same_limits.addItems(auto_labels)
+
+        #TODO delete?
+        '''
         self.list_persons.clear()
         if len(self.current_template.persons_to_notify) > 0:
             self.list_person.addItems(self.current_template.persons_to_notify)
+        '''
+
+    def fill_list_limits_and_plot(self):
+        """Fill list of QuickTest templates."""
+        self.cbox_limits_and_plot.clear()
+        if self.current_modality in self.limits_and_plot_templates:
+            labels = [obj.label for obj
+                      in self.limits_and_plot_templates[self.current_modality]]
+            labels.insert(0, '')
+            self.cbox_limits_and_plot.addItems(labels)
 
     def get_current_template(self):
         """Get self.current_template where not dynamically set."""
@@ -645,52 +1373,36 @@ class AutoTempWidgetBasic(StackWidget):
         if self.current_template.path_output != '':
             create_empty_file(self.current_template.path_output,
                               self, proceed_info_txt='Output path do not exist.')
+        self.current_template.path_warnings = self.txt_warnings_path.text()
+        self.current_template.limits_and_plot_label = (
+            self.cbox_limits_and_plot.currentText())
         self.current_template.station_name = self.txt_statname.text()
         self.current_template.active = not self.chk_deactivate.isChecked()
         self.current_template.archive = self.chk_archive.isChecked()
 
-    def view_output_file(self):
-        """View output file as txt."""
-        if os.path.exists(self.txt_output_path.text()):
-            os.startfile(self.txt_output_path.text())
+    def view_file(self, filetype='output'):
+        """View output or warning file as txt."""
+        if filetype == 'output':
+            if os.path.exists(self.txt_output_path.text()):
+                os.startfile(self.txt_output_path.text())
+        elif filetype == 'warning':
+            if os.path.exists(self.txt_warnings_path.text()):
+                os.startfile(self.txt_warnings_path.text())
 
-    def edit_limits(self):
-        """Edit min/max limits."""
-        # headers from output or qt results on sample images?
-        headers = []
-        first_values = None
-        if os.path.exists(self.txt_output_path.text()):
-            with open(self.txt_output_path.text()) as f:
-                headers = f.readline().strip('\n').split('\t')
-                first_values = f.readline().strip('\n').split('\t')
-        if len(headers) < 2:
-            QMessageBox.information(
-                self, 'Not output yet',
-                'To set the limits there should be column headers to extract from '
-                'the output text file. Output file is empty or missing columns.')
-        else:
-            dlg = LimitEditDialog(
-                headers=headers[1:],
-                min_max=self.current_template.min_max,
-                first_values=first_values[1:])
-            res = dlg.exec()
-            if res:
-                self.current_template.min_max = dlg.get_min_max()
+    def edit_limits_and_plot(self, add=False):
+        """Open dialog to edit limits and plot settings."""
+        dlg = LimitsAndPlotEditDialog(self, self.limits_and_plot_templates, add=add)
+        res = dlg.exec()
+        if res:
+            if dlg.edited:
+                set_label = dlg.save_current_template()
+                self.current_template.limits_and_plot_label = set_label
+                all_items = [self.cbox_limits_and_plot.itemText(i) for i
+                             in range(self.cbox_limits_and_plot.count())]
+                if set_label not in all_items:
+                    self.cbox_limits_and_plot.addItem(set_label)
+                self.cbox_limits_and_plot.setCurrentText(set_label)
                 self.flag_edit(True)
-                self.lbl_limits.setText('Edit to view limits')
-
-    def add_persons(self):
-        """Add to persons list."""
-        QMessageBox.information(
-            self, 'Not implemented yet',
-            'This functionality is not yet finished. To be continued....')
-        #TODO - only possible to add those with email address defined? 
-
-    def delete_person(self):
-        """Delete from persons list."""
-        QMessageBox.information(
-            self, 'Not implemented yet',
-            'This functionality is not yet finished. To be continued....')
 
 
 class AutoTemplateWidget(AutoTempWidgetBasic):
@@ -706,17 +1418,6 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         self.fname = 'auto_templates'
         self.empty_template = cfc.AutoTemplate()
         self.sample_filepath = ''
-
-        self.wid_mod_temp.vlo.addWidget(
-            QLabel('Automation templates with same input path:'))
-        self.list_same_input = QListWidget()
-        self.list_same_input.setFixedHeight(80)
-        self.wid_mod_temp.vlo.addWidget(self.list_same_input)
-        self.wid_mod_temp.vlo.addWidget(
-            QLabel('Automation templates with same output path:'))
-        self.list_same_output = QListWidget()
-        self.list_same_output.setFixedHeight(80)
-        self.wid_mod_temp.vlo.addWidget(self.list_same_output)
 
         self.tree_crit = DicomCritWidget(self)
         self.cbox_paramset = QComboBox()
@@ -788,7 +1489,7 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
             QLabel('Use QuickTest template: '),
             self.cbox_quicktest)
 
-        vlo_right.addWidget(self.gb_limits)
+        vlo_right.addWidget(self.gb_limits_and_plot)
 
         hlo_btm = QHBoxLayout()
         self.vlo_temp.addLayout(hlo_btm)
@@ -825,28 +1526,6 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         self.sample_filepath = ''
         self.flag_edit(False)
         self.update_import_enabled()
-
-        # update used_in
-        self.list_same_input.clear()
-        self.list_same_output.clear()
-        if self.current_template.label != '':
-            if self.current_template.path_input != '':
-                auto_labels = [
-                    temp.label for temp in self.templates[self.current_modality]
-                    if temp.path_input == self.current_template.path_input
-                    ]
-                if len(auto_labels) > 1:
-                    auto_labels.remove(self.current_template.label)
-                    self.list_same_input.addItems(auto_labels)
-
-            if self.current_template.path_output != '':
-                auto_labels = [
-                    temp.label for temp in self.templates[self.current_modality]
-                    if temp.path_output == self.current_template.path_output
-                    ]
-                if len(auto_labels) > 1:
-                    auto_labels.remove(self.current_template.label)
-                    self.list_same_output.addItems(auto_labels)
 
     def get_current_template(self):
         """Get self.current_template where not dynamically set."""
@@ -944,9 +1623,9 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
             qt = self.current_template.quicktemp_label
             outp = self.current_template.path_output
             sort = '' if len(self.current_template.sort_pattern.list_tags) == 0 else '-'
-            limits = '' if len(self.current_template.min_max) == 0 else '-'
-            notify = '' if len(self.current_template.persons_to_notify) == 0 else '-'
-            if params + qt + outp + sort + limits + notify != '':
+            #TODO delete?:
+            #notify = '' if len(self.current_template.persons_to_notify) == 0 else '-'
+            if params + qt + outp + sort != '': #TODO delete? notify
                 res = messageboxes.QuestionBox(
                     parent=self, title='Remove inactive settings?',
                     msg='Reset settings that only affect analysis or just deactivate',
@@ -958,8 +1637,7 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
                     self.current_template.path_output = ''
                     self.current_template.sort_pattern = copy.deepcopy(
                         self.empty_template.sort_pattern)
-                    self.current_template.min_max = []
-                    self.current_template.persons_to_notify = []
+                    #TODO delete? self.current_template.persons_to_notify = []
                     self.update_data()
         else:
             self.update_import_enabled()
@@ -968,9 +1646,9 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
     def update_import_enabled(self):
         """Update enabled guis whether import only or not."""
         self.gb_analyse.setEnabled(not self.current_template.import_only)
-        self.gb_limits.setEnabled(not self.current_template.import_only)
+        self.gb_limits_and_plot.setEnabled(not self.current_template.import_only)
         idx = self.hlo_output_path.count() - 1
-        while(idx >= 0):
+        while idx >= 0:
             this_widget = self.hlo_output_path.itemAt(idx).widget()
             this_widget.setEnabled(not self.current_template.import_only)
             idx -= 1
@@ -1014,7 +1692,10 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         hlo_options.addStretch()
         self.vlo_temp.addLayout(hlo_options)
         self.vlo_temp.addStretch()
-        self.vlo_temp.addWidget(self.gb_limits)
+        hlo_lim_plot = QHBoxLayout()
+        self.vlo_temp.addLayout(hlo_lim_plot)
+        hlo_lim_plot.addWidget(self.gb_limits_and_plot)
+        hlo_lim_plot.addStretch()
         self.vlo_temp.addStretch()
         self.vlo_temp.addWidget(self.chk_archive)
         self.vlo_temp.addWidget(self.chk_deactivate)
@@ -1107,13 +1788,13 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
 class DashWorker(QThread):
     """Refresh dash and display in webbrowser."""
 
-    def __init__(self, widget_parent=None):
+    def __init__(self, dash_settings=None):
         super().__init__()
-        self.widget_parent = widget_parent
+        self.dash_settings = dash_settings
 
     def run(self):
         """Run worker if possible."""
-        dash_app.run_dash_app(widget=self.widget_parent)
+        dash_app.run_dash_app(dash_settings=self.dash_settings)
 
 
 class DashSettingsWidget(StackWidget):
@@ -1131,7 +1812,6 @@ class DashSettingsWidget(StackWidget):
             'The dashboard can then be accessed from http:\\xxx.x.x.x:port where '
             'xxx.x.x.x is the IP address of the computer'
             ' updating the dashboard.<br>'
-            'Content and customizable parameters not finished yet...'
             )
         super().__init__(dlg_settings, header, subtxt)
         self.fname = 'dash_settings'
@@ -1157,24 +1837,58 @@ class DashSettingsWidget(StackWidget):
         hlo_settings.addLayout(vlo_left)
         hlo_settings.addLayout(vlo_right)
 
-        vlo_left.addWidget(uir.UnderConstruction(txt='Under construction...'))
-
         self.host = QLineEdit()
         self.host.textChanged.connect(lambda: self.flag_edit(True))
         self.port = QSpinBox(minimum=0, maximum=9999)
-        self.port.valueChanged.connect(lambda: self.flag_edit(True))
+        self.port.editingFinished.connect(lambda: self.flag_edit(True))
         self.url_logo = QLineEdit()
         self.url_logo.textChanged.connect(lambda: self.flag_edit(True))
         self.header = QLineEdit()
         self.header.textChanged.connect(lambda: self.flag_edit(True))
+        self.days_since_limit = QSpinBox(minimum=0, maximum=9999)
+        self.days_since_limit.editingFinished.connect(lambda: self.flag_edit(True))
+        self.plot_height = QSpinBox(minimum=50, maximum=2000)
+        self.plot_height.editingFinished.connect(lambda: self.flag_edit(True))
+        self.txt_table_headers_0 = QLineEdit()
+        self.txt_table_headers_0.editingFinished.connect(lambda: self.flag_edit(True))
+        self.txt_table_headers_1 = QLineEdit()
+        self.txt_table_headers_1.editingFinished.connect(lambda: self.flag_edit(True))
+        self.txt_table_headers_2 = QLineEdit()
+        self.txt_table_headers_2.editingFinished.connect(lambda: self.flag_edit(True))
+        self.txt_table_headers_3 = QLineEdit()
+        self.txt_table_headers_3.editingFinished.connect(lambda: self.flag_edit(True))
 
+        hlo_form = QHBoxLayout()
         flo = QFormLayout()
-        vlo_left.addLayout(flo)
+        vlo_left.addLayout(hlo_form)
+        hlo_form.addLayout(flo)
         flo.addRow(QLabel('Host:'), self.host)
         flo.addRow(QLabel('Port:'), self.port)
-        flo.addRow(QLabel('Header logo url:'), self.url_logo)
-        flo.addRow(QLabel('Header:'), self.header)
-
+        flo.addRow(QLabel('Dashboard header:'), self.header)
+        flo.addRow(QLabel('Dashboard header logo url:'), self.url_logo)
+        flo.addRow(QLabel('Days limit'), self.days_since_limit)
+        flo.addRow(QLabel(''), uir.LabelItalic(
+            '       Red font in overview table if > days limit.'))
+        flo.addRow(QLabel('Plot height (pixels)'), self.plot_height)
+        hlo_form.addStretch()
+        hlo_form.addStretch()
+        hlo_table_headers = QHBoxLayout()
+        vlo_left.addLayout(hlo_table_headers)
+        hlo_table_headers.addWidget(QLabel('Overview table headers:'))
+        hlo_table_headers.addSpacing(50)
+        self.txt_table_headers_0.setFixedWidth(200)
+        self.txt_table_headers_1.setFixedWidth(200)
+        self.txt_table_headers_2.setFixedWidth(200)
+        #TODO add when ready status: self.txt_table_headers_3.setFixedWidth(200)
+        hlo_table_headers.addWidget(self.txt_table_headers_0)
+        hlo_table_headers.addWidget(self.txt_table_headers_1)
+        hlo_table_headers.addWidget(self.txt_table_headers_2)
+        #TODO add when ready status: hlo_table_headers.addWidget(self.txt_table_headers_3)
+        hlo_table_headers.addStretch()
+        vlo_left.addStretch()
+        vlo_left.addWidget(uir.LabelItalic(
+            'If changes do not affect the dashboard - '
+            'try restarting imageQC and then open the dashboard.'))
         vlo_left.addStretch()
 
         if self.import_review_mode:
@@ -1197,7 +1911,7 @@ class DashSettingsWidget(StackWidget):
     def update_from_yaml(self, initial_template_label=''):
         """Refresh settings from yaml file.
 
-        Using self.templates as auto_common single template and
+        Using self.templates as common single template and
         self.current_template as TagPatternFormat to work smoothly
         with general code.
         """
@@ -1212,6 +1926,12 @@ class DashSettingsWidget(StackWidget):
         self.port.setValue(self.templates.port)
         self.url_logo.setText(self.templates.url_logo)
         self.header.setText(self.templates.header)
+        self.days_since_limit.setValue(self.templates.days_since_limit)
+        self.plot_height.setValue(self.templates.plot_height)
+        self.txt_table_headers_0.setText(self.templates.overview_table_headers[0])
+        self.txt_table_headers_1.setText(self.templates.overview_table_headers[1])
+        self.txt_table_headers_2.setText(self.templates.overview_table_headers[2])
+        self.txt_table_headers_3.setText(self.templates.overview_table_headers[3])
 
     def get_current_template(self):
         """Update self.templates with current values."""
@@ -1219,6 +1939,12 @@ class DashSettingsWidget(StackWidget):
         self.templates.port = self.port.value()
         self.templates.url_logo = self.url_logo.text()
         self.templates.header = self.header.text()
+        self.templates.days_since_limit = self.days_since_limit.value()
+        self.templates.plot_height = self.plot_height.value()
+        self.templates.overview_table_headers[0] = self.txt_table_headers_0.text()
+        self.templates.overview_table_headers[1] = self.txt_table_headers_1.text()
+        self.templates.overview_table_headers[2] = self.txt_table_headers_2.text()
+        self.templates.overview_table_headers[3] = self.txt_table_headers_3.text()
 
     def save_dashboard_settings(self):
         """Get current settings and save to yaml file."""
@@ -1238,13 +1964,24 @@ class DashSettingsWidget(StackWidget):
 
     def run_dash(self):
         """Show results in browser."""
-        self.get_current_template()
-        self.dash_worker = DashWorker(widget_parent=self)
-        self.dash_worker.start()
-        url = f'http://{self.templates.host}:{self.templates.port}'
-        webbrowser.open(url=url, new=1)
+        config_folder = cff.get_config_folder()
+        filenames = [x.stem for x in Path(config_folder).glob('*')
+                     if x.suffix == '.yaml']
+        if 'auto_templates' in filenames or 'auto_vendor_templates' in filenames:
+            self.get_current_template()
+            self.dash_worker = DashWorker(dash_settings=self.templates)
+            self.dash_worker.start()
+            url = f'http://{self.templates.host}:{self.templates.port}'
+            webbrowser.open(url=url, new=1)
+            self.dash_worker.exit()
+        else:
+            QMessageBox.information(
+                self, 'Missing automation templates',
+                '''Found no automation templates to display results from.''')
 
 
+#TODO delete?
+'''
 class PersonsToNotifyWidget(StackWidget):
     """Widget holding settings for FollowUpPersons."""
 
@@ -1342,3 +2079,4 @@ class PersonsToNotifyWidget(StackWidget):
         self.current_template.note = self.txt_note.text()
         self.current_template.mute = self.chk_mute.isChecked()
         self.current_template.all_notifications_mods = self.list_mod.get_checked_texts()
+'''

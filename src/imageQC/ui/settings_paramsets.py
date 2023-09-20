@@ -24,8 +24,8 @@ from imageQC.config import config_classes as cfc
 from imageQC.ui.settings_reusables import StackWidget, QuickTestOutputTreeView
 from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
-from imageQC.ui.ui_dialogs import TextDisplay
 from imageQC.ui import messageboxes
+from imageQC.scripts import dcm
 # imageQC block end
 
 
@@ -139,6 +139,40 @@ class ParametersOutputWidget(QWidget):
             self.parent.flag_edit(True)
             self.list_group_by.clear()
             self.list_group_by.addItems(pattern.list_tags)
+            main = self.parent.dlg_settings.main
+            if len([*main.results]) > 0:
+                ok_param = False
+                if main.current_paramset.label == self.parent.current_template.label:
+                    if main.current_modality == self.parent.current_modality:
+                        ok_param = True
+                if ok_param:
+                    dlg = messageboxes.QuestionBox(
+                        parent=self, title='Refresh group info?',
+                        msg=('To test the output of current results with these changes,'
+                             ' saving the parameterset and refreshing the group '
+                             'information is needed.'),
+                        yes_text='Save and refresh group information now',
+                        no_text='No, skip save/refresh.')
+                    res = dlg.exec()
+                    if res:
+                        self.parent.wid_mod_temp.save()
+                        self.update_group_indicators()
+
+    def update_group_indicators(self):
+        """Update main.current_group_indicatiors according to output.group_by."""
+        main = self.parent.dlg_settings.main
+        main.current_group_indicators = ['' for i in range(len(main.imgs))]
+        group_pattern = cfc.TagPatternFormat(
+            list_tags=self.parent.current_template.output.group_by)
+        for i, img in enumerate(main.imgs):
+            tags = dcm.get_tags(
+                img.filepath, frame_number=img.frame_number,
+                tag_patterns=[group_pattern], tag_infos=main.tag_infos)
+            if len(tags) > 0:
+                main.current_group_indicators[i] = '_'.join(tags[0])
+        QMessageBox.information(
+            self, 'Group inforamtion updated',
+            'Group tags updated according to the current settings.')
 
     def test_output(self):
         """Run QuickTest if set in main and current_paramset == selected paramset."""

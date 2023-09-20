@@ -1,0 +1,216 @@
+# v3.0.0_b16
+New options/functionalities:
+- If C:\Users and OneDrive in path defined in config folder settings, replace username with current to allow for shortcuts to sharepoint paths
+- New option to view dashboard with trendlines (automation results).
+- New option to set limits for automation results and append warnings to a specified txt file.
+- New button in toolbar in automation dialog window: Option to open input path of selected template in file explorer
+- Added calculation option to Parameterset output options: width (max-min) = to be able to extract max-min of result values
+- included reading Siemens daily QC PET report from .xml (PET-MR) 
+Fixes/bugfixes:
+- more variants of Siemens CT Constancy and Quality Daily pdf files from SPECT CT (Intevo) can now be read.
+- fixed bug when changing 'group by' in Parameterset output settings from SeriesUID. The changes now take effect. 
+- other small bugfixes
+
+Commits on Aug 23, 2023
+# v3.0.0_b15 
+New options/functionalities:
+- new tools above file list:
+	- move selected images to specific number in list
+	- add dummy image (for use when QuickTest missing images
+- when "Run in main window for selected files" (automation)
+	- question to open output file also
+	- question to add dummy images if missing
+- added option to reload QuickTest template (new button in toolbar)
+- added option to calculate MR SNR from single images (method 4 in NEMA MS 1-2008)
+- open advanced option
+	- Added option to edit the grouping of files
+	- Added option to add all images in selected folder
+Fixes/bugfixes:
+- fixes to calculating slice thickness from GE CT phantom
+- added tag 0018,1151 to find mA in e.g. GE CTs (in default dicom_tags, but not automatically updated if dicom tags edited i.e. local tag_infos.yaml)
+- fixed error on test ROI when rotated rectangle combined with offcenter (large rotation angle revealed error)
+- more modal progress bars and optimalization of existing
+- paramsets files now listed in modified-log in Settings - Config folder
+- other small bugfixes
+
+Commits on Aug 15, 2023
+# v3.0.0_b14 
+New options/functionalities:
+- Filter on modality possible in automation dialog
+- automation DICOM templates can be marked as import only i.e. for files one just would like to collect or as a supplement for another template with the same input path if DICOM criteria collide
+Fixes/bugfixes:
+- fixes to modal progress bar during automation
+- added warning when fewer images loaded than specified in current QuickTest template
+- small bugfixes
+- more validation of linked templates
+
+Commits on Aug 8, 2023
+# v3.0.0_b13 
+New options/functionalities:
+- Running automation from codeline now finished (not full scale tested, yet)
+- Zoom is now kept if image size is the same when selecting a new image
+- Visualizing peak VOI for PET Recovery Curve
+- Progress bar modal in Automation window - always option to Cancel/Stop unexpected long processes with loads of images
+- Started to build settings for automation dashboard to display and warn if outside limits
+Fixes/bugfixes:
+- NM uniformity - not happy with imageQCpy giving larger numbers than IDL version and Siemens calculations
+	- downscaling now closer to 6.4 mm pix (defined by NEMA). This will affect results as this effectivly is changed "smoothing"
+		- option to set scaling factor manually instead of automatic
+	- fixed error that only 4, not 5, pixels evaluated for the differential uniformity (affect results slightly)
+	- fixed NEMA 2.4.4 "any pixels in the outer UFOV having less than 75% of mean in CFOV shall be set to zero" = not analysed
+			if an outer row or column have values less than 75% of CFOV this row/col will be removed from ufov
+- fixes to logging to file (automation)
+- fixes to Recovery curve plotting (EARL tolerances). Auto set image to max in spheres after finished calculating.
+- recognizing CBCT images from XA equipment as CT
+
+Commits on Jul 5, 2023
+# v3.0.0-b11__ 
+small fix
+# v3.0.0-b11_ 
+Forgot to reset from debug code.
+Bugfixes and finetuning/generalizations to Num in combination with AutoQC Siemens gamma cameras
+# v3.0.0-b11 
+New options/functionalities:
+- NM SNI: option to use a grid of rois rather than the predefined 2 large, 6 small ROIs from the paper by Nelson et al 2013. SNI map available.
+Fixes/bugfixes:
+- Recovery curve - fixed errors finding spheres for full phantom
+- fixes on automation with Digit Templates
+- NM templates for Num with AutoQC from Siemens now included in config_defaults (forgotten to include in v3.0.0-b10)
+- Dicom criteria now editable for automation templates
+- other small fixes
+
+Commits on Jul 3, 2023
+# v3.0.0-b10 
+New options/functionalities:
+- ROI test expanded to accept multiple ROIs. Min/max added as values to extract (in supplement table for single ROI).
+- added test Num with 'Digit Templates' to read text from images based on user defined character image samples
+Fixes/bugfixes:
+- fixed error NM Bar phantom: changing bar widths now respond
+- fixed missing data in quicktest results if all values of a row is 0
+- fixed error in rename_dicom (in get_uniq_filenames)
+- fixed error when SNI calculated from image in "portrait" mode (width < height)
+- fixed error in visual xy coordinates with non-quadratic images and with offset (dx,dy other than zero)
+- more robust detection of two line sources (NM) + avoid crashes
+- more descriptive text in dialogbox when exporting QuickTest results (copy to clipboard)
+- fixed bugs on copy/import ROI tables (CT numbers, Recovery Curve, Num)
+
+Commits on Jun 26, 2023
+# v3.0.0-b9 
+-Set pixelsize to 1x1 mm when not given to avoid ZeroDivisionError - warning given to user for these files
+-Fixed error on rectangular ROI when color image (3d array, RGB)
+-Sorted by zpos per series (if available) in open_multi (Advanced open files option)
+-Fixes to Rename Dicom when splitting images into series without folder name template (using series UID)
+-Fixed bugs in import dicom tags settings from another config folder
+-Added functionality for version control. Version tag on each save. Warning if trying to save using older version. Update on default tags on startup with new version.
+-Fixes to moving images up and down in list - updating results and keeping selected images, allowing for more than one to move
+-Added option to use reference image for NM SNI (for use with calibration images Siemens)
+
+Commits on Jun 16, 2023
+# v3.0.0-b8 
+- result table now hide rows without results (images not marked for testing) - clicking image or table row will change highlight the corresponding table row or image
+- copy selected part of result table now possible (Ctrl+C) or right-click and Copy selected from popup menu
+- fixes for reading multiframe images CT
+- changes to versions in requirements.txt (allow versions of pyqt5 and matplotlib that I have on my work-computer)
+- fixed autocenter ROI MTF xray when inverted signal (high signal behind object)
+- option to set min/max HU for CT number test and to change linearity parameter (name/unit text). Used to be relative mass density, now default values are relative e-density. HU-min max and e-density in preset (importable tables).
+
+Commits on Jun 13, 2023
+# v3.0.0-b7 
+fixed bug when deleting autodelete rules
+fixed bug when slicelocation is missing
+fixed bug on import of CT number predefined roi-tables, added HU min/max
+added visual feedback on centering of circular disc for MTF
+Recovery coefficient for PET ready for fine-tuning
+added option to edit existing auto templates in wizard
+
+Commits on Jun 9, 2023
+# v3.0.0-b6 
+handle also matplotlib 3.7+
+continued on Recovery Coefficients (PET),
+fix on vendor files automation,
+fix on quicktest output if alternative output types from same test,
+bugfix on handeling deactivated templates,
+warnings about extra offsets from config.dat (IDL) - please set again,
+other bugfixes
+
+Commits on Jun 6, 2023
+# v3.0.0-b5 
+fixes to progressbar during automation, fixes to NM uniformity with curvature correction, bugfixes - avoid crashes, continued on test for PET recovery curve
+
+Commits on May 30, 2023
+# v3.0.0-b4 
+fixes to QuickTest output
+added progress bar to automation window
+
+Commits on May 23, 2023
+# v3.0.0-b2 
+fixed version number from last push
+# v3.0.0-b2 
+fixes to automation allowing to turn off ignore old images
+fixes to QuickTest output
+MR: added option to get slice thickness from wedge
+
+Commits on May 22, 2023
+# v3.0.0-b1 
+small fixes / prep to future improvements
+SNI with autoQC calibration on hold
+
+Commits on May 12, 2023
+# v3.0.20alpha 
+bugfixes, fixes to SNI
+
+Commits on May 9, 2023
+# v3.0.19alpha 
+bugfixes + SNI fixes
+
+Commits on May 8, 2023
+# v3.0.18 alpha 
+bugfixes
+
+Commits on May 3, 2023
+# v3.0.17alpha 
+started adding PET test Recovery Curve - not finished
+added - read_pdf_dummy function for easier adding other vendor QC PDF report files
+bugfixes
+
+Commits on Apr 21, 2023
+# v3.0.16alpha 
+fixes to automation, fixed SNI calculations
+
+Commits on Apr 14, 2023
+# v3.0.15alpha 
+fixes to automation and quicktest
+started on automation wizard
+
+Commits on Apr 4, 2023
+# v3.0.14alpha 
+bugfixes on quicktest output, point source correction NM flood, 3d line/wire source, handeling private dicom sequences
+
+Commits on Mar 14, 2023
+# v3.0.13alpha 
+rescale slope fixed for multiframe, fixes to MR tests, fixes to center of disc when offset
+
+Commits on Mar 6, 2023
+# v3.0.12alpha 
+Fixes on auto edge detection MTF xray/MR
+
+Commits on Mar 3, 2023
+# v3.0.11alpha 
+Many smaller fixes
+
+Commits on Feb 17, 2023
+# v3.0.10.2alpha 
+Small fixes
+# v3.0.10.1alpha 
+Small fixes to automation and a few other things
+
+Commits on Feb 16, 2023
+# v3.0.10alpha 
+added more tests (NPS and more) + other fixes
+
+Commits on Feb 7, 2023
+# v3.0.9alpha 
+Changed how paramsets are saved/loaded
+Restructured/changed code towards PEP8
+Added more tests
+General fixes, smaller improvements

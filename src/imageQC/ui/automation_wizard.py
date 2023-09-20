@@ -23,7 +23,6 @@ from PyQt5.QtWidgets import (
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 import imageQC.config.config_func as cff
 from imageQC.scripts.mini_methods_format import valid_template_name
-import imageQC.ui.settings
 from imageQC.config import config_classes as cfc
 from imageQC.scripts import dcm
 from imageQC.ui.reusable_widgets import (
@@ -105,7 +104,7 @@ class StartupPage(QWizardPage):
         self.btn_test_output.setEnabled(ok_results)
         self.btn_test_output.clicked.connect(self.test_output)
         self.gb_res.vlo.addWidget(self.btn_test_output)
-        self.btn_settings_output = QPushButton('Test output')
+        self.btn_settings_output = QPushButton('Configure and test output')
         self.btn_settings_output.setIcon(QIcon(
             f'{os.environ[ENV_ICON_PATH]}gears.png'))
         self.btn_settings_output.setEnabled(ok_results)
@@ -201,11 +200,11 @@ class OkGroupBox(QGroupBox):
 class SelectOverrideDialog(ImageQCDialog):
     """Dialog to select what to override for selected template."""
 
-    def __init__(self, saved_template, current_template):
+    def __init__(self, saved_template):
         super().__init__()
         self.setWindowTitle('Override/keep settings?')
-        vLO = QVBoxLayout()
-        self.setLayout(vLO)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
 
         txt = '''
         <p>The wizard will not change these settings of the selected template:</p>
@@ -221,8 +220,8 @@ class SelectOverrideDialog(ImageQCDialog):
         '''
         html_txt = f"""<html><head/><body>{txt}</body></html>"""
 
-        vLO.addWidget(QLabel(html_txt))
-        vLO.addWidget(QLabel('Keep these saved values from the selected template:'))
+        vlo.addWidget(QLabel(html_txt))
+        vlo.addWidget(QLabel('Keep these saved values from the selected template:'))
 
         texts = [
             f'Input path: {saved_template.path_input}',
@@ -233,13 +232,13 @@ class SelectOverrideDialog(ImageQCDialog):
             texts=texts,
             set_checked_ids=[0, 1, 2]
             )
-        vLO.addWidget(self.list_widget)
+        vlo.addWidget(self.list_widget)
 
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
-        vLO.addWidget(self.buttonBox)
+        vlo.addWidget(self.buttonBox)
 
 
 class SavePage(QWizardPage):
@@ -299,7 +298,7 @@ class SavePage(QWizardPage):
             for i, tag in enumerate(tags):
                 asc_txt = ('(ASC)' if self.main.current_sort_pattern.list_sort[i]
                            else '(DESC)')
-                tags_txt.append(tags[i] + asc_txt)
+                tags_txt.append(tag + asc_txt)
             sort_pattern_txt = ', '.join(tags_txt)
 
         self.setTitle('Finish and save template')
@@ -398,7 +397,7 @@ class SavePage(QWizardPage):
             self.txt_label.setText(self.current_template.label)
             idx = self.cbox_labels.currentIndex() - 1
             saved_temp = self.templates[self.main.current_modality][idx]
-            dlg = SelectOverrideDialog(saved_temp, self.current_template)
+            dlg = SelectOverrideDialog(saved_temp)
             res = dlg.exec()
             proceed = True
             if res:
@@ -424,6 +423,7 @@ class SavePage(QWizardPage):
         self.txt_path_output.setText(self.current_template.path_output)
 
     def locate_folder(self, widget):
+        """Select folder from FileDialog."""
         dlg = QFileDialog()
         dlg.setFileMode(QFileDialog.Directory)
         if widget.text() != '':
@@ -435,6 +435,7 @@ class SavePage(QWizardPage):
 
     def locate_file(self, widget, title='Locate file',
                     filter_str='All files (*)', opensave=False):
+        """Select file from FileDialog."""
         if opensave:
             fname, _ = QFileDialog.getSaveFileName(
                 self, title, widget.text(), filter=filter_str)
@@ -448,6 +449,7 @@ class SavePage(QWizardPage):
             self.current_template.path_output = fname
 
     def verify_new_label(self):
+        """Ensure valid template label."""
         text = self.txt_label.text()
         if text != '':
             text = valid_template_name(text)
@@ -528,6 +530,7 @@ class FinishPage(QWizardPage):
             lo_rb.addWidget(rbtn)
         vlo.addLayout(lo_rb)
 
+
 class AutomationWizard(QWizard):
     """GUI setup for the Automation assistant window."""
 
@@ -551,7 +554,7 @@ class AutomationWizard(QWizard):
 
         ok_config_folder = cff.verify_config_folder(self)
         if ok_config_folder:
-            ok_common, path, auto_common = cff.load_settings(fname='auto_common')
+            # TODO delete? ok_common, path, auto_common = cff.load_settings(fname='auto_common')
             self.ok_auto, path, self.templates = cff.load_settings(
                 fname='auto_templates')
             self.lastload = time()

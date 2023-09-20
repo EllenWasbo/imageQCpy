@@ -8,7 +8,6 @@ User interface for dialog Rename Dicom.
 import os
 from pathlib import Path
 
-import pydicom
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
@@ -24,7 +23,7 @@ from imageQC.ui import messageboxes
 from imageQC.ui.settings_dicom_tags import RenamePatternWidget
 from imageQC.config import config_classes as cfc
 from imageQC.config.iQCconstants import ENV_ICON_PATH
-from imageQC.scripts.dcm import find_all_valid_dcm_files, get_dcm_info_list
+from imageQC.scripts import dcm
 from imageQC.scripts.mini_methods_format import (
     valid_path, generate_uniq_filepath)
 from imageQC.scripts.mini_methods import get_all_matches
@@ -161,7 +160,7 @@ class RenameDicomDialog(ImageQCDialog):
         """Move all dicom files in subfolders to this folder."""
         progress_modal = uir.ProgressModal(
             "Searching...", "Stop", 0, 100, self, hide_cancel=True)
-        dcm_dict = find_all_valid_dcm_files(
+        dcm_dict = dcm.find_all_valid_dcm_files(
             self.path.text(), parent_widget=self, grouped=False,
             progress_modal=progress_modal)
         progress_modal.reset()
@@ -244,7 +243,7 @@ class RenameDicomDialog(ImageQCDialog):
         if proceed:
             progress_modal = uir.ProgressModal(
                 "Searching...", "Stop", 0, 100, self, hide_cancel=True)
-            dcm_dict = find_all_valid_dcm_files(
+            dcm_dict = dcm.find_all_valid_dcm_files(
                 self.path.text(), parent_widget=self, progress_modal=progress_modal,
                 grouped=False, search_subfolders=False)
             progress_modal.reset()
@@ -277,10 +276,9 @@ class RenameDicomDialog(ImageQCDialog):
                     else:
                         for i, file in enumerate(dcm_files):
                             progress_modal.setValue(i)
-                            pd = pydicom.dcmread(
-                                file.resolve(), stop_before_pixels=True)
-                            name_parts = get_dcm_info_list(
-                                pd, tag_pattern, self.wid_rename_pattern.tag_infos,
+                            pyd, _, _ = dcm.read_dcm(file.resolve())
+                            name_parts = dcm.get_dcm_info_list(
+                                pyd, tag_pattern, self.wid_rename_pattern.tag_infos,
                                 prefix_separator='', suffix_separator='',
                                 not_found_text='')
                             new_name = "_".join(name_parts)
@@ -288,8 +286,9 @@ class RenameDicomDialog(ImageQCDialog):
                             new_folders.append(file.parent / new_name)
 
                             if rename_files:
-                                name_parts_file = get_dcm_info_list(
-                                    pd, tag_pattern2, self.wid_rename_pattern.tag_infos,
+                                name_parts_file = dcm.get_dcm_info_list(
+                                    pyd, tag_pattern2,
+                                    self.wid_rename_pattern.tag_infos,
                                     prefix_separator='', suffix_separator='',
                                     not_found_text='')
                                 new_name_file = "_".join(name_parts_file)
@@ -365,9 +364,9 @@ class RenameDicomDialog(ImageQCDialog):
         """Generate names for folders or files."""
         progress_modal = uir.ProgressModal(
             "Searching for files...", "Stop", 0, 100, self, hide_cancel=True)
-        self.valid_dict = find_all_valid_dcm_files(
+        self.valid_dict = dcm.find_all_valid_dcm_files(
             self.path.text(), parent_widget=self,
-            progress_modal=progress_modal,grouped=True)
+            progress_modal=progress_modal, grouped=True)
         progress_modal.reset()
         dcm_folders = self.valid_dict['folders']
         dcm_files = self.valid_dict['files']
@@ -392,15 +391,22 @@ class RenameDicomDialog(ImageQCDialog):
                     progress_modal.setLabelText('Generate new folder names...')
                     for i, folder in enumerate(dcm_folders):
                         progress_modal.setValue(i)
-                        pd = pydicom.dcmread(
-                            dcm_files[i][0].resolve(), stop_before_pixels=True)
-                        name_parts = get_dcm_info_list(
-                            pd, tag_pattern, self.wid_rename_pattern.tag_infos,
-                            prefix_separator='', suffix_separator='',
-                            not_found_text='')
-                        new_name = "_".join(name_parts)
-                        new_name = valid_path(new_name, folder=True)
-                        self.new_names.append(folder.parent / new_name)
+                        pyd, _, _ = dcm.read_dcm(dcm_files[i][0].resolve())
+                        if pyd:
+                            name_parts = dcm.get_dcm_info_list(
+                                pyd, tag_pattern, self.wid_rename_pattern.tag_infos,
+                                prefix_separator='', suffix_separator='',
+                                not_found_text='')
+                            new_name = "_".join(name_parts)
+                            new_name = valid_path(new_name, folder=True)
+                            self.new_names.append(folder.parent / new_name)
+                        else:
+                            self.new_names.append('')
+                    idx_all_this = get_all_matches(self.new_names, '')
+                    if len(idx_all_this):
+                        for i in idx_all_this.reverse():
+                            self.original_names.pop(i)
+                            self.new_names.pop(i)
                     progress_modal.reset()
                 else:
                     empty_tag_pattern = True
@@ -420,15 +426,23 @@ class RenameDicomDialog(ImageQCDialog):
                     progress_modal.setLabelText('Generate new file names...')
                     for i, file in enumerate(dcm_files):
                         progress_modal.setValue(i)
-                        pd = pydicom.dcmread(
-                            file.resolve(), stop_before_pixels=True)
-                        name_parts = get_dcm_info_list(
-                            pd, tag_pattern, self.wid_rename_pattern.tag_infos,
-                            prefix_separator='', suffix_separator='',
-                            not_found_text='')
-                        new_name = "_".join(name_parts)
-                        new_name = valid_path(new_name) + '.dcm'
-                        self.new_names.append(file.parent / new_name)
+                        pyd, _, errmsg = dcm.read_dcm(file.resolve())
+                        if pyd:
+                            name_parts = dcm.get_dcm_info_list(
+                                pyd, tag_pattern, self.wid_rename_pattern.tag_infos,
+                                prefix_separator='', suffix_separator='',
+                                not_found_text='')
+                            new_name = "_".join(name_parts)
+                            new_name = valid_path(new_name) + '.dcm'
+                            self.new_names.append(file.parent / new_name)
+                        else:
+                            self.new_names.append('')
+                            print(errmsg)
+                    idx_all_this = get_all_matches(self.new_names, '')
+                    if len(idx_all_this):
+                        for i in idx_all_this.reverse():
+                            self.original_names.pop(i)
+                            self.new_names.pop(i)
                     progress_modal.reset()
                 else:
                     empty_tag_pattern = True
@@ -449,11 +463,14 @@ class RenameDicomDialog(ImageQCDialog):
     def rename(self):
         """Rename folders or files."""
         errmsg = []
+        confirm_msgs = []
         proceed = False
         if len(self.original_names) > 0:
             if len(self.original_names) == len(self.new_names):
                 proceed = True
 
+        type_name = 'folder(s)' if self.new_names[0].is_dir() else 'file(s)'
+        n_first = 0
         if proceed:  # rename first step
             max_val = len(self.original_names)
             progress_modal = uir.ProgressModal(
@@ -462,11 +479,15 @@ class RenameDicomDialog(ImageQCDialog):
                 progress_modal.setValue(i)
                 try:
                     path.rename(self.new_names[i])
+                    n_first += 1
                 except (PermissionError, OSError) as err:
                     errmsg.append(f'{path.resolve}: {err}')
                 if progress_modal.wasCanceled():
                     break
             progress_modal.reset()
+        if n_first > 0:
+            confirm_msgs.append(f'Renamed {n_first} {type_name} out of '
+                                f'{len(self.original_names)}')
 
         tag_pattern = cfc.TagPatternFormat(
             list_tags=self.wid_rename_pattern.current_template.list_tags2,
@@ -488,40 +509,48 @@ class RenameDicomDialog(ImageQCDialog):
                 0, max_val, self)
 
             counter = 0
+            n_renamed = 0
             for folder_no, file_list in enumerate(self.valid_dict['files']):
                 new_folder = self.new_names[folder_no]
                 if new_folder.exists():
                     for file in file_list:
                         progress_modal.setValue(counter)
                         file_new_loc = new_folder / file.name
-                        try:
-                            pd = pydicom.dcmread(
-                                file_new_loc.resolve(),
-                                stop_before_pixels=True)
-                            name_parts = get_dcm_info_list(
-                                pd, tag_pattern, self.wid_rename_pattern.tag_infos,
+                        pyd, _, pyd_err = dcm.read_dcm(file_new_loc.resolve())
+                        if pyd:
+                            name_parts = dcm.get_dcm_info_list(
+                                pyd, tag_pattern, self.wid_rename_pattern.tag_infos,
                                 prefix_separator='', suffix_separator='',
                                 not_found_text='')
                             new_name = "_".join(name_parts)
                             new_name = valid_path(new_name) + '.dcm'
-                            file_new_loc.rename(
-                                file_new_loc.parent / new_name)
-                        except pydicom.errors.InvalidDicomError:
-                            pass  # should be validated already
-                        except (PermissionError, OSError) as err:
-                            errmsg.append(f'{file.resolve}: {err}')
+                            try:
+                                file_new_loc.rename(
+                                    file_new_loc.parent / new_name)
+                                n_renamed += 1
+                            except (PermissionError, OSError) as err:
+                                errmsg.append(f'{file.resolve}: {err}')
+                        else:
+                            errmsg.append(pyd_err)
                         if progress_modal.wasCanceled():
                             break
                         counter += 1
                 if progress_modal.wasCanceled():
                     break
             progress_modal.reset()
+            confirm_msgs.append(f'Renamed {n_renamed} files(s) out of {max_val}')
 
         if len(errmsg) > 0:
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Failed renaming',
                 msg='Failed renaming one or more files. See details',
                 details=errmsg, icon=QMessageBox.Warning)
+            dlg.exec()
+        if len(confirm_msgs) > 0:
+            dlg = messageboxes.MessageBoxWithDetails(
+                self, title='Finished renaming',
+                msg='Finished renaming:',
+                info='\n'.join(confirm_msgs), icon=QMessageBox.Information)
             dlg.exec()
 
     def sort_seriesUID(self, dcm_files, progress_widget=None):
@@ -552,10 +581,9 @@ class RenameDicomDialog(ImageQCDialog):
         proceed = True
         for i, file in enumerate(dcm_files):
             progress_widget.setValue(i)
-            pd = pydicom.dcmread(
-                file.resolve(), stop_before_pixels=True)
-            info_list = get_dcm_info_list(
-                pd,
+            pyd, _, _ = dcm.read_dcm(file.resolve())
+            info_list = dcm.get_dcm_info_list(
+                pyd,
                 tag_pattern, self.wid_rename_pattern.tag_infos,
                 prefix_separator='', suffix_separator='',
                 not_found_text='')

@@ -90,6 +90,7 @@ class MessageBoxWithDetails(QMessageBox):
             """)
         '''
 
+
 class QuestionBox(QMessageBox):
     """QMessageBox with changed yes no text as options."""
 

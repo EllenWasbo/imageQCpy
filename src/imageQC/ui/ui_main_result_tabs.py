@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 # imageQC block start
 from imageQC.ui import ui_image_canvas
 from imageQC.ui.ui_main_image_widgets import (
-    GenericImageWidget, GenericImageToolbarPosVal, NavigationToolbar2QT)
+    GenericImageWidget, GenericImageToolbarPosVal, ImageNavigationToolbar)
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui.plot_widgets import PlotWidget, PlotCanvas
 from imageQC.config.iQCconstants import ENV_ICON_PATH
@@ -87,7 +87,7 @@ class ResultTableWidget(QWidget):
 
         if self.tb_copy.tool_header.isChecked():  # insert headers
             if self.result_table.row_labels[0] == '':
-                if col_range is None:
+                if col_range is None or col_range is False:
                     for i in range(len(values)):
                         values[i].insert(0, self.result_table.col_labels[i])
                 else:
@@ -97,7 +97,7 @@ class ResultTableWidget(QWidget):
                         values[i].insert(0, col_labels[i])
             else:
                 # row headers true headers
-                if row_range is None:
+                if row_range is None or row_range is False:
                     values.insert(0, self.result_table.row_labels)
                 else:
                     values.insert(0, self.result_table.row_labels[
@@ -234,7 +234,7 @@ class ResultTable(QTableWidget):
                 df = pd.DataFrame(txt_rows)
                 values_cols = df.T.values.tolist()
                 linked_image_list = False
-            except KeyError:
+            except (KeyError, TypeError):
                 pass
         else:
             if linked_image_list:
@@ -1900,16 +1900,12 @@ class ResultImageWidget(GenericImageWidget):
         self.setLayout(hlo)
 
 
-class ResultImageNavigationToolbar(NavigationToolbar2QT):
+class ResultImageNavigationToolbar(ImageNavigationToolbar):
     """Matplotlib navigation toolbar with some modifications."""
 
     def __init__(self, canvas, window):
         super().__init__(canvas, window)
         for act in self.actions():
-            if act.text() in ['Back', 'Forward', 'Pan', 'Subplots']:
+            if act.text() in ['Back', 'Forward', 'Pan']:  # already removed 'Subplots'
                 self.removeAction(act)
         self.setOrientation(Qt.Vertical)
-
-    def set_message(self, s):
-        """Hide cursor position and value text by overriding method set_message."""
-        pass

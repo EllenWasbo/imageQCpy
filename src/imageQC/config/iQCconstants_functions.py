@@ -35,12 +35,6 @@ def empty_template_dict(quicktest_options, dummy=None):
     empty_dict = {}
     for key, val in quicktest_options.items():
         if len(val) > 0:
-            #TODO delete?
-            '''
-            if isinstance(dummy, cfc.ParamSet):
-                empty_dict[key] = [getattr(dummy, key)]
-            else:
-            '''
             empty_dict[key] = [dummy]
 
     return empty_dict
@@ -102,10 +96,10 @@ def set_tag_patterns_special_default(quicktest_options, tag_infos):
     tag_pattern_file_list = cfc.TagPatternFormat()
     tag_pattern_file_list.label = 'File_list_display'
 
-    for m in all_modalities:
-        tag_patterns_special[m][0] = deepcopy(tag_pattern_annot)
-        tag_patterns_special[m].append(deepcopy(tag_pattern_dicom_display))
-        tag_patterns_special[m].append(deepcopy(tag_pattern_file_list))
+    for mod in all_modalities:
+        tag_patterns_special[mod][0] = deepcopy(tag_pattern_annot)
+        tag_patterns_special[mod].append(deepcopy(tag_pattern_dicom_display))
+        tag_patterns_special[mod].append(deepcopy(tag_pattern_file_list))
 
     # fill DICOM_display with all available tags
     for tag in tag_infos:
@@ -113,18 +107,18 @@ def set_tag_patterns_special_default(quicktest_options, tag_infos):
             modalities = all_modalities
         else:
             modalities = tag.limited2mod
-        for m in modalities:
-            if tag.attribute_name not in tag_patterns_special[m][1].list_tags:
-                tag_patterns_special[m][1].list_tags.append(tag.attribute_name)
+        for mod in modalities:
+            if tag.attribute_name not in tag_patterns_special[mod][1].list_tags:
+                tag_patterns_special[mod][1].list_tags.append(tag.attribute_name)
                 if tag.attribute_name == 'PixelSpacing':
-                    tag_patterns_special[m][1].list_format.append('|:.3f|')
+                    tag_patterns_special[mod][1].list_format.append('|:.3f|')
                 else:
-                    tag_patterns_special[m][1].list_format.append('')
+                    tag_patterns_special[mod][1].list_format.append('')
                 # fill Annotate with z = for all using SliceLocation
                 if tag.attribute_name == 'SliceLocation':
-                    tag_patterns_special[m][0].list_tags.append(
+                    tag_patterns_special[mod][0].list_tags.append(
                         tag.attribute_name)
-                    tag_patterns_special[m][0].list_format.append(
+                    tag_patterns_special[mod][0].list_format.append(
                         'z = |.1f|')
 
     # default file list display

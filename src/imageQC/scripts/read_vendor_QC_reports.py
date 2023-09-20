@@ -22,7 +22,8 @@ try:  # only needed with pyinstaller, importerror if run from spyder
 except ImportError:
     pass
 
-#TODO - fnmatch is case insensitive on Windows. Adding option for .lower for handeling other os
+# TODO - fnmatch is case insensitive on Windows. Adding option for .lower for handeling
+#   other os
 
 
 def read_vendor_template(template, filepath):
@@ -39,10 +40,13 @@ def read_vendor_template(template, filepath):
         txt = get_pdf_txt(filepath)
         results = read_Siemens_CT_QC(txt)
     elif template.file_type == 'Siemens exported energy spectrum (.txt)':
-        results = read_energy_spectrum_Siemens_gamma_camera(filepath)
+        results = read_e_spectrum_Siemens_gamma_camera(filepath)
     elif template.file_type == 'Siemens PET-CT DailyQC Reports (.pdf)':
         txt = get_pdf_txt(filepath)
         results = read_Siemens_PET_dailyQC(txt)
+    elif template.file_type == 'Siemens PET-MR DailyQC Reports (.xml)':
+        root = get_xml_tree(filepath)
+        results = read_Siemens_PET_dailyQC_xml(root)
     else:
         results = None
 
@@ -118,8 +122,8 @@ def read_pdf_dummy(txt):
     return data
 
 
-def read_energy_spectrum_Siemens_gamma_camera(filepath):
-    """Read energy spectrum copy to clipboard .txt from Analyser."""
+def read_e_spectrum_Siemens_gamma_camera(filepath):
+    """Read energy spectrum from .txt from Analyser Siemens gamma camera."""
     lines = []
     with open(filepath, 'r') as file:
         lines = file.readlines()
@@ -149,17 +153,17 @@ def read_energy_spectrum_Siemens_gamma_camera(filepath):
         max_counts = max(curve_counts)
         idx_max = curve_counts.index(max_counts)
         width, center = get_width_center_at_threshold(curve_counts, 0.5*max_counts)
-        keV_fwhm_start_stop = get_curve_values(
+        kev_fwhm_start_stop = get_curve_values(
                 curve_energy, np.arange(len(curve_energy)),
                 [center-width/2, center+width/2]
                 )
         denergy = curve_energy[idx_max] - curve_energy[idx_max-1]
         fwhm = width * denergy
-        keV_at_max = curve_energy[idx_max]
-        values = [max_counts, keV_at_max, fwhm, 100.*fwhm/keV_at_max]
+        kev_at_max = curve_energy[idx_max]
+        values = [max_counts, kev_at_max, fwhm, 100.*fwhm/kev_at_max]
         details = {'curve_counts': np.array(curve_counts),
                    'curve_energy': np.array(curve_energy),
-                   'keV_fwhm_start_stop': keV_fwhm_start_stop, 'keV_max': keV_at_max}
+                   'keV_fwhm_start_stop': kev_fwhm_start_stop, 'keV_max': kev_at_max}
 
     data = {'status': status, 'errmsg': errmsg,
             'values': values, 'headers': headers,
@@ -311,19 +315,19 @@ def read_Siemens_PET_dailyQC(txt):
                 pass
 
         # ECF
-        ECF = None
+        ecf = None
         search_txt = 'Scanner e'
         if search_txt in short_txt:
             rowno = short_txt.index(search_txt)
             split_txt = txt[rowno].split(' ')
             split_txt = [x for x in split_txt if x != '']
             try:
-                ECF = float(split_txt[-1])
+                ecf = float(split_txt[-1])
             except ValueError:  # seen when split in 2, not 3 lines
                 split_txt = txt[rowno + 1].split(' ')
                 split_txt = [x for x in split_txt if x != '']
                 try:
-                    ECF = float(split_txt[-2])
+                    ecf = float(split_txt[-2])
                 except ValueError:
                     pass
 
@@ -417,7 +421,7 @@ def read_Siemens_PET_dailyQC(txt):
         values = [date, ics_name, partial, full, timealign,
                   calib_factor, measured_randoms,
                   scanner_efficiency, scatter_ratio,
-                  ECF,
+                  ecf,
                   n_blocks_noise, n_blocks_efficiency,
                   n_img_efficiency,
                   phantom_pos_x, phantom_pos_y]
@@ -497,10 +501,10 @@ def read_Siemens_PET_dailyQC_xml(root):
                 scatter_ratio = def_err_text
                 errmsg = def_err_msg
             try:
-                ECF = float(details.find('fECF').find('cBlkValue').find(
+                ecf = float(details.find('fECF').find('cBlkValue').find(
                     'aValue').text)
             except AttributeError:
-                ECF = def_err_text
+                ecf = def_err_text
                 errmsg = def_err_msg
             try:
                 n_blocks_noise = int(details.find('aBlockNoise').find(
@@ -523,11 +527,11 @@ def read_Siemens_PET_dailyQC_xml(root):
 
             values = [date, calib_factor, measured_randoms,
                       scanner_efficiency, scatter_ratio,
-                      ECF,
+                      ecf,
                       n_blocks_noise, n_blocks_efficiency,
                       n_img_efficiency]
             headers = ['Date', 'Calibration Factor', 'Measured randoms %',
-                       'Scanner Efficiency [cps/Bq/cc]', ' Scatter Ratio %',
+                       'Scanner Efficiency [cps/Bq/cc]', 'Scatter Ratio %',
                        'ECF [Bq*s/ECAT counts]',
                        'Blocks out of range noise',
                        'Blocks out of range efficiency',
@@ -565,7 +569,7 @@ def get_Siemens_CT_QC_type_language(txt, file_type='standard'):
         report_type: str
             'daily' or 'constancy'
     """
-    #TODO put search strings in config folder as yaml file editable by gui or txt editor
+    # TODO search strings in config folder as yaml file editable by gui or txt editor
     search_strings = {
         'English': {
             'daily': 'Quality Daily',
@@ -580,7 +584,6 @@ def get_Siemens_CT_QC_type_language(txt, file_type='standard'):
             'tube_assembly': 'Tube Asse',
             'description': 'Description',
             'value': 'Value',
-            'result': 'Result',
             'test_result': 'Test Result',
             'slice': 'Slice',
             'slicewidth': 'Slice width',
@@ -607,7 +610,6 @@ def get_Siemens_CT_QC_type_language(txt, file_type='standard'):
             'tube_assembly': 'R?renhet',
             'description': 'Beskrivelse',
             'value': 'Verdi',
-            'result': 'Resultat',
             'test_result': 'Test Resultat',
             'slice': 'Snitt',
             'slicewidth': 'Snittbredde',
@@ -643,15 +645,14 @@ def get_Siemens_CT_QC_type_language(txt, file_type='standard'):
                     report_type = 'daily'
                     language = langu
                     break
-        '''if file_type == 'Symbia':  # inconsistent language
-            for txt_line in txt:
-                if fnmatch(txt_line,
-                                   search_strings[langu]['tester_name']):
-                    language = langu
-                    break'''
 
         if report_type != '':
             break
+
+    if report_type == '':
+        if 'Intevo' in txt[1]:
+            report_type = 'daily'
+            language = 'English'
 
     if language == '':
         return_strings = {}
@@ -662,56 +663,6 @@ def get_Siemens_CT_QC_type_language(txt, file_type='standard'):
         'language_dict': return_strings,
         'report_type': report_type
         }
-
-    '''
-# Probably not relevant at the time of this program to finish.
-#End of life model.
-def read_Siemens_CT_QC_Symbia(txt):
-    values = []
-    errmsg = []
-    status = False
-    headers = []
-
-    res = get_Siemens_CT_QC_type_language(txt)
-
-    proceed = True
-    if res['report_type'] == '' or len(res['language_dict']) == 0:
-        errmsg = errmsg.append(
-            'Unexpected content of expected Siemens CT QC report.')
-        proceed = False
-
-    if proceed:
-
-        #TODO .........
-
-        headers = ['Date', 'Tester name', 'Product Name', 'Serial Number',
-                   'Tube ID',
-                   'HUwater 110kV min', 'HUwater 110kV max',
-                   'HUwater 130kV min', 'HUwater 130kV max',
-                   'Diff 110kV max(abs)', 'Diff 130kV max(abs)',
-                   'Noise 80kV', 'Noise 110kV', 'Noise 130kV',
-                   'Slice 1mm', 'Slice 1.5mm', 'Slice 2.5mm',
-                   'Slice 4mm', 'Slice 5mm',
-                   'MTF50 B31s', 'MTF10 B31s',
-                   'MTF50 H41s', 'MTF10 H41s',
-                   'MTF50 U90s', 'MTF10 U90s']
-
-        values = [date, tester_name, product_name, serial_number,
-                      serial_tube,
-                      HUwater_110kV_min, HUwater_110kV_max,
-                      HUwater_130kV_min, HUwater_130kV_max,
-                      diff_110kV_max, diff_130kV_max,
-                      noise_80kV_max, noise_110kV_max, noise_130kV_max,
-                      slice_1, slice_1_5, slice_2_5, slice_4, slice_5,
-                      MTF50_B31s, MTF10_B31s,
-                      MTF50_H41s, MTF10_H41s,
-                      MTF50_U90s, MTF10_U90s
-                      ]
-
-    data = {'status': status, 'errmsg': errmsg,
-            'values': values, 'headers': headers}
-    return data
-'''
 
 
 def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
@@ -739,18 +690,21 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
     values = info
     status = True
 
-    # slice thickness
+    # slice thickness -------------------------------------------------------
     slice_head_min = ''
     slice_head_max = ''
     slice_body_min = ''
     slice_body_max = ''
 
     match_str = '*' + type_str + '*' + search_strings['slice'] + '*'
-    row_test = -1
-    for i in range(len(txt)):
-        if fnmatch(txt[i], match_str):
-            row_test = i
-            break
+
+    rownos = [
+        index for index in range(len(txt))
+        if fnmatch(txt[index], match_str)]
+    if len(rownos) > 0:  # constancy == 2, daily == 1
+        row_test = rownos[-1]
+    else:
+        row_test = -1
 
     if row_test > -1:
 
@@ -758,8 +712,8 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
         test_rows = [
             index for index in range(row_test, len(txt))
             if fnmatch(txt[index], match_str)]
-        if len(test_rows) == 2:
-            for row in test_rows:
+        if len(test_rows) >= 2:
+            for row in test_rows[0:2]:
                 slice_res = []
                 for i in range(row + 1, len(txt)):
                     if fnmatch(
@@ -778,7 +732,7 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                     slice_body_min = min(slice_res)
                     slice_body_max = max(slice_res)
 
-    # homogeneity / water HUwater
+    # homogeneity / water HUwater -------------------------------------------
     '''6 tests
     extract test 3 (head full coll, 130 kV)
     + test 6 (body full coll, 130 kV)'''
@@ -790,11 +744,14 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
     diff_body_max = ''
 
     match_str = '*'+type_str+'*'+search_strings['homogeneity']+'*'
-    row_test = -1
-    for i in range(len(txt)):
-        if fnmatch(txt[i], match_str):
-            row_test = i
-            break
+
+    rownos = [
+        index for index in range(len(txt))
+        if fnmatch(txt[index], match_str)]
+    if len(rownos) > 0:  # constancy == 2, daily == 1
+        row_test = rownos[-1]
+    else:
+        row_test = -1
 
     if row_test > -1:
 
@@ -802,7 +759,7 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
         test_rows = [
             index for index in range(row_test, len(txt))
             if fnmatch(txt[index], match_str)]
-        if len(test_rows) == 6:
+        if len(test_rows) >= 6:
             actual_test_rows = [test_rows[i] for i in (2, 5)]
             # full coll 130 kV only
             for row in actual_test_rows:
@@ -831,7 +788,11 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                                 if len(split_txt) >= 3:
                                     res_HU_val.append(float(split_txt[1]))
                             if read_diff:
-                                if len(split_txt) == 16:
+                                if len(split_txt) == 11:  # daily
+                                    res_HU_diff.extend(
+                                        [split_txt[3], split_txt[5],
+                                         split_txt[7], split_txt[9]])
+                                elif len(split_txt) == 16:  # constancy
                                     res_HU_diff.extend(
                                         [split_txt[4], split_txt[7],
                                          split_txt[10], split_txt[13]])
@@ -841,30 +802,35 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                 if HUwater_head_min == '':
                     HUwater_head_min = min(res_HU_val)
                     HUwater_head_max = max(res_HU_val)
-                    diff_head_max = max(map(abs, res_HU_diff))
+                    if len(res_HU_diff) > 0:
+                        diff_head_max = max(map(abs, res_HU_diff))
                 else:
                     HUwater_body_min = min(res_HU_val)
                     HUwater_body_max = max(res_HU_val)
-                    diff_body_max = max(map(abs, res_HU_diff))
+                    if len(res_HU_diff) > 0:
+                        diff_body_max = max(map(abs, res_HU_diff))
 
-    # noise
+    # noise -------------------------------------------------------
     # 7 tests: extract test 6 (body full coll, 130 kV) + test 7 (head full coll, 130 kV)
     noise_head_max = ''
     noise_body_max = ''
 
     match_str = '*'+type_str+'*'+search_strings['noise']+'*'
-    row_test = -1
-    for i in range(len(txt)):
-        if fnmatch(txt[i], match_str):
-            row_test = i
-            break
+
+    rownos = [
+        index for index in range(len(txt))
+        if fnmatch(txt[index], match_str)]
+    if len(rownos) > 0:  # constancy == 2, daily == 1
+        row_test = rownos[-1]
+    else:
+        row_test = -1
 
     if row_test > -1:
         match_str = search_strings['n_images'] + '*'
         test_rows = [
             index for index in range(row_test, len(txt))
             if fnmatch(txt[index], match_str)]
-        if len(test_rows) == 7:
+        if len(test_rows) >= 7:
             actual_test_rows = [test_rows[i] for i in (6, 5)]
             # full coll 130 kV only
             for row in actual_test_rows:
@@ -880,12 +846,28 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                             if len(split_txt) >= 3:
                                 noise_res.append(float(split_txt[1]))
 
-                if noise_head_max == '':
-                    noise_head_max = max(noise_res)
-                else:
-                    noise_body_max = max(noise_res)
+                if len(noise_res) == 0:
+                    # Quality_Constancy_Noise files - no result per slice
+                    for i in range(row + 1, len(txt)):
+                        if i in test_rows:
+                            break  # next test
+                        elif fnmatch(txt[i], search_strings['slicewidth'] + '*'):
+                            break  # next test
+                        else:
+                            split_txt = txt[i].split()
+                            if len(split_txt) == 5:
+                                if split_txt[-1] == 'kV':
+                                    noise_res.append(float(split_txt[1]))
+                                    break
+                try:
+                    if noise_head_max == '':
+                        noise_head_max = max(noise_res)
+                    else:
+                        noise_body_max = max(noise_res)
+                except ValueError:
+                    pass
 
-    # MTF
+    # MTF -------------------------------------------------------
     # 5 tests: extract test 1-3 (130 kV body B41, head H31, U90)'''
     MTF50_body_smooth = ''
     MTF10_body_smooth = ''
@@ -895,11 +877,13 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
     MTF10_UHR = ''
 
     match_str = '*' + type_str + '*MTF*'
-    row_test = -1
-    for i in range(len(txt)):
-        if fnmatch(txt[i], match_str):
-            row_test = i
-            break
+    rownos = [
+        index for index in range(len(txt))
+        if fnmatch(txt[index], match_str)]
+    if len(rownos) > 0:  # constancy == 2, daily == 1
+        row_test = rownos[-1]
+    else:
+        row_test = -1
 
     if row_test > -1:
 
@@ -907,7 +891,7 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
         test_rows = [
             index for index in range(row_test, len(txt))
             if fnmatch(txt[index], match_str)]
-        if len(test_rows) == 5:
+        if len(test_rows) >= 5:
             actual_test_rows = [test_rows[i] for i in (0, 1, 2)]  # test 1-3
             for row in actual_test_rows:
 
@@ -923,19 +907,25 @@ def read_Siemens_CT_QC_Intevo(txt, type_str, search_strings, info, errmsg):
                         if fnmatch(txt[i],
                                    search_strings['slice'] + '*'):
                             split_txt = txt[i].split()
-                            if len(split_txt) == 10:
+                            if len(split_txt) == 7:
+                                mtf50_res.append(float(split_txt[1]))
+                                mtf10_res.append(float(split_txt[3]))
+                            elif len(split_txt) == 10:
                                 mtf50_res.append(float(split_txt[1]))
                                 mtf10_res.append(float(split_txt[4]))
 
-                if row == actual_test_rows[0]:
-                    MTF50_body_smooth = sum(mtf50_res)/len(mtf50_res)
-                    MTF10_body_smooth = sum(mtf10_res)/len(mtf10_res)
-                elif row == actual_test_rows[1]:
-                    MTF50_head_smooth = sum(mtf50_res)/len(mtf50_res)
-                    MTF10_head_smooth = sum(mtf10_res)/len(mtf10_res)
-                else:
-                    MTF50_UHR = sum(mtf50_res)/len(mtf50_res)
-                    MTF10_UHR = sum(mtf10_res)/len(mtf10_res)
+                try:
+                    if row == actual_test_rows[0]:
+                        MTF50_body_smooth = sum(mtf50_res)/len(mtf50_res)
+                        MTF10_body_smooth = sum(mtf10_res)/len(mtf10_res)
+                    elif row == actual_test_rows[1]:
+                        MTF50_head_smooth = sum(mtf50_res)/len(mtf50_res)
+                        MTF10_head_smooth = sum(mtf10_res)/len(mtf10_res)
+                    else:
+                        MTF50_UHR = sum(mtf50_res)/len(mtf50_res)
+                        MTF10_UHR = sum(mtf10_res)/len(mtf10_res)
+                except ZeroDivisionError:
+                    pass
 
     headers = ['Date', 'Tester name', 'Product Name', 'Serial Number',
                'Tube ID',
@@ -1086,7 +1076,6 @@ def read_Siemens_CT_QC(txt):
 
         return [slice_head_min, slice_head_max, slice_body_min, slice_body_max,
                 slice_dblA_min, slice_dblA_max, slice_dblB_min, slice_dblB_max]
-
 
     def get_homog_water_SiemensCT(txt, match_str,
                                   rownos_description, search_strings):
@@ -1244,7 +1233,6 @@ def read_Siemens_CT_QC(txt):
                 HUwater_dblB_min, HUwater_dblB_max,
                 diff_dblA_max, diff_dblB_max]
 
-
     def get_noise_SiemensCT(txt, match_str,
                             rownos_description, search_strings):
         """Read noise parameters from Siemens CT report.
@@ -1328,7 +1316,6 @@ def read_Siemens_CT_QC(txt):
 
         return [noise_head_max, noise_body_max,
                 noise_dblA_max, noise_dblB_max]
-
 
     def get_MTF_SiemensCT(txt, match_str,
                           rownos_description, search_strings):
@@ -1419,7 +1406,7 @@ def read_Siemens_CT_QC(txt):
                             MTF10_head_smooth = sum(mtf10_res)/len(mtf10_res)
                         elif test_str == search_strings[
                                 'test_typical_body']:
-                            if MTF50_body_smooth == None:
+                            if MTF50_body_smooth is None:
                                 MTF50_body_smooth = sum(mtf50_res)/len(mtf50_res)
                                 MTF10_body_smooth = sum(mtf10_res)/len(mtf10_res)
                             else:
@@ -1432,7 +1419,7 @@ def read_Siemens_CT_QC(txt):
                                 MTF10_dblB_smooth = sum(mtf10_res[v:])/v
                         else:
                             # without and with UHR, without first
-                            if MTF50_head_sharp == None:
+                            if MTF50_head_sharp is None:
                                 MTF50_head_sharp = sum(mtf50_res)/len(mtf50_res)
                                 MTF10_head_sharp = sum(mtf10_res)/len(mtf10_res)
                             else:
@@ -1446,6 +1433,7 @@ def read_Siemens_CT_QC(txt):
                 MTF50_dblA_smooth, MTF10_dblA_smooth,
                 MTF50_dblB_smooth, MTF10_dblB_smooth]
 
+    ###################################################################
     file_type = 'standard'
     for txt_line in txt[0:2]:
         if fnmatch(txt_line, '*Symbia T*'):
@@ -1488,9 +1476,9 @@ def read_Siemens_CT_QC(txt):
             # get date
             rowno = -1
             date = def_err_text
-            for r, txt_line in enumerate(txt):
+            for lineno, txt_line in enumerate(txt):
                 if fnmatch(txt_line, '*' + search_strings['page1'] + '*'):
-                    rowno = r
+                    rowno = lineno
                     break
             if rowno > -1:
                 split_txt = txt[rowno].split(' ')
@@ -1603,7 +1591,7 @@ def read_Siemens_CT_QC(txt):
                        'MTF50 dblB smooth', 'MTF10 dblB smooth']
 
             values = [date, tester_name, product_name, serial_number,
-                          serial_tube_A, serial_tube_B]
+                      serial_tube_A, serial_tube_B]
             values.extend(homog_water_res[0:6])
             values.extend(noise_res[0:2])
             values.extend(slice_res[0:4])
@@ -1664,7 +1652,3 @@ def get_xml_tree(path):
     root = tree.getroot()
 
     return root
-
-#path = r"C:\Users\ellen\CloudStation\ImageQCpy\30jun2022_edit\tests\test_inputs\vendor_QC_reports\SiemensCT\Siemens_CT_constancy_VB20A_Force.pdf"
-#res = read_Siemens_CT_QC(get_pdf_txt(path))
-#res = read_Siemens_PET_dailyQC_xml(get_xml_tree(path))

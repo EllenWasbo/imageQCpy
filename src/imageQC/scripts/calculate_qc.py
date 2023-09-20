@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
+import copy
 import numpy as np
 import scipy as sp
 from scipy.signal import find_peaks
@@ -17,7 +18,7 @@ import skimage
 from PyQt5.QtWidgets import qApp
 
 # imageQC block start
-import imageQC.scripts.dcm as dcm
+from imageQC.scripts import dcm
 from imageQC.scripts.calculate_roi import (get_rois, get_roi_circle)
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
@@ -103,6 +104,8 @@ def extract_values(values, columns=[], calculation='='):
                 new_values = [float(np.std(allvals))]
             elif calculation == 'max abs':
                 new_values = [float(np.max(np.abs(allvals)))]
+            elif calculation == 'width (max-min)':
+                new_values = [float(np.max(allvals)) - float(np.min(allvals))]
 
     return new_values
 
@@ -255,7 +258,9 @@ def quicktest_output(input_main):
                             if row is None:
                                 row = [None] * len(headers)
                                 force_include = True
-                            if len(values) == len(input_main.imgs):  # not 3d CHANGED from marked to input_main.imgs and added if len(row)=0
+                            if len(values) == len(input_main.imgs):
+                                # not 3d CHANGED from marked to input_main.imgs and
+                                # added if len(row)=0
                                 try:
                                     if test in marked[r]:
                                         force_include = True  # also if all None
@@ -668,17 +673,6 @@ def calculate_qc(input_main, wid_auto=None,
                                 test]['values_sup'][i] = result.values_sup
                             input_main.results[
                                 test]['details_dict'][i] = result.details_dict
-                            '''
-                            if len(result.values) != len(result.headers):
-                                input_main.results[
-                                    test]['values'][i] = [
-                                        None for i in range(len(result.headers))]
-                            if len(result.values_sup) != len(result.headers_sup):
-                                input_main.results[
-                                    test]['values_sup'][i] = [
-                                        None for i in range(len(result.headers_sup))]
-                            '''
-
             if err_extra:
                 if extra_tag_list_compare is not None:
                     attr_list = []
@@ -735,6 +729,15 @@ def calculate_qc(input_main, wid_auto=None,
                     if len(val) > 2:
                         if val[2] == '0':
                             ignore_cols.append(idx)
+
+                # ensure rows without DCM test (only extra tags) are not included
+                for i, tags in enumerate(tag_lists):
+                    try:
+                        if 'DCM' not in marked[i]:
+                            tag_lists[i] = []
+                    except IndexError:
+                        pass
+
                 tag_lists = mmf.convert_lists_to_numbers(
                     tag_lists, ignore_columns=ignore_cols)
                 input_main.results['DCM'] = {
@@ -833,8 +836,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         values_sup = []
         alt = paramset.roi_use_table
         errmsgs = []
-        headers = HEADERS[modality][test_code]['alt0']
-        headers_sup = HEADERS_SUP[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
         all_headers = headers + headers_sup
         if alt > 0:
             labels = paramset.roi_table.labels
@@ -963,11 +966,11 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             avg_val = np.mean(arr)
             std_val = np.std(arr)
         if modality == 'CT':
-            headers = HEADERS[modality][test_code]['alt0']
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
             if image2d is not None:
                 values = [avg_val, std_val, 0, 0]
         elif modality == 'Xray':
-            headers = HEADERS[modality][test_code]['alt0']
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
             if image2d is not None:
                 values = [avg_val, std_val]
 
@@ -988,8 +991,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 stds.append(np.std(arr))
 
         if modality == 'CT':
-            headers = HEADERS[modality][test_code]['alt0']
-            headers_sup = HEADERS_SUP[modality][test_code]['altAll']
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
             if image2d is not None:
                 values = [avgs[1], avgs[2], avgs[3], avgs[4], avgs[0],
                           avgs[1] - avgs[0], avgs[2] - avgs[0],
@@ -998,7 +1001,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
         elif modality == 'Xray':
             alt = paramset.hom_tab_alt
-            headers = HEADERS[modality][test_code]['alt'+str(alt)]
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt'+str(alt)])
             if image2d is not None:
                 if alt == 0:
                     values = avgs + stds
@@ -1012,7 +1015,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         values = avgs + diffs_percent
 
         elif modality == 'PET':
-            headers = HEADERS[modality][test_code]['alt0']
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
             if image2d is not None:
                 avg = sum(avgs) / len(avgs)
                 diffs = [100.*(avgs[i] - avg)/avg for i in range(5)]
@@ -1025,7 +1028,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
     def CTn():
         headers = paramset.ctn_table.labels
-        headers_sup = HEADERS_SUP[modality][test_code]['altAll']
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
         if image2d is not None:
             values = []
             errmsg = []
@@ -1058,7 +1061,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def HUw():
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         values = []
         if image2d is not None:
             arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
@@ -1071,7 +1074,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
     def Sli():
         if modality == 'CT':
             alt = paramset.sli_type
-            headers = HEADERS[modality][test_code]['alt' + str(alt)]
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
             if image2d is not None:
                 lines = roi_array
                 values, details_dict, errmsg = calculate_slicethickness(
@@ -1090,9 +1093,9 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             else:
                 res = Results(headers=headers, alternative=alt)
         elif modality == 'MR':
-            headers = HEADERS[modality][test_code]['alt0']
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
             # ['Nominal (mm)', 'Slice thickness (mm)', 'Diff (mm)', 'Diff (%)']
-            headers_sup = HEADERS_SUP[modality][test_code]['altAll']
+            headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
             # FWHM1, FWHM2
             if image2d is not None:
                 lines = roi_array
@@ -1125,8 +1128,10 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         if modality in ['CT', 'SPECT']:
             # only bead/point method 2d (alt0)
             alt = paramset.mtf_type
-            headers = HEADERS[modality][test_code]['alt' + str(alt)]
-            headers_sup = HEADERS_SUP[modality][test_code]['alt' + str(alt)]
+            headers = copy.deepcopy(
+                HEADERS[modality][test_code]['alt' + str(alt)])
+            headers_sup = copy.deepcopy(
+                HEADERS_SUP[modality][test_code]['alt' + str(alt)])
             if image2d is None:
                 res = Results(headers=headers, headers_sup=headers_sup)
             else:
@@ -1163,8 +1168,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         headers=headers, headers_sup=headers_sup, errmsg=errmsg)
 
         elif modality in ['Xray', 'MR']:
-            headers = HEADERS[modality][test_code]['alt0']
-            headers_sup = HEADERS_SUP[modality][test_code]['alt0']
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
             if image2d is None:
                 res = Results(headers=headers, headers_sup=headers_sup)
             else:
@@ -1211,8 +1216,10 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
         elif modality == 'NM':
             alt = paramset.mtf_type
-            headers = HEADERS[modality][test_code]['alt' + str(alt)]
-            headers_sup = HEADERS_SUP[modality][test_code]['alt' + str(alt)]
+            headers = copy.deepcopy(
+                HEADERS[modality][test_code]['alt' + str(alt)])
+            headers_sup = copy.deepcopy(
+                HEADERS_SUP[modality][test_code]['alt' + str(alt)])
             if image2d is None:
                 res = Results(headers=headers, headers_sup=headers_sup)
             else:
@@ -1266,7 +1273,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Rin():
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         if image2d is None:
             res = Results(headers=headers)
         else:
@@ -1307,8 +1314,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Dim():
-        headers = HEADERS[modality][test_code]['alt0']
-        headers_sup = HEADERS_SUP[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
         if image2d is None:
             res = Results(headers=headers, headers_sup=headers_sup)
         else:
@@ -1378,7 +1385,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def NPS():
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         if image2d is None:
             res = Results(headers=headers)
         else:
@@ -1396,12 +1403,12 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             avg_val = np.mean(arr)
             std_val = np.std(arr)
             values = [None, None, avg_val, std_val]
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         res = Results(headers=headers, values=values)
         return res
 
     def Var():
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         if image2d is None:
             res = Results(headers=headers)
         else:
@@ -1423,8 +1430,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Uni():
-        headers = HEADERS[modality][test_code]['alt0']
-        headers_sup = HEADERS_SUP[modality][test_code]['altAll']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
         if image2d is None:
             res = Results(headers=headers, headers_sup=headers_sup)
         else:
@@ -1462,8 +1469,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
     def SNI():
         alt = paramset.sni_type
-        headers = HEADERS[modality][test_code]['alt' + str(alt)]
-        headers_sup = HEADERS_SUP[modality][test_code]['altAll']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
         if image2d is None:
             res = Results(headers=headers, headers_sup=headers_sup)
         else:
@@ -1483,7 +1490,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Spe():
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         if image2d is None:
             res = Results(headers=headers)
         else:
@@ -1508,7 +1515,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Bar():
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         # ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',
         #    'FWHM1', 'FWHM2', 'FWHM3', 'FWHM4']
         if image2d is None:
@@ -1537,8 +1544,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def SNR():
-        headers = HEADERS[modality][test_code]['alt1']
-        headers_sup = HEADERS_SUP[modality][test_code]['alt1']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt1'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt1'])
         if image2d is None:
             res = Results(headers=headers)
         else:
@@ -1557,9 +1564,9 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def PIU():
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         # ['min', 'max', 'PIU'],
-        headers_sup = HEADERS_SUP[modality][test_code]['altAll']
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
         # ['x min (pix from upper left)', 'y min', 'x max', 'y max']
         if image2d is None:
             res = Results(headers=headers, headers_sup=headers_sup)
@@ -1581,7 +1588,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Gho():
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         # ['Center', 'top', 'bottom', 'left', 'right', 'PSG']
         if image2d is None:
             res = Results(headers=headers)
@@ -1600,7 +1607,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Geo():
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         # ['width_0', 'width_90', 'width_45', 'width_135',
         #         'GD_0', 'GD_90', 'GD_45', 'GD_135']
         if image2d is None:
@@ -1700,8 +1707,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
     def MTF(images_to_test):
         if modality in ['CT', 'SPECT']:
-            headers = HEADERS[modality][test_code][f'alt{paramset.mtf_type}']
-            headers_sup = HEADERS_SUP[modality][test_code][f'alt{paramset.mtf_type}']
+            headers = copy.deepcopy(
+                HEADERS[modality][test_code][f'alt{paramset.mtf_type}'])
+            headers_sup = copy.deepcopy(
+                HEADERS_SUP[modality][test_code][f'alt{paramset.mtf_type}'])
             if len(images_to_test) == 0:
                 res = Results(headers=headers, headers_sup=headers_sup)
             else:
@@ -1786,7 +1795,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
     def Cro(images_to_test):
         """PET cross calibration."""
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         if len(images_to_test) == 0:
             res = Results(headers=headers)
         else:
@@ -1869,8 +1878,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
     def Rec(images_to_test):
         """PET Recovery Curve."""
         alt = paramset.rec_type
-        headers = HEADERS[modality][test_code]['alt' + str(alt)]
-        headers_sup = HEADERS_SUP[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
         errmsgs = []
         proceed = True
         if extra_taglists[0][-1] != 'BQML':
@@ -2008,7 +2017,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     rc_values = [None for i in range(n_spheres + 1)]
                     rc_values_all = [rc_values for i in range(3)]
                     rec_type = rec_type + 3  # image values, not RC values
-                    headers = HEADERS[modality][test_code]['alt' + str(rec_type)]
+                    headers = copy.deepcopy(
+                        HEADERS[modality][test_code]['alt' + str(rec_type)])
                     input_main.tab_pet.rec_type.setCurrentIndex(rec_type)
 
                 details_dict['values'] = rc_values_all + details_dict['values']
@@ -2029,7 +2039,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         # use two and two images
         values_first_imgs = []
         idxs_first_imgs = []
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         if len(images_to_test) <= 1:
             res = Results(
                 headers=headers,
@@ -2071,7 +2081,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         return res
 
     def Uni(images_to_test):
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         errmsgs = []
         if len(images_to_test) == 0:
             res = Results(headers=headers)
@@ -2098,7 +2108,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         return res
 
     def SNI(images_to_test):
-        headers = HEADERS[modality][test_code]['alt0']
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         errmsgs = []
         if len(images_to_test) == 0:
             res = Results(headers=headers)
@@ -2239,8 +2249,8 @@ def calculate_slicethickness(
                 # find upper envelope curve
                 local_max = (np.diff(np.sign(np.diff(profile))) < 0).nonzero()[0] + 1
                 if local_max.size > 0:
-                    new_x, envelope_y = mmcalc.resample(profile[local_max], local_max, 1,
-                                                        n_steps=len(profile))
+                    new_x, envelope_y = mmcalc.resample(profile[local_max], local_max,
+                                                        1, n_steps=len(profile))
                     width, center = mmcalc.get_width_center_at_threshold(
                         envelope_y, halfmax)
                     if sli_signal_low_density:
@@ -2776,9 +2786,7 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                 if err is not None:
                     errmsg.append(err)
                 else:
-                    if (
-                            isinstance(paramset, cfc.ParamSetNM)
-                            or isinstance(paramset, cfc.ParamSetSPECT)):
+                    if isinstance(paramset, (cfc.ParamSetNM, cfc.ParamSetSPECT)):
                         fwhm, _ = mmcalc.get_width_center_at_threshold(
                             LSF[i], np.max(LSF[i])/2)
                         fwtm, _ = mmcalc.get_width_center_at_threshold(
@@ -3171,7 +3179,6 @@ def get_corrections_point_source(
     dx, dy = offset
 
     # calculate distances from center in plane
-    shape_ufov_y, shape_ufov_x = ufov_denoised.shape
     dists_inplane = mmcalc.get_distance_map_point(
         image2d.shape, center_dx=dx, center_dy=dy)
     dists_inplane = img_info.pix[0] * dists_inplane
@@ -3650,18 +3657,18 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
         order_peaks = np.argsort(prof[peaks_pos])
 
         tan_angles = np.tan(angs[peaks_pos])
-        for no, order in enumerate(order_peaks):
-            pos_x = dist / np.sqrt(1 + tan_angles[no]**2)
-            this_ang = angs[peaks_pos[no]]
+        for i, order in enumerate(order_peaks):
+            pos_x = dist / np.sqrt(1 + tan_angles[i]**2)
+            this_ang = angs[peaks_pos[i]]
             if this_ang > np.pi/2 and this_ang < 3*np.pi/2:
                 pos_x = - pos_x
-            pos_y = - pos_x * tan_angles[no]
+            pos_y = - pos_x * tan_angles[i]
             roi_dx_dy[order] = (pos_x + dx, pos_y + dy)
 
         # for each sphere - get spheric roi
         roi_radii = np.array(paramset.rec_sphere_diameters)  # search radius=Ø
         roi_radii[0] = roi_radii[1]  # smallest a bit extra margin
-        radius_1cc = 10* (3 / (4*np.pi)) ** (1/3)
+        radius_1cc = 10 * (3 / (4 * np.pi)) ** (1/3)
         zpos_center = zpos[len(zpos) // 2]
         zpos_diff = np.abs(zpos - zpos_center)
         roi_spheres = []

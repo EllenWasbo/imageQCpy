@@ -144,6 +144,6 @@ def test_Siemens_CT_QC_Symia():
 def test_Siemens_NM_energy_spectrum():
     file_name = (path_tests / 'test_inputs' / 'vendor_QC_reports' / 'SiemensNM' /
                  'eResDet1.txt')
-    res = read_vendor_QC_reports.read_energy_spectrum_Siemens_gamma_camera(
+    res = read_vendor_QC_reports.read_e_spectrum_Siemens_gamma_camera(
         file_name.resolve())
     assert res['values'] == [32706.0, 141.350159, 12.678160069552563, 8.96932848130193]

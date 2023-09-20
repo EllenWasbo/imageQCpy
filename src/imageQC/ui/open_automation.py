@@ -203,6 +203,10 @@ class OpenAutomationDialog(ImageQCDialog):
             QIcon(f'{os.environ[ENV_ICON_PATH]}file.png'),
             'Open result file', self)
         act_open_result_file.triggered.connect(self.open_result_file)
+        act_open_input_path = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}open.png'),
+            'Open input path in file explorer', self)
+        act_open_input_path.triggered.connect(self.open_input_path)
         act_reset_template = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}reset.png'),
             ('Move files for selected template(s) out of "Archive" folder to '
@@ -214,7 +218,8 @@ class OpenAutomationDialog(ImageQCDialog):
             'Edit templates', self)
         act_settings.triggered.connect(self.edit_template)
         tb_temps.addActions(
-            [act_refresh, act_open_result_file, act_reset_template, act_settings])
+            [act_refresh, act_open_result_file, act_open_input_path,
+             act_reset_template, act_settings])
 
         vlo_list = QVBoxLayout()
         hlo_filter = QHBoxLayout()
@@ -265,6 +270,9 @@ class OpenAutomationDialog(ImageQCDialog):
         _, _, self.templates = cff.load_settings(fname='auto_templates')
         _, _, self.templates_vendor = cff.load_settings(
             fname='auto_vendor_templates')
+        _, _, self.limits_and_plot_templates = cff.load_settings(
+            fname='limits_and_plot_templates')
+        #_, _, self.persons_to_notify = cff.load_settings(fname='persons_to_notify')
         _, _, self.paramsets = cff.load_settings(fname='paramsets')
         self.quicktest_templates = self.main.quicktest_templates
         self.digit_templates = self.main.digit_templates
@@ -446,22 +454,23 @@ class OpenAutomationDialog(ImageQCDialog):
                     arr.append(name)
                     if temp.import_only:
                         if temp.active:
-                            arr[-1] = arr[-1] + ' (import_only)'
+                            arr[-1] = f'-\t{arr[-1]}  (import_only)'
                         else:
-                            arr[-1] = arr[-1] + ' (import_only and deactivated)'
+                            arr[-1] = f'-\t{arr[-1]}  (import_only and deactivated)'
                     else:
                         if temp.active:
                             if temp.path_input != '':
                                 n_files, err = self.count_files(temp.path_input)
                                 if n_files > 0:
-                                    arr[-1] = arr[-1] + ' (' + str(n_files) + ')'
+                                    arr[-1] = f'({n_files})\t{arr[-1]}'
                                 else:
+                                    arr[-1] = f'-\t{arr[-1]}'
                                     if err is not None:
                                         errormsgs.append(f'{err}')
                             else:
-                                arr[-1] = arr[-1] + ' (input path unknown)'
+                                arr[-1] = f'-\t{arr[-1]} (input path unknown)'
                         else:
-                            arr[-1] = arr[-1] + ' (deactivated)'
+                            arr[-1] = f'-\t{arr[-1]} (deactivated)'
 
                     counter = counter + 1
                     self.progress_bar.setValue(counter)
@@ -482,14 +491,15 @@ class OpenAutomationDialog(ImageQCDialog):
                         if temp.path_input != '':
                             n_files, err = self.count_files(temp.path_input)
                             if n_files > 0:
-                                arr[-1] = arr[-1] + ' (' + str(n_files) + ')'
+                                arr[-1] = f'({n_files})\t{arr[-1]}'
                             else:
+                                arr[-1] = f'-\t{arr[-1]}'
                                 if err is not None:
                                     errormsgs.append(f'{err}')
                         else:
-                            arr[-1] = arr[-1] + ' (input path unknown)'
+                            arr[-1] = f'-\t{arr[-1]} (input path unknown)'
                     elif temp.active is False:
-                        arr[-1] = arr[-1] + ' (deactivated)'
+                        arr[-1] = f'-\t{arr[-1]} (deactivated)'
                     counter = counter + 1
                     self.progress_bar.setValue(counter)
 
@@ -545,11 +555,9 @@ class OpenAutomationDialog(ImageQCDialog):
                 if temp_this.active and temp_this.path_input != '':
                     n_files, err = self.count_files(temp_this.path_input)
                     if n_files > 0:
-                        txt = (
-                            self.templates_displayed_names_all[idx]
-                            + ' (' + str(n_files) + ')')
+                        txt = f'({n_files})\t{self.templates_displayed_names_all[idx]}'
                     else:
-                        txt = self.templates_displayed_names_all[idx]
+                        txt = f'-\t{self.templates_displayed_names_all[idx]}'
                     item = self.list_templates.item(rows[no])
                     item.setText(txt)
         self.main.stop_wait_cursor()
@@ -571,6 +579,26 @@ class OpenAutomationDialog(ImageQCDialog):
                 QMessageBox.warning(
                     self, 'File not found',
                     f'File not found {path}'
+                    )
+            self.list_templates.setCurrentRow(sel[0].row())
+
+    def open_input_path(self):
+        """Open file explorer in input path."""
+        sel = self.list_templates.selectedIndexes()
+        if len(sel) > 0:
+            mods, is_vendors, ids = self.get_selected_templates_mod_id()
+            if is_vendors[0]:
+                temp = self.templates_vendor[mods[0]][ids[0]]
+            else:
+                temp = self.templates[mods[0]][ids[0]]
+
+            path = temp.path_input
+            if os.path.exists(path):
+                os.startfile(path)
+            else:
+                QMessageBox.warning(
+                    self, 'Path not found',
+                    f'Input path not found {path}'
                     )
             self.list_templates.setCurrentRow(sel[0].row())
 
@@ -663,6 +691,7 @@ class OpenAutomationDialog(ImageQCDialog):
                         self.close()
                         self.main.start_wait_cursor()
                         self.main.chk_append.setChecked(False)
+                        self.main.btn_read_vendor_file.setChecked(False)
                         self.main.wid_quicktest.gb_quicktest.setChecked(False)
                         self.main.wid_center.reset_delta()
                         self.main.open_files(file_list=pre_selected_files)
@@ -716,6 +745,7 @@ class OpenAutomationDialog(ImageQCDialog):
             tempnos = self.templates_displayed_ids
         if len(tempnos) > 0:
             log = []
+            warnings_all = []
             self.automation_active = True
             max_progress = 100*len(tempnos)  # 0-100 within each temp
             if len(tempnos) > 1:
@@ -728,6 +758,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     0, max_progress, self, minimum_duration=0, hide_cancel=True)
 
             for i, tempno in enumerate(tempnos):
+                warnings = []
                 mod = self.templates_mod[tempno]
                 if self.templates_is_vendor[tempno]:
                     temp_this = self.templates_vendor[mod][self.templates_id[tempno]]
@@ -744,20 +775,29 @@ class OpenAutomationDialog(ImageQCDialog):
                         pre_msg = f'Template {mod}/{temp_this.label}:'
                         self.progress_modal.setLabelText(
                             f'{pre_msg} Extracting data from vendor report...')
-                        msgs, not_written = automation.run_template_vendor(
-                            temp_this, mod,
+                        msgs, warnings, not_written = automation.run_template_vendor(
+                            temp_this, mod, self.limits_and_plot_templates,
+                            #self.persons_to_notify,
                             decimal_mark=self.paramsets[mod][0].output.decimal_mark,
                             parent_widget=self)
                     else:
-                        msgs, not_written = automation.run_template(
+                        msgs, warnings, not_written = automation.run_template(
                             temp_this, mod,
                             self.paramsets,
                             self.quicktest_templates, self.digit_templates,
+                            self.limits_and_plot_templates, #self.persons_to_notify,
                             self.tag_infos, parent_widget=self
                             )
                     if len(msgs) > 0:
                         for msg in msgs:
                             log.append(msg)
+                    if len(warnings) > 0:
+                        paths_already = [msg_list[0] for msg_list in warnings_all]
+                        if warnings[0] in paths_already:
+                            idx = paths_already.index(warnings[0])
+                            warnings_all[idx].extend(warnings[1:])
+                        else:
+                            warnings_all.append(warnings)
                     if len(not_written) > 0:
                         log.append('Results failed to be written to output file.')
                         # TODO offer to clipboard
@@ -768,6 +808,16 @@ class OpenAutomationDialog(ImageQCDialog):
             self.progress_modal.setValue(max_progress)
 
             self.automation_active = False
+
+            if len(warnings_all) > 0:
+                for warnings in warnings_all:
+                    proceed = os.path.exists(warnings[0])
+                    if proceed:
+                        with open(warnings[0], "a") as f:
+                            f.write('\n'.join(warnings[1:]))
+                    else:
+                        log.append('Failed adding warnings for violated limits to '
+                                   f'{warnings[0]}')
 
             if len(log) > 0:
                 if isinstance(log, list):

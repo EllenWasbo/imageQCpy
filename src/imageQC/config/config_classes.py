@@ -41,7 +41,8 @@ class LastModified:
     auto_templates: list = field(default_factory=list)
     auto_vendor_templates: list = field(default_factory=list)
     dash_settings: list = field(default_factory=list)
-    persons_to_notify: list = field(default_factory=list)
+    limits_and_plot_templates: list = field(default_factory=list)
+    # TODO delete? persons_to_notify: list = field(default_factory=list)
 
 
 @dataclass
@@ -245,7 +246,7 @@ class HUnumberTable:
             self.labels.append(label)
             self.pos_x.append(pos_x)
             self.pos_y.append(pos_y)
-            self.linearity_axis_axis.append(0.)
+            self.linearity_axis.append(0.)
             if len(self.min_HU) > 0:
                 self.min_HU.append(0)
                 self.max_HU.append(0)
@@ -303,6 +304,7 @@ class RecTable(PositionTable):
 class QuickTestOutputTemplate:
     """Class for holding output templates."""
 
+    # NB if changing parameters here - fix in config/config_func.py:load_settings
     include_header: bool = False
     transpose_table: bool = False
     decimal_mark: str = '.'
@@ -459,7 +461,7 @@ class ParamSetNM(ParamSetCommon):
     sni_radius: float = 330.
     sni_sum_first: bool = False
     sni_eye_filter_c: float = 28.
-    sni_ref_image: str = ''
+    sni_ref_image: str = ''  # file name (without path and extension)
     mtf_type: int = 1  # [Point, line (default), Two lines (, edge])
     mtf_roi_size_x: float = 50.
     mtf_roi_size_y: float = 50.
@@ -667,6 +669,8 @@ class AutoCommon:
         default_factory=TagPatternFormat)
 
 
+# TODO delete?
+'''
 @dataclass
 class PersonToNotify:
     """Dataclass for name, email, notes on persons to notify on automation results."""
@@ -677,6 +681,7 @@ class PersonToNotify:
     all_notifications_mods: list = field(default_factory=list)  # list of str
     # this person should get all notifications for the selected modalities
     mute: bool = False
+'''
 
 
 @dataclass
@@ -686,22 +691,26 @@ class AutoTemplate:
     label: str = ''
     path_input: str = ''
     path_output: str = ''
+    path_warnings: str = ''
     station_name: str = ''
     dicom_crit_attributenames: list = field(default_factory=list)
     dicom_crit_values: list = field(default_factory=list)
     sort_pattern: TagPatternSort = field(default_factory=TagPatternSort)
     paramset_label: str = ''
     quicktemp_label: str = ''
-    visualization_label: str = ''
+    limits_and_plot_label: str = ''
     archive: bool = True
     delete_if_not_image: bool = False
     delete_if_too_many: bool = False
     active: bool = True
     import_only: bool = False  # if used only during import supplement, not analyse
+    # TODO delete?
+    '''
     persons_to_notify: list = field(default_factory=list)
     # list of names (label) of PersonToNotify for this specific template
     min_max: list = field(default_factory=list)
     # [min, max] for each column in output
+    '''
 
 
 @dataclass
@@ -711,28 +720,160 @@ class AutoVendorTemplate:
     label: str = ''
     path_input: str = ''
     path_output: str = ''
+    path_warnings: str = ''
     station_name: str = ''
-    visualization_label: str = ''
+    limits_and_plot_label: str = ''
     archive: bool = False
     file_type: str = ''
     file_suffix: str = ''  # starting with . e.g. '.pdf'
     active: bool = True
-    persons_to_notify: list = field(default_factory=list)
-    # list of names (label) of PersonToNotify for this specific template
-    min_max: list = field(default_factory=list)
-    # tuples (min, max) for each column in output
+    # TODO delete? persons_to_notify: list = field(default_factory=list)
 
 
 @dataclass
-class VisualizationSub:
-    """Dataclass for the automation output trend visualization."""
+class LimitsAndPlotTemplate:
+    """Dataclass for the automation output limits and plot settings for dash_app."""
 
-    columns: list = field(default_factory=list)  # list of ints
-    legends: list = field(default_factory=list)  # list of str (default is header)
-    styles: list = field(default_factory=list)  # '-bo' and similar
-    ytitle: str = ''
-    lower_upper: list = field(default_factory=list)  # set min/max to display optional
-    hide: bool = False
+    label: str = ''
+    type_vendor: bool = False  # True if used with automation vendor templates
+    groups: list = field(default_factory=list)
+    # list of headers to group = same limits and plot in same graph
+    # ex. [['col a', 'col c'],['col b', 'col d'],['col e'], ['col f']]
+    groups_limits: list = field(default_factory=list)  # list of lists
+    # eg [min, max] * number of groups, default is [None, None] for each group
+    groups_ranges: list = field(default_factory=list)  # list of lists
+    # min y, max y in display
+    # eg [min, max] * number of groups, default is [None, None] for each group = Auto
+    groups_hide: list = field(default_factory=list)  # list of bool
+    # default is False for each group
+    groups_title: list = field(default_factory=list)  # list of str (plot title)
+
+    def __post_init__(self):
+        """Add empty list_sort if not defined."""
+        if len(self.groups) > len(self.groups_limits):
+            diff = len(self.groups) - len(self.groups_limits)
+            self.groups_limits.extend([[None, None] for i in range(diff)])
+        if len(self.groups) > len(self.groups_ranges):
+            diff = len(self.groups) - len(self.groups_ranges)
+            self.groups_ranges.extend([[None, None] for i in range(diff)])
+        if len(self.groups) > len(self.groups_hide):
+            diff = len(self.groups) - len(self.groups_hide)
+            self.groups_hide.extend([False for i in range(diff)])
+        if len(self.groups) > len(self.groups_title):
+            self.groups_title = [', '.join(group) for group in self.groups]
+
+    def add_group(self, group=[], limits=[None, None],
+                  ranges=[None, None], hide=False, title='', index=-1):
+        """Add group element in each list at given index or append."""
+        if index == -1:
+            index = len(self.groups)
+        self.groups.insert(index, group)
+        self.groups_limits.insert(index, limits)
+        self.groups_ranges.insert(index, ranges)
+        self.groups_hide.insert(index, hide)
+        if title == '':
+            title = ', '.join(group)
+        self.groups_title.insert(index, title)
+
+    def delete_group(self, index):
+        """Delete froup element."""
+        try:
+            self.groups.pop(index)
+            self.groups_limits.pop(index)
+            self.groups_ranges.pop(index)
+            self.groups_hide.pop(index)
+            self.groups_title.pop(index)
+        except IndexError:
+            print(f'Failed deleting group idx {index} from {self}')
+
+    def remove_empty_groups(self):
+        """Remove empty groups."""
+        empty_group_idxs = [idx for idx, group in enumerate(self.groups)
+                            if len(group) == 0]
+        if len(empty_group_idxs) > 0:
+            empty_group_idxs.reverse()
+            for idx in empty_group_idxs:
+                self.groups.pop(idx)
+                self.groups_limits.pop(idx)
+                self.groups_ranges.pop(idx)
+                self.groups_hide.pop(idx)
+                self.groups_title.pop(idx)
+
+    def move_group(self, old_group_number=None, new_group_number=None):
+        """Move group to new position (index).
+
+        Parameters
+        ----------
+        old_group_number : int, optional
+            Original group number. The default is None.
+        new_group_number : int, optional
+            New group index. The default is None.
+        """
+        if old_group_number is None or new_group_number is None:
+            pass
+        else:
+            group = self.groups.pop(old_group_number)
+            limits = self.groups_limits.pop(old_group_number)
+            ranges = self.groups_ranges.pop(old_group_number)
+            hide = self.groups_hide.pop(old_group_number)
+            title = self.groups_title.pop(old_group_number)
+            self.add_group(group=group, limits=limits, ranges=ranges,
+                           hide=hide, title=title, index=new_group_number)
+
+    def find_headers_group_index(self, header):
+        """Return group index where header is found."""
+        idx = -1
+        for i, group in enumerate(self.groups):
+            if header in group:
+                idx = i
+                break
+        return idx
+
+    def group_headers(self, headers):
+        """Group headers."""
+        if len(headers) > 1:
+            # test if already grouped
+            group_idxs = []
+            for header in headers:
+                group_idx = self.find_headers_group_index(header)
+                if group_idx not in group_idxs:
+                    group_idxs.append(group_idx)
+            not_included_yet = []
+            for idx in group_idxs:
+                if len(self.groups[idx]) > 1:
+                    for header in self.groups[idx]:
+                        if header not in headers:
+                            not_included_yet.append(header)
+            if len(not_included_yet) > 0:
+                pass
+                # TODO ask to include rest of other group
+                # or remove selected from other group
+            group_to = group_idxs[0]
+            group_idxs.pop(0)
+            headers.pop(0)
+            # move to first selected group
+            for header_no, idx in enumerate(group_idxs):
+                header = headers[header_no]
+                self.groups[group_to].append(header)
+                self.groups[idx].remove(header)
+            self.groups_title[group_to] = ', '.join(headers)
+            self.remove_empty_groups()
+
+    def ungroup_headers(self, headers):
+        """Ungroup headers."""
+        if len(headers) > 0:
+            for header in headers:
+                group_idx = self.find_headers_group_index(header)
+                self.groups[group_idx].remove(header)
+                self.add_group(
+                    group=[header],
+                    limits=self.groups_limits[group_idx],
+                    ranges=self.groups_ranges[group_idx],
+                    hide=self.groups_hide[group_idx],
+                    title=header,
+                    index=group_idx+1
+                    )
+            self.remove_empty_groups()
 
 
 @dataclass
@@ -744,4 +885,9 @@ class DashSettings:
     port: int = 8050
     url_logo: str = ''
     header: str = 'Constancy controls'
-    subs: list = field(default_factory=list)  # list of VisualizationSub
+    overview_table_headers: list[
+        str] = field(default_factory=lambda: [
+            'Template', 'Last results', 'Days since', 'Status'])
+    days_since_limit: int = 30
+    plot_height: int = 200
+    override_css: bool = False  # TODO option to put css in config folder

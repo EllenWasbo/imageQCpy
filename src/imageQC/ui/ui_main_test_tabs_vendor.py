@@ -84,6 +84,7 @@ class ParamsTabVendor(QWidget):
             implemented_types = [
                 'Siemens CT Constancy/Daily Reports (.pdf)',
                 'Siemens PET-CT DailyQC Reports (.pdf)',
+                'Siemens PET-MR DailyQC Reports (.xml)',
                 'Siemens exported energy spectrum (.txt)'
                 ]
             if file_type in implemented_types:

@@ -1476,8 +1476,8 @@ def find_lines(image):
     if not all(xy_dir_xy):
         # try scipy.signal.find_peaks
         xy_dir_xy_peak = [None for i in range(4)]
-        di = 0
-        for iprof, prof in enumerate([prof_x, prof_y]):
+        direction = 0
+        for prof in [prof_x, prof_y]:
             peaks = find_peaks(prof, distance=10)
             peaks_pos = peaks[0]
             highest_peak_pos = None
@@ -1486,13 +1486,13 @@ def find_lines(image):
                 order_peaks = np.argsort(prof[peaks_pos])
                 highest_peak_pos = peaks_pos[order_peaks[-1]]
                 lowest_peak_pos = peaks_pos[order_peaks[-2]]
-            if di == 0:  # prof_x
+            if direction == 0:  # prof_x
                 xy_dir_xy_peak[2] = highest_peak_pos  # xpos of ydir
                 xy_dir_xy_peak[0] = lowest_peak_pos  # xpos of xdir
             else:  # prof_y
                 xy_dir_xy_peak[1] = highest_peak_pos  # ypos of x dir
                 xy_dir_xy_peak[3] = lowest_peak_pos  # ypos of y dir
-            di = di + 1
+            direction += 1
 
         # try combine (trust more center at threshold technique)
         xy_dir_xy_combine = []

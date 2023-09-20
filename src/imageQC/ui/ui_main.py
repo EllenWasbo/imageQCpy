@@ -9,8 +9,10 @@ import os
 import copy
 from dataclasses import dataclass
 from time import time, ctime
+from pathlib import Path
 import numpy as np
 import pandas as pd
+import webbrowser
 
 from PyQt5.QtGui import QIcon, QScreen
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -38,6 +40,7 @@ from imageQC.ui.ui_dialogs import TextDisplay
 from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
+from imageQC.ui.settings_automation import DashWorker
 from imageQC.config import config_func as cff
 from imageQC.config.iQCconstants import (
     QUICKTEST_OPTIONS, VERSION,
@@ -81,8 +84,9 @@ class MainWindow(QMainWindow):
 
     screenChanged = pyqtSignal(QScreen, QScreen)
 
-    def __init__(self, scX=1400, scY=700, char_width=7):
+    def __init__(self, scX=1400, scY=700, char_width=7, developer_mode=False):
         super().__init__()
+        self.developer_mode = developer_mode  # option to hide some options if True
 
         self.save_blocked = False
         if os.environ[ENV_USER_PREFS_PATH] == '':
@@ -430,6 +434,7 @@ class MainWindow(QMainWindow):
 
     def update_mode(self):
         """Update GUI when modality has changed."""
+        self.wid_quicktest.gb_quicktest.setChecked(False)
         curr_mod_idx = get_modality_index(self.current_modality)
         if curr_mod_idx != self.btns_mode.checkedId():
             self.btns_mode.button(curr_mod_idx).setChecked(True)
@@ -804,6 +809,23 @@ class MainWindow(QMainWindow):
             self.wizard = automation_wizard.AutomationWizard(self)
             self.wizard.open()
 
+    def run_dash(self):
+        """Show automation results in browser."""
+        config_folder = cff.get_config_folder()
+        filenames = [x.stem for x in Path(config_folder).glob('*')
+                     if x.suffix == '.yaml']
+        if 'auto_templates' in filenames or 'auto_vendor_templates' in filenames:
+            _, _, dash_settings = cff.load_settings(fname='dash_settings')
+            self.dash_worker = DashWorker(dash_settings=dash_settings)
+            self.dash_worker.start()
+            url = f'http://{dash_settings.host}:{dash_settings.port}'
+            webbrowser.open(url=url, new=1)
+            self.dash_worker.exit()
+        else:
+            QMessageBox.information(
+                self, 'Missing automation templates',
+                '''Found no automation templates to display results from.''')
+
     def run_rename_dicom(self):
         """Start Rename Dicom dialog."""
         dlg = rename_dicom.RenameDicomDialog(self)
@@ -812,17 +834,30 @@ class MainWindow(QMainWindow):
     def run_settings(self, initial_view='', initial_template_label='',
                      paramset_output=False):
         """Display settings dialog."""
-        _, _, self.persons_to_notify = cff.load_settings(
-            fname='persons_to_notify')
-        if initial_view == '':
-            dlg = settings.SettingsDialog(self)
-        else:
-            dlg = settings.SettingsDialog(
-                self, initial_view=initial_view,
-                paramset_output=paramset_output,
-                initial_template_label=initial_template_label)
-        dlg.exec()
-        self.update_settings(after_edit_settings=True)
+        proceed = True
+        if self.wid_paramset.edited or self.wid_quicktest.edited:
+            txt = 'parameter set' if self.wid_paramset.edited else ''
+            if self.wid_quicktest.edited:
+                if txt:
+                    txt = txt + ' and QuickTest template'
+                else:
+                    txt = 'QuickTest template'
+            msg = f'There are unsaved changes to {txt}. Ignore and continue?'
+            reply = QMessageBox.question(
+                self, 'Save changes first?', msg,
+                QMessageBox.Yes, QMessageBox.No)
+            if reply == QMessageBox.No:
+                proceed = False
+        if proceed:
+            if initial_view == '':
+                dlg = settings.SettingsDialog(self)
+            else:
+                dlg = settings.SettingsDialog(
+                    self, initial_view=initial_view,
+                    paramset_output=paramset_output,
+                    initial_template_label=initial_template_label)
+            dlg.exec()
+            self.update_settings(after_edit_settings=True)
 
     def update_settings(self, after_edit_settings=False):
         """Refresh data from settings files affecting GUI in main window."""
@@ -875,7 +910,7 @@ class MainWindow(QMainWindow):
         else:
             row_list = [[*dataf.to_dict()]]
             for row in range(nrows):
-                row_list.append([dataf.iat[row, col] for col in range(ncols)])
+                row_list.append([str(dataf.iat[row, col]) for col in range(ncols)])
             lines_list = ['\t'.join(row) for row in row_list]
             txt = '\n'.join(lines_list)
         dlg = TextDisplay(
@@ -1005,6 +1040,10 @@ class MainWindow(QMainWindow):
             QIcon(f'{os.environ[ENV_ICON_PATH]}playGears.png'),
             'Start wizard to config automation with current settings', self)
         act_wizard_auto.triggered.connect(self.run_auto_wizard)
+        act_dash = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}globe.png'),
+            'Refreash and show dashboard with results from automation templates', self)
+        act_dash.triggered.connect(self.run_dash)
         act_rename_dcm = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}rename_dicom.png'),
             'Run Rename DICOM', self)
@@ -1083,7 +1122,8 @@ class MainWindow(QMainWindow):
         menu_bar.addMenu(QMenu('&Help', self))
 
         # fill toolbar
-        tool_bar.addActions([act_open, act_open_adv, act_open_auto, act_wizard_auto])
+        tool_bar.addActions([
+            act_open, act_open_adv, act_open_auto, act_wizard_auto, act_dash])
         tool_bar.addSeparator()
         tool_bar.addWidget(self.chk_append)
         tool_bar.addSeparator()

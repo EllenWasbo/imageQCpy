@@ -69,9 +69,11 @@ class StackWidget(QWidget):
         try:
             self.import_review_mode = self.dlg_settings.import_review_mode
             self.save_blocked = self.dlg_settings.main.save_blocked
+            #self.developer_mode = self.dlg_settings.main.developer_mode
         except AttributeError:
             self.import_review_mode = False
             self.save_blocked = False
+            #self.developer_mode = True  #TODO sure?
         try:
             self.current_modality = self.dlg_settings.initial_modality
         except AttributeError:
@@ -114,10 +116,11 @@ class StackWidget(QWidget):
             if 'patterns' in self.fname or self.fname == 'auto_templates':
                 _, _, self.tag_infos = cff.load_settings(fname='tag_infos')
             elif self.fname in [
-                    'paramsets', 'quicktest_templates', 'persons_to_notify']:
+                    'paramsets', 'quicktest_templates',
+                    'limits_and_plot_templates']: #TODO delete? 'persons_to_notify',
                 _, _, self.auto_templates = cff.load_settings(
                     fname='auto_templates')
-                if self.fname == 'persons_to_notify':
+                if self.fname in ['limits_and_plot_templates']: #TODO delete? 'persons_to_notify',
                     _, _, self.auto_vendor_templates = cff.load_settings(
                         fname='auto_vendor_templates')
             elif self.fname == 'digit_templates':
@@ -129,6 +132,11 @@ class StackWidget(QWidget):
                 _, _, self.quicktest_templates = cff.load_settings(
                     fname='quicktest_templates')
                 self.fill_lists()
+
+            if self.fname in ['auto_templates', 'auto_vendor_templates']:
+                _, _, self.limits_and_plot_templates = cff.load_settings(
+                    fname='limits_and_plot_templates')
+                self.fill_list_limits_and_plot()
 
             if self.grouped:
                 self.wid_mod_temp.cbox_modality.setCurrentText(
@@ -183,6 +191,9 @@ class StackWidget(QWidget):
             self.update_file_types()
         elif self.fname == 'auto_templates':
             self.fill_lists()
+
+        if self.fname in ['auto_templates', 'auto_vendor_templates']:
+            self.fill_list_limits_and_plot()
 
         self.refresh_templist()
         try:
@@ -405,9 +416,10 @@ class StackWidget(QWidget):
         more_fnames = None
         log = []
         mod = self.current_modality
-        if self.fname in ['paramsets', 'quicktest_templates', 'persons_to_notify']:
+        if self.fname in ['paramsets', 'quicktest_templates', 
+                          'limits_and_plot_templates']: #TODO delete? 'persons_to_notify'
             more_fnames = ['auto_templates']
-            if self.fname == 'persons_to_notify':
+            if self.fname in ['limits_and_plot_templates']: #TODO delete? 'persons_to_notify'
                 more_fnames.append('auto_vendor_templates')
             for more_fname in more_fnames:
                 _, path, auto_templates = cff.load_settings(fname=more_fname)
@@ -417,13 +429,20 @@ class StackWidget(QWidget):
                         ref_attr = 'paramset_label'
                     elif self.fname == 'quicktest_templates':
                         ref_attr = 'quicktemp_label'
-                    else:
+                    #TODO delete?
+                    '''
+                    elif self.fname == 'persons_to_notify':
                         ref_attr = 'persons_to_notify'
+                    else:
+                    '''
+                    ref_attr = 'limits_and_plot_label'
                     temp_auto = cff.get_ref_label_used_in_auto_templates(
                         auto_templates, ref_attr=ref_attr)
                     _, temp_labels = np.array(temp_auto[mod]).T.tolist()
 
                     changed = False
+                    #TODO delete?
+                    '''
                     if ref_attr == 'persons_to_notify':
                         flat_list = [item for sub in temp_labels for item in sub]
                         if oldlabel in flat_list:
@@ -436,16 +455,17 @@ class StackWidget(QWidget):
                                     changed = True
                                     #log.append(temp)
                     else:
-                        if oldlabel in temp_labels:
-                            for i, temp in enumerate(temp_labels):
-                                if temp == oldlabel:
-                                    setattr(auto_templates[mod][i], ref_attr, newlabel)
-                                    changed = True
-                                    #log.append(temp)
+                    '''
+                    if oldlabel in temp_labels:
+                        for i, temp in enumerate(temp_labels):
+                            if temp == oldlabel:
+                                setattr(auto_templates[mod][i], ref_attr, newlabel)
+                                changed = True
+                                #log.append(temp)
 
                     if changed:
                         log.append(
-                            f'{self.fname[:-1]} {oldlabel} used in auto_templates. '
+                            f'{self.fname[:-1]} {oldlabel} used in {more_fname} '
                             'Label updated.')
                         save_more = True
                         if more is None:
@@ -696,14 +716,17 @@ class ModTempSelector(QWidget):
     def clear(self):
         """Clear template - set like empty_template."""
         try:
-            lbl = self.parent.current_template.label
-            self.parent.current_template = copy.deepcopy(
-                self.parent.empty_template)
-            self.parent.current_template.label = lbl
-            self.parent.update_data()
-            self.parent.flag_edit(True)
+            self.parent.clear()
         except AttributeError:
-            print('Missing empty template (method clear in ModTempSelector)')
+            try:
+                lbl = self.parent.current_template.label
+                self.parent.current_template = copy.deepcopy(
+                    self.parent.empty_template)
+                self.parent.current_template.label = lbl
+                self.parent.update_data()
+                self.parent.flag_edit(True)
+            except AttributeError:
+                print('Missing empty template (method clear in ModTempSelector)')
 
     def add(self):
         """Add new template to list. Ask for new name and verify."""
@@ -920,15 +943,18 @@ class ModTempSelector(QWidget):
             else:
                 if row not in self.parent.marked[self.parent.current_modality]:
                     self.parent.marked[self.parent.current_modality].append(row)
-                    if self.parent.fname == 'auto_templates':
-                        self.parent.dlg_settings.mark_qt_param(
+                    if self.parent.fname in ['auto_templates', 'auto_vendor_templates']:
+                        self.parent.dlg_settings.mark_qt_param_limits(
                             self.parent.current_template,
                             mod=self.parent.current_modality
                             )
+                        #TODO delete?
+                        '''
                         if len(self.parent.current_template.persons_to_notify) > 0:
                             self.parent.dlg_settings.mark_persons(
                                 self.parent.current_template
                                 )
+                        '''
                     if self.parent.fname == 'paramsets':
                         if self.parent.current_template.num_digit_label != '':
                             self.parent.dlg_settings.mark_digit_temps(
@@ -1160,7 +1186,7 @@ class QuickTestOutputTreeView(QTreeView):
 
         self.model.itemChanged.connect(self.parent.flag_edit)
 
-    def update_data(self, set_selected=0):
+    def update_data(self, set_selected=0, set_selected_txt=''):
         """Set data to self.parent.current_template.output.
 
         Parameters
@@ -1212,7 +1238,28 @@ class QuickTestOutputTreeView(QTreeView):
 
         self.model.blockSignals(False)
         self.model.endResetModel()
-        self.setCurrentIndex(self.model.index(set_selected, 0))
+        if set_selected_txt == '':
+            self.setCurrentIndex(self.model.index(set_selected, 0))
+        else:
+            new_row_values = self.get_model_as_text_list()
+            new_row_select = new_row_values.index(set_selected_txt)
+            self.setCurrentIndex(self.model.index(new_row_select, 0))
+
+    def get_model_as_text_list(self):
+        """Return all rows as txt.
+
+        Returns
+        -------
+        row_txts : list of str
+        """
+        row_txts = []
+        for row in range(self.model.rowCount()):
+            values_row = []
+            for col in range(self.model.columnCount()):
+                item = self.model.item(row, col)
+                values_row.append(item.text())
+            row_txts.append(' '.join(values_row))
+        return row_txts
 
     def get_testcode_subno(self, rowno):
         """Get test_code and QuickTestOutputSub number from row number.
@@ -1310,7 +1357,6 @@ class QuickTestOutputTreeView(QTreeView):
 
     def move_sub(self, move_up=True):
         """If first in test, move test, else move sub within test."""
-
         def move_test(testcode):
             keys = [*self.parent.current_template.output.tests]
             testno = keys.index(testcode)
@@ -1326,6 +1372,7 @@ class QuickTestOutputTreeView(QTreeView):
 
         sel = self.selectedIndexes()
         if len(sel) > 0:
+            orig_row_values = self.get_model_as_text_list()
             rowno = sel[0].row()
             code, subno = self.get_testcode_subno(rowno)
 
@@ -1347,7 +1394,7 @@ class QuickTestOutputTreeView(QTreeView):
                     self.parent.current_template.output.tests[code].insert(
                         subno+1, popped)
 
-            self.update_data(set_selected=rowno)
+            self.update_data(set_selected_txt=orig_row_values[rowno])
             self.parent.flag_edit(True)
 
 

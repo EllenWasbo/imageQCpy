@@ -44,7 +44,7 @@ class TreeFileList(QTreeWidget):
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setAcceptDrops(True)
         self.setHeaderLabels(['Image', 'Frame', 'Test'])
-        self.setColumnWidth(0, round(0.8*self.main.gui.panel_width))
+        self.setColumnWidth(0, round(0.7*self.main.gui.panel_width))
         self.setColumnWidth(1, 90)
         self.currentItemChanged.connect(self.main.update_active_img)
         self.itemDoubleClicked.connect(self.dbl_click_item)
@@ -97,9 +97,9 @@ class TreeFileList(QTreeWidget):
                 if quicktest_active:
                     test_string = '+'.join(img.marked_quicktest)
                     if img.quicktest_image_name != '':
-                        test_string += f' (Name: {img.quicktest_image_name})'
+                        test_string += f' (Image name: {img.quicktest_image_name})'
                     if img.quicktest_group_name != '':
-                        test_string += f' (Group: {img.quicktest_group_name})'
+                        test_string += f' (Group name: {img.quicktest_group_name})'
                 else:
                     test_string = 'x' if img.marked else ''
                 frameno = f'{img.frame_number}' if img.frame_number > -1 else ''
@@ -255,7 +255,6 @@ class TreeFileList(QTreeWidget):
         if proceed:
             for sel in selrows:
                 if qt_edit:
-                    #tests_this = self.main.imgs[sel].marked_quicktest
                     self.main.imgs[sel].marked_quicktest = test_codes
                     self.main.wid_quicktest.flag_edit(True)
                 elif remove_mark:

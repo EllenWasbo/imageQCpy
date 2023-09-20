@@ -9,11 +9,11 @@ import os
 import copy
 from pathlib import Path
 from time import time, ctime
-import yaml
-import numpy as np
-from PyQt5.QtCore import QFile, QIODevice, QTextStream
 from dataclasses import asdict
+import numpy as np
 
+import yaml
+from PyQt5.QtCore import QFile, QIODevice, QTextStream
 from PyQt5.QtWidgets import QMessageBox, QFileDialog
 
 # imageQC block start
@@ -74,10 +74,10 @@ def version_control(input_main):
     res = getattr(last_mod, 'tag_infos')
     if len(res) > 0:
         if len(res) == 2:
-            user, modtime = res
+            # TODO delete? user, modtime = res
             version_string = ''
         else:
-            user, modtime, version_string = res
+            _, _, version_string = res
 
         version_diff = calculate_version_difference(version_string)
         if version_diff > 0:  # current version newer than saved tag_infos
@@ -125,7 +125,7 @@ def version_control(input_main):
                                     new_tag_infos,
                                     key=lambda x: x.attribute_name.upper())
                         taginfos_reset_sort_index(new_tag_infos)
-                        ok_save, path = save_settings(
+                        _, _ = save_settings(
                             new_tag_infos, fname='tag_infos')
                     else:
                         reply = QMessageBox.question(
@@ -134,7 +134,7 @@ def version_control(input_main):
                             QMessageBox.Yes, QMessageBox.No)
                         if reply == QMessageBox.No:
                             # update version number
-                            ok_save, path = save_settings(
+                            _, _ = save_settings(
                                 input_main.tag_infos, fname='tag_infos')
 
 
@@ -156,13 +156,13 @@ def verify_config_folder(widget):
         proceed = False
         quest = '''Config folder not specified.
         Do you want to locate or initate a config folder now?'''
-        msgBox = QMessageBox(
+        msg_box = QMessageBox(
             QMessageBox.Question,
             'Proceed?', quest,
             buttons=QMessageBox.Yes | QMessageBox.No,
             parent=widget
             )
-        res = msgBox.exec_()
+        res = msg_box.exec_()
         if res == QMessageBox.Yes:
             proceed = True
         if proceed:
@@ -171,10 +171,10 @@ def verify_config_folder(widget):
             if dlg.exec():
                 fname = dlg.selectedFiles()
                 os.environ[ENV_CONFIG_FOLDER] = fname[0]
-                user_status, user_path, user_prefs = load_user_prefs()
+                _, user_path, user_prefs = load_user_prefs()
                 if user_path != '':
                     user_prefs.config_folder = os.environ[ENV_CONFIG_FOLDER]
-                    ok, path = save_user_prefs(user_prefs, parentwidget=widget)
+                    _, _ = save_user_prefs(user_prefs, parentwidget=widget)
 
     return proceed
 
@@ -232,16 +232,16 @@ def init_user_prefs(path=APPDATA, config_folder=''):
 
     Returns
     -------
-    bool
+    status: bool
         False if failed initiating user preferences and config folder
-    str
+    path_out: str
         path (or '' if failed)
-    str
+    errmsg: str
         error message
     """
     status = False
     errmsg = ''
-    p = ''
+    path_out = ''
 
     # initiate APPDATA or TEMPDIR imageQC if missing
     if os.path.exists(path) is False:
@@ -255,23 +255,23 @@ def init_user_prefs(path=APPDATA, config_folder=''):
         userpref = cfc.UserPreferences()
         userpref.config_folder = config_folder
 
-        p = os.path.join(path, USER_PREFS_FNAME)
+        path_out = os.path.join(path, USER_PREFS_FNAME)
 
         if os.access(path, os.W_OK):
-            with open(p, 'w') as file:
+            with open(path_out, 'w') as file:
                 yaml.safe_dump(
                     asdict(userpref), file,
                     default_flow_style=None, sort_keys=False)
             status = True
         else:
-            errmsg = '\n'.join(['Missing writing permission:', p])
-            p = ''
+            errmsg = '\n'.join(['Missing writing permission:', path_out])
+            path_out = ''
 
     if errmsg != '':
         errmsg = '\n'.join([errmsg,
                             'Saving settings is not possible.'])
 
-    return (status, p, errmsg)
+    return (status, path_out, errmsg)
 
 
 def verify_input_dict(dict_input, default_object):
@@ -313,13 +313,13 @@ def save_user_prefs(userpref, parentwidget=None):
         path = os.environ[ENV_USER_PREFS_PATH]
     except KeyError:
         if parentwidget is not None:
-            quest = ('Save user_preferences.yaml in:')
+            quest = 'Save user_preferences.yaml in:'
             res = messageboxes.QuestionBox(
                 parentwidget, title='Save as', msg=quest,
                 yes_text=f'{APPDATA}', no_text=f'{TEMPDIR}')
-            p = APPDATA if res.exec() == 0 else TEMPDIR
-            stat, path, user_prefs = init_user_prefs(
-                    path=p, config_folder=os.environ[ENV_CONFIG_FOLDER])
+            path_local = APPDATA if res.exec() == 0 else TEMPDIR
+            _, path, userpref = init_user_prefs(
+                    path=path_local, config_folder=os.environ[ENV_CONFIG_FOLDER])
         else:
             path = ''
 
@@ -335,13 +335,8 @@ def save_user_prefs(userpref, parentwidget=None):
     return (status, path)
 
 
-def load_user_prefs(parent=None):
+def load_user_prefs():
     """Load yaml file.
-
-    Parameters
-    ----------
-    parent : widget, optional
-        Default is None.
 
     Returns
     -------
@@ -362,8 +357,8 @@ def load_user_prefs(parent=None):
             path = os.path.join(TEMPDIR, USER_PREFS_FNAME)  # try with TEMPDIR
 
     if os.path.exists(path):
-        with open(path, 'r') as f:
-            doc = yaml.safe_load(f)
+        with open(path, 'r') as file:
+            doc = yaml.safe_load(file)
             updated_doc = verify_input_dict(doc, cfc.UserPreferences())
             userprefs = cfc.UserPreferences(**updated_doc)
 
@@ -384,8 +379,8 @@ def get_config_folder():
         Config folder if exists else empty string.
     """
     try:
-        p = os.environ[ENV_CONFIG_FOLDER]
-        config_folder = p if os.path.exists(p) else ''
+        path = os.environ[ENV_CONFIG_FOLDER]
+        config_folder = path if os.path.exists(path) else ''
     except KeyError:
         config_folder = ''
 
@@ -408,12 +403,6 @@ def get_config_filename(fname, force=False):
         full path to yaml file if it exist, empty if not verified
     """
     path = ''
-    """TODO delete?
-    user_prefs_ok, user_path, userprefs = load_user_prefs()
-    if user_prefs_ok:
-        path_temp = os.path.join(
-            userprefs.config_folder, fname + '.yaml')
-    """
     if os.environ[ENV_CONFIG_FOLDER] != '':
         path_temp = os.path.join(
             os.environ[ENV_CONFIG_FOLDER], fname + '.yaml')
@@ -489,6 +478,29 @@ def load_default_pos_tables(filename='Siemens_AutoQC'):
     return tables
 
 
+def convert_OneDrive(path):
+    """Test wether C:Users and OneDrive in path - replace username if not correct.
+
+    Option to use shortcut paths in OneDrive to same sharepoint
+    (shortcut name must be the same).
+
+    Parameters
+    ----------
+    path_string : str
+
+    Returns
+    -------
+    path : str
+        as input or replaced username if OneDrive shortcut
+    """
+    if 'OneDrive' in path and 'C:\\Users' in path:
+        path_obj = Path(path)
+        if path_obj.exists() is False:
+            if USERNAME != path_obj.parts[2]:
+                path = os.path.join(*path_obj.parts[:2], USERNAME, *path_obj.parts[3:])
+    return path
+
+
 def load_settings(fname='', temp_config_folder=''):
     """Load settings from yaml file in config folder.
 
@@ -536,10 +548,12 @@ def load_settings(fname='', temp_config_folder=''):
                             if fname == 'tag_infos':
                                 updated_doc = verify_input_dict(doc, cfc.TagInfo())
                                 settings.append(cfc.TagInfo(**updated_doc))
+                            '''
                             elif fname == 'persons_to_notify':
                                 updated_doc = verify_input_dict(
                                     doc, cfc.PersonToNotify())
                                 settings.append(cfc.PersonToNotify(**updated_doc))
+                            '''
                     if fname == 'tag_infos':
                         taginfos_reset_sort_index(settings)
 
@@ -550,10 +564,10 @@ def load_settings(fname='', temp_config_folder=''):
                     else:
                         fnames = [fname]
 
-                    for fn in fnames:
+                    for fname_this in fnames:
                         sett_this = []
                         if len(fnames) > 1:
-                            path_this = str(Path(path) / f'{fn}.yaml')
+                            path_this = str(Path(path) / f'{fname_this}.yaml')
                         else:
                             path_this = path
                         if Path(path_this).exists():
@@ -578,8 +592,9 @@ def load_settings(fname='', temp_config_folder=''):
                                         decimal_mark=doc['output']['decimal_mark'],
                                         include_filename=doc[
                                             'output']['include_filename'],
+                                        group_by=doc['output']['group_by'],
                                         tests=tests)
-                                    modality = fn.split('_')[1]
+                                    modality = fname_this.split('_')[1]
                                     if 'roi_table' in doc:
                                         upd = verify_input_dict(doc['roi_table'],
                                                                 cfc.PositionTable())
@@ -597,6 +612,7 @@ def load_settings(fname='', temp_config_folder=''):
                                             upd = verify_input_dict(doc['rec_table'],
                                                                     cfc.RecTable())
                                             doc['rec_table'] = cfc.RecTable(**upd)
+
                                     class_ = getattr(cfc, f'ParamSet{modality}')
                                     upd = verify_input_dict(doc, class_())
                                     sett_this.append(class_(**upd))
@@ -660,8 +676,26 @@ def load_settings(fname='', temp_config_folder=''):
                                         temp, cfc.DigitTemplate())
                                     settings[mod].append(
                                         cfc.DigitTemplate(**upd))
+                                elif fname == 'limits_and_plot_templates':
+                                    upd = verify_input_dict(
+                                        temp, cfc.LimitsAndPlotTemplate())
+                                    settings[mod].append(
+                                        cfc.LimitsAndPlotTemplate(**upd))
+
+                                if 'auto' in fname:
+                                    try:
+                                        for attr in [
+                                                'path_input',
+                                                'path_output',
+                                                'path_warnings']:
+                                            new_path = convert_OneDrive(
+                                                getattr(settings[mod][-1], attr))
+                                            setattr(settings[mod][-1], attr, new_path)
+                                    except (IndexError, KeyError, AttributeError):
+                                        pass
                     status = True
-                except:
+                except Exception as error:
+                    print(f'config_func.py load_settings: {str(error)}')
                     return_default = True
             else:  # settings as one object
                 with open(path, 'r') as file:
@@ -669,12 +703,12 @@ def load_settings(fname='', temp_config_folder=''):
                     if fname == 'auto_common':
                         upd = verify_input_dict(
                             doc['filename_pattern'], cfc.TagPatternFormat())
-                        doc['filename_pattern'] = (cfc.TagPatternFormat(**upd))
+                        doc['filename_pattern'] = cfc.TagPatternFormat(**upd)
                         upd = verify_input_dict(doc, cfc.AutoCommon())
                         settings = cfc.AutoCommon(**upd)
+                        settings.import_path = convert_OneDrive(settings.import_path)
                     elif fname == 'dash_settings':
                         upd = verify_input_dict(doc, cfc.DashSettings())
-                        # todo list of subs?
                         settings = cfc.DashSettings(**upd)
                     elif fname == 'last_modified':
                         upd = verify_input_dict(doc, cfc.LastModified())
@@ -687,15 +721,15 @@ def load_settings(fname='', temp_config_folder=''):
             if 'paramsets' in fname:
                 default_tags_dcm = load_default_dcm_test_tag_patterns()
                 if fname == 'paramsets':  # load as dict
-                    for m in QUICKTEST_OPTIONS:
-                        if m not in settings:
-                            class_ = getattr(cfc, f'ParamSet{m}')
-                            settings[m] = [class_(
-                                dcm_tagpattern=default_tags_dcm[m])]
+                    for mod in QUICKTEST_OPTIONS:
+                        if mod not in settings:
+                            class_ = getattr(cfc, f'ParamSet{mod}')
+                            settings[mod] = [class_(
+                                dcm_tagpattern=default_tags_dcm[mod])]
                 else:
-                    m = fname.split('_')[1]
-                    class_ = getattr(cfc, f'ParamSet{m}')
-                    settings = [class_(dcm_tagpattern=default_tags_dcm[m])]
+                    mod = fname.split('_')[1]
+                    class_ = getattr(cfc, f'ParamSet{mod}')
+                    settings = [class_(dcm_tagpattern=default_tags_dcm[mod])]
             else:
                 settings = CONFIG_FNAMES[fname]['default']
                 if fname == 'tag_infos':
@@ -726,7 +760,7 @@ def check_save_conflict(fname, lastload):
     path = get_config_filename(fname)
     if os.path.exists(path):
         if os.path.getmtime(path) > lastload:
-            ok, path, last_mod = load_settings(fname='last_modified')
+            _, path, last_mod = load_settings(fname='last_modified')
             res = getattr(last_mod, fname)
             if len(res) == 2:
                 user, modtime = res
@@ -760,9 +794,9 @@ def check_save_conflict(fname, lastload):
 def update_last_modified(fname=''):
     """Update last_modified.yaml."""
     # path = get_config_filename(fname, force=True)
-    ok, path_last_mod, last_mod = load_settings(fname='last_modified')
+    _, _, last_mod = load_settings(fname='last_modified')
     setattr(last_mod, fname, [USERNAME, time(), VERSION])
-    ok, path_last_mod = save_settings(last_mod, fname='last_modified')
+    _, _ = save_settings(last_mod, fname='last_modified')
 
 
 def save_settings(settings, fname=''):
@@ -786,13 +820,13 @@ def save_settings(settings, fname=''):
     path = ''
 
     def try_save(input_data, override_path=None):
-        p = path
+        path_to_use = path
         status = False
         try_again = False
         if override_path is not None:  # for testing/troubleshooting
-            p = override_path
+            path_to_use = override_path
         try:
-            with open(p, 'w') as file:
+            with open(path_to_use, 'w') as file:
                 if isinstance(input_data, list):
                     yaml.safe_dump_all(
                         input_data, file, default_flow_style=None, sort_keys=False)
@@ -803,13 +837,13 @@ def save_settings(settings, fname=''):
         except yaml.YAMLError:
             # try once more with eval(str(input_data))
             try_again = True
-        except IOError as e:
+        except IOError as io_error:
             QMessageBox.warning(None, "Failed saving",
-                                f'Failed saving to {p} {e}')
+                                f'Failed saving to {path_to_use} {io_error}')
         if try_again:
             try:
                 input_data = eval(str(input_data))
-                with open(p, 'w') as file:
+                with open(path_to_use, 'w') as file:
                     if isinstance(input_data, list):
                         yaml.safe_dump_all(
                             input_data, file, default_flow_style=None, sort_keys=False)
@@ -817,9 +851,9 @@ def save_settings(settings, fname=''):
                         yaml.safe_dump(
                             input_data, file, default_flow_style=None, sort_keys=False)
                 status = True
-            except yaml.YAMLError as ex:
+            except yaml.YAMLError as yaml_error:
                 QMessageBox.warning(None, 'Failed saving',
-                                    f'Failed saving to {p} {ex}')
+                                    f'Failed saving to {path_to_use} {yaml_error}')
         return status
 
     if fname != '':
@@ -842,12 +876,12 @@ def save_settings(settings, fname=''):
                 if all_paramsets:
                     status_all = []
                     folder = path
-                    for m, sett_this in settings.items():
+                    for mod, sett_this in settings.items():
                         listofdict = [asdict(temp) for temp in sett_this]
-                        path = str(Path(folder) / f'paramset_{m}.yaml')
+                        path = str(Path(folder) / f'paramset_{mod}.yaml')
                         status_this = try_save(listofdict)
                         status_all.append(status_this)
-                        update_last_modified(f'paramset_{m}')
+                        update_last_modified(f'paramset_{mod}')
                     path = folder  # output
                     status = all(status_all)
                 else:
@@ -857,7 +891,7 @@ def save_settings(settings, fname=''):
                 temp_dict = {}
                 for key, val in settings.items():
                     temp_dict[key] = [asdict(temp) for temp in val]
-                if temp_dict != {}:
+                if temp_dict:
                     status = try_save(temp_dict)
             else:
                 status = try_save(asdict(settings))
@@ -873,32 +907,32 @@ def import_settings(import_main):
     any_same_name = False
     if import_main.tag_infos != []:
         fname = 'tag_infos'
-        ok, path, tag_infos = load_settings(fname=fname)
+        _, _, tag_infos = load_settings(fname=fname)
         tag_infos.extend(import_main.tag_infos)
 
         quest = (f'Importing {len(import_main.tag_infos)} DICOM tag settings. '
                  'By default these will be added to the end of tag-list. '
                  'Sort all tags by attribute name?')
-        msgBox = QMessageBox(
+        msg_box = QMessageBox(
             QMessageBox.Question,
             'Sort DICOM tags?', quest,
             buttons=QMessageBox.Yes | QMessageBox.No,
             parent=None
             )
-        res = msgBox.exec_()
+        res = msg_box.exec_()
         if res == QMessageBox.Yes:
             tag_infos = sorted(tag_infos, key=lambda x: x.attribute_name.upper())
 
         taginfos_reset_sort_index(tag_infos)
-        status, path = save_settings(tag_infos, fname=fname)
+        _, _ = save_settings(tag_infos, fname=fname)
 
     list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
                   if item['saved_as'] == 'modality_dict']
     list_dicts.append('paramsets')
-    for d in list_dicts:
-        new_temps = getattr(import_main, d, {})
+    for dict_string in list_dicts:
+        new_temps = getattr(import_main, dict_string, {})
         if new_temps != {}:
-            ok, path, temps = load_settings(fname=d)
+            _, _, temps = load_settings(fname=dict_string)
             for key in temps:
                 if key in new_temps:
                     if len(new_temps[key]) > 0:
@@ -907,8 +941,8 @@ def import_settings(import_main):
                         if old_labels == ['']:
                             temps[key] = new_temps[key]
                         else:
-                            for new_id, new_temp in enumerate(new_temps[key]):
-                                if d == 'tag_patterns_special':  # replace
+                            for new_id in range(len(new_temps[key])):
+                                if dict_string == 'tag_patterns_special':  # replace
                                     old_id = old_labels.index(new_labels[new_id])
                                     temps[key][old_id] = new_temps[key][new_id]
                                 else:
@@ -917,12 +951,12 @@ def import_settings(import_main):
                                             new_labels[new_id] + '_import')
                                         any_same_name = True
                                     temps[key].append(new_temps[key][new_id])
-                        if d == 'paramsets':
+                        if dict_string == 'paramsets':
                             if new_labels[0] != '':
-                                status, path = save_settings(
+                                _, _ = save_settings(
                                     temps[key], fname=f'paramsets_{key}')
-            if d != 'paramsets':
-                status, path = save_settings(temps, fname=d)
+            if dict_string != 'paramsets':
+                _, _ = save_settings(temps, fname=dict_string)
 
     try:
         if import_main.auto_common.import_path != '':
@@ -1049,7 +1083,7 @@ def get_ref_label_used_in_auto_templates(auto_templates, ref_attr='paramset_labe
         key = modalitystring
         value = AutoTemplate
     ref_attr : str
-        'paramset_label' or 'quicktemp_label' or 'persons_to_notify' (list)
+        'paramset_label' or 'quicktemp_label' or 'limits_and_plot_label'
 
     Returns
     -------
@@ -1069,56 +1103,71 @@ def get_ref_label_used_in_auto_templates(auto_templates, ref_attr='paramset_labe
 
 
 def verify_auto_templates(main):
-    """Verify all paramsets + quicktest templates in auto_templates are defined.
+    """Verify all linked templates in auto_templates are defined.
 
     Also verify that persons to notify are defined (if any).
     """
     status = True
     log = []
-    if hasattr(main, 'auto_templates'):
-        linked_persons = []
-        for fname in ['paramsets', 'quicktest_templates']:
-            ref_attr = 'paramset_label' if fname == 'paramset' else 'quicktemp_label'
-            temp_in_auto = get_ref_label_used_in_auto_templates(
-                main.auto_templates, ref_attr=ref_attr)
-            if hasattr(main, fname):
-                mod_dict = getattr(main, fname)
-                for mod, templist in mod_dict.items():
-                    all_labels = [t.label for t in templist]
-                    missing = []
-                    auto_labels, temp_labels = np.array(temp_in_auto[mod]).T.tolist()
-                    if auto_labels[0] != '':
-                        for label in temp_labels:
-                            if label not in all_labels:
-                                missing.append(label)
-                        if len(missing) > 0:
-                            if '' in missing:
-                                log.append(
-                                    f'{mod}: {fname} not defined for some templates')
-                                missing.remove('')
+    auto_fnames = ['auto_templates', 'auto_vendor_templates']
+    for auto_fname in auto_fnames:
+        if hasattr(main, auto_fname):
+            # TODO delete? linked_persons = []
+            linked_fnames = ['limits_and_plot_templates']
+            linked_labels = ['limits_and_plot_label']
+            if 'vendor' not in auto_fname:
+                linked_fnames.extend(['paramsets', 'quicktest_templates'])
+                linked_labels.extend(['paramset_label', 'quicktemp_label'])
+            for i, fname in enumerate(linked_fnames):
+                ref_attr = linked_labels[i]
+                temp_in_auto = get_ref_label_used_in_auto_templates(
+                    main.auto_templates, ref_attr=ref_attr)
+                if hasattr(main, fname):
+                    mod_dict = getattr(main, fname)
+                    for mod, templist in mod_dict.items():
+                        all_labels = [t.label for t in templist]
+                        missing = []
+                        auto_labels, temp_labels =\
+                            np.array(temp_in_auto[mod]).T.tolist()
+                        if auto_labels[0] != '':
+                            for label in temp_labels:
+                                if label not in all_labels:
+                                    missing.append(label)
                             if len(missing) > 0:
-                                log.append(
-                                    f'{mod}: missing definition of {fname} {missing}')
-                            status = False
-                    if fname == 'paramsets':  # just once
-                        try:
-                            for temp in templist:
-                                if len(temp.persons_to_notify) > 0:
-                                    linked_persons.extend(temp.persons_to_notify)
-                        except AttributeError:
-                            pass
-        if len(linked_persons) > 0:
-            linked_persons = list(set(linked_persons))
-            if hasattr(main, 'persons_to_notify'):
-                all_persons = [temp.label for temp in main.persons_to_notify]
-                missing = []
-                for person in linked_persons:
-                    if person not in all_persons:
-                        missing.append(person)
-                if len(missing) > 0:
-                    log.append(
-                        'Automation templates set to notify undefined persons: '
-                        f'{missing}')
+                                if '' in missing:
+                                    log.append(f'{mod}: {fname} not defined for '
+                                               'some templates')
+                                    missing.remove('')
+                                if len(missing) > 0:
+                                    log.append(
+                                        f'{mod}: missing definition of '
+                                        f'{fname} {missing}')
+                                status = False
+                        # TODO delete: (persons_to_notify)
+                        '''
+                        if fname == 'paramsets':  # just once
+                            try:
+                                for temp in templist:
+                                    if len(temp.persons_to_notify) > 0:
+                                        linked_persons.extend(temp.persons_to_notify)
+                            except AttributeError:
+                                pass
+                        '''
+            # TODO delete?
+            '''
+            if len(linked_persons) > 0:
+                linked_persons = list(set(linked_persons))
+                if hasattr(main, 'persons_to_notify'):
+                    all_persons = [temp.label for temp in main.persons_to_notify]
+                    missing = []
+                    for person in linked_persons:
+                        if person not in all_persons:
+                            missing.append(person)
+                    if len(missing) > 0:
+                        log.append(
+                            'Automation templates set to notify undefined persons: '
+                            f'{missing}')
+            '''
 
     return (status, log)
 
@@ -1306,7 +1355,7 @@ def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):
                   'tag_patterns_sort', 'rename_patterns', 'paramsets',
                   'auto_templates']
         for fname in fnames:
-            ok, path, templates = load_settings(fname=fname)
+            _, _, templates = load_settings(fname=fname)
             found_in = []
             for mod in templates:
                 proceed = True
@@ -1372,7 +1421,7 @@ def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):
                 param_auto = {}
                 if fname == 'paramsets':
                     # list all automation templates where paramset used
-                    ok, path, auto_templates = load_settings(
+                    _, _, auto_templates = load_settings(
                         fname='auto_templates')
                     param_auto = get_ref_label_used_in_auto_templates(
                         auto_templates, ref_attr='paramset_label')
@@ -1397,14 +1446,15 @@ def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):
                         changed_mod = [f[0] for f in found_in]
                         changed_mod = list(set(changed_mod))
                         ok_all = []
-                        for m in changed_mod:
-                            ok, path = save_settings(templates[m], fname=f'{fname}_{m}')
-                            ok_all.append(ok)
-                        ok = all(ok_all)
+                        for mod in changed_mod:
+                            ok_this, _ = save_settings(
+                                templates[mod], fname=f'{fname}_{mod}')
+                            ok_all.append(ok_this)
+                        ok_this = all(ok_all)
                     else:
-                        ok, path = save_settings(templates, fname=fname)
-                    oks.append(ok)
-                    if ok:
+                        ok_this, _ = save_settings(templates, fname=fname)
+                    oks.append(ok_this)
+                    if ok_this:
                         log.append('Saved')
                     else:
                         log.append('Saving failed')
@@ -1418,7 +1468,7 @@ def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):
                     log.append(f'{fname} - attribute_name {name} not found')
 
         fname = 'auto_common'
-        ok, path, template = load_settings(fname=fname)
+        _, _, template = load_settings(fname=fname)
         found = False
         for oldnew in old_new_names:
             old_name, new_name = oldnew
@@ -1435,9 +1485,9 @@ def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):
         if found:
             if name == '':
                 log.append(f'{fname} changed attribute_names')
-                ok, path = save_settings(template, fname=fname)
-                oks.append(ok)
-                if ok:
+                ok_this, _ = save_settings(template, fname=fname)
+                oks.append(ok_this)
+                if ok_this:
                     log.append('Saved')
                 else:
                     log.append('Saving failed')
@@ -1476,7 +1526,7 @@ def verify_tag_infos(main):
         if hasattr(main, fname):
             templates = getattr(main, fname)
         else:
-            ok, path, templates = load_settings(fname=fname)
+            _, _, templates = load_settings(fname=fname)
         for mod in templates:
             for template in templates[mod]:
                 if 'patterns' in fname:
@@ -1493,9 +1543,9 @@ def verify_tag_infos(main):
 
         fname = 'auto_common'
         if hasattr(main, fname):
-            templates = getattr(main, fname)
+            template = getattr(main, fname)
         else:
-            ok, path, template = load_settings(fname=fname)
+            _, _, template = load_settings(fname=fname)
         found_attributes['CT'].extend(template.auto_delete_criterion_attributenames)
         found_attributes['CT'].extend(template.filename_pattern.list_tags)
 
@@ -1509,7 +1559,6 @@ def verify_tag_infos(main):
             status = False
 
     return (status, log)
-
 
 
 def get_icon_path(user_pref_dark_mode):

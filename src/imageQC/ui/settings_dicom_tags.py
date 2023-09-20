@@ -14,7 +14,6 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QAction, QCheckBox, QListWidget, QComboBox,
     QAbstractScrollArea, QMessageBox, QDialogButtonBox, QFileDialog
     )
-import pydicom
 
 # imageQC block start
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS, ENV_ICON_PATH
@@ -167,23 +166,18 @@ class DicomTagDialog(ImageQCDialog):
         all_tags = []
         filename = self.sample_filepath.text()
         if filename != '':
-            pd = {}
-            try:
-                pd = pydicom.dcmread(filename, stop_before_pixels=True)
-            except pydicom.errors.InvalidDicomError:
-                QMessageBox.information(
-                    self, 'Failed reading DICOM',
-                    'Could not read selected file as DICOM. InvalidDicomError')
-            except FileNotFoundError:
-                pass
-            if len(pd) > 0:
+            pyd, _, errmsg = dcm.read_dcm(filename)
+            if pyd:
                 all_tags = dcm.get_all_tags_name_number(
-                    pd, sequence_list=self.sample_sequences)
-                self.pydict = pd
+                    pyd, sequence_list=self.sample_sequences)
+                self.pydict = pyd
                 self.get_tag_data()
                 self.sample_attribute_names = all_tags['attribute_names']
                 self.sample_tags = all_tags['tags']
             else:
+                if errmsg:
+                    QMessageBox.information(
+                        self, 'Failed reading DICOM', errmsg)
                 self.sample_attribute_names = []
                 self.sample_tags = []
 

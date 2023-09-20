@@ -48,7 +48,9 @@ def prepare_debug():
 
 if __name__ == '__main__':
     print('imageQC is starting up...', flush=True)
-    #prepare_debug()  # type c to continue, # before this code in imageQC.py to deactivate debugging
+    developer_mode = False
+    if developer_mode:
+        prepare_debug()  # type c to continue, # before this code in imageQC.py to deactivate debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     # verify that config_folder exists
     if user_prefs.config_folder != '':
@@ -233,7 +235,8 @@ if __name__ == '__main__':
             dlg.show()
             splash.finish(dlg)
             dlg.exec()
-        w = ui_main.MainWindow(scX=sz.width(), scY=sz.height(), char_width=char_width)
+        w = ui_main.MainWindow(scX=sz.width(), scY=sz.height(), char_width=char_width,
+                               developer_mode=developer_mode)
         w.show()
         splash.finish(w)
         w.version_control()

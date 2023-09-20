@@ -111,7 +111,7 @@ class TagPatternTree(QWidget):
                 'Delete selected tag(s) from pattern', self)
             act_delete.triggered.connect(self.delete)
             if self.typestr == 'sort':
-                toolb.addActions([act_sort , act_up, act_down, act_delete])
+                toolb.addActions([act_sort, act_up, act_down, act_delete])
             elif self.typestr == 'none':
                 toolb.addActions([act_up, act_down, act_delete])
             else:

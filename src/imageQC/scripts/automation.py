@@ -15,23 +15,20 @@ from datetime import date, datetime
 from time import time
 import shutil
 
-import pydicom
-
 # imageQC block start
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
 from imageQC.scripts.input_main_auto import InputMain
 from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
-import imageQC.scripts.read_vendor_QC_reports as read_vendor_QC_reports
-import imageQC.scripts.dcm as dcm
-from imageQC.scripts.mini_methods import get_all_matches
+from imageQC.scripts import read_vendor_QC_reports
+from imageQC.scripts import dcm
+from imageQC.scripts.mini_methods import get_all_matches, string_to_float
 from imageQC.scripts.mini_methods_format import valid_path, val_2_str
 import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
 from imageQC.ui import reusable_widgets as uir
 # imageQC block end
 
-pydicom.config.future_behavior(True)
 logger = logging.getLogger('imageQC')
 
 
@@ -116,19 +113,16 @@ def run_automation_non_gui(args):
         lastload_auto_common = time()
         ndays = args.ndays
         if args.import_images or args.auto in ['all', 'dicom']:
-            ok_common, path, auto_common = cff.load_settings(
-                fname='auto_common')
+            ok_common, path, auto_common = cff.load_settings(fname='auto_common')
             if ndays == -2:
                 ndays = auto_common.ignore_since
-            ok_tags, path, tag_infos = cff.load_settings(
-                fname='tag_infos')
-            ok_temps, path, auto_templates = cff.load_settings(
-                fname='auto_templates')
+            _, _, tag_infos = cff.load_settings(fname='tag_infos')
+            ok_temps, _, auto_templates = cff.load_settings(fname='auto_templates')
             if args.auto in ['all', 'dicom']:
                 if ok_temps:
                     run_auto = True
         if args.auto in ['all', 'vendor']:
-            ok_temps_v, path, auto_vendor_templates = cff.load_settings(
+            ok_temps_v, _, auto_vendor_templates = cff.load_settings(
                 fname='auto_vendor_templates')
             if ok_temps_v:
                 run_auto_vendor = True
@@ -148,27 +142,27 @@ def run_automation_non_gui(args):
                 append_log(log_import)
                 if import_status:
                     fname = 'auto_common'
-                    proceed_save, errmsg = cff.check_save_conflict(
+                    proceed_save, _ = cff.check_save_conflict(
                         fname, lastload_auto_common)
                     if proceed_save:
                         # save today as last import date to auto_common
                         auto_common.last_import_date = datetime.now().strftime(
                             "%d.%m.%Y %I:%M")
-                        ok_save, path = cff.save_settings(
-                            auto_common, fname=fname)
+                        _, _ = cff.save_settings(auto_common, fname=fname)
             else:
                 logger.error('Path defined as image pool in import settings'
                              f'not valid dir: {auto_common.import_path}')
 
         # run templates
-        ok_params, path, paramsets = cff.load_settings(
-            fname='paramsets')
-        ok_qt, path, qt_templates = cff.load_settings(
-            fname='quicktest_templates')
-        _, _, digit_templates = cff.load_settings(
-            fname='digit_templates')
+        _, _, paramsets = cff.load_settings(fname='paramsets')
+        _, _, qt_templates = cff.load_settings(fname='quicktest_templates')
+        _, _, digit_templates = cff.load_settings(fname='digit_templates')
+        _, _, limits_and_plot_templates = cff.load_settings(
+            fname='limits_and_plot_templates')
+        #_, _, persons_to_notify = cff.load_settings(fname='persons_to_notify')
         decimal_mark = '.'
         vendor = True  # first vendor templates if any
+        warnings_all = []
         for templates in [auto_vendor_templates, auto_templates]:
             run_this = run_auto_vendor if vendor else run_auto
             if run_this:
@@ -181,6 +175,7 @@ def run_automation_non_gui(args):
 
                 if len(set_templates) > 0:
                     for t_id, mod_temp in enumerate(set_templates):
+                        warnings = []
                         mod, templabel = mod_temp
                         if vendor:
                             decimal_mark = paramsets[mod][0].output.decimal_mark
@@ -188,15 +183,20 @@ def run_automation_non_gui(args):
                             tempno = labels[mod].index(templabel)
                             template = templates[mod][tempno]
                             if vendor:
-                                log_this, not_written = run_template_vendor(
-                                    template, mod, decimal_mark=decimal_mark)
+                                log_this, warnings, not_written = run_template_vendor(
+                                    template, mod,
+                                    limits_and_plot_templates,
+                                    #persons_to_notify,
+                                    decimal_mark=decimal_mark)
                             else:
-                                log_this, not_written = run_template(
+                                log_this, warnings, not_written = run_template(
                                     template,
                                     mod,
                                     paramsets,
                                     qt_templates,
                                     digit_templates,
+                                    limits_and_plot_templates,
+                                    #persons_to_notify,
                                     tag_infos
                                 )
                             append_log(log_this, not_written)
@@ -204,6 +204,13 @@ def run_automation_non_gui(args):
                             v_txt = ('Automation template (vendor)' if vendor
                                      else 'Automation template')
                             logger.warning(f'{v_txt} {mod}/{templabel} not found.')
+                        if len(warnings) > 0:
+                            paths_already = [msg_list[0] for msg_list in warnings_all]
+                            if warnings[0] in paths_already:
+                                idx = paths_already.index(warnings[0])
+                                warnings_all[idx].extend(warnings[1:])
+                            else:
+                                warnings_all.append(warnings)
                 if len(set_modalities) == 0 and len(set_templates) == 0:
                     set_modalities = actual_modalities  # all if not specified
                 if len(set_modalities) > 0:
@@ -212,20 +219,43 @@ def run_automation_non_gui(args):
                             for t_id, label in enumerate(labels[mod]):
                                 if vendor:
                                     template = auto_vendor_templates[mod][t_id]
-                                    log_this, not_written = run_template_vendor(
-                                        template, mod, decimal_mark=decimal_mark)
+                                    log_this, warnings, not_written =\
+                                        run_template_vendor(
+                                            template, mod,
+                                            limits_and_plot_templates,
+                                            #persons_to_notify,
+                                            decimal_mark=decimal_mark)
                                 else:
                                     template = auto_templates[mod][t_id]
-                                    log_this, not_written = run_template(
+                                    log_this, warnings, not_written = run_template(
                                         template,
                                         mod,
                                         paramsets,
                                         qt_templates,
                                         digit_templates,
+                                        limits_and_plot_templates,
+                                        #persons_to_notify,
                                         tag_infos
                                     )
                                 append_log(log_this, not_written)
+                                if len(warnings) > 0:
+                                    paths_already = [
+                                        msg_list[0] for msg_list in warnings_all]
+                                    if warnings[0] in paths_already:
+                                        idx = paths_already.index(warnings[0])
+                                        warnings_all[idx].extend(warnings[1:])
+                                    else:
+                                        warnings_all.append(warnings)
             vendor = False
+        if len(warnings_all) > 0:
+            for warnings in warnings_all:
+                proceed = os.path.exists(warnings[0])
+                if proceed:
+                    with open(warnings[0], "a") as file:
+                        file.write('\n'.join(warnings[1:]))
+                else:
+                    append_log('Failed adding warnings for violated limits to '
+                               f'{warnings[0]}')
 
 
 def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
@@ -254,8 +284,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
     proceed = False
     import_path = auto_common.import_path if override_path is None else override_path
     if os.path.exists(import_path):
-        p = Path(import_path)
-        files = [x for x in p.glob('**/*') if x.is_file()]
+        p_import = Path(import_path)
+        files = [x for x in p_import.glob('**/*') if x.is_file()]
         if len(files) > 0:
             proceed = True
             if parent_widget is not None:
@@ -265,14 +295,14 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                     )
         else:
             import_log.append(
-                f'Found no new files in import path {p}')
+                f'Found no new files in import path {p_import}')
     else:
         import_log.append(
-            f'Failed to read import path {p}')
+            f'Failed to read import path {p_import}')
 
     if proceed:
         import_log.append(
-            f'Found {len(files)} files in import path {p}')
+            f'Found {len(files)} files in import path {p_import}')
 
         # get all station_names/dicom crits/input paths of automation_templates
         station_names = {}
@@ -282,7 +312,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
         n_files_template = {}
         if templates is not None:
             nmod = len(templates)
-            m = 0
+            mod_no = 0
             for mod, temps in templates.items():
                 station_names[mod] = []
                 for temp in temps:
@@ -297,8 +327,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                     temp.dicom_crit_values for temp in temps]
                 n_files_template[mod] = [0] * len(temps)
                 if parent_widget is None:
-                    m += 1
-                    print_progress('Extracting template settings.', m, nmod)
+                    mod_no += 1
+                    print_progress('Extracting template settings.', mod_no, nmod)
 
         not_dicom_files = []  # index list of files not valid dicom
         too_old_files = []  # older than ignore since if set
@@ -324,26 +354,24 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                 "Importing files...                            ", "Cancel",
                 0, progress_max, parent_widget)  # 0-100 within each temp
 
+        cancelled = False
         for f_id, file in enumerate(files):
             if parent_widget is not None:
                 progress_modal.setValue(f_id)
                 progress_modal.setLabelText(
                     f'Reading DICOM header of files: {f_id + 1} / {len(files)}')
-            pd = {}
-            try:
-                pd = pydicom.dcmread(file, stop_before_pixels=True)
-            except pydicom.errors.InvalidDicomError:
+            pyd, _, _ = dcm.read_dcm(file)
+            if not pyd:
                 not_dicom_files.append(f_id)
-
-            if len(pd) > 0:
+            else:
                 # get modality and station name from file
-                station_name = pd.get('StationName', '')
-                modalityDCM = pd.get('Modality', '')
+                station_name = pyd.get('StationName', '')
+                modalityDCM = pyd.get('Modality', '')
                 mod = dcm.get_modality(modalityDCM)['key']
 
                 # generate new name
                 name_parts = dcm.get_dcm_info_list(
-                    pd, auto_common.filename_pattern, tag_infos,
+                    pyd, auto_common.filename_pattern, tag_infos,
                     prefix_separator='', suffix_separator='',
                     not_found_text='')
                 delete_this = False
@@ -354,7 +382,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
 
                     # check for auto delete
                     match_strings = dcm.get_dcm_info_list(
-                        pd, delete_pattern, tag_infos,
+                        pyd, delete_pattern, tag_infos,
                         prefix_separator='', suffix_separator='',
                         not_found_text='')
 
@@ -413,7 +441,7 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                                         tag_pattern = cfc.TagPatternFormat(
                                             list_tags=attr_names)
                                         tag_values = dcm.get_dcm_info_list(
-                                            pd, tag_pattern, tag_infos,
+                                            pyd, tag_pattern, tag_infos,
                                             prefix_separator='', suffix_separator='',
                                             not_found_text=''
                                             )
@@ -427,7 +455,6 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                                                 if '?' in crit_val or '*' in crit_val:
                                                     if fnmatch(tag_values[i], crit_val):
                                                         fn_match.append(True)
-                                                        pass
                                                     else:
                                                         fn_match.append(False)
                                                         break
@@ -461,11 +488,11 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                 print_progress('Reading DICOM header of files:', f_id + 1, len(files))
             else:
                 if progress_modal.wasCanceled():
-                    proceed = False
+                    cancelled = True
                     import_log.append('Import was cancelled.')
                     break
 
-        if proceed is False:  # canceled
+        if cancelled:
             if parent_widget is not None:
                 progress_modal.close()
                 parent_widget.status_label.clearMessage()
@@ -569,8 +596,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                     try:
                         os.remove(file)
                         del_files.append(file)
-                    except (PermissionError, OSError, FileNotFoundError) as e:
-                        import_log.append(f'Failed to autodelete {file}\n{e}')
+                    except (PermissionError, OSError, FileNotFoundError) as err:
+                        import_log.append(f'Failed to autodelete {file}\n{err}')
                         ndel -= 1
                 import_log.append(
                     f'{len(delete_files)} files auto deleted according to import '
@@ -585,11 +612,11 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
                 progress_modal.setLabelText('Deleting empty folders...')
                 progress_modal.setValue(int(len(files) * 1.9))
             if auto_common.auto_delete_empty_folders:
-                dirs = [str(x) for x in p.glob('**/*') if x.is_dir()]
+                dirs = [str(x) for x in p_import.glob('**/*') if x.is_dir()]
                 dirs = sorted(dirs, key=len, reverse=True)
-                for d in dirs:
+                for directory in dirs:
                     try:
-                        Path(d).rmdir()
+                        Path(directory).rmdir()
                     except OSError:  # error if folder not empty
                         pass  # not empty
             if len(move_errors) > 0:
@@ -665,17 +692,88 @@ def move_rename_file(filepath_orig, filepath_new):
         try:
             filepath_orig.rename(filepath_new)
             status = True
-        except (PermissionError, OSError) as e:
-            if 'WinError 17' in str(e):
+        except (PermissionError, OSError) as err:
+            if 'WinError 17' in str(err):
                 shutil.move(filepath_orig, filepath_new)
                 status = True
             else:
-                errmsg = f'Failed to rename\n{filepath_orig}\nto {filepath_new}\n{e}'
+                errmsg = f'Failed to rename\n{filepath_orig}\nto {filepath_new}\n{err}'
 
     return (status, errmsg)
 
 
+def test_limits(headers=None, values=None,
+                limits_label='', limits_mod_templates=None):
+    """Test limits and notify.
+
+    Parameters
+    ----------
+    headers : list of str, optional
+        QuickTest result headers without date. The default is None.
+    values : list of str, optional
+        QuickTest result values (one row). The default is None.
+    limits_label : str, optional
+        automation template set limits label. The default is ''.
+    limits_mod_templates : TYPE, optional
+        limits_and_plot_templates for current modality. The default is None.
+
+    Return
+    ------
+    limits_crossed: bool
+    msgs: list of str
+    """
+    limits_crossed = False
+    proceed = False
+    missing = []
+    limits_template = None
+    template_headers = []
+    msgs = []
+    if isinstance(values, list) and limits_label != '':
+        limits = [temp.label for temp in limits_mod_templates]
+        try:
+            idx = limits.index(limits_label)
+            limits_template = limits_mod_templates[idx]
+            template_headers = [elem for sublist in limits_template.groups
+                                for elem in sublist]
+            missing = [header for header in headers if header not in template_headers]
+            if len(missing) == len(headers):
+                msgs.append('Result headers do not match headers defined in limits and '
+                            f'plot template {limits_label}.')
+            elif len(missing) > 0:
+                msgs.append('Some column headers in limits and plot template '
+                            f'{limits_label} do not match output.')
+                proceed = True
+            else:
+                proceed = True
+        except ValueError:
+            msgs.append(f'Failed finding limits and plot template named {limits_label}')
+
+    if proceed:
+        for i, header in enumerate(headers):
+            float_value = string_to_float(values[i])
+            if float_value is not None:
+                group_idx = limits_template.find_headers_group_index(header)
+                if group_idx > -1:
+                    limits = limits_template.groups_limits[group_idx]
+                    if any(limits):
+                        if limits[0] is not None:
+                            if float_value < limits[0]:
+                                limits_crossed = True
+                                msgs.append(
+                                    f'WARNING: {header} {float_value} lower than '
+                                    f'set minimum {limits[0]}')
+                        if limits[1] is not None:
+                            if float_value > limits[1]:
+                                limits_crossed = True
+                                msgs.append(
+                                    f'WARNING: {header} {float_value} higher than '
+                                    f'set maximum {limits[1]}')
+
+    return limits_crossed, msgs
+
+
 def run_template(auto_template, modality, paramsets, qt_templates, digit_templates,
+                 limits_and_plot_templates, #persons_to_notify,
                  tag_infos, parent_widget=None):
     """Find new images, generate img_dict, sort by date/sortpattern.
 
@@ -697,6 +795,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
         collection of available digit templates from .yaml
         keys = modalities
         values = list of DigitTemplate defined in config_classes.py
+    limits_and_plot_templates: dict
+        collection of available limits from .yaml
+        keys = modalities
+        values = list of LimitsAndPlotTemplate defined in config_classes.py
     tag_infos : list
         list of TagInfo as defined in config_classes.py
     parent_widget : widget, optional
@@ -704,12 +806,15 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
 
     Returns
     -------
-    log : TYPE
-        DESCRIPTION.
-    not_written : TYPE
-        DESCRIPTION.
+    log : list of str
+        automation log - what has been performed
+    warnings : list of str
+        warnings when limits violated. first list element = log file path
+    not_written : list of str
+        results if failed writing results to file
     """
     log = []
+    warnings = []
     not_written = []
     log_pre = f'Template {modality}/{auto_template.label}:'
     if auto_template.active is False:
@@ -741,16 +846,16 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                      'Automation template ignored.'))
             if proceed:
                 err_exist = False
-                p = Path(auto_template.path_input)
+                p_input = Path(auto_template.path_input)
                 start_progress_val = 0
                 if parent_widget is not None:
                     start_progress_val = parent_widget.progress_modal.value()
-                if p.exists():
+                if p_input.exists():
                     if parent_widget is not None:
                         parent_widget.progress_modal.setLabelText(
                             f'{auto_template.label}: Finding new files...')
                         parent_widget.progress_modal.setValue(start_progress_val + 2)
-                    files = [x for x in p.glob('*') if x.is_file()]
+                    files = [x for x in p_input.glob('*') if x.is_file()]
                 else:
                     files = []
                     err_exist = True
@@ -772,7 +877,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                         parent_widget.progress_modal.setLabelText(
                             f'{auto_template.label}: Reading {len(files)} new files...')
                         parent_widget.progress_modal.setValue(start_progress_val + 3)
-                    img_infos, _, warnings = dcm.read_dcm_info(
+                    img_infos, _, warnings_dcm = dcm.read_dcm_info(
                         files, GUI=False, tag_infos=tag_infos)
 
                     if len(img_infos) > 0:
@@ -783,8 +888,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             digit_templates=digit_templates,
                             tag_infos=tag_infos
                             )
-                        if len(warnings) > 0:
-                            log.extend(warnings)
+                        if len(warnings_dcm) > 0:
+                            log.extend(warnings_dcm)
 
                         if parent_widget is None:
                             print(f'\rSorting {len(img_infos)} files for template ',
@@ -808,16 +913,17 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                 f'\t No write permission to {auto_template.path_output}'
                                 )
 
-                        nd = len(uniq_date_uids)
+                        n_sessions = len(uniq_date_uids)
                         if parent_widget is not None:
                             curr_val = parent_widget.progress_modal.value()
                             diff = curr_val - start_progress_val
-                            sub_interval = int((100-diff)/nd)
+                            sub_interval = int((100-diff)/n_sessions)
                             parent_widget.progress_modal.sub_interval = sub_interval
 
-                        for d, uniq_date_uid in enumerate(uniq_date_uids):
+                        for ses_no, uniq_date_uid in enumerate(uniq_date_uids):
                             if parent_widget is None:
-                                print(f'\rAnalysing image set {d}/{nd} for template ',
+                                print(f'\rAnalysing image set {ses_no}/{n_sessions} '
+                                      'for template ',
                                       f'{modality}/{auto_template.label} ...',
                                       sep='', end='', flush=True)
                             date_str = (
@@ -840,17 +946,24 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             input_main_this.results = {}
                             input_main_this.current_group_indicators = []
 
-                            calculate_qc(input_main_this, wid_auto=parent_widget,
-                                         auto_template_label=auto_template.label,
-                                         auto_template_session=f'Session {d+1}/{nd}')
-                            #if parent_widget is not None:
-                            #    curr_val = parent_widget.progress_modal.value()
-                            #    diff = curr_val - start_progress_val
-                            #    sub_interval = int((100-diff)/nd)
-                            #    new_val = curr_val + sub_interval
-                            #    parent_widget.progress_modal.sub_interval = sub_interval
-                            #    parent_widget.progress_modal.setValue(new_val)
+                            calculate_qc(
+                                input_main_this, wid_auto=parent_widget,
+                                auto_template_label=auto_template.label,
+                                auto_template_session=f'Session {ses_no+1}/{n_sessions}'
+                                )
                             value_list, header_list = quicktest_output(input_main_this)
+                            if auto_template.limits_and_plot_label != '':
+                                limits_crossed, msgs = test_limits(
+                                    headers=header_list, values=value_list,
+                                    limits_label=auto_template.limits_and_plot_label,
+                                    limits_mod_templates=limits_and_plot_templates[
+                                        modality],
+                                    )
+                                if limits_crossed:
+                                    log.extend(msgs)
+                                    if auto_template.path_warnings != '':
+                                        warnings.append(f'{date_str}:')
+                                        warnings.extend(msgs)
                             header_list = ['Date'] + header_list
                             value_list = [date_str] + value_list
 
@@ -875,7 +988,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                 '\rFinished analysing template                        ',
                                 '                                                     ')
                         log.append(
-                            f'Finished analysing template ({nd} sessions)'
+                            f'Finished analysing template ({n_sessions} sessions)'
                             )
         else:
             if auto_template.import_only is False:
@@ -887,13 +1000,43 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                          'Template ignored'))
     if len(log) > 0:
         log.insert(0, log_pre)
-    return (log, not_written)
+    if len(warnings) > 0:
+        warnings.insert(0, f'Template {auto_template.label}')
+        warnings.insert(0, auto_template.path_warnings)
+    return (log, warnings, not_written)
 
 
-def run_template_vendor(auto_template, modality, decimal_mark='.',
-                        parent_widget=None):
-    """Find new files and read."""
+def run_template_vendor(auto_template, modality,
+                        limits_and_plot_templates, #persons_to_notify,
+                        decimal_mark='.', parent_widget=None):
+    """Find new files and read.
+
+    Parameters
+    ----------
+    auto_template : AutoVendorTemplate
+        as defined in config_classes.py
+    modality : str
+        modality as defined in imageQC
+    limits_and_plot_templates: dict
+        collection of available limits from .yaml
+        keys = modalities
+        values = list of LimitsAndPlotTemplate defined in config_classes.py
+    decimal_mark : str
+        . or ,
+    parent_widget : widget, optional
+        Widget to recieve messages. The default is None i.e. print messages to console.
+
+    Returns
+    -------
+    log : list of str
+        automation log - what has been performed
+    warnings : list of str
+        warnings when limits violated. first list element = log file path
+    not_written : list of str
+        results if failed writing results to file
+    """
     log = []
+    warnings = []
     not_written = []
     log_pre = f'Template {modality}/{auto_template.label}:'
     files = []
@@ -910,13 +1053,13 @@ def run_template_vendor(auto_template, modality, decimal_mark='.',
             proceed = False
             log.append('\t File type not specified. Failed to proceed.')
         if proceed:
-            p = Path(auto_template.path_input)
-            if p.is_dir():
+            p_input = Path(auto_template.path_input)
+            if p_input.is_dir():
                 #glob_string = '**/*' if search_subfolders else '*'
                 #TODO - if GE QAP - search subfolder but not Archive
                 glob_string = '*'
                 files = [
-                    x for x in p.glob(glob_string)
+                    x for x in p_input.glob(glob_string)
                     if x.suffix == auto_template.file_suffix
                     ]
                 files.sort(key=lambda t: t.stat().st_mtime)
@@ -941,6 +1084,18 @@ def run_template_vendor(auto_template, modality, decimal_mark='.',
                         auto_template.path_output,
                         res, to_file=write_ok, decimal_mark=decimal_mark
                         )
+                    if auto_template.limits_and_plot_label != '':
+                        limits_crossed, msgs = test_limits(
+                                headers=print_array[0][1:],
+                                values=print_array[0][1:],
+                                limits_label=auto_template.limits_and_plot_label,
+                                limits_mod_templates=limits_and_plot_templates[modality],
+                                )
+                        if limits_crossed:
+                            log.extend(msgs)
+                            if auto_template.path_warnings != '':
+                                warnings.append(f'{print_array[-1][0]}:')  # date
+                                warnings.extend(msgs)
                     if write_ok is False:
                         if len(not_written) == 0:
                             not_written.append(print_array)
@@ -955,7 +1110,10 @@ def run_template_vendor(auto_template, modality, decimal_mark='.',
 
     if len(log) > 0:
         log.insert(0, log_pre)
-    return (log, not_written)
+    if len(warnings) > 0:
+        warnings.insert(0, f'Template {auto_template.label}')
+        warnings.insert(0, auto_template.path_warnings)
+    return (log, warnings, not_written)
 
 
 def append_auto_res(auto_template, headers, values, to_file=False):
@@ -985,9 +1143,9 @@ def append_auto_res(auto_template, headers, values, to_file=False):
             print_list = [headers, values]
         else:
             print_list = [values]
-        with open(auto_template.path_output, "a") as f:
+        with open(auto_template.path_output, "a") as file:
             for row in print_list:
-                f.write('\t'.join(row)+'\n')
+                file.write('\t'.join(row)+'\n')
         status = True
         print_list = [[]]
 
@@ -1020,11 +1178,11 @@ def append_auto_res_vendor(output_path, result_dict, to_file=False, decimal_mark
         filesize = os.path.getsize(output_path)
         if filesize > 0:
             print_list = [print_list[1]]  # ignore header
-        with open(output_path, "a") as f:
+        with open(output_path, "a") as file:
             for row in print_list:
                 row_strings = val_2_str(
                     row, lock_format=True, decimal_mark=decimal_mark)
-                f.write('\t'.join(row_strings) + '\n')
+                file.write('\t'.join(row_strings) + '\n')
         status = True
         print_list = []
 
@@ -1068,8 +1226,8 @@ def archive_files(input_main_imgs=None, filepath=None):
         archive_path = archive_path / input_main_imgs[0].acq_date
         archive_path.mkdir(exist_ok=True)
 
-        for p in all_files:
-            this_file = Path(p)
+        for path in all_files:
+            this_file = Path(path)
             try:
                 this_file.rename(archive_path / this_file.name)
             except FileExistsError:

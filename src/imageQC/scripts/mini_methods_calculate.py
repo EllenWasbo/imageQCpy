@@ -81,7 +81,7 @@ def gauss_4param_fit(x, y):
     mean = sum(x * y) / sum(y)
     sigma = np.sqrt(sum(y * (x - mean) ** 2) / sum(y))
     try:
-        popt, pcov = curve_fit(gauss_4param, x, y, p0=[min(y), max(y), mean, sigma])
+        popt, _ = curve_fit(gauss_4param, x, y, p0=[min(y), max(y), mean, sigma])
     except RuntimeError:
         popt = None
     return popt
@@ -95,13 +95,13 @@ def gauss(x, A, sigma):
 def gauss_fit(x, y, fwhm=0):
     """Fit x,y to gaussian curve."""
     if fwhm == 0:
-        width, center = get_width_center_at_threshold(y, np.max(y)/2)
+        width, _ = get_width_center_at_threshold(y, np.max(y)/2)
         if width is not None:
             fwhm = width * (x[1] - x[0])
     sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
     A = max(y)
     try:
-        popt, pcov = curve_fit(
+        popt, _ = curve_fit(
             gauss, x, y, p0=[A, sigma],
             bounds=([0.9*A, 0.5*sigma], [1.1*A, 2*sigma])
             )
@@ -135,7 +135,7 @@ def gauss_double_fit(x, y, fwhm1=None, A2_positive=False):
     popt from scipy.optimize.curve_fit
     """
     if fwhm1 is None:
-        width, center = get_width_center_at_threshold(y, np.max(y)/2)
+        width, _ = get_width_center_at_threshold(y, np.max(y)/2)
         if width is not None:
             fwhm1 = width * (x[1] - x[0])
     sigma1 = fwhm1 / (2 * np.sqrt(2 * np.log(2)))
@@ -145,7 +145,7 @@ def gauss_double_fit(x, y, fwhm1=None, A2_positive=False):
         A2 = 0.1 * np.max(y)
         sigma = sigma1
         try:
-            popt, pcov = curve_fit(
+            popt, _ = curve_fit(
                 gauss_double, x, y, p0=[A1, sigma, A2, sigma],
                 bounds=([0.5*A1, 0.7*sigma, 0, 0.7*sigma],
                         [2*A1, 2*sigma, 2*A1, 3*sigma]),
@@ -202,7 +202,7 @@ def polyfit_2d(array_2d, max_order=2):
     # Linear, least-squares fit.
     A = np.vstack(basis).T
     b = array_2d.ravel()
-    c, r, rank, s = np.linalg.lstsq(A, b, rcond=None)
+    c, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
 
     # Calculate the fitted surface from the coefficients, c.
     fitted_2darray = np.sum(c[:, None, None] * np.array(get_basis(xs, ys, max_order))

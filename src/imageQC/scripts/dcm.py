@@ -7,23 +7,21 @@ Scripts dealing with pydicom.
 """
 from __future__ import annotations
 import warnings
-import os
-import pydicom
-import numpy as np
-import pandas as pd
 from dataclasses import dataclass, field
 from typing import Optional
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QMessageBox, QDialog, QTextEdit
+import numpy as np
+import pydicom
+import pandas
+from PyQt5.QtWidgets import QMessageBox
 
 # imageQC block start
-from imageQC.config.iQCconstants import QUICKTEST_OPTIONS, ENV_ICON_PATH
+from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
 import imageQC.scripts.mini_methods_format as mmf
 from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.config.config_classes import TagPatternFormat
+from imageQC.ui.ui_dialogs import TextDisplay
 # imageQC block end
 
 pydicom.config.future_behavior(True)
@@ -80,6 +78,47 @@ def fix_sop_class(elem, **kwargs):
     return elem
 
 
+def read_dcm(file, stop_before_pixels=True):
+    """Read DICOM and catch errors.
+
+    Parameters
+    ----------
+    file : str
+        file path
+    stop_before_pixels : bool
+        Default is True.
+
+    Returns
+    -------
+    pyd : DataSet (pydicom)
+        the pydicom dataset returned from pydicom.dcmread
+    is_image : bool
+        the file has image content
+    errmsg : str
+        errormessage reading file
+    """
+    pyd = {}
+    errmsg = ''
+    is_image = True
+    try:
+        pyd = pydicom.dcmread(file, stop_before_pixels=stop_before_pixels)
+    except pydicom.errors.InvalidDicomError:
+        errmsg = f'InvalidDicomError {file}'
+        is_image = False
+    except FileNotFoundError:
+        errmsg = f'FileNotFoundError {file}'
+        is_image = False
+    except AttributeError:
+        pydicom.config.data_element_callback = fix_sop_class
+        pyd = pydicom.dcmread(file, stop_before_pixels=True)
+
+    if pyd:
+        columns = pyd.get('Columns', 0)  # Columns>0 == image data
+        if columns == 0:
+            is_image = False
+    return pyd, is_image, errmsg
+
+
 def read_dcm_info(filenames, GUI=True, tag_infos=[],
                   tag_patterns_special={}, statusbar=None,
                   series_pattern=None):
@@ -121,34 +160,21 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         if statusbar is not None:
             statusbar.showMessage(f'Reading file {fileno+1}/{len(filenames)}')
         file_verified = True
-        pd = {}
-        try:
-            pd = pydicom.dcmread(file, stop_before_pixels=True)
-            columns = pd.get('Columns', 0)  # Columns>0 == image data
-            if columns == 0:
-                file_verified = False
-        except pydicom.errors.InvalidDicomError:
-            file_verified = False
-        except FileNotFoundError:
-            file_verified = False
-        except AttributeError:
-            pydicom.config.data_element_callback = fix_sop_class
-            pd = pydicom.dcmread(file, stop_before_pixels=True)
-
+        pyd, file_verified, errmsg = read_dcm(file)
         if file_verified:
-            modalityDCM = pd.get('Modality', '')
+            modalityDCM = pyd.get('Modality', '')
             mod = get_modality(modalityDCM)['key']
-            frames = pd.get('NumberOfFrames', None)
+            frames = pyd.get('NumberOfFrames', None)
             attrib = {
                 'filepath': str(file),
                 'modality': mod,
                 'modalityDCM': modalityDCM,
-                'shape': (pd.get('Rows', 0), pd.get('Columns', 0)),
-                'studyUID': (pd.get('StudyInstanceUID', ''))
+                'shape': (pyd.get('Rows', 0), pyd.get('Columns', 0)),
+                'studyUID': (pyd.get('StudyInstanceUID', ''))
                 }
 
             slice_thickness, pix, slice_location, acq_date = get_dcm_info_list(
-                    pd,
+                    pyd,
                     TagPatternFormat(list_tags=[
                         'SliceThickness', 'PixelSpacing', 'SliceLocation',
                         'AcquisitionDate']),
@@ -192,10 +218,10 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
             if np.sum(attrib['pix']) == 0:
                 attrib['pix'] = [1, 1]  # to avoid ZeroDevisionError
                 try:
-                    serdescr = pd['SeriesDescription'].value
+                    serdescr = pyd['SeriesDescription'].value
                 except KeyError:
                     try:
-                        serdescr = pd['ImageComments'].value
+                        serdescr = pyd['ImageComments'].value
                     except KeyError:
                         serdescr = ''
                 ignore_strings = ['Save Screen', 'SAVE_SCREEN',
@@ -216,7 +242,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
             if mod == 'NM':
                 # attrib nm_radius
                 nm_radius = get_dcm_info_list(
-                        pd,
+                        pyd,
                         TagPatternFormat(
                             list_tags=['RadialPosition'], list_format=['']),
                         tag_infos,
@@ -230,8 +256,8 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                             nm_radius = nm_radius.split(',')
 
             if GUI:
-                ww = pd.get('WindowWidth', -1)
-                wc = pd.get('WindowCenter', -1)
+                ww = pyd.get('WindowWidth', -1)
+                wc = pyd.get('WindowCenter', -1)
                 # seen issue with window width and window center
                 # listed as two identical values
                 if str(type(ww)) == "<class 'pydicom.multival.MultiValue'>":
@@ -253,7 +279,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     pass
                 if GUI:
                     attrib.update(get_dcm_gui_info_lists(
-                        pd,
+                        pyd,
                         tag_infos=tag_infos,
                         tag_patterns_special=tag_patterns_special,
                         modality=mod,
@@ -265,7 +291,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
             else:  # multiframe
                 if GUI:
                     gui_info = get_dcm_gui_info_lists(
-                        pd, tag_infos=tag_infos,
+                        pyd, tag_infos=tag_infos,
                         tag_patterns_special=tag_patterns_special,
                         modality=mod,
                         series_pattern=series_pattern)
@@ -322,7 +348,7 @@ def info_extract_frame(frame, info):
                     try:
                         out_dict[key].append(
                             ''.join([tag[0], str(tag[1][frame]), tag[2]]))
-                        #TODO format for tag1....
+                        # TODO format for tag1....
                     except (IndexError, TypeError):
                         out_dict[key].append(
                             ''.join([tag[0], str(tag[1]), tag[2]]))
@@ -597,7 +623,7 @@ def get_modality(modalityStr):
         'PT': 'PET',
         'MR': 'MR'
         }
-    # TODO: add mammo
+    # TODO: add mammo (move modality MG)
     qtOptKey = variants.get(modalityStr, 'CT')
 
     return {'id': list(QUICKTEST_OPTIONS.keys()).index(qtOptKey),
@@ -635,29 +661,23 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
     """
     npout = None
     tag_strings = []
-    pd = None
-    try:
-        pd = pydicom.dcmread(filepath)
-    except pydicom.errors.InvalidDicomError:
-        pass
-    except FileNotFoundError:
-        pass  # TODO show errormessage
-    if pd is not None:
+    pyd, is_image, _ = read_dcm(filepath, stop_before_pixels=False)
+    if is_image:
         pixarr = None
         try:
-            pixarr = pd.pixel_array
+            pixarr = pyd.pixel_array
         except AttributeError:
             pass
 
         overlay = None
         try:
-            overlay = pd.overlay_array(0x6000)  # e.g. Patient Protocol Siemens CT
+            overlay = pyd.overlay_array(0x6000)  # e.g. Patient Protocol Siemens CT
         except AttributeError:
             pass
 
         if pixarr is not None:
             slope, intercept = get_dcm_info_list(
-                pd, TagPatternFormat(list_tags=['RescaleSlope', 'RescaleIntercept']),
+                pyd, TagPatternFormat(list_tags=['RescaleSlope', 'RescaleIntercept']),
                 tag_infos)
             if frame_number == -1 or isinstance(slope, str):
                 # assume intercept is str if slope is str
@@ -682,11 +702,11 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
                 intercept = 0.
 
             if frame_number > -1:
-                ndim = pd.pixel_array.ndim
+                ndim = pyd.pixel_array.ndim
                 if ndim == 3:
-                    pixarr = pd.pixel_array[frame_number, :, :]
+                    pixarr = pyd.pixel_array[frame_number, :, :]
             else:
-                pixarr = pd.pixel_array
+                pixarr = pyd.pixel_array
             if pixarr is not None:
                 npout = pixarr * slope + intercept
 
@@ -706,13 +726,13 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
             else:
                 npout = overlay
 
-        orient = pd.get('PatientPosition', '')
+        orient = pyd.get('PatientPosition', '')
         if orient == 'FFS':
             npout = np.fliplr(npout)
 
         if len(tag_patterns) > 0 and tag_infos is not None:
             tag_strings = read_tag_patterns(
-                pd, tag_patterns, tag_infos, frame_number=frame_number)
+                pyd, tag_patterns, tag_infos, frame_number=frame_number)
             if NM_count:
                 for pidx, pattern in enumerate(tag_patterns):
                     if 'CountsAccumulated' in pattern.list_tags:
@@ -732,8 +752,8 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
                                 tag_strings[pidx][idx] = new_val
 
         if get_window_level:
-            ww = pd.get('WindowWidth', -1)
-            wc = pd.get('WindowCenter', -1)
+            ww = pyd.get('WindowWidth', -1)
+            wc = pyd.get('WindowCenter', -1)
             # seen issue with window width and window center
             # listed as two identical values
             if str(type(ww)) == "<class 'pydicom.multival.MultiValue'>":
@@ -764,27 +784,21 @@ def get_tags(filepath, frame_number=-1, tag_patterns=[], tag_infos=None):
         for each tag_pattern as input, list of (formatted) dicom tag values
     """
     tag_strings = []
-    pd = None
     if len(tag_patterns) > 0 and tag_infos is not None:
-        try:
-            pd = pydicom.dcmread(filepath, stop_before_pixels=True)
-        except pydicom.errors.InvalidDicomError:
-            pass
-        except FileNotFoundError:
-            pass  # TODO show errormessage
-        if pd is not None:
+        pyd, _, errmsg = read_dcm(filepath)  # TODO show errormessage
+        if pyd:
             tag_strings = read_tag_patterns(
-                pd, tag_patterns, tag_infos, frame_number=frame_number)
+                pyd, tag_patterns, tag_infos, frame_number=frame_number)
 
     return tag_strings
 
 
-def read_tag_patterns(pd, tag_patterns, tag_infos, frame_number=-1):
+def read_tag_patterns(pyd, tag_patterns, tag_infos, frame_number=-1):
     """Read tags in tag_patterns.
 
     Parameters
     ----------
-    pd : pydicom dictionary
+    pyd : pydicom dictionary
     tag_patterns : list of TagPatternFormat og TagPatternSort
     tag_infos : list of TagInfo
 
@@ -796,7 +810,7 @@ def read_tag_patterns(pd, tag_patterns, tag_infos, frame_number=-1):
     tag_string_lists = []
     for pattern in tag_patterns:
         tag_strings = get_dcm_info_list(
-            pd, pattern, tag_infos,
+            pyd, pattern, tag_infos,
             prefix_separator='', suffix_separator='')
 
         if 'mAs' in pattern.list_tags:  # if not found try mA * exp.time
@@ -810,7 +824,7 @@ def read_tag_patterns(pd, tag_patterns, tag_infos, frame_number=-1):
                 pass
             if proceed_mA_time:
                 tag_strings_mA_time = get_dcm_info_list(
-                    pd, TagPatternFormat(list_tags=['mA', 'ExposureTime']),
+                    pyd, TagPatternFormat(list_tags=['mA', 'ExposureTime']),
                     tag_infos,
                     prefix_separator='', suffix_separator='')
                 if '' not in tag_strings_mA_time:
@@ -888,7 +902,7 @@ def get_element_in_sequence(dataset, sequence_string,
     return elem
 
 
-def get_tag_data(pd, tag_info=None):
+def get_tag_data(pyd, tag_info=None):
     """Read content of specific Dicom tag from file pydicom dictionary.
 
     Parameters
@@ -901,59 +915,59 @@ def get_tag_data(pd, tag_info=None):
     data_element
     """
     data_element = None
-    if pd is not None and tag_info is not None:
+    if pyd is not None and tag_info is not None:
         seq = tag_info.sequence
         gr = tag_info.tag[0]
         el = tag_info.tag[1]
-        nframes = int(pd.get('NumberOfFrames', -1))
+        nframes = int(pyd.get('NumberOfFrames', -1))
 
         try:
             if seq[0] != '':
-                pd_sub = get_element_in_sequence(pd, seq[0])
+                pyd_sub = get_element_in_sequence(pyd, seq[0])
                 if len(seq) > 1:
                     if seq[0] == 'PerFrameFunctionalGroupsSequence' and nframes > 1:
                         data_element = []
-                        for f in range(nframes):
-                            pd_sub = get_element_in_sequence(
-                                pd, seq[0], element_number=f)
+                        for frame_no in range(nframes):
+                            pyd_sub = get_element_in_sequence(
+                                pyd, seq[0], element_number=frame_no)
                             for i in range(1, len(seq)):
-                                pd_sub = get_element_in_sequence(pd_sub, seq[i])
-                            data_element.append(pd_sub[gr, el])
+                                pyd_sub = get_element_in_sequence(pyd_sub, seq[i])
+                            data_element.append(pyd_sub[gr, el])
                     else:
-                        pd_sub_final = get_element_in_sequence(
-                            pd, seq[0], return_sequence=True)
-                        pd_sub = pd_sub_final[0]
+                        pyd_sub_final = get_element_in_sequence(
+                            pyd, seq[0], return_sequence=True)
+                        pyd_sub = pyd_sub_final[0]
                         for i in range(1, len(seq)):
-                            pd_sub_final = get_element_in_sequence(
-                                pd_sub, seq[i], return_sequence=True)
-                            pd_sub = pd_sub_final[0]
+                            pyd_sub_final = get_element_in_sequence(
+                                pyd_sub, seq[i], return_sequence=True)
+                            pyd_sub = pyd_sub_final[0]
                 else:
-                    pd_sub_final = get_element_in_sequence(
-                        pd, seq[0], return_sequence=True)
+                    pyd_sub_final = get_element_in_sequence(
+                        pyd, seq[0], return_sequence=True)
 
                 if data_element is None:
                     if tag_info.value_id == -3:  # combine data from all sequences
                         try:
-                            if len(pd_sub_final.value) > 1:
+                            if len(pyd_sub_final.value) > 1:
                                 data_element = []
-                                for i in range(len(pd_sub_final.value)):
-                                    sub = pd_sub_final[i]
+                                for i in range(len(pyd_sub_final.value)):
+                                    sub = pyd_sub_final[i]
                                     data_element.append(sub[gr, el])
                             else:
-                                data_element = pd_sub[gr, el]
+                                data_element = pyd_sub[gr, el]
                         except AttributeError:
                             data_element = None
                     else:
-                        data_element = pd_sub[gr, el]
+                        data_element = pyd_sub[gr, el]
             else:
-                data_element = pd[gr, el]
+                data_element = pyd[gr, el]
         except (KeyError, IndexError, TypeError):
             data_element = None
 
     return data_element
 
 
-def get_special_tag_data(pd, tag_info=None):
+def get_special_tag_data(pyd, tag_info=None):
     """Get DICOM information for data not specified as tag. tag_info.tag = ['...', ''].
 
     Parameters
@@ -967,7 +981,7 @@ def get_special_tag_data(pd, tag_info=None):
     """
     data_element = None
     if tag_info.attribute_name == 'FrameNumber':
-        frames = int(pd.get('NumberOfFrames', -1))
+        frames = int(pyd.get('NumberOfFrames', -1))
         if frames > -1:
             data_element = pydicom.DataElement(
                 0xffffffff, 'LO', list(np.arange(frames)))
@@ -1005,17 +1019,17 @@ def find_all_valid_dcm_files(
     dcm_files = []
     dcm_folders = []
     if path_str != '':
-        p = Path(path_str)
-        if p.is_dir():
+        path_obj = Path(path_str)
+        if path_obj.is_dir():
             glob_string = '**/*' if search_subfolders else '*'
             if progress_modal is not None:
                 progress_modal.setLabelText('Searching for files with .dcm extension')
-            dcm_files = [x for x in p.glob(glob_string) if x.suffix == '.dcm']
+            dcm_files = [x for x in path_obj.glob(glob_string) if x.suffix == '.dcm']
             if len(dcm_files) == 0:
                 if progress_modal is not None:
                     progress_modal.setLabelText(
                         'Searching for files with any file extension')
-                files = [x for x in p.glob(glob_string) if x.is_file()]
+                files = [x for x in path_obj.glob(glob_string) if x.is_file()]
                 dcm_files = []
                 if progress_modal is not None:
                     progress_modal.setRange(0, len(files))
@@ -1023,12 +1037,11 @@ def find_all_valid_dcm_files(
                     try:
                         pydicom.dcmread(file, specific_tags=[(0x8, 0x60)])
                         dcm_files.append(file)
-                    except pydicom.errors.InvalidDicomError:
-                        pass
-                    except FileNotFoundError:
-                        pass  # TODO show errormessage
-                    except AttributeError:
-                        pass
+                    except pydicom.errors.InvalidDicomError as error0:
+                        print(f'{file}\n{str(error0)}')
+                    except (FileNotFoundError, AttributeError) as error:
+                        print(f'{file}\n{str(error)}')
+
                     if progress_modal is not None:
                         progress_modal.setLabelText(
                             f'Validated {len(dcm_files)} out of {len(files)} files as '
@@ -1098,9 +1111,9 @@ def sort_imgs(img_infos, tag_pattern_sort, tag_infos):
             else:
                 infos.append(info[0])
 
-        df = {}
-        for c, attr in enumerate(tag_pattern_sort.list_tags):
-            col = [row[c] for row in infos]
+        dataf = {}
+        for i, attr in enumerate(tag_pattern_sort.list_tags):
+            col = [row[i] for row in infos]
             col_nmb = []
             types = []
             for val in col:
@@ -1116,9 +1129,9 @@ def sort_imgs(img_infos, tag_pattern_sort, tag_infos):
                     for idx in idxs:
                         col_nmb[idx] = -10000
             col = col_nmb
-            df[attr] = col
-        df = pd.DataFrame(df)
-        sorted_infos = df.sort_values(
+            dataf[attr] = col
+        dataf = pandas.DataFrame(dataf)
+        sorted_infos = dataf.sort_values(
             by=tag_pattern_sort.list_tags,
             ascending=tag_pattern_sort.list_sort)
 
@@ -1141,46 +1154,30 @@ def dump_dicom(parent_widget, filename=''):
         The default is ''.
     """
     if filename != '':
-        try:
-            ds = pydicom.dcmread(filename)
-            #TODO consider using TextDisplay from ui_dialogs
-            dlg = QDialog(parent_widget)
-            dlg.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-            dlg.setWindowFlags(dlg.windowFlags() | Qt.CustomizeWindowHint)
-            dlg.setWindowFlags(
-                dlg.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-            txtEdit = QTextEdit('', dlg)
-            txtEdit.setPlainText(str(ds))
-            txtEdit.setReadOnly(True)
-            txtEdit.createStandardContextMenu()
-            txtEdit.setMinimumWidth(1000)
-            txtEdit.setMinimumHeight(800)
-            dlg.setWindowTitle(filename)
-            dlg.setMinimumWidth(1000)
-            dlg.setMinimumHeight(800)
-            dlg.show()
-
-        except pydicom.errors.InvalidDicomError:
+        pyd, _, errmsg = read_dcm(filename)
+        if pyd:
+            dlg = TextDisplay(
+                parent_widget, str(pyd), title=filename,
+                min_width=1000, min_height=800)
+            res = dlg.exec()
+            if res:
+                pass  # just to wait for user to close message
+        else:
             QMessageBox.warning(
-                parent_widget, 'Dicom read failed',
-                'Failed to read selected file as dicom.')
-        except FileNotFoundError:
-            QMessageBox.warning(
-                parent_widget, 'Dicom read failed',
-                'Failed to read selected file as dicom.')
+                parent_widget, 'Dicom read failed', errmsg)
 
 
-def get_all_tags_name_number(pd, sequence_list=['']):
+def get_all_tags_name_number(pyd, sequence_list=['']):
     """Find all (nested) attribute names.
 
     Parameters
     ----------
-    pd: pydicom dataframe
+    pyd: pydicom dataframe
     sequence_list : list of str
         not nested list!
         List of sequence attribute names (keyword e.g. 'PlanePositionSequence')
         if not ['']
-        tags to find will be in pd[seq1][0][seq2][0]...
+        tags to find will be in pyd[seq1][0][seq2][0]...
 
     Returns
     -------
@@ -1207,17 +1204,17 @@ def get_all_tags_name_number(pd, sequence_list=['']):
 
     list_name_tag = []
     if sequence_list[0] == '':
-        list_name_tag = get_tags_also_private(pd)
+        list_name_tag = get_tags_also_private(pyd)
     else:
-        pd_sub = get_element_in_sequence(pd, sequence_list[0])
-        if pd_sub is not None:
+        pyd_sub = get_element_in_sequence(pyd, sequence_list[0])
+        if pyd_sub is not None:
             if len(sequence_list) == 1:
-                list_name_tag = get_tags_also_private(pd_sub)
+                list_name_tag = get_tags_also_private(pyd_sub)
             else:
                 for i in range(1, len(sequence_list)):
-                    pd_sub = get_element_in_sequence(pd_sub, sequence_list[i])
-                    if pd_sub is not None:
-                        list_name_tag = get_tags_also_private(pd_sub)
+                    pyd_sub = get_element_in_sequence(pyd_sub, sequence_list[i])
+                    if pyd_sub is not None:
+                        list_name_tag = get_tags_also_private(pyd_sub)
                     else:
                         list_name_tag = []
 

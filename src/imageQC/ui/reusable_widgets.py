@@ -386,16 +386,6 @@ class ToolBarTableExport(QToolBar):
             self.parent.flag_edit(True)
 
 
-class ListWidget(QListWidget):
-    #TODO delete - not sure if this have any function. Tried arrow up/down did not work
-    def __init__(self):
-        super().__init__()
-
-    def keyPressedEvent(self, event):
-        print(event.key())
-        #breakpoint()# cannot make arrow up/down work...
-
-
 class ListWidgetCheckable(QListWidget):
     """Checkable list widget."""
 

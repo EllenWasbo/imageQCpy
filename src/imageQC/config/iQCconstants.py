@@ -10,7 +10,7 @@ import os
 
 # imageQC block start
 import imageQC.config.config_classes as cfc
-import imageQC.config.iQCconstants_functions as iQCconstants_functions
+from imageQC.config import iQCconstants_functions
 # imageQC block end
 
 
@@ -27,7 +27,7 @@ else:
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.0-b15'
+VERSION = '3.0.0-b16'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -98,7 +98,7 @@ ALTERNATIVES = {
 """dict: with lists defining the alternative methods/table displays
  if more than one option leading to different columns in table."""
 
-CALCULATION_OPTIONS = ['=', 'min', 'max', 'mean', 'stdev', 'max abs']
+CALCULATION_OPTIONS = ['=', 'min', 'max', 'mean', 'stdev', 'max abs', 'width (max-min)']
 #  options for QuickTestOutput settings - type of calculations
 
 roi_headers = ['Average', 'Stdev']
@@ -378,18 +378,26 @@ CONFIG_FNAMES = {
         },
     'dash_settings': {
         'saved_as': 'object',
-        'default': cfc.DashSettings()
+        'default': cfc.DashSettings(),
         },
-    'persons_to_notify': {
-        'saved_as': 'object_list',
-        'default': []
+    'limits_and_plot_templates': {
+        'saved_as': 'modality_dict',
+        'default': iQCconstants_functions.empty_template_dict(
+            QUICKTEST_OPTIONS, dummy=cfc.LimitsAndPlotTemplate()),
         },
     'active_users': {
         'saved_as': 'dict',
-        'default': {}
+        'default': {},
         },
     'last_modified': {
         'saved_as': 'object',
-        'default': cfc.LastModified()
+        'default': cfc.LastModified(),
         }
     }
+
+'''
+    'persons_to_notify': {
+        'saved_as': 'object_list',
+        'default': [],
+        },
+'''

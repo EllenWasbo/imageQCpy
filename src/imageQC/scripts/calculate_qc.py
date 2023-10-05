@@ -93,19 +93,22 @@ def extract_values(values, columns=[], calculation='='):
         if calculation == '=' or any(is_string):
             new_values = selected_values
         else:
-            allvals = np.array(allvals)
-            if calculation == 'min':
-                new_values = [float(np.min(allvals))]
-            elif calculation == 'max':
-                new_values = [float(np.max(allvals))]
-            elif calculation == 'mean':
-                new_values = [float(np.mean(allvals))]
-            elif calculation == 'stdev':
-                new_values = [float(np.std(allvals))]
-            elif calculation == 'max abs':
-                new_values = [float(np.max(np.abs(allvals)))]
-            elif calculation == 'width (max-min)':
-                new_values = [float(np.max(allvals)) - float(np.min(allvals))]
+            if all(allvals):
+                allvals = np.array(allvals)
+                if calculation == 'min':
+                    new_values = [float(np.min(allvals))]
+                elif calculation == 'max':
+                    new_values = [float(np.max(allvals))]
+                elif calculation == 'mean':
+                    new_values = [float(np.mean(allvals))]
+                elif calculation == 'stdev':
+                    new_values = [float(np.std(allvals))]
+                elif calculation == 'max abs':
+                    new_values = [float(np.max(np.abs(allvals)))]
+                elif calculation == 'width (max-min)':
+                    new_values = [float(np.max(allvals)) - float(np.min(allvals))]
+            else:
+                new_values = [None]
 
     return new_values
 
@@ -437,7 +440,7 @@ def calculate_qc(input_main, wid_auto=None,
             extras = None  # placeholder for extra arguments to pass to calc_2d/3d
             if input_main.current_modality == 'NM' and 'SNI' in flattened_marked:
                 if paramset.sni_correct and paramset.sni_ref_image != '':
-                    extras = get_sni_ref_image(paramset, tag_infos)
+                    extras = get_SNI_ref_image(paramset, tag_infos)
             if 'Num' in flattened_marked:
                 digit_templates = input_main.digit_templates[
                     input_main.current_modality]
@@ -467,6 +470,7 @@ def calculate_qc(input_main, wid_auto=None,
             tag_lists = [[] for i in range(n_img)]
             extra_tag_list = None
             extra_tag_list_compare = None
+            extra_tag_list_keep = False
             marked_3d = []
             input_main.current_group_indicators = ['' for i in range(n_img)]
             for i in range(n_analyse):
@@ -479,12 +483,13 @@ def calculate_qc(input_main, wid_auto=None,
                                 list_tags=['ConvolutionKernel'])
                             extra_tag_list = []
                             read_tags[i] = True
-                elif 'Uni' in marked[i]:
-                    if paramset.uni_sum_first:
-                        marked_3d[i].append('Uni')
-                elif 'SNI' in marked[i]:
-                    if paramset.sni_sum_first:
-                        marked_3d[i].append('SNI')
+                elif modality == 'NM':
+                    if 'Uni' in marked[i]:
+                        if paramset.uni_sum_first:
+                            marked_3d[i].append('Uni')
+                    if 'SNI' in marked[i]:
+                        if paramset.sni_sum_first:
+                            marked_3d[i].append('SNI')
                 elif modality == 'SPECT':
                     if 'MTF' in marked[i]:
                         if paramset.mtf_type > 0:
@@ -503,6 +508,7 @@ def calculate_qc(input_main, wid_auto=None,
                         extra_tag_pattern = cfc.TagPatternFormat(
                             list_tags=['AcquisitionTime', 'Units'])
                         extra_tag_list = []
+                        extra_tag_list_keep = True
                         extra_tag_list_compare = [False, True]
                         read_tags[i] = True
                 elif modality == 'MR':
@@ -553,18 +559,19 @@ def calculate_qc(input_main, wid_auto=None,
                                 if extra_tag_pattern is not None:
                                     extra_tag_list.append(tags[2])
                         if extra_tag_pattern is not None:
-                            if len(extra_tag_list) == 2:
+                            if len(extra_tag_list) > 1:
                                 if extra_tag_list_compare is None:
-                                    if extra_tag_list[0] != extra_tag_list[1]:
+                                    if extra_tag_list[0] != extra_tag_list[-1]:
                                         err_extra = True
                                 else:
                                     for cno, comp in enumerate(extra_tag_list_compare):
                                         if comp:
                                             if (
                                                     extra_tag_list[0][cno]
-                                                    != extra_tag_list[1][cno]):
+                                                    != extra_tag_list[-1][cno]):
                                                 err_extra = True
-                                extra_tag_list.pop()  # always chech against first
+                                if extra_tag_list_keep is False:
+                                    extra_tag_list.pop()  # always check against first
                     else:
                         tags = dcm.get_tags(
                             img_infos[i].filepath,
@@ -1799,23 +1806,43 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         if len(images_to_test) == 0:
             res = Results(headers=headers)
         else:
-            # ['AcquisitionTime', 'RadionuclideTotalDose',
-            # RadiopharmaceuticalStartTime', 'Units']
-            if extra_taglists[0][-1] != 'BQML':
-                res = Results(
-                    headers=headers,
-                    errmsg=f'BQML expected as Unit. Found {extra_taglists[0][0]}')
+            try:
+                activity_dict = input_main.tab_pet.get_Cro_activities()
+            except AttributeError:
+                activity_dict = {}
+            proceed = True
+            activity_inj = None
+            inj_time = None
+            errmsgs = []
+            fmt = '%H%M%S'
+            if activity_dict:
+                activity_inj = activity_dict['activity_Bq']
+                inj_time = activity_dict['activity_time']
             else:
-                errmsgs = []
-                fmt = '%H%M%S'
+                # ['AcquisitionTime', 'RadionuclideTotalDose',
+                # RadiopharmaceuticalStartTime', 'Units']
+                if extra_taglists[0][-1] != 'BQML':
+                    res = Results(
+                        headers=headers,
+                        errmsg=f'BQML expected as Unit. Found {extra_taglists[0][0]}')
+                    proceed = False
+                else:
+                    inj_time = datetime.strptime(
+                        extra_taglists[0][2].split('.')[0], fmt)
+                    activity_inj = int(extra_taglists[0][1]) * 1/1000000  # Bq to MBq
+            if proceed:
                 acq_time = datetime.strptime(
                     extra_taglists[0][0].split('.')[0], fmt)
-                inj_time = datetime.strptime(
-                    extra_taglists[0][2].split('.')[0], fmt)
-                activity_inj = int(extra_taglists[0][1]) * 1/1000000  # Bq to MBq
-                time_diff = acq_time - inj_time
+                try:
+                    time_diff = acq_time - inj_time
+                    time_diff_minutes = time_diff.seconds/60
+                except TypeError:  # datetime.time from activity_dict
+                    tdiff_h = acq_time.hour - inj_time.hour
+                    tdiff_m = acq_time.minute - inj_time.minute
+                    tdiff_s = acq_time.second - inj_time.second
+                    time_diff_minutes = tdiff_h * 60 + tdiff_m + tdiff_s / 60
                 activity_at_scan = activity_inj * np.exp(
-                    -np.log(2)*time_diff.seconds/60/HALFLIFE['F18'])
+                    -np.log(2)*time_diff_minutes/HALFLIFE['F18'])
                 actual_concentr = 1000000 * activity_at_scan / paramset.cro_volume
 
                 roi_array, errmsg = get_rois(
@@ -1990,10 +2017,12 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 details_dict.update(res_dict)
                 values_sup = []
                 rec_type = paramset.rec_type
+                fmt = '%H%M%S'
+                acq_times = [t[0] for t in extra_taglists]
+                acq_times.sort()
+                scan_start = acq_times[0].split('.')[0]
                 if activity_dict:
-                    fmt = '%H%M%S'
-                    acq_time = datetime.strptime(
-                        extra_taglists[0][0].split('.')[0], fmt)
+                    acq_time = datetime.strptime(scan_start, fmt)
                     tdiff_h = acq_time.hour - activity_dict['sphere_time'].hour
                     tdiff_m = acq_time.minute - activity_dict['sphere_time'].minute
                     tdiff_s = acq_time.second - activity_dict['sphere_time'].second
@@ -2012,7 +2041,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         rc_values = img_values[:n_spheres] / sph_act_at_scan
                         rc_values = list(rc_values) + [img_values[-1] / bg_act_at_scan]
                         rc_values_all.append(rc_values)
-                    values_sup = [sph_act_at_scan, bg_act_at_scan]
+                    values_sup = [scan_start, sph_act_at_scan, bg_act_at_scan]
                 else:
                     rc_values = [None for i in range(n_spheres + 1)]
                     rc_values_all = [rc_values for i in range(3)]
@@ -2020,12 +2049,13 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     headers = copy.deepcopy(
                         HEADERS[modality][test_code]['alt' + str(rec_type)])
                     input_main.tab_pet.rec_type.setCurrentIndex(rec_type)
+                    values_sup = [scan_start, None, None]
 
                 details_dict['values'] = rc_values_all + details_dict['values']
                 values = details_dict['values'][rec_type]
                 res = Results(headers=headers, values=[values],
                               headers_sup=headers_sup,
-                              values_sup=values_sup,
+                              values_sup=[values_sup],
                               details_dict=details_dict, pr_image=False,
                               errmsg=errmsgs)
             else:
@@ -2096,7 +2126,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             details_dict = {
                 'sum_image': image_input,
                 'matrix': res['matrix'],
-                'du_matrix': res['du_matrix']
+                'du_matrix': res['du_matrix'],
+                'matrix_ufov': res['matrix_ufov']
                 }
             values = res['values']
 
@@ -3265,14 +3296,16 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
                 sub = image[y-2:y+3, x]
                 max_val = np.max(sub)
                 min_val = np.min(sub)
-                du_cols[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
+                if max_val and min_val:
+                    du_cols[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
         du_rows = np.zeros(image.shape)
         for y in range(sz_y):
             for x in range(2, sz_x - 3):
                 sub = image[y, x-2:x+3]
                 max_val = np.max(sub)
                 min_val = np.min(sub)
-                du_rows[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
+                if max_val and min_val:
+                    du_rows[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
         du_matrix = np.maximum(du_cols, du_rows)
         return {'du_matrix': du_matrix, 'du': np.max(du_matrix)}
 
@@ -3384,7 +3417,7 @@ def get_eye_filter(roi_size, pix, c):
     return {'filter_2d': eye_filter_2d, 'curve': eye_filter_1d, 'unit': unit}
 
 
-def get_sni_ref_image(paramset, tag_infos):
+def get_SNI_ref_image(paramset, tag_infos):
     """Get noise from reference image.
 
     Parameters

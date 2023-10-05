@@ -408,6 +408,8 @@ class ParamsTabCommon(QTabWidget):
         self.tab_dcm = ParamsWidget(self, run_txt='Collect DICOM header information')
         self.wid_dcm_pattern = TagPatternTreeTestDCM(self)
         self.tab_dcm.vlo.addWidget(self.wid_dcm_pattern)
+        self.tab_dcm.vlo.addWidget(QLabel(
+            'Select tag in list above to plot values in tab "Results plot" below.'))
 
     def create_tab_roi(self):
         """GUI of tab ROI."""
@@ -611,6 +613,56 @@ class ParamsTabCommon(QTabWidget):
         flo3.addRow(QLabel('Plot'), self.mtf_plot)
         vlo2.addLayout(flo3)
         self.tab_mtf.hlo.addLayout(vlo2)
+
+    def create_tab_rin(self):
+        """GUI of tab for Ring artefacts CT+SPECT."""
+        self.tab_rin = ParamsWidget(self, run_txt='Calculate radial profile')
+        info_txt = '''
+        Extract radial profile to quantify ring artifacts. Image center is assumed to
+        be at center of scanner.<br>
+        The radial profile is extracted by sorting pixels by distance from center.<br>
+        Linear trend (or mean signal) is removed from the profile to calculate min/max
+        as a measure of ring artifacts.<br>
+        Values closer than 4 pix from center will always be ignored.
+        '''
+        self.tab_rin.hlo_top.addWidget(QLabel('Quantify ring artifacts'))
+        self.tab_rin.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
+        self.rin_sigma_image = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
+        self.rin_sigma_image.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rin_sigma_image'))
+        self.rin_sigma_profile = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
+        self.rin_sigma_profile.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rin_sigma_profile'))
+        self.rin_range_start = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
+        self.rin_range_start.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rin_range_start'))
+        self.rin_range_stop = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
+        self.rin_range_stop.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rin_range_stop'))
+        self.rin_subtract_trend = BoolSelectTests(
+            self, attribute='rin_subtract_trend',
+            text_true='linear trend from profile', text_false='mean value of profile')
+
+        flo = QFormLayout()
+        flo.addRow(
+            QLabel('Gaussian filter image before extracting profile. Sigma (mm) = '),
+            self.rin_sigma_image)
+        flo.addRow(
+            QLabel('Gaussian filter radial profile before calculations. Sigma (mm) = '),
+            self.rin_sigma_profile)
+        flo.addRow(
+            QLabel('Ignore profile data closer than (mm) to center (min. 4*pix)'),
+            self.rin_range_start)
+        flo.addRow(QLabel('Ignore profile data larger than (mm) from center'),
+                   self.rin_range_stop)
+        self.tab_rin.hlo.addLayout(flo)
+        self.tab_rin.hlo.addStretch()
+        hlo_subtract = QHBoxLayout()
+        hlo_subtract.addWidget(QLabel('Subtract'))
+        hlo_subtract.addWidget(self.rin_subtract_trend)
+        hlo_subtract.addStretch()
+        self.tab_rin.vlo.addLayout(hlo_subtract)
 
     def add_NPS_plot_settings(self):
         """Add common NPS settings and gui."""
@@ -931,56 +983,6 @@ class ParamsTabCT(ParamsTabCommon):
         flo3.addRow(QLabel('Plot'), self.mtf_plot)
         vlo2.addLayout(flo3)
         self.tab_mtf.hlo.addLayout(vlo2)
-
-    def create_tab_rin(self):
-        """GUI of tab for Ring artefacts."""
-        self.tab_rin = ParamsWidget(self, run_txt='Calculate radial profile')
-        info_txt = '''
-        Extract radial profile to quantify ring artifacts. Image center is assumed to
-        be at center of scanner.<br>
-        The radial profile is extracted by sorting pixels by distance from center.<br>
-        Linear trend (or mean signal) is removed from the profile to calculate min/max
-        as a measure of ring artifacts.<br>
-        Values closer than 4 pix from center will always be ignored.
-        '''
-        self.tab_rin.hlo_top.addWidget(QLabel('Quantify ring artifacts'))
-        self.tab_rin.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
-
-        self.rin_sigma_image = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
-        self.rin_sigma_image.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='rin_sigma_image'))
-        self.rin_sigma_profile = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
-        self.rin_sigma_profile.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='rin_sigma_profile'))
-        self.rin_range_start = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
-        self.rin_range_start.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='rin_range_start'))
-        self.rin_range_stop = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
-        self.rin_range_stop.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='rin_range_stop'))
-        self.rin_subtract_trend = BoolSelectTests(
-            self, attribute='rin_subtract_trend',
-            text_true='linear trend from profile', text_false='mean value of profile')
-
-        flo = QFormLayout()
-        flo.addRow(
-            QLabel('Gaussian filter image before extracting profile. Sigma (mm) = '),
-            self.rin_sigma_image)
-        flo.addRow(
-            QLabel('Gaussian filter radial profile before calculations. Sigma (mm) = '),
-            self.rin_sigma_profile)
-        flo.addRow(
-            QLabel('Ignore profile data closer than (mm) to center (min. 4*pix)'),
-            self.rin_range_start)
-        flo.addRow(QLabel('Ignore profile data larger than (mm) from center'),
-                   self.rin_range_stop)
-        self.tab_rin.hlo.addLayout(flo)
-        self.tab_rin.hlo.addStretch()
-        hlo_subtract = QHBoxLayout()
-        hlo_subtract.addWidget(QLabel('Subtract'))
-        hlo_subtract.addWidget(self.rin_subtract_trend)
-        hlo_subtract.addStretch()
-        self.tab_rin.vlo.addLayout(hlo_subtract)
 
     def create_tab_dim(self):
         """GUI of tab Dim. Test distance of rods in Catphan."""
@@ -1759,10 +1761,10 @@ class ParamsTabSPECT(ParamsTabCommon):
         super().__init__(parent)
 
         self.create_tab_mtf()
-        self.create_tab_con()
+        self.create_tab_rin()
 
         self.addTab(self.tab_mtf, "Spatial resolution")
-        self.addTab(self.tab_con, "Contrast")
+        self.addTab(self.tab_rin, "Ring artifacts")
 
     def create_tab_mtf(self):
         """GUI of tab MTF."""
@@ -1818,11 +1820,6 @@ class ParamsTabSPECT(ParamsTabCommon):
         flo3.addRow(QLabel('Plot'), self.mtf_plot)
         vlo2.addLayout(flo3)
         self.tab_mtf.hlo.addLayout(vlo2)
-
-    def create_tab_con(self):
-        """GUI of tab Contrast."""
-        self.tab_con = ParamsWidget(self, run_txt='Calculate contrast')
-        self.tab_con.vlo_top.addWidget(uir.UnderConstruction())
 
 
 class ParamsTabPET(ParamsTabCommon):
@@ -1898,6 +1895,23 @@ class ParamsTabPET(ParamsTabCommon):
         self.cro_calibration_factor.setValue(1.)
         self.cro_calibration_factor.valueChanged.connect(
             self.clear_results_current_test)
+        self.cro_override_activity = QGroupBox(
+            'Override injection time/activity in DICOM header')
+        self.cro_override_activity.setCheckable(True)
+        self.cro_override_activity.setChecked(False)
+        self.cro_override_activity.setFont(uir.FontItalic())
+        self.cro_override_activity.toggled.connect(self.clear_results_current_test)
+        self.activity = QDoubleSpinBox(decimals=2, minimum=0.)
+        self.activity.editingFinished.connect(self.clear_results_current_test)
+        self.activity_resid = QDoubleSpinBox(decimals=2, minimum=0.)
+        self.activity_resid.editingFinished.connect(self.clear_results_current_test)
+        self.activity_time = QTimeEdit(self)
+        self.activity_time.setDisplayFormat('hh:mm:ss')
+        self.activity_time.editingFinished.connect(self.clear_results_current_test)
+        self.activity_time_resid = QTimeEdit(self)
+        self.activity_time_resid.setDisplayFormat('hh:mm:ss')
+        self.activity_time_resid.editingFinished.connect(
+            self.clear_results_current_test)
 
         flo0 = QFormLayout()
         flo0.addRow(QLabel('ROI radius (mm)'), self.cro_roi_size)
@@ -1906,7 +1920,19 @@ class ParamsTabPET(ParamsTabCommon):
         flo0.addRow(QLabel('           '),
                     uir.LabelItalic('(NB: Current calibration factor cannot be saved)'))
         self.tab_cro.hlo.addLayout(flo0)
-        self.tab_cro.hlo.addStretch()
+        self.tab_cro.hlo.addWidget(uir.VLine())
+
+        hlo_act = QHBoxLayout()
+        self.cro_override_activity.setLayout(hlo_act)
+        flo1 = QFormLayout()
+        flo2 = QFormLayout()
+        hlo_act.addLayout(flo1)
+        hlo_act.addLayout(flo2)
+        flo1.addRow(QLabel('Activity (MBq)'), self.activity)
+        flo2.addRow(QLabel('at'), self.activity_time)
+        flo1.addRow(QLabel('Residual (MBq)'), self.activity_resid)
+        flo2.addRow(QLabel('at'), self.activity_time_resid)
+        self.tab_cro.hlo.addWidget(self.cro_override_activity)
 
         hlo_auto_select = QHBoxLayout()
         self.cro_auto_select_slices.setLayout(hlo_auto_select)
@@ -1918,6 +1944,16 @@ class ParamsTabPET(ParamsTabCommon):
 
     def create_tab_rec(self):
         """GUI of tab Recovery Curve."""
+        info_txt = '''
+        Calculate Recovery curve from PET body phantom used for EARL accreditation.<br>
+        Time of scan start is found from earliest acquisition time in images.<br>
+        Images will be sorted by slice position during calculation and images to
+        include are determined<br>
+        from avarage in first background ROI and max in images (to find the hot spheres)
+        .<br>
+        Note that found scan start time and calculated activities at scan start can<br>
+        be found in the supplement table.
+        '''
         self.tab_rec = ParamsWidget(self, run_txt='Calculate recovery coefficients')
         self.rec_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, maximum=100)
         self.rec_roi_size.valueChanged.connect(
@@ -2006,10 +2042,11 @@ class ParamsTabPET(ParamsTabCommon):
         flo2b.addRow(QLabel('at'), self.rec_time_bg_resid)
         flo1b.addRow(QLabel('Volume background (mL)'), self.rec_background_volume)
 
-        flo_avg_perc = QFormLayout()
-        flo_avg_perc.addRow(QLabel('Average in sphere within threshold (%)'),
-                            self.rec_sphere_percent)
-        vlo_right.addLayout(flo_avg_perc)
+        hlo_avg_perc = QHBoxLayout()
+        hlo_avg_perc.addWidget(QLabel('Average in sphere within threshold (%)'))
+        hlo_avg_perc.addWidget(self.rec_sphere_percent)
+        hlo_avg_perc.addWidget(uir.InfoTool(info_txt, parent=self.main))
+        vlo_right.addLayout(hlo_avg_perc)
 
         vlo_right.addWidget(uir.LabelHeader('Background ROIs', 3))
         hlo_bg = QHBoxLayout()
@@ -2034,6 +2071,33 @@ class ParamsTabPET(ParamsTabCommon):
         hlo_right.addLayout(flo_plot)
         hlo_right.addWidget(QLabel('EARL tolerances'))
         hlo_right.addWidget(self.rec_earl)
+
+    def get_Cro_activities(self):
+        """Get override values for Cross calibration test."""
+        if self.activity.value() > 0 and self.cro_override_activity.isChecked():
+            if self.activity_resid.value() > 0:
+                resid_time = self.activity_time_resid.time().toPyTime()
+                act_time = self.activity_time.time().toPyTime()
+                minutes = (
+                    (resid_time.hour - act_time.hour) * 60 +
+                    (resid_time.minute - act_time.minute) +
+                    (resid_time.second - act_time.second) / 60
+                    )
+                act = self.activity.value() * np.exp(
+                    -np.log(2)*minutes/HALFLIFE['F18'])
+                act = act - self.activity_resid.value()
+                act_time = resid_time
+            else:
+                act = self.activity.value()
+                act_time = self.activity_time.time().toPyTime()
+
+            rec_dict = {
+                'activity_Bq': act, 'activity_time': act_time,
+                }
+        else:
+            rec_dict = {}
+
+        return rec_dict
 
     def get_Rec_activities(self):
         """Get values for Recovery curve test."""

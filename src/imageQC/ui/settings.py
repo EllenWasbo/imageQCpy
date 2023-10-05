@@ -234,19 +234,6 @@ class SettingsDialog(ImageQCDialog):
                            widget=settings_automation.LimitsAndPlotWidget(self),
                            exclude_if_empty=False)
 
-            #TODO delete?:
-            '''
-            proceed = True
-            if import_review_mode:
-                if len(self.main.persons_to_notify) == 0:
-                    proceed = False
-            if proceed:
-                add_widget(parent=self.item_auto_info, snake='persons_to_notify',
-                           title='Persons to notify',
-                           widget=settings_automation.PersonsToNotifyWidget(self),
-                           exclude_if_empty=False)
-            '''
-
         item, widget = self.get_item_widget_from_txt(initial_view)
         self.tree_settings.setCurrentItem(item)
         self.tree_settings.expandToDepth(2)
@@ -435,7 +422,6 @@ class SettingsDialog(ImageQCDialog):
                 # _, widget = self.get_item_widget_from_txt(
                 #    self.previous_selected_txt)
                 self.widget_shared_settings.update_from_yaml()
-                # TODO DELETE? fails? self.widget_shared_settings.verify_config_files()
 
     def update_import_main(self):
         """Update templates of all widgets according to import_main.
@@ -460,9 +446,9 @@ class SettingsDialog(ImageQCDialog):
                         if snake in [
                                 'paramsets',
                                 'quicktest_templates',
-                                'limits_and_plot_templates']:  #TODO delete? 'persons_to_notify'
+                                'limits_and_plot_templates']:
                             widget.auto_templates = self.main.auto_templates
-                            if snake in ['limits_and_plot_templates']: #TODO delete?'persons_to_notify':
+                            if snake in ['limits_and_plot_templates']:
                                 widget.auto_vendor_templates = (
                                     self.main.auto_vendor_templates)
                         elif snake == 'digit_templates':
@@ -493,23 +479,10 @@ class SettingsDialog(ImageQCDialog):
             widget.update_data()
             widget.flag_edit(False)
 
-        #TODO delete?
-        '''
-        try:
-            self.widget_persons_to_notify.templates = self.main.persons_to_notify
-            self.widget_persons_to_notify.update_data()
-        except AttributeError:
-            pass
-        '''
         try:
             self.widget_dash_settings.templates = self.main.dash_settings
             self.widget_dash_settings.update_data()
-        except AttributeError:
-            pass
-        try:
-            self.widget_limits_and_plot_templates.templates =\
-                self.main.limits_and_plot_templates
-            self.widget_limits_and_plot_templates.update_data()
+            self.widget_dash_settings.flag_edit(False)
         except AttributeError:
             pass
 
@@ -535,7 +508,7 @@ class SettingsDialog(ImageQCDialog):
                         self.mark_digit_temps(widget.templates[mod][idx], mod=mod)
             widget.marked[mod] = marked_idxs
 
-    def mark_qt_param_limit(self, auto_template, mod='CT'):
+    def mark_qt_param_limits(self, auto_template, mod='CT'):
         """Also mark used quicktest, paramset, limit when auto_template is marked."""
         try:
             label_this = [auto_template.quicktemp_label, auto_template.paramset_label]
@@ -553,27 +526,6 @@ class SettingsDialog(ImageQCDialog):
         if paramset.num_digit_label != '':
             widget = self.widget_digit_templates
             self.mark_extra(widget, paramset.num_digit_label, mod)
-
-    #TODO delete?
-    '''
-    def mark_persons(self, auto_template):
-        """Also mark coupled persons to notify."""
-        if len(auto_template.persons_to_notify) > 0:
-            widget = self.widget_persons_to_notify
-            all_labels = [temp.label for temp in widget.templates]
-            for label_this in auto_template.persons_to_notify:
-                if label_this in all_labels:
-                    idxs = get_all_matches(all_labels, label_this)
-                    try:
-                        marked_idxs = widget.marked
-                    except AttributeError:
-                        widget.marked_ignore = []
-                        marked_idxs = []
-                    for idx in idxs:
-                        if idx not in marked_idxs:
-                            marked_idxs.append(idx)
-                    widget.marked = marked_idxs
-    '''
 
     def set_marked(self, marked=True, import_all=False):
         """Set type of marking to ImportMain."""
@@ -655,7 +607,7 @@ class SettingsDialog(ImageQCDialog):
 
             list_objects = [fname for fname, item in CONFIG_FNAMES.items()
                             if item['saved_as'] == 'object']
-            list_objects.pop('last_modified')
+            list_objects.remove('last_modified')
             for snake in list_objects:
                 proceed = True
                 try:
@@ -908,10 +860,9 @@ class SharedSettingsWidget(StackWidget):
         _, _, auto_common = cff.load_settings(fname='auto_common')
         _, _, auto_templates = cff.load_settings(fname='auto_templates')
         _, _, auto_vendor_templates = cff.load_settings(fname='auto_vendor_templates')
-        # _, _, dash_settings = cff.load_settings(fname='dash_settings')
+        #TODO _, _, dash_settings = cff.load_settings(fname='dash_settings')
         _, _, limits_and_plot_templates = cff.load_settings(
             fname='limits_and_plot_templates')
-        #_, _, persons_to_notify = cff.load_settings(fname='persons_to_notify')
 
         all_temps = ImportMain(
             tag_infos=tag_infos,
@@ -944,6 +895,10 @@ class SharedSettingsWidget(StackWidget):
             details.append(
                 'Parameter sets linked to undefined Digit Templates')
             details.extend(log_param)
+        status_lim, log_lim = cff.verify_limits_used_with_auto(all_temps)
+        if status_lim is False:
+            details.extend(log_lim)
+
         if len(details) > 0:
             msg = 'Found issues with the templates. See details.'
             icon = QMessageBox.Warning
@@ -975,7 +930,9 @@ class SharedSettingsWidget(StackWidget):
                     dlg = messageboxes.MessageBoxWithDetails(
                         parent=self, title='Information',
                         msg='Imported parameters will now be presented for review.',
-                        info=f'See details for warnings regarding the imported config file',
+                        info=(
+                            'See details for warnings regarding the imported '
+                            'config file'),
                         details=config_idl.errmsg)
                     dlg.exec()
                 import_main = ImportMain(
@@ -1152,7 +1109,6 @@ class ImportMain:
     auto_vendor_templates: dict = field(default_factory=dict)
     dash_settings: cfc.DashSettings = field(default_factory=cfc.DashSettings)
     limits_and_plot_templates: dict = field(default_factory=dict)
-    #TODO delete? persons_to_notify: list = field(default_factory=list)
 
 
 class SelectImportFilesDialog(ImageQCDialog):

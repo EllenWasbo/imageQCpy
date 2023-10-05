@@ -19,6 +19,10 @@ try:
     from waitress import serve
     from plotly.subplots import make_subplots
     import plotly.graph_objects as go
+    try:
+        from dash import ctx
+    except:
+        from dash import callback_context
 except (ImportError, ModuleNotFoundError) as err:
     print(f'Warning: {err}')
     print('To run the dash application you will need to install dash '
@@ -150,13 +154,22 @@ def get_data():
                                 how='all', inplace=True)  # ignore empty rows
                             date_header = dataframe.columns[0]
                             dataframe = dataframe.sort_values(by=[date_header])
-                            newest_date = dataframe[date_header].iloc[-1].date()
+                            try:
+                                first_row_val = dataframe[date_header].iloc[-1]
+                            except IndexError:
+                                first_row_val = ''
+                            if isinstance(first_row_val, str):
+                                newest_date = 'error'
+                                days_since = -1000
+                            else:
+                                newest_date = first_row_val.date()
+                                days_since = (date.today() - newest_date).days
                             temp_this = Template(
                                 label=temp.label,
                                 limits_and_plot_template=temp.limits_and_plot_label,
                                 data=dataframe,
                                 newest_date=f'{newest_date}',
-                                days_since=(date.today() - newest_date).days
+                                days_since=days_since
                                 # TODO status=
                                 )
                             create_empty = True
@@ -193,16 +206,16 @@ def run_dash_app(dash_settings=None):
     logger.setLevel(logging.ERROR)
 
     modality_dict = {}
-    try:
-        app = dash.Dash(
-            __name__, suppress_callback_exceptions=True,
-            external_stylesheets=[dbc.themes.YETI])
-        modality_dict = get_data()
+    #try:
+    app = dash.Dash(
+        __name__, suppress_callback_exceptions=True,
+        external_stylesheets=[dbc.themes.YETI])
+    modality_dict = get_data()
+    '''
     except Exception as error:
         print('Failed running dash')
-        print('Probably due to missing installed packages '
-              '(dash + dash_bootstrap_components + waitress).')
         print(error)
+    '''
 
     def layout():
         """Build the overall layout structure."""
@@ -343,7 +356,14 @@ def run_dash_app(dash_settings=None):
         [Input({'type': 'overview_modality_button', 'index': ALL}, 'n_clicks')],
     )
     def go_to_modality(n_clicks):
-        mod_value = [*modality_dict].index('CT')
+        mod_value = 0
+        try:
+            if ctx.triggered_id:
+                mod_value = [*modality_dict].index(ctx.triggered_id.index)
+        except:
+            triggered_id = callback_context.triggered[0]['prop_id']
+            if triggered_id:
+                mod_value = [*modality_dict].index(triggered_id)
         return 'results', mod_value
 
     @app.callback(

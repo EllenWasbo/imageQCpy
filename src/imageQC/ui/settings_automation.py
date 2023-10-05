@@ -15,7 +15,7 @@ from PyQt5.QtGui import QIcon, QBrush, QColor
 from PyQt5.QtWidgets import (
     QApplication, qApp, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QToolBar, QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox,
-    QListWidget, QComboBox, QDoubleSpinBox,
+    QListWidget, QComboBox, QDoubleSpinBox, QAbstractItemView,
     QMessageBox, QDialogButtonBox, QInputDialog, QFileDialog
     )
 
@@ -31,7 +31,8 @@ from imageQC.ui import reusable_widgets as uir
 from imageQC.ui.ui_dialogs import ImageQCDialog, TextDisplay
 from imageQC.ui import messageboxes
 from imageQC.scripts.mini_methods import (
-    create_empty_file, create_empty_folder, find_value_in_sublists)
+    create_empty_file, create_empty_folder, find_value_in_sublists,
+    get_headers_first_values_in_path)
 from imageQC.scripts.mini_methods_format import valid_template_name
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm
@@ -73,13 +74,6 @@ class AutoInfoWidget(StackWidget):
             the trends.<br>
             '''
             )
-        #TODO delete:
-        '''
-        <b>Persons to notify</b><br>
-        This is work in progress too. Persons can be added to the automation
-        templates to recieve email if values outside set limits. <br>
-        This functionality is under construction.
-        '''
         super().__init__(dlg_settings, header, subtxt)
         self.vlo.addStretch()
 
@@ -557,6 +551,8 @@ class LimitsAndPlotContent(QWidget):
         self.headers = []  # column headers flattened from template.groups
         self.group_numbers = []  # group number for each element in headers
 
+        self.cbox_output_paths = QComboBox()
+        self.cbox_output_paths.currentIndexChanged.connect(self.update_output_path)
         self.txt_sample_file_path = QLineEdit(sample_file_path)
         self.txt_sample_file_path.textChanged.connect(self.update_from_sample_file)
 
@@ -580,6 +576,13 @@ class LimitsAndPlotContent(QWidget):
         btn_group_selected.clicked.connect(self.group_selected)
         btn_ungroup_selected = QPushButton('Ungroup selected')
         btn_ungroup_selected.clicked.connect(self.ungroup_selected)
+
+        if isinstance(self.parent, LimitsAndPlotWidget):
+            hlo_outputs = QHBoxLayout()
+            vlo.addLayout(hlo_outputs)
+            hlo_outputs.addWidget(QLabel('Linked output paths: '))
+            hlo_outputs.addWidget(self.cbox_output_paths)
+            hlo_outputs.addStretch()
 
         hlo_sample = QHBoxLayout()
         vlo.addLayout(hlo_sample)
@@ -753,46 +756,113 @@ class LimitsAndPlotContent(QWidget):
         """
         flatten_groups = [
             elem for sublist in self.parent.current_template.groups for elem in sublist]
-        if flatten_groups != self.headers:
-            missing = []
-            for header in self.headers:
-                if header not in flatten_groups:
-                    missing.append(header)
-
-            ignored = self.update_header_order()
-            if len(ignored) > 0:
-                # TODO warning + remove headers from template
-                ignored.sort(key=lambda x: x[0], reverse=True)
-                for group_idx, header in ignored:
-                    group = self.parent.current_template.groups[group_idx]
-                    if len(group) == 1:
-                        self.parent.current_template.delete_group(group_idx)
-                    else:
-                        self.parent.current_template.groups[group_idx].pop(
-                            group.index(header))
+        set_template_headers = set(flatten_groups)
+        if hasattr(self.parent, 'output_headers'):
+            flatten_output_headers = [
+                elem for sublist in self.parent.output_headers for elem in sublist]
+            set_sample_headers = set(flatten_output_headers)
+        else:
+            set_sample_headers = set(self.headers)
+        missing_in_template = list(set_template_headers.difference(set_sample_headers))
+        missing_in_sample = list(set_sample_headers.difference(set_template_headers))
+        if len(missing_in_template) > 0 and len(missing_in_sample) == 0:
+            # Add to template or ignore?
+            res = messageboxes.QuestionBox(
+                parent=self, title='Add or ignore missing headers?',
+                msg=('The LimitsAndPlot template are missing headers that are found '
+                     'in the connected automation output file(s).'),
+                info='See details for the missing headers.',
+                details=missing_in_template,
+                yes_text='Add missing headers to LimitsAndPlot template',
+                no_text='Ignore missing headers')
+            if res.exec():  # overwrite
+                for header in missing_in_template:
+                    self.parent.current_template.add_group([header])
                 self.parent.flag_edit(True)
-            if len(missing) > 0:
-                # missing headers in template
-                # TODO information
-                for header in missing:
-                    self.parent.current_template.add_group(group=[header])
-                self.parent.flag_edit(True)
+        elif len(missing_in_template) == 0 and len(missing_in_sample) > 0:
+            res = messageboxes.MessageBoxWithDetails(
+                parent=self, title='Mismatching headers',
+                msg=('Some headers found in the LimitsAndPlot template cannot be '
+                     'found in any of the connected automation output files. '
+                     'Consider deleting these '
+                     'headers from the LimitsAndPlot template.'),
+                info='See these headers in details.',
+                details=missing_in_sample)
+            if res.exec():
+                pass
+        elif len(missing_in_template) > 0 and len(missing_in_sample) > 0:
+            proceed = True
+            if hasattr(self.parent, 'output_headers'):
+                # same headers all files?
+                if len(self.parent.output_headers) > 1:
+                    first_headers = self.parent.output_headers[0]
+                    for headers in self.parent.output_headers:
+                        if headers != first_headers:
+                            proceed = False
+                if proceed is False:
+                    details = ['Headers in output files']
+                    for i, path in enumerate(self.parent.output_paths):
+                        details.append(f'{path}:')
+                        details.extend(self.parent.output_headers[i])
+                    details.extend(['', 'Missing in template:'])
+                    details.extend(missing_in_template)
+                    details.extend(['', 'Missing in output file(s):'])
+                    details.extend(missing_in_sample)
+                    res = messageboxes.MessageBoxWithDetails(
+                        parent=self, title='Mismatching headers',
+                        msg=('Found mismatch between headers found in the Limits and '
+                             'plot template and headers found in at least one of the '
+                             'connected automation output files. The headers of '
+                             'connected output files differ. '
+                             'Consider connecting these to separate '
+                             'Limits and plot templates.'),
+                        info='See mismatch headers in details.',
+                        details=details)
+                    if res.exec():
+                        pass
+            if proceed:
+                if hasattr(self.parent, 'output_headers'):
+                    output_paths = self.parent.output_paths
+                else:
+                    output_paths = [self.txt_sample_file_path.text()]
+                dlg = LimitsAndPlotFixHeadersDialog(
+                    self,
+                    limits_template=copy.deepcopy(self.parent.current_template),
+                    output_paths=output_paths,
+                    headers_in_output=self.headers,
+                    headers_in_template=flatten_groups
+                    )
+                res = dlg.exec()
+                if res:
+                    self.parent.current_template = dlg.get_template()
+                    self.headers = dlg.get_headers()
+                    self.parent.flag_edit(True)
+                else:
+                    QMessageBox.warning(
+                        self, 'Mismatch persist',
+                        'The mismatch still persist. To trigger the dailog to fix '
+                        'this template again (the one you just canceled), select '
+                        'another template and then select the current template once '
+                        'again.')
         self.group_numbers = []
         for idx, group in enumerate(self.parent.current_template.groups):
             self.group_numbers.extend([idx] * len(group))
+
+    def update_output_path(self):
+        """Update textfield with sample path when another output path is selected."""
+        try:
+            self.txt_sample_file_path.setText(
+                self.parent.output_paths[self.cbox_output_paths.currentIndex()])
+        except IndexError:
+            self.txt_sample_file_path.setText('')
 
     def update_from_sample_file(self, silent=False):
         """Find headers and sample data from sample file."""
         self.headers = []
         self.first_values = None
         if os.path.exists(self.txt_sample_file_path.text()):
-            with open(self.txt_sample_file_path.text()) as f:
-                self.headers = f.readline().strip('\n').split('\t')
-                self.first_values = f.readline().strip('\n').split('\t')
-            if len(self.headers) > 0:
-                self.headers.pop(0)  # date not included
-                if self.first_values is not None:
-                    self.first_values.pop(0)
+            self.headers, self.first_values = get_headers_first_values_in_path(
+                self.txt_sample_file_path.text())
         elif self.txt_sample_file_path.text() == '':
             if self.parent.current_template is not None:
                 self.headers = [
@@ -803,8 +873,8 @@ class LimitsAndPlotContent(QWidget):
                 QMessageBox.information(
                     self, 'No output yet',
                     'To set the limits and plot settings there should be column headers'
-                    ' to extract from the a sample text file. Output file is empty or '
-                    'missing columns.')
+                    ' of a sample file to extract headers from. '
+                    'Output file is empty or are missing column headers.')
             self.first_values = ['' for i in range(len(self.headers))]
             self.group_numbers = []
             for idx, group in enumerate(self.parent.current_template.groups):
@@ -937,7 +1007,7 @@ class LimitsAndPlotContent(QWidget):
         sel_row = sels[0].row()
         selected_header = self.headers[sel_row]
         self.group_numbers[sel_row]
-        val = 1 if direction == 'up' else -1
+        val = -1 if direction == 'up' else 1
         self.parent.current_template.move_group(
             old_group_number=self.group_numbers[sel_row],
             new_group_number=self.group_numbers[sel_row] + val)
@@ -1008,7 +1078,9 @@ class LimitsAndPlotEditDialog(ImageQCDialog):
                         if used_labels.count(curr_label) > 1:
                             res = messageboxes.QuestionBox(
                                 parent=self, title='Overwrite or save new?',
-                                msg='The template is used by other automation templates.',
+                                msg=(
+                                    'The template is used by other automation '
+                                    'templates.'),
                                 yes_text='Overwrite limits and plot template',
                                 no_text='Save as new template')
                             if res.exec():  # overwrite
@@ -1050,6 +1122,158 @@ class LimitsAndPlotEditDialog(ImageQCDialog):
         return self.current_template.label
 
 
+class LimitsAndPlotFixHeadersDialog(ImageQCDialog):
+    """Dialog for editing limits and plot settings."""
+
+    def __init__(self, parent, limits_template=None, output_paths=None, auto_label='',
+                 headers_in_output=None, headers_in_template=None):
+        """Initiate LimitsAndPlotFixHeadersDialog.
+
+        Parameters
+        ----------
+        parent : QWidget
+        limits_template : LimitsAndPlotTemplate, optional
+            The default is None.
+        output_paths : list of str
+            output paths to edit
+        auto_label : str
+        headers_in_output : list of str
+        headers_in_template : list of str
+        """
+        super().__init__()
+        self.setWindowTitle(
+            'Handle mismatch between headers in output file and Limits and plot '
+            'template')
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        self.parent = parent
+        self.current_template = limits_template
+        self.headers_in_output = headers_in_output
+        self.output_paths = output_paths
+
+        self.list_output_headers = QListWidget()
+        self.list_output_headers.addItems(headers_in_output)
+        self.list_template_headers = QListWidget()
+        self.list_output_headers.setFixedWidth(400)
+        self.list_template_headers.setFixedWidth(400)
+        self.list_template_headers.setDragDropMode(QAbstractItemView.InternalMove)
+
+        info_txt = [
+            'Header of output file and Limits template need to match.', '',
+            'Found headers with differing text strings or differing number of strings.',
+            'Sort headers of the right list (drag/drop) such that the row numbers '
+            'match the left list.',
+            'This sorting will not affect the order of headers neither in the output '
+            'path nor the template plot order.',
+            'The sorting is just to find the matches.']
+        vlo.addWidget(uir.LabelMultiline(txts=info_txt))
+        hlo_lists = QHBoxLayout()
+        vlo.addLayout(hlo_lists)
+        vlo.addSpacing(20)
+
+        vlo_list_output = QVBoxLayout()
+        hlo_lists.addLayout(vlo_list_output)
+        vlo_list_output.addWidget(uir.LabelHeader(
+            f'Headers in output path of automation template {auto_label}', 3))
+        vlo_list_output.addWidget(self.list_output_headers)
+
+        vlo_list_temp = QVBoxLayout()
+        hlo_lists.addLayout(vlo_list_temp)
+        vlo_list_temp.addWidget(uir.LabelHeader(
+            f'Headers in Limits and plot template {self.current_template.label}', 3))
+        vlo_list_temp.addWidget(self.list_template_headers)
+
+        self.fill_list_template_headers(headers_in_template)
+        vlo.addSpacing(20)
+
+        btn_replace_output_headers = QPushButton(
+            'Replace headers in output file with those in Limits template')
+        btn_replace_output_headers.clicked.connect(self.replace_output_headers)
+        btn_replace_template_headers = QPushButton(
+            'Replace headers in Limits template with those in the output file')
+        btn_replace_template_headers.clicked.connect(self.replace_template_headers)
+
+        hlo_dlg_btns = QHBoxLayout()
+        vlo.addLayout(hlo_dlg_btns)
+        hlo_dlg_btns.addStretch()
+        btn_ok = QPushButton('Finished matching...')
+        btn_ok.clicked.connect(self.fix)
+        hlo_dlg_btns.addWidget(btn_ok)
+        btn_cancel = QPushButton('Cancel')
+        btn_cancel.clicked.connect(self.reject)
+        hlo_dlg_btns.addWidget(btn_cancel)
+
+    def fill_list_template_headers(self, headers):
+        """Fill the lists of headers trying to find matches."""
+        headers_order = [-1 for header in headers]
+        no_match = []
+        for i, header in enumerate(headers):
+            if header in self.headers_in_output:
+                headers_order[i] = self.headers_in_output.index(header)
+            else:
+                no_match.append(header)
+        headers_ordered = ['' for header in headers]
+        for i, header in enumerate(headers):
+            if i in headers_order:
+                headers_ordered[i] = header
+        for header in headers:
+            if header in no_match:
+                idx = headers_ordered.index('')
+                headers_ordered[idx] = header
+        self.list_template_headers.addItems(headers_ordered)
+
+    def fix(self):
+        """Start fixing the mismatch based on the sorting."""
+        headers_template = []
+        for x in range(self.list_template_headers.count()):
+            headers_template.append(self.list_template_headers.item(x).text())
+        res = messageboxes.QuestionBox(
+            parent=self, title='Correct the mismatch',
+            msg='How to force the same headers of the output file and Limits template?',
+            yes_text='Replace headers in output file',
+            no_text='Replace headers in LimitsAndPlot template')
+        if res.exec():
+            self.replace_output_headers(headers_template)
+        else:
+            self.replace_template_headers(headers_template)
+        self.accept()
+
+    def replace_output_headers(self, headers_template):
+        """Replace headers in output file."""
+        for path in self.output_paths:
+            lines = []
+            with open(path, 'r') as file:
+                lines = file.readlines()
+            if len(lines) > 0:
+                header_line = lines[0]
+                for i, header in enumerate(self.headers_in_output):
+                    if header in header_line:
+                        lines[0] = lines[0].replace(header, headers_template[i])
+                        self.headers_in_output[i] = headers_template[i]
+                with open(path, 'w') as file:
+                    for lin in lines:
+                        file.write(lin)
+        QMessageBox.information(
+            self, 'Headers in output file(s) updated',
+            'Finished replacing headers of output file(s).')
+
+    def replace_template_headers(self, headers_template):
+        """Replace headers in template."""
+        for i, old_header in enumerate(headers_template):
+            if old_header != self.headers_in_output[i]:
+                group_idx = self.current_template.find_headers_group_index(old_header)
+                idx = self.current_template.groups[group_idx].index(old_header)
+                self.current_template.groups[group_idx][idx] = self.headers_in_output[i]
+
+    def get_template(self):
+        """Fetch current template."""
+        return self.current_template
+
+    def get_headers(self):
+        """Fetch current headers."""
+        return self.headers_in_output
+
+
 class LimitsAndPlotWidget(StackWidget):
     """Widget holding limits and plot settings."""
 
@@ -1060,18 +1284,23 @@ class LimitsAndPlotWidget(StackWidget):
         After running automation templates linked to a LimitsAndPlot template the
         results will be compared to the tolerance limits set for the diffent
         columns.<br>
-        Results from different columns can be grouped together to have the same settings.
-        If outside tolerance a warning will be displayed in the automation log. <br>
-        There are still some work/testing to do to automatically send emails.<br>
+        Results from different columns can be grouped together to have the same
+        settings. If outside tolerance, a warning will be displayed in the
+        automation log. <br>
+        You could also specify a text file to append these warnings. Use for example
+        Sharepoint "Alert me" functionality to set up notification for specific users.
+        <br>
         The limits and y-ranges and naming will be used if displaying the dashboard
-        for the results<br>
+        for the results.<br>
         '''
         super().__init__(dlg_settings, header, subtxt,
                          mod_temp=True, grouped=True)
         self.fname = 'limits_and_plot_templates'
         self.empty_template = cfc.LimitsAndPlotTemplate()
         self.current_template = None
-        self.sample_file_used_in = ''
+        self.auto_labels = []  # auto_labels used in
+        self.output_paths = []  # output paths for linked automation templates
+        self.output_headers = []  # headers in output paths (list of list of str)
 
         if self.import_review_mode is False:
             self.wid_mod_temp.toolbar.removeAction(self.wid_mod_temp.act_move_modality)
@@ -1087,7 +1316,7 @@ class LimitsAndPlotWidget(StackWidget):
         vlo.addWidget(self.wid_content)
 
         if self.import_review_mode:
-            self.content.setEnabled(False)
+            self.wid_content.setEnabled(False)
 
         self.vlo.addWidget(uir.HLine())
         self.vlo.addWidget(self.status_label)
@@ -1103,36 +1332,24 @@ class LimitsAndPlotWidget(StackWidget):
         """Update GUI with selected template."""
         self.update_used_in()
         self.wid_content.blockSignals(True)
-        self.wid_content.txt_sample_file_path.setText(self.sample_file_used_in)
+        self.wid_content.cbox_output_paths.clear()
+        self.wid_content.cbox_output_paths.addItems(
+            [f'Auto template: {self.auto_labels[i]}, output file: {path}' for i, path
+             in enumerate(self.output_paths)])
         self.wid_content.blockSignals(False)
-        self.wid_content.update_from_sample_file(silent=True)
 
     def update_used_in(self):
         """Update list of auto-templates where this template is used."""
-        self.sample_file_used_in = ''
         self.list_used_in.clear()
-        auto_labels = []
-        auto_labels_all = []
-        if self.current_template.label != '':
-            mod_temps = []
-            try:
-                if self.current_template.type_vendor:
-                    mod_temps = self.auto_vendor_templates[self.current_modality]
-                else:
-                    mod_temps = self.auto_templates[self.current_modality]
-            except KeyError:
-                pass
-
-            auto_labels = [
-                temp.label for temp in mod_temps
-                if temp.limits_and_plot_label == self.current_template.label
-                ]
-            auto_labels_all = [temp.label for temp in mod_temps]
-
-            if len(auto_labels) > 0:
-                self.list_used_in.addItems(auto_labels)
-                first_idx = auto_labels_all.index(auto_labels[0])
-                self.sample_file_used_in = mod_temps[first_idx].path_output
+        self.auto_labels, self.output_paths = cff.get_auto_labels_output_used_in_lim(
+                self.auto_templates, self.auto_vendor_templates, self.current_template,
+                modality=self.current_modality)
+        if len(self.auto_labels) > 0:
+            self.list_used_in.addItems(self.auto_labels)
+            self.output_headers = []
+            for path in self.output_paths:
+                headers, _ = self.wid_content.get_headers_first_values_in_path(path)
+                self.output_headers.append(headers)
 
 
 class AutoTempWidgetBasic(StackWidget):
@@ -1216,24 +1433,6 @@ class AutoTempWidgetBasic(StackWidget):
         self.tb_edit_limits_and_plot.act_add.triggered.connect(
             lambda: self.edit_limits_and_plot(add=True))
         vlo_limits_and_plot.addWidget(uir.HLine())
-        '''
-        hlo_persons = QHBoxLayout()
-        vlo_limits_and_plot.addLayout(hlo_persons)
-        self.list_persons = QListWidget()
-        self.list_persons.setFixedWidth(200)
-        self.tb_edit_persons = uir.ToolBarEdit(
-            edit_button=False, add_button=True, delete_button=True)
-        self.tb_edit_persons.setOrientation(Qt.Vertical)
-        self.tb_edit_persons.act_add.triggered.connect(self.add_persons)
-        self.tb_edit_persons.act_delete.triggered.connect(self.delete_person)
-        hlo_persons.addWidget(QLabel('Notify:'))
-        hlo_persons.addWidget(self.list_persons)
-        hlo_persons.addWidget(self.tb_edit_persons)
-        hlo_persons.addWidget(uir.UnderConstruction(
-            txt=('Under developement. '
-                 'No email warnings will be sent yet.')))
-        hlo_persons.addStretch()
-        '''
 
         hlo_input_path = QHBoxLayout()
         self.vlo_temp.addLayout(hlo_input_path)
@@ -1292,6 +1491,9 @@ class AutoTempWidgetBasic(StackWidget):
         toolb.addActions([act_new_warn_file, act_warnings_view])
         vlo_limits_and_plot.addWidget(uir.LabelItalic(
             'Append warnings to file if limits are violated.'))
+        vlo_limits_and_plot.addWidget(uir.LabelItalic(
+            'Use i.e. "Alert me" functionality in Sharepoint to notify/email '
+            'specific persons.'))
 
     def update_data(self):
         """Refresh GUI after selecting template."""
@@ -1305,15 +1507,16 @@ class AutoTempWidgetBasic(StackWidget):
         self.chk_deactivate.setChecked(not self.current_template.active)
         self.cbox_limits_and_plot.setCurrentText(
             self.current_template.limits_and_plot_label)
-        if (
-                self.cbox_limits_and_plot.currentText()
-                != self.current_template.limits_and_plot_label):
-            QMessageBox.warning(
-                self, 'Warning',
-                ('Limits and plot template '
-                 f'{self.current_template.limits_and_plot_label} set for this '
-                 'template, but not defined in limits_and_plot_templates.yaml.'))
-            self.cbox_limits_and_plot.setCurrentText('')
+        if self.import_review_mode is False:
+            if (
+                    self.cbox_limits_and_plot.currentText()
+                    != self.current_template.limits_and_plot_label):
+                QMessageBox.warning(
+                    self, 'Warning',
+                    ('Limits and plot template '
+                     f'{self.current_template.limits_and_plot_label} set for this '
+                     'template, but not defined in limits_and_plot_templates.yaml.'))
+                self.cbox_limits_and_plot.setCurrentText('')
 
         # update used_in
         self.list_same_input.clear()
@@ -1347,21 +1550,17 @@ class AutoTempWidgetBasic(StackWidget):
                     auto_labels.remove(self.current_template.label)
                     self.list_same_limits.addItems(auto_labels)
 
-        #TODO delete?
-        '''
-        self.list_persons.clear()
-        if len(self.current_template.persons_to_notify) > 0:
-            self.list_person.addItems(self.current_template.persons_to_notify)
-        '''
-
     def fill_list_limits_and_plot(self):
         """Fill list of QuickTest templates."""
         self.cbox_limits_and_plot.clear()
-        if self.current_modality in self.limits_and_plot_templates:
-            labels = [obj.label for obj
-                      in self.limits_and_plot_templates[self.current_modality]]
-            labels.insert(0, '')
-            self.cbox_limits_and_plot.addItems(labels)
+        try:
+            if self.current_modality in self.limits_and_plot_templates:
+                labels = [obj.label for obj
+                          in self.limits_and_plot_templates[self.current_modality]]
+                labels.insert(0, '')
+                self.cbox_limits_and_plot.addItems(labels)
+        except AttributeError:  # if import review mode
+            pass
 
     def get_current_template(self):
         """Get self.current_template where not dynamically set."""
@@ -1524,8 +1723,9 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         self.chk_import_only.setChecked(self.current_template.import_only)
 
         self.sample_filepath = ''
+        if self.import_review_mode is False:
+            self.update_import_enabled()
         self.flag_edit(False)
-        self.update_import_enabled()
 
     def get_current_template(self):
         """Get self.current_template where not dynamically set."""
@@ -1623,9 +1823,7 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
             qt = self.current_template.quicktemp_label
             outp = self.current_template.path_output
             sort = '' if len(self.current_template.sort_pattern.list_tags) == 0 else '-'
-            #TODO delete?:
-            #notify = '' if len(self.current_template.persons_to_notify) == 0 else '-'
-            if params + qt + outp + sort != '': #TODO delete? notify
+            if params + qt + outp + sort != '':
                 res = messageboxes.QuestionBox(
                     parent=self, title='Remove inactive settings?',
                     msg='Reset settings that only affect analysis or just deactivate',
@@ -1637,7 +1835,6 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
                     self.current_template.path_output = ''
                     self.current_template.sort_pattern = copy.deepcopy(
                         self.empty_template.sort_pattern)
-                    #TODO delete? self.current_template.persons_to_notify = []
                     self.update_data()
         else:
             self.update_import_enabled()
@@ -1978,105 +2175,3 @@ class DashSettingsWidget(StackWidget):
             QMessageBox.information(
                 self, 'Missing automation templates',
                 '''Found no automation templates to display results from.''')
-
-
-#TODO delete?
-'''
-class PersonsToNotifyWidget(StackWidget):
-    """Widget holding settings for FollowUpPersons."""
-
-    def __init__(self, dlg_settings=None):
-        header = 'Persons to notify'
-        subtxt = (
-            'Set up email adresses as receipents for a warning when set limits '
-            'for automation outputs are violated.'
-            )
-        super().__init__(dlg_settings, header, subtxt,
-                         temp_alias='person',
-                         mod_temp=True, grouped=False
-                         )
-        self.fname = 'persons_to_notify'
-
-        self.empty_template = cfc.PersonToNotify()
-        self.current_template = self.empty_template
-
-        self.txt_email = QLineEdit('')
-        self.txt_email.textChanged.connect(self.flag_edit)
-        self.txt_email.setMinimumWidth(200)
-
-        self.txt_note = QLineEdit('')
-        self.txt_note.textChanged.connect(self.flag_edit)
-        self.txt_note.setMinimumWidth(200)
-        self.list_mod = uir.ListWidgetCheckable(texts=[*QUICKTEST_OPTIONS])
-        self.chk_mute = QCheckBox()
-        self.chk_mute.stateChanged.connect(
-            lambda: self.flag_edit(True))
-
-        self.wid_temp = QWidget(self)
-        self.hlo.addWidget(self.wid_temp)
-        self.vlo_temp = QVBoxLayout()
-        self.wid_temp.setLayout(self.vlo_temp)
-
-        self.vlo_temp.addWidget(uir.UnderConstruction(txt='Under construction...'))
-
-        flo = QFormLayout()
-        self.vlo_temp.addLayout(flo)
-        flo.addRow(QLabel('E-mail:'), self.txt_email)
-        flo.addRow(QLabel('Note/comment:'), self.txt_note)
-        flo.addRow(QLabel('Send all notifications for modalities:'), self.list_mod)
-        flo.addRow(QLabel('Pause emails to this person.'), self.chk_mute)
-        self.vlo_temp.addStretch()
-
-        if not self.import_review_mode:
-            self.wid_mod_temp.toolbar.removeAction(self.wid_mod_temp.act_move_modality)
-        else:
-            self.wid_temp.setEnabled(False)
-
-        self.wid_mod_temp.vlo.addWidget(
-            QLabel('Selected person added to Automation template(s):'))
-        self.list_used_in = QListWidget()
-        self.wid_mod_temp.vlo.addWidget(self.list_used_in)
-
-        self.vlo.addWidget(uir.HLine())
-        self.vlo.addWidget(self.status_label)
-
-    def update_data(self):
-        """Update GUI with the selected template."""
-        self.txt_email.setText(self.current_template.email)
-        self.txt_note.setText(self.current_template.note)
-        self.list_mod.set_checked_texts(self.current_template.all_notifications_mods)
-        self.chk_mute.setChecked(self.current_template.mute)
-        self.flag_edit(False)
-
-        self.update_used_in()
-
-    def update_used_in(self):
-        """Update list of auto-templates with link to this person."""
-        self.list_used_in.clear()
-        if self.current_template.label != '':
-            try:
-                auto_labels = [
-                    temp.label for temp in self.auto_templates[self.current_modality]
-                    if self.current_template.label in temp.persons_to_notify
-                    ]
-            except KeyError:
-                auto_labels = []
-            try:
-                auto_labels_vendor = [
-                    temp.label for temp in self.auto_vendor_templates[
-                        self.current_modality]
-                    if self.current_template.label in temp.persons_to_notify
-                    ]
-                auto_labels.extend(auto_labels_vendor)
-            except KeyError:
-                pass
-            if len(auto_labels) > 0:
-                self.list_used_in.addItems(auto_labels)
-
-    def get_current_template(self):
-        """Get self.current_template where not dynamically set."""
-        self.current_template.email = self.txt_email.text()
-        self.current_template.note = self.txt_note.text()
-        self.current_template.mute = self.chk_mute.isChecked()
-        self.current_template.all_notifications_mods = self.list_mod.get_checked_texts()
-'''

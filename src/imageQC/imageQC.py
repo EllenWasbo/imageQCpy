@@ -48,17 +48,18 @@ def prepare_debug():
 
 if __name__ == '__main__':
     print('imageQC is starting up...', flush=True)
+    warnings = []
     developer_mode = False
     if developer_mode:
-        prepare_debug()  # type c to continue, # before this code in imageQC.py to deactivate debugging
+        prepare_debug()  # type c to continue, developer_mode=False in imageQC.py to deactivate debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     # verify that config_folder exists
     if user_prefs.config_folder != '':
         if not os.path.exists(user_prefs.config_folder):
-            print(
-                f'Config folder do not exist.({user_prefs.config_folder})', flush=True)
-            print('Config folder will be unlinked.', flush=True)
+            msg = f'Config folder do not exist.({user_prefs.config_folder})'
+            print(msg, flush=True)
             user_prefs.config_folder = ''
+            warnings.append(msg)
 
     os.environ[ENV_USER_PREFS_PATH] = user_prefs_path
     os.environ[ENV_ICON_PATH] = cff.get_icon_path(user_prefs.dark_mode)
@@ -236,7 +237,7 @@ if __name__ == '__main__':
             splash.finish(dlg)
             dlg.exec()
         w = ui_main.MainWindow(scX=sz.width(), scY=sz.height(), char_width=char_width,
-                               developer_mode=developer_mode)
+                               developer_mode=developer_mode, warnings=warnings)
         w.show()
         splash.finish(w)
         w.version_control()

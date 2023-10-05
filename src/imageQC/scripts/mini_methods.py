@@ -45,6 +45,7 @@ def get_uniq_ordered(input_list):
             output_list.append(elem)
     return output_list
 
+
 def get_all_matches(input_list, value, wildcards=False):
     """Get all matches of value in input_list.
 
@@ -176,3 +177,18 @@ def get_modality_index(modality_string):
     """
     mods = [*QUICKTEST_OPTIONS]
     return mods.index(modality_string)
+
+
+def get_headers_first_values_in_path(self, path):
+    """Get headers and first row values from output path."""
+    headers = []
+    first_values = None
+    if os.path.exists(path):
+        with open(path) as f:
+            headers = f.readline().strip('\n').split('\t')
+            first_values = f.readline().strip('\n').split('\t')
+        if len(headers) > 0:
+            headers.pop(0)  # date not included
+            if first_values is not None:
+                first_values.pop(0)
+    return headers, first_values

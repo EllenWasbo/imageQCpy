@@ -40,12 +40,15 @@ class TreeFileList(QTreeWidget):
     def __init__(self, parent):
         super().__init__()
         self.main = parent
-        self.setColumnCount(3)
+        self.setColumnCount(5)
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setAcceptDrops(True)
-        self.setHeaderLabels(['Image', 'Frame', 'Test'])
-        self.setColumnWidth(0, round(0.7*self.main.gui.panel_width))
-        self.setColumnWidth(1, 90)
+        self.setHeaderLabels(['Image', 'Frame', 'Test', 'Image name', 'Group name'])
+        self.setColumnHidden(3, True)  # image name
+        self.setColumnHidden(4, True)  # group name
+        self.setColumnWidth(0, round(0.55*self.main.gui.panel_width))
+        self.setColumnWidth(1, 60)
+        self.setColumnWidth(2, round(0.2*self.main.gui.panel_width))
         self.currentItemChanged.connect(self.main.update_active_img)
         self.itemDoubleClicked.connect(self.dbl_click_item)
         self.installEventFilter(self)
@@ -86,20 +89,33 @@ class TreeFileList(QTreeWidget):
                 marked_img_ids = list(np.arange(len(self.main.imgs)))
         return marked_img_ids
 
-    def update_file_list(self, set_selected=None):
-        """Populate tree with filepath/pattern and test indicators."""
+    def update_file_list(self, set_selected=None, keep_active=False):
+        """Populate tree with filepath/pattern and test indicators.
+
+        Parameters
+        ----------
+        set_selected : list of int, optional
+            Set selected image numbers. The default is None.
+        keep_active : bool, optional
+            Set True to avoid re-reading image data and other cascade actions.
+            The default is False.
+        """
+        self.blockSignals(True)
         self.clear()
+        self.blockSignals(False)
         quicktest_active = self.main.wid_quicktest.gb_quicktest.isChecked()
+        self.setColumnHidden(3, not quicktest_active)  # image name
+        self.setColumnHidden(4, not quicktest_active)  # group name
         if len(self.main.imgs) == 0:
-            QTreeWidgetItem(self, [''] * 3)
+            QTreeWidgetItem(self, [''] * 5)
         else:
             for img in self.main.imgs:
+                image_name = ''
+                group_name = ''
                 if quicktest_active:
                     test_string = '+'.join(img.marked_quicktest)
-                    if img.quicktest_image_name != '':
-                        test_string += f' (Image name: {img.quicktest_image_name})'
-                    if img.quicktest_group_name != '':
-                        test_string += f' (Group name: {img.quicktest_group_name})'
+                    image_name = img.quicktest_image_name
+                    group_name = img.quicktest_group_name
                 else:
                     test_string = 'x' if img.marked else ''
                 frameno = f'{img.frame_number}' if img.frame_number > -1 else ''
@@ -111,14 +127,21 @@ class TreeFileList(QTreeWidget):
                         file_text = img.filepath
                     else:
                         file_text = ' '.join(img.file_list_strings)
-                QTreeWidgetItem(self, [file_text, frameno, test_string])
+                QTreeWidgetItem(self, [file_text, frameno, test_string,
+                                       image_name, group_name])
             self.main.lbl_n_loaded.setText(str(len(self.main.imgs)))
-            try:
-                self.main.gui.active_img_no = set_selected[-1]
-            except (TypeError, IndexError):
-                pass
+            if keep_active is False:
+                try:
+                    self.main.gui.active_img_no = set_selected[-1]
+                except (TypeError, IndexError):
+                    pass
 
+            if keep_active:  # avoid reading image from file once again
+                self.blockSignals(True)
             self.setCurrentItem(self.topLevelItem(self.main.gui.active_img_no))
+            if keep_active:
+                self.blockSignals(False)
+
             if isinstance(set_selected, list):
                 # force selected
                 self.blockSignals(True)
@@ -264,7 +287,7 @@ class TreeFileList(QTreeWidget):
 
             if self.main.summed_img is not None:
                 self.main.reset_summed_img()
-            self.update_file_list()
+            self.update_file_list(set_selected=selrows, keep_active=True)
             if remove_all:
                 self.main.results = {}
             if remove_mark:

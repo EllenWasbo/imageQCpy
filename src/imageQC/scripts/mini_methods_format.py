@@ -328,3 +328,11 @@ def val_2_str(val_list, decimal_mark='.', format_same=True, lock_format=False,
 def valid_template_name(text):
     """No slash or space in template names (confuse automation)."""
     return re.sub('[\s/]+', '_', text)
+
+
+def get_color_list(n_colors=0):
+    """Return standard color list."""
+    colors = ['r', 'b', 'g', 'y', 'c', 'm']
+    if len(colors) < n_colors:
+        colors.extend(['r'] * (n_colors-len(colors)))
+    return colors

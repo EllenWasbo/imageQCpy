@@ -42,7 +42,6 @@ class LastModified:
     auto_vendor_templates: list = field(default_factory=list)
     dash_settings: list = field(default_factory=list)
     limits_and_plot_templates: list = field(default_factory=list)
-    # TODO delete? persons_to_notify: list = field(default_factory=list)
 
 
 @dataclass
@@ -498,8 +497,11 @@ class ParamSetSPECT(ParamSetCommon):
     mtf_auto_center: bool = True
     mtf_3d: bool = True  # not used yet - assumed 3d for line and circ. edge
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
-    con_roi_size: float = 20.
-    con_roi_dist: float = 58.
+    rin_sigma_image: float = 0.  # sigma for gaussfilter of image
+    rin_sigma_profile: float = 0.  # sigma for gaussfilter of radial profile
+    rin_range_start: float = 5.  # mm from center
+    rin_range_stop: float = 65.  # mm from center
+    rin_subtract_trend: bool = True  # True = subtract trend, False = subtract mean
 
 
 @dataclass
@@ -669,21 +671,6 @@ class AutoCommon:
         default_factory=TagPatternFormat)
 
 
-# TODO delete?
-'''
-@dataclass
-class PersonToNotify:
-    """Dataclass for name, email, notes on persons to notify on automation results."""
-
-    label: str = ''  # name
-    email: str = ''
-    note: str = ''
-    all_notifications_mods: list = field(default_factory=list)  # list of str
-    # this person should get all notifications for the selected modalities
-    mute: bool = False
-'''
-
-
 @dataclass
 class AutoTemplate:
     """Dataclass for keeping information on how to perform automation."""
@@ -704,13 +691,6 @@ class AutoTemplate:
     delete_if_too_many: bool = False
     active: bool = True
     import_only: bool = False  # if used only during import supplement, not analyse
-    # TODO delete?
-    '''
-    persons_to_notify: list = field(default_factory=list)
-    # list of names (label) of PersonToNotify for this specific template
-    min_max: list = field(default_factory=list)
-    # [min, max] for each column in output
-    '''
 
 
 @dataclass
@@ -727,7 +707,6 @@ class AutoVendorTemplate:
     file_type: str = ''
     file_suffix: str = ''  # starting with . e.g. '.pdf'
     active: bool = True
-    # TODO delete? persons_to_notify: list = field(default_factory=list)
 
 
 @dataclass

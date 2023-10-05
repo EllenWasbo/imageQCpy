@@ -117,10 +117,32 @@ class SelectTemplateWidget(QWidget):
                 self.get_current_template()
             elif 'paramsets' in self.fname:
                 self.current_template = self.main.current_paramset
-            self.modality_dict[
-                self.main.current_modality][template_id] = copy.deepcopy(
-                    self.current_template)
-            self.save()
+
+            proceed = True  # warning if used in automation templates
+            _, _, auto_templates = cff.load_settings(fname='auto_templates')
+
+            if self.main.current_modality in auto_templates:
+                auto_this_mod = auto_templates[self.main.current_modality]
+                if self.fname == 'quicktest_templates':
+                    auto_labels = [
+                        temp.label for temp in auto_this_mod
+                        if temp.quicktemp_label == self.current_template.label
+                        ]
+                else:
+                    auto_labels = [
+                        temp.label for temp in auto_this_mod
+                        if temp.paramset_label == self.current_template.label
+                        ]
+                if len(auto_labels) > 0:
+                    question = (
+                        'Proceed overriding template connected to automation templates '
+                        f'{auto_labels}?')
+                    proceed = messageboxes.proceed_question(self, question)
+            if proceed:
+                self.modality_dict[
+                    self.main.current_modality][template_id] = copy.deepcopy(
+                        self.current_template)
+                self.save()
 
     def save(self, new_added=False):
         """Save to file."""

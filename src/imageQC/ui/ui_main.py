@@ -15,7 +15,7 @@ import pandas as pd
 import webbrowser
 
 from PyQt5.QtGui import QIcon, QScreen
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtWidgets import (
     QApplication, qApp, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QStackedWidget, QSplitter, QGroupBox, QTabWidget,
@@ -84,7 +84,8 @@ class MainWindow(QMainWindow):
 
     screenChanged = pyqtSignal(QScreen, QScreen)
 
-    def __init__(self, scX=1400, scY=700, char_width=7, developer_mode=False):
+    def __init__(self, scX=1400, scY=700, char_width=7, developer_mode=False,
+                 warnings=[]):
         super().__init__()
         self.developer_mode = developer_mode  # option to hide some options if True
 
@@ -210,6 +211,19 @@ class MainWindow(QMainWindow):
         self.reset_split_sizes()
 
         self.update_mode()
+
+        if len(warnings) > 0:
+            QTimer.singleShot(300, lambda: self.show_warnings(warnings))
+
+    def show_warnings(self, warnings=[]):
+        """Show startup warnings when screen initialised."""
+        dlg = messageboxes.MessageBoxWithDetails(
+            self, title='Warnings',
+            msg='Found issues during startup',
+            info='See details',
+            icon=QMessageBox.Warning,
+            details=warnings)
+        dlg.exec()
 
     def clear_all_images(self):
         """Set empty values at startup and when all images closed."""
@@ -345,6 +359,7 @@ class MainWindow(QMainWindow):
     def update_active_img(self, current):
         """Overwrite pixmap in memory with new active image, refresh GUI."""
         if len(self.imgs) > 0:
+            old_number = self.gui.active_img_no
             if current is not None:
                 self.gui.active_img_no = self.tree_file_list.indexOfTopLevelItem(
                     current)

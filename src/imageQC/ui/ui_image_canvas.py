@@ -14,6 +14,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
 # imageQC block start
 from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
+from imageQC.scripts.mini_methods_format import get_color_list
 # imageQC block end
 
 
@@ -161,6 +162,10 @@ class ImageCanvas(GenericImageCanvas):
                 ylim = self.ax.get_ylim()
         except (AttributeError, IndexError):
             pass
+        try:
+            cmap = self.ax.get_images()[0].cmap.name
+        except:
+            cmap='gray'
 
         self.ax.cla()
         nparr = self.main.active_img
@@ -178,7 +183,7 @@ class ImageCanvas(GenericImageCanvas):
                 wl_max = meanval+stdval
 
         self.img = self.ax.imshow(
-            nparr, cmap='gray', vmin=wl_min, vmax=wl_max)
+            nparr, cmap=cmap, vmin=wl_min, vmax=wl_max)
         if xlim is not None:
             self.ax.set_xlim(xlim)
             self.ax.set_ylim(ylim)
@@ -355,9 +360,11 @@ class ImageCanvas(GenericImageCanvas):
         """Drow ROIs with labels if any."""
         if self.main.current_paramset.roi_use_table > 0:
             labels = self.main.current_paramset.roi_table.labels
+            colors = get_color_list(n_colors=len(labels))
         else:
             labels = None
-        self.add_contours_to_all_rois(labels=labels)
+            colors = None
+        self.add_contours_to_all_rois(labels=labels, colors=colors)
 
     def Num(self):
         """Draw  ROIs with labels."""
@@ -810,6 +817,8 @@ class ResultImageCanvas(GenericImageCanvas):
                 if 'SNI_map' in details_dict:
                     self.current_image = details_dict['SNI_map']
                     self.min_val = 0
-                    max_in_res = np.max(self.main.results['SNI']['values'])
+                    max_in_res = np.max([
+                        row for row in self.main.results['SNI']['values']
+                        if len(row) > 0])
                     if max_in_res > 0:
                         self.max_val = max_in_res

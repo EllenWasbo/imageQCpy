@@ -750,6 +750,7 @@ class TagPatternTreeTestDCM(TagPatternTree):
         self.parent = parent
         self.fname = 'tag_patterns_format'
         self.templates = None
+        self.current_select = 0
 
         tit = ('Extract data from DICOM header for each image '
                'using tag pattern.')
@@ -778,6 +779,8 @@ class TagPatternTreeTestDCM(TagPatternTree):
 
         self.current_template = self.main.current_paramset.dcm_tagpattern
 
+        self.table_pattern.currentItemChanged.connect(self.refresh_plot)
+
     def edit(self):
         """Edit tag pattern by dialog."""
         dlg = TagPatternEditDialog(
@@ -793,6 +796,7 @@ class TagPatternTreeTestDCM(TagPatternTree):
             self.update_data()
             self.main.current_paramset.dcm_tagpattern = self.current_template
             self.parent.flag_edit(True)
+            self.current_select = 0
 
     def save_as(self):
         """Save tag pattern as new tag pattern format."""
@@ -832,6 +836,7 @@ class TagPatternTreeTestDCM(TagPatternTree):
             self.main.current_paramset.dcm_tagpattern = new_template
             self.parent.flag_edit(True)
             self.current_template = new_template
+            self.current_select = 0
             self.update_data()
 
     def update_data(self):
@@ -844,3 +849,8 @@ class TagPatternTreeTestDCM(TagPatternTree):
                 row_strings = [tagname, infotext]
                 item = QTreeWidgetItem(row_strings)
                 self.table_pattern.addTopLevelItem(item)
+
+    def refresh_plot(self, current):
+        if current is not None:
+            self.current_select = self.table_pattern.indexOfTopLevelItem(current)
+            self.main.refresh_results_display(update_table=False)

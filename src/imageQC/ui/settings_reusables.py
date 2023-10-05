@@ -117,10 +117,10 @@ class StackWidget(QWidget):
                 _, _, self.tag_infos = cff.load_settings(fname='tag_infos')
             elif self.fname in [
                     'paramsets', 'quicktest_templates',
-                    'limits_and_plot_templates']: #TODO delete? 'persons_to_notify',
+                    'limits_and_plot_templates']:
                 _, _, self.auto_templates = cff.load_settings(
                     fname='auto_templates')
-                if self.fname in ['limits_and_plot_templates']: #TODO delete? 'persons_to_notify',
+                if self.fname in ['limits_and_plot_templates']:
                     _, _, self.auto_vendor_templates = cff.load_settings(
                         fname='auto_vendor_templates')
             elif self.fname == 'digit_templates':
@@ -157,7 +157,7 @@ class StackWidget(QWidget):
 
     def update_modality(self):
         """Refresh GUI after selecting modality (stack with ModTempSelector."""
-        if self.edited:
+        if self.edited and self.import_review_mode is False:
             if hasattr(self, 'current_template'):
                 res = messageboxes.QuestionBox(
                     parent=self, title='Save changes?',
@@ -416,11 +416,15 @@ class StackWidget(QWidget):
         more_fnames = None
         log = []
         mod = self.current_modality
-        if self.fname in ['paramsets', 'quicktest_templates', 
-                          'limits_and_plot_templates']: #TODO delete? 'persons_to_notify'
-            more_fnames = ['auto_templates']
-            if self.fname in ['limits_and_plot_templates']: #TODO delete? 'persons_to_notify'
-                more_fnames.append('auto_vendor_templates')
+        if self.fname in ['paramsets', 'quicktest_templates',
+                          'limits_and_plot_templates']:
+            if self.fname in ['limits_and_plot_templates']:
+                if self.current_template.type_vendor:
+                    more_fnames = ['auto_vendor_templates']
+                else:
+                    more_fnames = ['auto_templates']
+            else:
+                more_fnames = ['auto_templates']
             for more_fname in more_fnames:
                 _, path, auto_templates = cff.load_settings(fname=more_fname)
 
@@ -429,39 +433,18 @@ class StackWidget(QWidget):
                         ref_attr = 'paramset_label'
                     elif self.fname == 'quicktest_templates':
                         ref_attr = 'quicktemp_label'
-                    #TODO delete?
-                    '''
-                    elif self.fname == 'persons_to_notify':
-                        ref_attr = 'persons_to_notify'
-                    else:
-                    '''
-                    ref_attr = 'limits_and_plot_label'
+                    elif self.fname == 'limits_and_plot_templates':
+                        ref_attr = 'limits_and_plot_label'
                     temp_auto = cff.get_ref_label_used_in_auto_templates(
                         auto_templates, ref_attr=ref_attr)
                     _, temp_labels = np.array(temp_auto[mod]).T.tolist()
-
                     changed = False
-                    #TODO delete?
-                    '''
-                    if ref_attr == 'persons_to_notify':
-                        flat_list = [item for sub in temp_labels for item in sub]
-                        if oldlabel in flat_list:
-                            for i, templist in enumerate(temp_labels):
-                                if oldlabel in templist:
-                                    newlist = list(map(
-                                        lambda x: x.replace(oldlabel, newlabel),
-                                        templist))
-                                    setattr(auto_templates[mod][i], ref_attr, newlist)
-                                    changed = True
-                                    #log.append(temp)
-                    else:
-                    '''
+
                     if oldlabel in temp_labels:
                         for i, temp in enumerate(temp_labels):
                             if temp == oldlabel:
                                 setattr(auto_templates[mod][i], ref_attr, newlabel)
                                 changed = True
-                                #log.append(temp)
 
                     if changed:
                         log.append(
@@ -472,6 +455,7 @@ class StackWidget(QWidget):
                             more = [auto_templates]
                         else:
                             more.append(auto_templates)
+
         elif self.fname == 'digit_templates':
             more_fname = f'paramsets_{mod}'
             more_fnames = [more_fname]
@@ -486,7 +470,6 @@ class StackWidget(QWidget):
                         if temp == oldlabel:
                             paramsets[i].num_digit_label = newlabel
                             changed = True
-                            #log.append(temp)
 
                 if changed:
                     log.append(
@@ -948,13 +931,6 @@ class ModTempSelector(QWidget):
                             self.parent.current_template,
                             mod=self.parent.current_modality
                             )
-                        #TODO delete?
-                        '''
-                        if len(self.parent.current_template.persons_to_notify) > 0:
-                            self.parent.dlg_settings.mark_persons(
-                                self.parent.current_template
-                                )
-                        '''
                     if self.parent.fname == 'paramsets':
                         if self.parent.current_template.num_digit_label != '':
                             self.parent.dlg_settings.mark_digit_temps(

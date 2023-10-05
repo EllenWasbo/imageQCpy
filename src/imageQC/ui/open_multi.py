@@ -35,6 +35,8 @@ class OpenMultiDialog(ImageQCDialog):
     """
 
     def __init__(self, main):
+        # TODO Special tag pattern "Group open advanced" as default - modality selection option
+
         super().__init__()
         self.setWindowTitle('Select images to open')
         self.main = main
@@ -51,6 +53,14 @@ class OpenMultiDialog(ImageQCDialog):
 
         vlo = QVBoxLayout()
         self.setLayout(vlo)
+        info_text = [
+            'All DICOM files in the selected folder will be listed as groups '
+            'defined by the DICOM tag pattern below.',
+            'Use the selection rules or manually select images to open.',
+            'Images will be displayed in the image list as defined in Settings - '
+            'Special tag patterns - File list display.',
+            ]
+        vlo.addWidget(uir.LabelMultiline(txts=info_text))
 
         hlo_browse = QHBoxLayout()
         vlo.addLayout(hlo_browse)
@@ -67,18 +77,15 @@ class OpenMultiDialog(ImageQCDialog):
         hlo_status.addWidget(self.status_label)
         vlo.addLayout(hlo_status)
 
-        info_text = (
-            'All DICOM files in the selected folder listed as groups '
-            'defined by the DICOM tag pattern below.<br>'
-            'Use the selection rules or manually select images to open.<br>'
-            'Images will be displayed in the list as defined in Settings - '
-            'Special tag patterns - File list display.'
-        )
-        # TODO Special tag pattern "Group open advanced" as default - modality selection option
-        vlo.addWidget(uir.LabelItalic(info_text))
+        vlo.addWidget(uir.LabelHeader('Group images by DICOM tags', 4))
         hlo_pattern = QHBoxLayout()
         vlo.addLayout(hlo_pattern)
         hlo_pattern.addWidget(self.wid_series_pattern)
+        btn_refresh_pattern = QPushButton('Refresh lists')
+        btn_refresh_pattern.setToolTip(
+            'Refresh grouping of selected files after tag pattern changed')
+        btn_refresh_pattern.clicked.connect(self.refresh_lists)
+        hlo_pattern.addWidget(btn_refresh_pattern)
         hlo_pattern.addStretch()
 
         vlo.addWidget(uir.HLine())
@@ -215,6 +222,14 @@ class OpenMultiDialog(ImageQCDialog):
             fname = dlg.selectedFiles()
             self.path.setText(os.path.normpath(fname[0]))
             self.find_all_dcm()
+
+    def refresh_lists(self):
+        """Refresh lists when tag pattern changed."""
+        if self.path.text() != '':
+            self.find_all_dcm()
+        else:
+            QMessageBox.warning(self, 'No folder selected',
+                                'No folder selected so there is nothing to refresh.')
 
     def find_all_dcm(self):
         """Find all DICOM files and list these according to the pattern."""

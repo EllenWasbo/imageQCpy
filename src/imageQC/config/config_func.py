@@ -74,7 +74,6 @@ def version_control(input_main):
     res = getattr(last_mod, 'tag_infos')
     if len(res) > 0:
         if len(res) == 2:
-            # TODO delete? user, modtime = res
             version_string = ''
         else:
             _, _, version_string = res
@@ -541,21 +540,25 @@ def load_settings(fname='', temp_config_folder=''):
         if path != '' or all_paramsets:
             if CONFIG_FNAMES[fname_]['saved_as'] == 'object_list':
                 if fname_ != 'paramsets':
-                    with open(path, 'r') as file:
-                        docs = yaml.safe_load_all(file)
-                        settings = []
-                        for doc in docs:
-                            if fname == 'tag_infos':
-                                updated_doc = verify_input_dict(doc, cfc.TagInfo())
-                                settings.append(cfc.TagInfo(**updated_doc))
-                            '''
-                            elif fname == 'persons_to_notify':
-                                updated_doc = verify_input_dict(
-                                    doc, cfc.PersonToNotify())
-                                settings.append(cfc.PersonToNotify(**updated_doc))
-                            '''
-                    if fname == 'tag_infos':
-                        taginfos_reset_sort_index(settings)
+                    try:
+                        with open(path, 'r') as file:
+                            docs = yaml.safe_load_all(file)
+                            settings = []
+                            for doc in docs:
+                                if fname == 'tag_infos':
+                                    updated_doc = verify_input_dict(doc, cfc.TagInfo())
+                                    settings.append(cfc.TagInfo(**updated_doc))
+                                '''
+                                elif fname == 'persons_to_notify':
+                                    updated_doc = verify_input_dict(
+                                        doc, cfc.PersonToNotify())
+                                    settings.append(cfc.PersonToNotify(**updated_doc))
+                                '''
+                        if fname == 'tag_infos':
+                            taginfos_reset_sort_index(settings)
+                    except OSError as error:
+                        print(f'config_func.py load_settings {fname}: {str(error)}')
+                        return_default = True
 
                 else:  # paramsets
                     if all_paramsets:  # load as dict
@@ -571,56 +574,64 @@ def load_settings(fname='', temp_config_folder=''):
                         else:
                             path_this = path
                         if Path(path_this).exists():
-                            with open(path_this, 'r') as file:
-                                docs = yaml.safe_load_all(file)
-                                for doc in docs:
-                                    upd = verify_input_dict(doc['dcm_tagpattern'],
-                                                            cfc.TagPatternFormat())
-                                    doc['dcm_tagpattern'] = cfc.TagPatternFormat(**upd)
-                                    tests = {}
-                                    for key, test in doc['output']['tests'].items():
-                                        tests[key] = []
-                                        for sub in test:
-                                            upd = verify_input_dict(
-                                                sub, cfc.QuickTestOutputSub())
-                                            tests[key].append(
-                                                cfc.QuickTestOutputSub(**upd))
-                                    doc['output'] = cfc.QuickTestOutputTemplate(
-                                        include_header=doc['output']['include_header'],
-                                        transpose_table=doc[
-                                            'output']['transpose_table'],
-                                        decimal_mark=doc['output']['decimal_mark'],
-                                        include_filename=doc[
-                                            'output']['include_filename'],
-                                        group_by=doc['output']['group_by'],
-                                        tests=tests)
-                                    modality = fname_this.split('_')[1]
-                                    if 'roi_table' in doc:
-                                        upd = verify_input_dict(doc['roi_table'],
-                                                                cfc.PositionTable())
-                                        doc['roi_table'] = cfc.PositionTable(**upd)
-                                    if 'num_table' in doc:
-                                        upd = verify_input_dict(doc['num_table'],
-                                                                cfc.PositionTable())
-                                        doc['num_table'] = cfc.PositionTable(**upd)
-                                    if modality == 'CT':
-                                        upd = verify_input_dict(doc['ctn_table'],
-                                                                cfc.HUnumberTable())
-                                        doc['ctn_table'] = cfc.HUnumberTable(**upd)
-                                    elif modality == 'PET':
-                                        if 'rec_table' in doc:
-                                            upd = verify_input_dict(doc['rec_table'],
-                                                                    cfc.RecTable())
-                                            doc['rec_table'] = cfc.RecTable(**upd)
+                            try:
+                                with open(path_this, 'r') as file:
+                                    docs = yaml.safe_load_all(file)
+                                    for doc in docs:
+                                        upd = verify_input_dict(doc['dcm_tagpattern'],
+                                                                cfc.TagPatternFormat())
+                                        doc['dcm_tagpattern'] = cfc.TagPatternFormat(
+                                            **upd)
+                                        tests = {}
+                                        for key, test in doc['output']['tests'].items():
+                                            tests[key] = []
+                                            for sub in test:
+                                                upd = verify_input_dict(
+                                                    sub, cfc.QuickTestOutputSub())
+                                                tests[key].append(
+                                                    cfc.QuickTestOutputSub(**upd))
+                                        doc['output'] = cfc.QuickTestOutputTemplate(
+                                            include_header=doc[
+                                                'output']['include_header'],
+                                            transpose_table=doc[
+                                                'output']['transpose_table'],
+                                            decimal_mark=doc['output']['decimal_mark'],
+                                            include_filename=doc[
+                                                'output']['include_filename'],
+                                            group_by=doc['output']['group_by'],
+                                            tests=tests)
+                                        modality = fname_this.split('_')[1]
+                                        if 'roi_table' in doc:
+                                            upd = verify_input_dict(doc['roi_table'],
+                                                                    cfc.PositionTable())
+                                            doc['roi_table'] = cfc.PositionTable(**upd)
+                                        if 'num_table' in doc:
+                                            upd = verify_input_dict(doc['num_table'],
+                                                                    cfc.PositionTable())
+                                            doc['num_table'] = cfc.PositionTable(**upd)
+                                        if modality == 'CT':
+                                            upd = verify_input_dict(doc['ctn_table'],
+                                                                    cfc.HUnumberTable())
+                                            doc['ctn_table'] = cfc.HUnumberTable(**upd)
+                                        elif modality == 'PET':
+                                            if 'rec_table' in doc:
+                                                upd = verify_input_dict(
+                                                    doc['rec_table'], cfc.RecTable())
+                                                doc['rec_table'] = cfc.RecTable(**upd)
 
-                                    class_ = getattr(cfc, f'ParamSet{modality}')
-                                    upd = verify_input_dict(doc, class_())
-                                    sett_this.append(class_(**upd))
+                                        class_ = getattr(cfc, f'ParamSet{modality}')
+                                        upd = verify_input_dict(doc, class_())
+                                        sett_this.append(class_(**upd))
 
-                                    if len(fnames) == 1:
-                                        settings = sett_this
-                                    else:
-                                        settings[modality] = sett_this
+                                        if len(fnames) == 1:
+                                            settings = sett_this
+                                        else:
+                                            settings[modality] = sett_this
+                            except OSError as error:
+                                print(
+                                    f'config_func.py load_settings {fname_this}: '
+                                    f'{str(error)}')
+                                return_default = True
                         else:
                             return_default = True
 
@@ -698,22 +709,27 @@ def load_settings(fname='', temp_config_folder=''):
                     print(f'config_func.py load_settings: {str(error)}')
                     return_default = True
             else:  # settings as one object
-                with open(path, 'r') as file:
-                    doc = yaml.safe_load(file)
-                    if fname == 'auto_common':
-                        upd = verify_input_dict(
-                            doc['filename_pattern'], cfc.TagPatternFormat())
-                        doc['filename_pattern'] = cfc.TagPatternFormat(**upd)
-                        upd = verify_input_dict(doc, cfc.AutoCommon())
-                        settings = cfc.AutoCommon(**upd)
-                        settings.import_path = convert_OneDrive(settings.import_path)
-                    elif fname == 'dash_settings':
-                        upd = verify_input_dict(doc, cfc.DashSettings())
-                        settings = cfc.DashSettings(**upd)
-                    elif fname == 'last_modified':
-                        upd = verify_input_dict(doc, cfc.LastModified())
-                        settings = cfc.LastModified(**upd)
-                status = True
+                try:
+                    with open(path, 'r') as file:
+                        doc = yaml.safe_load(file)
+                        if fname == 'auto_common':
+                            upd = verify_input_dict(
+                                doc['filename_pattern'], cfc.TagPatternFormat())
+                            doc['filename_pattern'] = cfc.TagPatternFormat(**upd)
+                            upd = verify_input_dict(doc, cfc.AutoCommon())
+                            settings = cfc.AutoCommon(**upd)
+                            settings.import_path = convert_OneDrive(
+                                settings.import_path)
+                        elif fname == 'dash_settings':
+                            upd = verify_input_dict(doc, cfc.DashSettings())
+                            settings = cfc.DashSettings(**upd)
+                        elif fname == 'last_modified':
+                            upd = verify_input_dict(doc, cfc.LastModified())
+                            settings = cfc.LastModified(**upd)
+                    status = True
+                except OSError as error:
+                    print(f'config_func.py load_settings {fname}: {str(error)}')
+                    return_default = True
         else:
             return_default = True
 
@@ -1102,6 +1118,47 @@ def get_ref_label_used_in_auto_templates(auto_templates, ref_attr='paramset_labe
     return templates_in_auto
 
 
+def get_auto_labels_output_used_in_lim(
+        auto_templates, auto_vendor_templates, limits_template,
+        modality=''):
+    """Get automation template labels and output path where limits template used.
+
+    Parameters
+    ----------
+    auto_templates : dict
+    auto_vendor_templates : dict
+    limits_template : LimitsAndPlotTemplate
+    modality : str
+
+    Returns
+    -------
+    auto_labels : list of str
+    output_paths : list of str
+    """
+    auto_labels = []
+    output_paths = []
+    if limits_template.label != '':
+        mod_temps = []
+        try:
+            if limits_template.type_vendor:
+                mod_temps = auto_vendor_templates[modality]
+            else:
+                mod_temps = auto_templates[modality]
+        except KeyError:
+            pass
+
+        auto_labels = [
+            temp.label for temp in mod_temps
+            if temp.limits_and_plot_label == limits_template.label
+            ]
+        output_paths = [
+            temp.path_output for temp in mod_temps
+            if temp.limits_and_plot_label == limits_template.label
+            ]
+
+    return auto_labels, output_paths
+
+
 def verify_auto_templates(main):
     """Verify all linked templates in auto_templates are defined.
 
@@ -1112,7 +1169,6 @@ def verify_auto_templates(main):
     auto_fnames = ['auto_templates', 'auto_vendor_templates']
     for auto_fname in auto_fnames:
         if hasattr(main, auto_fname):
-            # TODO delete? linked_persons = []
             linked_fnames = ['limits_and_plot_templates']
             linked_labels = ['limits_and_plot_label']
             if 'vendor' not in auto_fname:
@@ -1143,31 +1199,6 @@ def verify_auto_templates(main):
                                         f'{mod}: missing definition of '
                                         f'{fname} {missing}')
                                 status = False
-                        # TODO delete: (persons_to_notify)
-                        '''
-                        if fname == 'paramsets':  # just once
-                            try:
-                                for temp in templist:
-                                    if len(temp.persons_to_notify) > 0:
-                                        linked_persons.extend(temp.persons_to_notify)
-                            except AttributeError:
-                                pass
-                        '''
-            # TODO delete?
-            '''
-            if len(linked_persons) > 0:
-                linked_persons = list(set(linked_persons))
-                if hasattr(main, 'persons_to_notify'):
-                    all_persons = [temp.label for temp in main.persons_to_notify]
-                    missing = []
-                    for person in linked_persons:
-                        if person not in all_persons:
-                            missing.append(person)
-                    if len(missing) > 0:
-                        log.append(
-                            'Automation templates set to notify undefined persons: '
-                            f'{missing}')
-            '''
 
     return (status, log)
 
@@ -1187,7 +1218,7 @@ def verify_paramsets(main):
                 used_in = []
                 digit_in_params = [
                     [temp.label, temp.num_digit_label]
-                    for temp in main.paramset[mod] if temp.num_digit_label != '']
+                    for temp in main.paramsets[mod] if temp.num_digit_label != '']
                 if len(digit_in_params) > 0:
                     param_labels, digit_labels = np.array(digit_in_params).T.tolist()
                     for label in digit_labels:
@@ -1202,6 +1233,49 @@ def verify_paramsets(main):
                                 f'{mod}: missing definition of {fname} {missing} '
                                 f'used in paramset(s) {used_in}')
                         status = False
+
+    return (status, log)
+
+
+def verify_limits_used_with_auto(main):
+    """Validate headers of LimitsAndPlot templates to linked automation templates."""
+    status = True
+    log = []
+    templates = main.limits_and_plot_templates
+    mismatch_dict = {}
+    for mod in [*templates]:
+        mismatch_templates = []
+        labels = [temp.label for temp in templates[mod]]
+        if labels[0] != '':  # none defined
+            for label in labels:
+                idx = labels.index(label)
+                this_template = templates[mod][idx]
+                auto_labels, output_paths = get_auto_labels_output_used_in_lim(
+                        main.auto_templates, main.auto_vendor_templates,
+                        this_template, modality=mod)
+                for auto_no, path in enumerate(output_paths):
+                    headers_in_path = []
+                    if os.path.exists(path):
+                        with open(path) as file:
+                            headers_in_path =\
+                                file.readline().strip('\n').split('\t')
+                    if len(headers_in_path) > 0:
+                        headers_in_path.pop(0)  # remove date column
+                    headers_in_limits = [
+                        elem for sublist in this_template.groups
+                        for elem in sublist]
+                    if set(headers_in_path) != set(headers_in_limits):
+                        if label not in mismatch_templates:
+                            mismatch_templates.append(label)
+        if len(mismatch_templates) > 0:
+            mismatch_dict[mod] = mismatch_templates
+
+    if mismatch_dict:
+        status = False
+        log = ['Found mismatches between headers in Limits & Plot templates '
+               'when compared to output path header of automation templates '
+               'where the Limits & plot template is used/linked.']
+        log.extend([f'\t{mod}: {labels}' for mod, labels in mismatch_dict])
 
     return (status, log)
 

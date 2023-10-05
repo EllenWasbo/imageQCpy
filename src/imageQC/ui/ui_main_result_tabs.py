@@ -408,8 +408,11 @@ class ResultPlotCanvas(PlotCanvas):
             if None not in self.default_range_y:
                 self.ax.set_ylim(self.default_range_y)
         elif len(self.bars) > 0:
-            for bar in self.bars:
-                self.ax.bar(bar['names'], bar['values'])
+            try:
+                for bar in self.bars:
+                    self.ax.bar(bar['names'], bar['values'])
+            except ValueError:
+                pass  # seen when in results, results and options change, #TODO better avoid
         else:
             self.ax.axis('off')
 
@@ -459,6 +462,33 @@ class ResultPlotCanvas(PlotCanvas):
                 break
         return yrange
 
+    def DCM(self):
+        """Prepare plot for test DCM."""
+        widget = self.main.stack_test_tabs.currentWidget()
+        param_no = widget.wid_dcm_pattern.current_select
+        xvals = []
+        yvals = []
+        for i, row in enumerate(self.main.results['DCM']['values']):
+            if len(row) > 0:
+                xvals.append(i)
+                yvals.append(row[param_no])
+        proceed = True
+        for yval in yvals:
+            if isinstance(yval, str):
+                proceed = False
+                break
+        if proceed:
+            curve = {'label':
+                     self.main.results['DCM']['headers'][param_no],
+                     'xvals': xvals,
+                     'yvals': yvals,
+                     'style': '-bo'}
+            self.curves.append(curve)
+            self.xtitle = 'Image index'
+            self.ytitle = self.main.results['DCM']['headers'][param_no]
+            self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
+            self.ax.set_xticks(xvals)
+
     def ROI(self):
         """Prepare plot for test ROI."""
         xvals = []
@@ -466,17 +496,33 @@ class ResultPlotCanvas(PlotCanvas):
         for i, row in enumerate(self.main.results['ROI']['values']):
             if len(row) > 0:
                 xvals.append(i)
-                yvals.append(row[0])
-        curve = {'label': 'Average',
-                 'xvals': xvals,
-                 'yvals': yvals,
-                 'style': '-b'}
-        self.curves.append(curve)
+                if self.main.current_paramset.roi_use_table == 0:
+                    yvals.append(row[0])
+                else:
+                    yvals.append(row)
+        if self.main.current_paramset.roi_use_table == 0:
+            curve = {'label': 'Average',
+                     'xvals': xvals,
+                     'yvals': yvals,
+                     'style': '-b'}
+            self.curves.append(curve)
+            self.ytitle = 'Average pixel value'
+        else:
+            headers = self.main.results['ROI']['headers']
+            colors = mmf.get_color_list(n_colors=len(headers))
+            for i in range(len(yvals[0])):
+                curve = {'label': headers[i],
+                         'xvals': xvals,
+                         'yvals': [vals[i] for vals in yvals],
+                         'style': '-',
+                         'color': colors[i]}
+                self.curves.append(curve)
+            test_widget = self.main.stack_test_tabs.currentWidget()
+            val_text = test_widget.roi_table_val.currentText()
+            self.ytitle = val_text
         self.xtitle = 'Image index'
-        self.ytitle = 'Average pixel value'
-        if self.main.current_modality in ['Xray', 'NM']:
-            self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
-            self.ax.set_xticks(xvals)
+        self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
+        self.ax.set_xticks(xvals)
 
     def Hom(self):
         """Prepare plot for test Hom."""
@@ -1552,20 +1598,23 @@ class ResultPlotCanvas(PlotCanvas):
             colors = ['red', 'blue', 'green', 'cyan', 'k', 'k', 'k', 'k']
             styles = ['-', '-', '-', '-', '-', '--', ':', '-.']
 
-            yvals_all = [[] for label in labels]
-            for i, row in enumerate(self.main.results['SNI']['values']):
-                if len(row) > 0:
-                    img_nos.append(i)
-                    for j, val in enumerate(row):
-                        yvals_all[j].append(val)
-            if self.main.current_paramset.sni_type == 0:
-                yvals_all.pop(0)  # do not include max in plot
-                labels.pop(0)
-            xvals = img_nos
-            for j, yvals in enumerate(yvals_all):
-                self.curves.append(
-                    {'label': labels[j], 'xvals': xvals,
-                     'yvals': yvals, 'color': colors[j], 'style': styles[j]})
+            try:
+                yvals_all = [[] for label in labels]
+                for i, row in enumerate(self.main.results['SNI']['values']):
+                    if len(row) > 0:
+                        img_nos.append(i)
+                        for j, val in enumerate(row):
+                            yvals_all[j].append(val)
+                if self.main.current_paramset.sni_type == 0:
+                    yvals_all.pop(0)  # do not include max in plot
+                    labels.pop(0)
+                xvals = img_nos
+                for j, yvals in enumerate(yvals_all):
+                    self.curves.append(
+                        {'label': labels[j], 'xvals': xvals,
+                         'yvals': yvals, 'color': colors[j], 'style': styles[j]})
+            except IndexError:
+                pass
 
         def plot_filtered_NPS(roi_name='L1'):
             """Plot filtered NPS + NPS structure for selected ROI +quantum noise txt."""

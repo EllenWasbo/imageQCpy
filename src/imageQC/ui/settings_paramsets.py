@@ -171,7 +171,7 @@ class ParametersOutputWidget(QWidget):
             if len(tags) > 0:
                 main.current_group_indicators[i] = '_'.join(tags[0])
         QMessageBox.information(
-            self, 'Group inforamtion updated',
+            self, 'Group information updated',
             'Group tags updated according to the current settings.')
 
     def test_output(self):

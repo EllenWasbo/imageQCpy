@@ -22,7 +22,8 @@ from imageQC.scripts.input_main_auto import InputMain
 from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm
-from imageQC.scripts.mini_methods import get_all_matches, string_to_float
+from imageQC.scripts.mini_methods import (
+    get_all_matches, string_to_float, get_headers_first_values_in_path)
 from imageQC.scripts.mini_methods_format import valid_path, val_2_str
 import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
@@ -737,16 +738,21 @@ def test_limits(headers=None, values=None,
                                 for elem in sublist]
             missing = [header for header in headers if header not in template_headers]
             if len(missing) == len(headers):
-                msgs.append('Result headers do not match headers defined in limits and '
-                            f'plot template {limits_label}.')
+                msgs.append('Headers in output file do not match headers defined in '
+                            f'limits and plot template {limits_label}.')
             elif len(missing) > 0:
                 msgs.append('Some column headers in limits and plot template '
-                            f'{limits_label} do not match output.')
+                            f'{limits_label} do not match headeres in output.')
                 proceed = True
             else:
                 proceed = True
         except ValueError:
             msgs.append(f'Failed finding limits and plot template named {limits_label}')
+
+        if len(values) != len(headers):
+            msgs.append('Number of extracted values do not match number of headers '
+                        'in output file. Comparing to limits skipped.')
+            proceed = False
 
     if proceed:
         for i, header in enumerate(headers):
@@ -890,6 +896,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             )
                         if len(warnings_dcm) > 0:
                             log.extend(warnings_dcm)
+                        output_headers = []
+                        if os.path.exists(auto_template.path_output):
+                            output_headers = get_headers_first_values_in_path(
+                                auto_template.path_output)
 
                         if parent_widget is None:
                             print(f'\rSorting {len(img_infos)} files for template ',
@@ -952,9 +962,11 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                 auto_template_session=f'Session {ses_no+1}/{n_sessions}'
                                 )
                             value_list, header_list = quicktest_output(input_main_this)
-                            if auto_template.limits_and_plot_label != '':
+                            if all([
+                                    auto_template.limits_and_plot_label != '',
+                                    output_headers]):
                                 limits_crossed, msgs = test_limits(
-                                    headers=header_list, values=value_list,
+                                    headers=output_headers, values=value_list,
                                     limits_label=auto_template.limits_and_plot_label,
                                     limits_mod_templates=limits_and_plot_templates[
                                         modality],
@@ -1040,6 +1052,7 @@ def run_template_vendor(auto_template, modality,
     not_written = []
     log_pre = f'Template {modality}/{auto_template.label}:'
     files = []
+    n_ok = 0
 
     if auto_template.active is False:
         log.append('Deactivated template')
@@ -1069,6 +1082,10 @@ def run_template_vendor(auto_template, modality,
                 log.append(
                     f'''\t Failed to write to output path
                     {auto_template.path_output}''')
+            output_headers = []
+            if os.path.exists(auto_template.path_output):
+                output_headers = get_headers_first_values_in_path(
+                    auto_template.path_output)
             for fileno, file in enumerate(files):
                 if parent_widget is not None:
                     parent_widget.progress_modal.setLabelText(
@@ -1084,12 +1101,15 @@ def run_template_vendor(auto_template, modality,
                         auto_template.path_output,
                         res, to_file=write_ok, decimal_mark=decimal_mark
                         )
-                    if auto_template.limits_and_plot_label != '':
+                    if status:
+                        n_ok += 1
+                    if auto_template.limits_and_plot_label != '' and output_headers:
                         limits_crossed, msgs = test_limits(
-                                headers=print_array[0][1:],
+                                headers=output_headers,
                                 values=print_array[0][1:],
                                 limits_label=auto_template.limits_and_plot_label,
-                                limits_mod_templates=limits_and_plot_templates[modality],
+                                limits_mod_templates=limits_and_plot_templates[
+                                    modality],
                                 )
                         if limits_crossed:
                             log.extend(msgs)
@@ -1110,6 +1130,11 @@ def run_template_vendor(auto_template, modality,
 
     if len(log) > 0:
         log.insert(0, log_pre)
+    else:
+        if n_ok > 0:
+            log = [log_pre, f'\tFinished reading {n_ok} files']
+        else:
+            log = [log_pre, '\tNo files read correctly']
     if len(warnings) > 0:
         warnings.insert(0, f'Template {auto_template.label}')
         warnings.insert(0, auto_template.path_warnings)

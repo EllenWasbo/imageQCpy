@@ -272,7 +272,6 @@ class OpenAutomationDialog(ImageQCDialog):
             fname='auto_vendor_templates')
         _, _, self.limits_and_plot_templates = cff.load_settings(
             fname='limits_and_plot_templates')
-        #_, _, self.persons_to_notify = cff.load_settings(fname='persons_to_notify')
         _, _, self.paramsets = cff.load_settings(fname='paramsets')
         self.quicktest_templates = self.main.quicktest_templates
         self.digit_templates = self.main.digit_templates
@@ -656,21 +655,23 @@ class OpenAutomationDialog(ImageQCDialog):
                 )
         else:
             mods, is_vendors, ids = self.get_selected_templates_mod_id()
+            proceed = True
             if is_vendors[0]:
                 temp_this = self.templates_vendor[mods[0]][ids[0]]
                 filt = f'File *.{temp_this.file_type}'
                 open_txt = 'Open vendor QC files'
             else:
                 temp_this = self.templates[mods[0]][ids[0]]
-                filt = 'DICOM files (*.dcm);;All files (*)'
-                open_txt = 'Open DICOM files'
-
-            if temp_this.import_only:
-                QMessageBox.warning(
-                    self, 'Template import only',
-                    'The selected template is marked as import only, no analysis.'
-                    )
-            else:
+                if temp_this.import_only:
+                    QMessageBox.warning(
+                        self, 'Template import only',
+                        'The selected template is marked as import only, no analysis.'
+                        )
+                    proceed = False
+                else:
+                    filt = 'DICOM files (*.dcm);;All files (*)'
+                    open_txt = 'Open DICOM files'
+            if proceed:
                 if temp_this.path_input == '':
                     fnames = QFileDialog.getOpenFileNames(self, open_txt, filter=filt)
                 else:
@@ -760,12 +761,16 @@ class OpenAutomationDialog(ImageQCDialog):
             for i, tempno in enumerate(tempnos):
                 warnings = []
                 mod = self.templates_mod[tempno]
+                proceed = False
                 if self.templates_is_vendor[tempno]:
                     temp_this = self.templates_vendor[mod][self.templates_id[tempno]]
+                    proceed = temp_this.active
                 else:
                     temp_this = self.templates[mod][self.templates_id[tempno]]
+                    if temp_this.active and temp_this.import_only is False:
+                        proceed = True
 
-                if temp_this.active and temp_this.import_only is False:
+                if proceed:
                     if i == 0:
                         self.progress_modal.setLabelText("Preparing data...")
                         self.progress_modal.setValue(1)
@@ -777,7 +782,6 @@ class OpenAutomationDialog(ImageQCDialog):
                             f'{pre_msg} Extracting data from vendor report...')
                         msgs, warnings, not_written = automation.run_template_vendor(
                             temp_this, mod, self.limits_and_plot_templates,
-                            #self.persons_to_notify,
                             decimal_mark=self.paramsets[mod][0].output.decimal_mark,
                             parent_widget=self)
                     else:
@@ -785,7 +789,7 @@ class OpenAutomationDialog(ImageQCDialog):
                             temp_this, mod,
                             self.paramsets,
                             self.quicktest_templates, self.digit_templates,
-                            self.limits_and_plot_templates, #self.persons_to_notify,
+                            self.limits_and_plot_templates,
                             self.tag_infos, parent_widget=self
                             )
                     if len(msgs) > 0:

@@ -27,7 +27,7 @@ else:
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.0-b16'
+VERSION = '3.0.1'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -44,7 +44,7 @@ QUICKTEST_OPTIONS = {
            'HUw', 'Rin', 'Dim', 'NPS'],
     'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
     'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
-    'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Con'],
+    'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Rin'],
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec'],
     'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF']}
 """dict: with lists defining modalities and their corresponding
@@ -194,7 +194,7 @@ HEADERS = {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y']
             },
-        'Con': {}
+        'Rin': {'alt0': ['Min diff from trend (HU)', 'Max diff from trend (HU)']},
         },
     'PET': {
         'ROI': {'alt0': roi_headers},
@@ -292,7 +292,7 @@ HEADERS_SUP = {
     'PET':  {
         'ROI': {'alt0': roi_headers_sup},
         'Rec': {
-            'alt0': ['Spheres at scan start (Bq/mL)',
+            'alt0': ['Scan start (HHMMSS)', 'Spheres at scan start (Bq/mL)',
                      'Background at scan start (Bq/mL)'],
             },
         },

@@ -126,6 +126,9 @@ def get_data():
                                 encoding='ISO-8859-1')
                             if dataframe.index.size > 1:
                                 proceed = True
+                        except FileNotFoundError as ferror:
+                            print(temp.path_output)
+                            print(ferror)
                         except pd.errors.EmptyDataError as error:
                             print(temp.path_output)
                             print(error)
@@ -360,10 +363,14 @@ def run_dash_app(dash_settings=None):
         try:
             if ctx.triggered_id:
                 mod_value = [*modality_dict].index(ctx.triggered_id.index)
-        except:
-            triggered_id = callback_context.triggered[0]['prop_id']
-            if triggered_id:
-                mod_value = [*modality_dict].index(triggered_id)
+        except NameError:
+            triggered_id = callback_context.triggered[0]['prop_id'].split('.')
+            if triggered_id[0]:
+                dd = eval(triggered_id[0])
+                if isinstance(dd, dict):
+                    if 'index' in dd:
+                        mod_value = [*modality_dict].index(dd['index'])
+
         return 'results', mod_value
 
     @app.callback(

@@ -532,6 +532,7 @@ class LimitsAndPlotContent(QWidget):
         Parameters
         ----------
         parent : StackWidget or None
+            parent holds the current_template
             if StackWidget register changes with parent.flag_edit(True)
         sample_file_path : str, optional
             Result file used to get column headers and sample values. The default is ''.
@@ -554,7 +555,7 @@ class LimitsAndPlotContent(QWidget):
         self.cbox_output_paths = QComboBox()
         self.cbox_output_paths.currentIndexChanged.connect(self.update_output_path)
         self.txt_sample_file_path = QLineEdit(sample_file_path)
-        self.txt_sample_file_path.textChanged.connect(self.update_from_sample_file)
+        #self.txt_sample_file_path.textChanged.connect(self.update_from_sample_file)
 
         self.list_headers = QListWidget()
         self.list_headers.setFixedWidth(300)
@@ -587,6 +588,7 @@ class LimitsAndPlotContent(QWidget):
         hlo_sample = QHBoxLayout()
         vlo.addLayout(hlo_sample)
         self.txt_sample_file_path.setMinimumWidth(500)
+        hlo_sample.addWidget(QLabel('Sample file:'))
         hlo_sample.addWidget(self.txt_sample_file_path)
         toolb = uir.ToolBarBrowse('Locate sample results file')
         toolb.act_browse.triggered.connect(self.locate_sample_file)
@@ -703,6 +705,7 @@ class LimitsAndPlotContent(QWidget):
             paths = [x[1] for x in temp_outs]
             path = paths[labels.index(label)]
             self.txt_sample_file_path.setText(path)
+            self.update_from_sample_file()
 
     def generate_empty_template(self):
         """Generate empty template based on available headers."""
@@ -857,7 +860,7 @@ class LimitsAndPlotContent(QWidget):
             self.txt_sample_file_path.setText('')
 
     def update_from_sample_file(self, silent=False):
-        """Find headers and sample data from sample file."""
+        """Find headers and sample data from sample file or startup if None."""
         self.headers = []
         self.first_values = None
         if os.path.exists(self.txt_sample_file_path.text()):
@@ -914,6 +917,8 @@ class LimitsAndPlotContent(QWidget):
         if len(self.headers) > 0:
             self.list_headers.addItems(self.headers)
             self.list_headers.setCurrentRow(set_selected_idx)
+        else:
+            self.reset_data_display()
 
     def item_selected(self, new, old):
         """When item is selected in list - make sure actually selected."""
@@ -929,7 +934,10 @@ class LimitsAndPlotContent(QWidget):
             header_first_select = self.headers[sel_rows[0]]
             idx_in_sublists = find_value_in_sublists(
                 self.parent.current_template.groups, header_first_select)
-            group_idx = idx_in_sublists[0]
+            if len(idx_in_sublists) > 0:
+                group_idx = idx_in_sublists[0]
+            else:
+                group_idx = 0
 
             brush = QBrush(QColor(110, 148, 192))
             brush_default = QBrush(QColor(255, 255, 255, 0))
@@ -1103,7 +1111,7 @@ class LimitsAndPlotEditDialog(ImageQCDialog):
                     text = valid_template_name(text)
                     if proceed and text != '':
                         already = [temp.label for temp
-                                   in self.auto_templates[self.current_modality]]
+                                   in self.templates[self.current_modality]]
                         if text in already:
                             QMessageBox.warning(
                                 self, 'Name already in use',
@@ -1323,20 +1331,23 @@ class LimitsAndPlotWidget(StackWidget):
 
     def clear(self):
         """Replace the clear method of ModTempSelector."""
-        # Reset to trigger new empty template based on sample file.
-        self.wid_content.initial_template_label = ''
-        self.current_template = None
-        self.wid_content.update_from_sample_file()
+        label = self.current_template.label
+        self.wid_content.headers = []
+        self.wid_content.first_values = None
+        self.wid_content.generate_empty_template()
+        self.current_template.label = label
+        self.wid_content.group_numbers = []
+        self.wid_content.update_data()
+        self.flag_edit(flag=True)
 
     def update_data(self):
         """Update GUI with selected template."""
         self.update_used_in()
-        self.wid_content.blockSignals(True)
         self.wid_content.cbox_output_paths.clear()
         self.wid_content.cbox_output_paths.addItems(
             [f'Auto template: {self.auto_labels[i]}, output file: {path}' for i, path
              in enumerate(self.output_paths)])
-        self.wid_content.blockSignals(False)
+        self.wid_content.update_from_sample_file(silent=True)
 
     def update_used_in(self):
         """Update list of auto-templates where this template is used."""
@@ -1348,7 +1359,7 @@ class LimitsAndPlotWidget(StackWidget):
             self.list_used_in.addItems(self.auto_labels)
             self.output_headers = []
             for path in self.output_paths:
-                headers, _ = self.wid_content.get_headers_first_values_in_path(path)
+                headers, _ = get_headers_first_values_in_path(path)
                 self.output_headers.append(headers)
 
 
@@ -1590,18 +1601,25 @@ class AutoTempWidgetBasic(StackWidget):
 
     def edit_limits_and_plot(self, add=False):
         """Open dialog to edit limits and plot settings."""
-        dlg = LimitsAndPlotEditDialog(self, self.limits_and_plot_templates, add=add)
-        res = dlg.exec()
-        if res:
-            if dlg.edited:
-                set_label = dlg.save_current_template()
-                self.current_template.limits_and_plot_label = set_label
-                all_items = [self.cbox_limits_and_plot.itemText(i) for i
-                             in range(self.cbox_limits_and_plot.count())]
-                if set_label not in all_items:
-                    self.cbox_limits_and_plot.addItem(set_label)
-                self.cbox_limits_and_plot.setCurrentText(set_label)
-                self.flag_edit(True)
+        if os.path.exists(self.txt_output_path.text()):
+            dlg = LimitsAndPlotEditDialog(self, self.limits_and_plot_templates, add=add)
+            res = dlg.exec()
+            if res:
+                if dlg.edited:
+                    set_label = dlg.save_current_template()
+                    self.current_template.limits_and_plot_label = set_label
+                    all_items = [self.cbox_limits_and_plot.itemText(i) for i
+                                 in range(self.cbox_limits_and_plot.count())]
+                    if set_label not in all_items:
+                        self.cbox_limits_and_plot.addItem(set_label)
+                    self.cbox_limits_and_plot.setCurrentText(set_label)
+                    self.flag_edit(True)
+        else:
+            QMessageBox.information(
+                self, 'Missing output path',
+                'The output file path is not defined or file not found. '
+                'The Limits and plot template need to be defined based on '
+                'headers found from an output file.')
 
 
 class AutoTemplateWidget(AutoTempWidgetBasic):
@@ -2085,7 +2103,7 @@ class DashSettingsWidget(StackWidget):
         vlo_left.addStretch()
         vlo_left.addWidget(uir.LabelItalic(
             'If changes do not affect the dashboard - '
-            'try restarting imageQC and then open the dashboard.'))
+            'try changing the port number to force an update.'))
         vlo_left.addStretch()
 
         if self.import_review_mode:

@@ -135,8 +135,12 @@ class ImageCanvas(GenericImageCanvas):
 
     def img_is_missing(self):
         """Show message when pixel_data is missing."""
+        try:
+            cmap = self.ax.get_images()[0].cmap.name
+        except (AttributeError, IndexError):
+            cmap = 'gray'
         self.ax.cla()
-        self.img = self.ax.imshow(np.zeros((100, 100)))
+        self.img = self.ax.imshow(np.zeros((100, 100)), cmap=cmap)
         self.ax.axis('off')
         at = matplotlib.offsetbox.AnchoredText(
             'Pixel data not found',
@@ -165,7 +169,7 @@ class ImageCanvas(GenericImageCanvas):
         try:
             cmap = self.ax.get_images()[0].cmap.name
         except:
-            cmap='gray'
+            cmap = 'gray'
 
         self.ax.cla()
         nparr = self.main.active_img

@@ -448,7 +448,7 @@ class StackWidget(QWidget):
 
                     if changed:
                         log.append(
-                            f'{self.fname[:-1]} {oldlabel} used in {more_fname} '
+                            f'{self.fname[:-1]} {oldlabel} used in {more_fname}. '
                             'Label updated.')
                         save_more = True
                         if more is None:
@@ -885,20 +885,39 @@ class ModTempSelector(QWidget):
 
                     # also reset link to auto_templates
                     if qtext != '':
-                        auto_labels = [
-                            self.parent.list_used_in.item(i).text() for i
-                            in range(self.parent.list_used_in.count())]
-                        for temp in self.parent.auto_templates[
-                                self.parent.current_modality]:
-                            if temp.label in auto_labels:
-                                if self.parent.fname == 'quicktest_templates':
-                                    temp.quicktemp_label = ''
-                                else:
-                                    temp.paramset_label = ''
-                        auto_widget = self.parent.dlg_settings.widget_auto_templates
+                        type_vendor = False
+                        if self.parent.fname == 'limits_and_plot_templates':
+                            type_vendor = self.parent.current_template.type_vendor
+                        if type_vendor:
+                            auto_labels = [
+                                self.parent.list_used_in.item(i).text() for i
+                                in range(self.parent.list_used_in.count())]
+                            for temp in self.parent.auto_vendor_templates[
+                                    self.parent.current_modality]:
+                                if temp.label in auto_labels:
+                                    temp.limits_and_plot_label = ''
+                            auto_widget =\
+                                self.parent.dlg_settings.widget_auto_vendor_templates
+                            auto_widget.templates = copy.deepcopy(
+                                self.parent.auto_vendor_templates)
+                        else:
+                            auto_labels = [
+                                self.parent.list_used_in.item(i).text() for i
+                                in range(self.parent.list_used_in.count())]
+                            for temp in self.parent.auto_templates[
+                                    self.parent.current_modality]:
+                                if temp.label in auto_labels:
+                                    if self.parent.fname == 'quicktest_templates':
+                                        temp.quicktemp_label = ''
+                                    elif self.parent.fname == 'limits_and_plot_templates':
+                                        temp.limits_and_plot_label = ''
+                                    else:
+                                        temp.paramset_label = ''
+                            auto_widget = self.parent.dlg_settings.widget_auto_templates
+                            auto_widget.templates = copy.deepcopy(
+                                self.parent.auto_templates)
+
                         auto_widget.lastload = self.parent.lastload
-                        auto_widget.templates = copy.deepcopy(
-                            self.parent.auto_templates)
                         auto_widget.save()
 
                     self.parent.save()

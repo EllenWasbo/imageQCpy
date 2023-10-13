@@ -105,8 +105,8 @@ def read_dcm(file, stop_before_pixels=True):
     except pydicom.errors.InvalidDicomError:
         errmsg = f'InvalidDicomError {file}'
         is_image = False
-    except FileNotFoundError:
-        errmsg = f'FileNotFoundError {file}'
+    except (FileNotFoundError, PermissionError) as err:
+        errmsg = f'Error reading {file} {str(err)}'
         is_image = False
     except AttributeError:
         pydicom.config.data_element_callback = fix_sop_class
@@ -1039,7 +1039,10 @@ def find_all_valid_dcm_files(
                         dcm_files.append(file)
                     except pydicom.errors.InvalidDicomError as error0:
                         print(f'{file}\n{str(error0)}')
-                    except (FileNotFoundError, AttributeError) as error:
+                    except (
+                            FileNotFoundError,
+                            AttributeError,
+                            PermissionError) as error:
                         print(f'{file}\n{str(error)}')
 
                     if progress_modal is not None:
@@ -1106,10 +1109,13 @@ def sort_imgs(img_infos, tag_pattern_sort, tag_infos):
                             frame_number=img_infos[i].frame_number,
                             tag_patterns=[tag_pattern_sort],
                             tag_infos=tag_infos)
-            if isinstance(info[0], dict):
-                infos.append(info[0]['dummy'])
+            if len(info) > 0:
+                if isinstance(info[0], dict):
+                    infos.append(info[0]['dummy'])  # multiframe
+                else:
+                    infos.append(info[0])
             else:
-                infos.append(info[0])
+                infos.append([''])  # dummy image
 
         dataf = {}
         for i, attr in enumerate(tag_pattern_sort.list_tags):

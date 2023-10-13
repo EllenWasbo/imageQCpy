@@ -179,7 +179,7 @@ def get_modality_index(modality_string):
     return mods.index(modality_string)
 
 
-def get_headers_first_values_in_path(self, path):
+def get_headers_first_values_in_path(path):
     """Get headers and first row values from output path."""
     headers = []
     first_values = None

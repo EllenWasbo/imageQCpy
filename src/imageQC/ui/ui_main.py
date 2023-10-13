@@ -36,7 +36,7 @@ from imageQC.ui import automation_wizard
 from imageQC.ui import settings
 from imageQC.ui import open_multi
 from imageQC.ui import open_automation
-from imageQC.ui.ui_dialogs import TextDisplay
+from imageQC.ui.ui_dialogs import TextDisplay, AboutDialog
 from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
@@ -299,6 +299,8 @@ class MainWindow(QMainWindow):
 
     def add_dummy(self, n_dummies=1):
         """Add place-holder / dummy image when missing images for QuickTest temp."""
+        if not n_dummies:
+            n_dummies = 1
         dummy_list = [dcm.DcmInfoGui(modality=self.current_modality)] * n_dummies
         self.update_on_new_images(dummy_list, append=True)
 
@@ -1007,6 +1009,16 @@ class MainWindow(QMainWindow):
         if proceed:
             sys.exit()
 
+    def about(self):
+        """Show about info."""
+        dlg = AboutDialog(version=VERSION)
+        dlg.exec()
+
+    def wiki(self):
+        """Open wiki url."""
+        url = 'https://github.com/EllenWasbo/imageQCpy/wiki'
+        webbrowser.open(url=url, new=1)
+
     def clicked_resultsize(self, tool=None):
         """Maximize or reset results size."""
         if tool.isChecked():
@@ -1121,6 +1133,14 @@ class MainWindow(QMainWindow):
         act_quit = QAction('&Quit', self)
         act_quit.setShortcut('Ctrl+Q')
         act_quit.triggered.connect(self.exit_app)
+        act_about = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}info.png'),
+            'About imageQC...', self)
+        act_about.triggered.connect(self.about)
+        act_wiki = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}globe.png'),
+            'Wiki ...', self)
+        act_wiki.triggered.connect(self.wiki)
 
         # fill menus
         menu_file = QMenu('&File', self)
@@ -1134,7 +1154,9 @@ class MainWindow(QMainWindow):
         menu_layout = QMenu('&Layout', self)
         menu_layout.addActions([act_resize_main, act_reset_split])
         menu_bar.addMenu(menu_layout)
-        menu_bar.addMenu(QMenu('&Help', self))
+        menu_help = QMenu('&Help', self)
+        menu_help.addActions([act_about, act_wiki])
+        menu_bar.addMenu(menu_help)
 
         # fill toolbar
         tool_bar.addActions([

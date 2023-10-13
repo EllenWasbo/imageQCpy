@@ -160,7 +160,7 @@ def run_automation_non_gui(args):
         _, _, digit_templates = cff.load_settings(fname='digit_templates')
         _, _, limits_and_plot_templates = cff.load_settings(
             fname='limits_and_plot_templates')
-        #_, _, persons_to_notify = cff.load_settings(fname='persons_to_notify')
+
         decimal_mark = '.'
         vendor = True  # first vendor templates if any
         warnings_all = []
@@ -187,7 +187,6 @@ def run_automation_non_gui(args):
                                 log_this, warnings, not_written = run_template_vendor(
                                     template, mod,
                                     limits_and_plot_templates,
-                                    #persons_to_notify,
                                     decimal_mark=decimal_mark)
                             else:
                                 log_this, warnings, not_written = run_template(
@@ -197,7 +196,6 @@ def run_automation_non_gui(args):
                                     qt_templates,
                                     digit_templates,
                                     limits_and_plot_templates,
-                                    #persons_to_notify,
                                     tag_infos
                                 )
                             append_log(log_this, not_written)
@@ -224,7 +222,6 @@ def run_automation_non_gui(args):
                                         run_template_vendor(
                                             template, mod,
                                             limits_and_plot_templates,
-                                            #persons_to_notify,
                                             decimal_mark=decimal_mark)
                                 else:
                                     template = auto_templates[mod][t_id]
@@ -235,7 +232,6 @@ def run_automation_non_gui(args):
                                         qt_templates,
                                         digit_templates,
                                         limits_and_plot_templates,
-                                        #persons_to_notify,
                                         tag_infos
                                     )
                                 append_log(log_this, not_written)
@@ -779,7 +775,7 @@ def test_limits(headers=None, values=None,
 
 
 def run_template(auto_template, modality, paramsets, qt_templates, digit_templates,
-                 limits_and_plot_templates, #persons_to_notify,
+                 limits_and_plot_templates,
                  tag_infos, parent_widget=None):
     """Find new images, generate img_dict, sort by date/sortpattern.
 
@@ -898,7 +894,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             log.extend(warnings_dcm)
                         output_headers = []
                         if os.path.exists(auto_template.path_output):
-                            output_headers = get_headers_first_values_in_path(
+                            output_headers, _ = get_headers_first_values_in_path(
                                 auto_template.path_output)
 
                         if parent_widget is None:
@@ -1019,7 +1015,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
 
 
 def run_template_vendor(auto_template, modality,
-                        limits_and_plot_templates, #persons_to_notify,
+                        limits_and_plot_templates,
                         decimal_mark='.', parent_widget=None):
     """Find new files and read.
 
@@ -1084,7 +1080,7 @@ def run_template_vendor(auto_template, modality,
                     {auto_template.path_output}''')
             output_headers = []
             if os.path.exists(auto_template.path_output):
-                output_headers = get_headers_first_values_in_path(
+                output_headers, _ = get_headers_first_values_in_path(
                     auto_template.path_output)
             for fileno, file in enumerate(files):
                 if parent_widget is not None:

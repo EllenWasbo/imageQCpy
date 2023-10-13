@@ -1,3 +1,17 @@
+# v3.0.3
+_Oct 13, 2023_
+
+.exe + code
+
+- Bugfixes
+
+# v3.0.2
+_Oct 11, 2023 - as .exe only_
+
+- Updated readme.md
+- Added content to Help menu.
+- bugfixes LimitsAndPlot templates config
+
 # v3.0.1
 _Oct 05, 2023_
 

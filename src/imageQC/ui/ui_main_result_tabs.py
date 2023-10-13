@@ -741,8 +741,6 @@ class ResultPlotCanvas(PlotCanvas):
             self.title = 'Profiles for slice thickness calculations'
             imgno = self.main.gui.active_img_no
             details_dict = self.main.results['Sli']['details_dict'][imgno]
-            n_pix = len(details_dict['profiles'][0])
-            xvals = [details_dict['dx'] * i for i in range(n_pix)]
 
             # ROI h_colors = ['b', 'lime']
             # ROI v_colors = ['c', 'r', 'm', 'darkorange']
@@ -765,10 +763,14 @@ class ResultPlotCanvas(PlotCanvas):
                     l_idxs = [self.main.tab_mr.sli_plot.currentIndex() - 1]
 
             for l_idx in l_idxs:
-                self.curves.append({'label': details_dict['labels'][l_idx],
-                                    'xvals': xvals,
-                                    'yvals': details_dict['profiles'][l_idx],
-                                    'color': colors[l_idx]})
+                n_pix = len(details_dict['profiles'][l_idx])
+                xvals = [details_dict['dx'] * i for i in range(n_pix)]
+                self.curves.append({
+                    'label': details_dict['labels'][l_idx],
+                    'xvals': xvals,
+                    'yvals': details_dict['profiles'][l_idx],
+                    'color': colors[l_idx]})
+
                 try:
                     self.curves.append(
                         {'label': f'{details_dict["labels"][l_idx]} envelope',
@@ -931,9 +933,12 @@ class ResultPlotCanvas(PlotCanvas):
             for ddno in range(2):
                 try:
                     dd = details_dicts[ddno]
+                    xvals = dd['LSF_x'] # TODO fix when this is error, expecting index
                     proceed = True
                 except IndexError:
                     proceed = False
+                except TypeError:
+                    proceed = False # TODO fix when this is error
                 if proceed:
                     xvals = dd['LSF_x']
                     yvals = dd['LSF']

@@ -48,6 +48,59 @@ class ImageQCDialog(QDialog):
         QApplication.restoreOverrideCursor()
 
 
+class AboutDialog(ImageQCDialog):
+    """Info about imageQC."""
+
+    def __init__(self, version=''):
+        super().__init__()
+        self.setModal(True)
+        self.setWindowTitle("imageQC")
+
+        layout = QVBoxLayout()
+        layout.setAlignment(QtCore.Qt.AlignCenter)
+        layout.addSpacing(20)
+        logo = QLabel()
+        im = QPixmap(':/icons/iQC_icon128.png')
+        logo.setPixmap(im)
+        hlo_top = QHBoxLayout()
+        layout.addLayout(hlo_top)
+        hlo_top.addStretch()
+        hlo_top.addWidget(logo)
+        hlo_top.addStretch()
+
+        header_text = """<html><head/><body>
+            <p><span style=\" font-size:14pt;\">imageQC</span></p>
+            </body></html>"""
+        hlo_header = QHBoxLayout()
+        header = QLabel()
+        header.setText(header_text)
+        hlo_header.addStretch()
+        hlo_header.addWidget(header)
+        hlo_header.addStretch()
+        layout.addLayout(hlo_header)
+
+        info_text = f"""<html><head/><body>
+            <p>imageQC - a tool for the medical physicist working with
+            DICOM images and information from medical imaging devices.<br><br>
+            Author: Ellen Wasboe, Stavanger University Hospital<br>
+            Current version: {version}
+            </p>
+            </body></html>"""
+        label = QLabel()
+        label.setText(info_text)
+        layout.addWidget(label)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok,
+            QtCore.Qt.Horizontal, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addSpacing(20)
+        layout.addWidget(buttons)
+
+        self.setLayout(layout)
+
+
 class StartUpDialog(ImageQCDialog):
     """Startup dialog if config file not found."""
 

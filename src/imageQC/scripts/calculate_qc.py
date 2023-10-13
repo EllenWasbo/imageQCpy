@@ -3702,6 +3702,8 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
         roi_radii = np.array(paramset.rec_sphere_diameters)  # search radius=Ø
         roi_radii[0] = roi_radii[1]  # smallest a bit extra margin
         radius_1cc = 10 * (3 / (4 * np.pi)) ** (1/3)
+        #TODO SUVpeak closer to EARL:
+            # 12mm diameter, spherical positioned to yield highest uptake (not centered on max)
         zpos_center = zpos[len(zpos) // 2]
         zpos_diff = np.abs(zpos - zpos_center)
         roi_spheres = []

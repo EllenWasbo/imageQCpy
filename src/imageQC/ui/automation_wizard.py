@@ -445,8 +445,9 @@ class SavePage(QWizardPage):
             fname, _ = QFileDialog.getOpenFileName(
                 self, title, widget.text(), filter=filter_str)
         if fname != '':
-            widget.setText(os.path.normpath(fname))
-            self.current_template.path_output = fname
+            path_output = os.path.normpath(fname)
+            widget.setText(path_output)
+            self.current_template.path_output = path_output
 
     def verify_new_label(self):
         """Ensure valid template label."""
@@ -478,7 +479,11 @@ class SavePage(QWizardPage):
                     self.templates[self.main.current_modality][
                         idx - 1] = self.current_template
             else:
-                self.templates[self.main.current_modality].append(self.current_template)
+                if self.templates[self.main.current_modality][0].label == '':
+                    self.templates[self.main.current_modality] = [self.current_template]
+                else:
+                    self.templates[self.main.current_modality].append(
+                        self.current_template)
                 proceed = True
 
             if proceed:

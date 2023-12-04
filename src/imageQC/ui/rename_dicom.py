@@ -187,15 +187,22 @@ class RenameDicomDialog(ImageQCDialog):
                     path = Path(file)
                     new_file = Path(self.path.text()) / path.name
                     new_file_str = generate_uniq_filepath(new_file.resolve())
+                    msg = ''
                     if new_file_str != '':
                         try:
                             path.rename(new_file_str)
                             count_renamed += 1
-                        except FileExistsError as err:
-                            failed_paths.append(file.resolve())
-                            print(f'Failed renaming {file} to {new_file_str}/n{err}')
+                        except FileExistsError:
+                            msg = (f'FileExistsError: Failed moving {file} to '
+                                   f'{new_file_str}')
+                        except FileNotFoundError:
+                            msg = (f'FileNotFoundError: Failed moving {file} to '
+                                   f'{new_file_str}')
                     else:
-                        failed_paths.append(file.resolve())
+                        msg = f'Failed generating unique filename for {file}'
+                    if msg:
+                        failed_paths.append(msg)
+                        print(msg)
                     progress_modal.setValue(i+1)
                     progress_modal.setLabelText(f'Renaming file {i+1}/{n_files}...')
                 self.reset_names()

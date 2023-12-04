@@ -199,7 +199,7 @@ class StartUpDialog(ImageQCDialog):
         locate = True
         if ask_first:
             quest = ('Locate or initiate shared configuration folder now?'
-                     '(May alse be done later from the Settings manager)')
+                     '(May also be done later from the Settings manager)')
             res = messageboxes.QuestionBox(
                 self, title='Shared config folder', msg=quest,
                 yes_text='Yes, now', no_text='No, later')

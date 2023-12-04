@@ -669,7 +669,7 @@ class OpenAutomationDialog(ImageQCDialog):
                         )
                     proceed = False
                 else:
-                    filt = 'DICOM files (*.dcm);;All files (*)'
+                    filt = 'DICOM files (*.dcm *.IMA);;All files (*)'
                     open_txt = 'Open DICOM files'
             if proceed:
                 if temp_this.path_input == '':

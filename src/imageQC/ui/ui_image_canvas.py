@@ -107,22 +107,30 @@ class GenericImageCanvas(FigureCanvasQTAgg):
                     [x1, x2], [y1, y2],
                     color='red', linewidth=self.main.gui.annotations_line_thick,
                     gid='profile'))
-                self.draw()
+                self.draw_idle()
                 plotstatus = True
         return plotstatus
 
     def profile_remove(self):
         """Clear profile line."""
         if hasattr(self.ax, 'lines'):
-            for line in self.ax.lines:
+            for i, line in enumerate(self.ax.lines):
                 if line.get_gid() == 'profile':
-                    line.remove()
+                    self.ax.lines[i].remove()
+                    self.draw_idle()
                     break
 
     def draw(self):
         """Avoid super().draw when figure collapsed by sliders."""
         try:
             super().draw()
+        except ValueError:
+            pass
+
+    def draw_idle(self):
+        """Avoid super().draw when figure collapsed by sliders."""
+        try:
+            super().draw_idle()
         except ValueError:
             pass
 

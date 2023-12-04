@@ -234,13 +234,18 @@ class TreeFileList(QTreeWidget):
             if len(selrows) == len(self.main.imgs):
                 self.main.clear_all_images()
             else:
-                if last_selected < len(self.main.imgs):
-                    self.main.set_active_img(last_selected)
-                else:
-                    self.main.set_active_img(0)
+                numbers = [i for i in range(len(self.main.imgs))]
                 selrows.sort(reverse=True)
                 for row in selrows:
                     del self.main.imgs[row]
+                    del numbers[row]
+                diff = np.array(numbers) - last_selected
+                idx = np.where(diff > 0)
+                try:
+                    new_active = idx[0][0]
+                except IndexError:
+                    new_active = 0
+                self.main.set_active_img(new_active)
                 self.main.update_results(deleted_idxs=selrows)
                 if self.main.summed_img is not None:
                     self.main.reset_summed_img()

@@ -335,7 +335,7 @@ class DigitTemplateEditDialog(ImageQCDialog):
         """Locate sample DICOM file."""
         fname = QFileDialog.getOpenFileName(
             self, 'Read DICOM file',
-            filter="DICOM file (*.dcm);;All files (*)")
+            filter="DICOM file (*.dcm *.IMA);;All files (*)")
         if fname[0] != '':
             self.sample_filepath.setText(fname[0])
             self.current_image, _ = dcm.get_img(fname[0], tag_infos=self.tag_infos)

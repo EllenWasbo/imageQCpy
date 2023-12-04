@@ -1,3 +1,12 @@
+
+# v3.0.4
+_Dec 04, 2023_
+
+- added .IMA as DICOM extension variant (in addition to .dcm) - when searching for files and opening files
+- bugfixes on AutoWizard (for details see Issue #3 on GitHub)
+- bugfixes (catching more errors for Rename DICOM)
+- bugfix when closing selected images
+
 # v3.0.3
 _Oct 13, 2023_
 

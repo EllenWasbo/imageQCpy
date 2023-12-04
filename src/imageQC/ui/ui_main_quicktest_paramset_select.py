@@ -270,8 +270,12 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         if template_id == 0:
             self.current_template = cfc.QuickTestTemplate()
         else:
-            self.current_template = copy.deepcopy(
-                self.modality_dict[self.main.current_modality][template_id - 1])
+            try:
+                self.current_template = copy.deepcopy(
+                    self.modality_dict[self.main.current_modality][template_id - 1])
+            except IndexError:
+                self.cbox_template.setCurrentIndex(0)
+                self.current_template = cfc.QuickTestTemplate()
         self.set_current_template_to_imgs()
         self.main.tree_file_list.update_file_list()
         self.flag_edit(False)

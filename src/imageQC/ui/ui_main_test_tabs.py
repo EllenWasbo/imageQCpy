@@ -1296,7 +1296,7 @@ class GroupBoxCorrectPointSource(QGroupBox):
         """Add reference images for NM SNI."""
         fname = QFileDialog.getOpenFileName(
             self, 'Select DICOM file to use as reference image for NM SNI test',
-            filter="DICOM files (*.dcm);;All files (*)")
+            filter="DICOM files (*.dcm *.IMA);;All files (*)")
         if fname[0] != '':
             src = fname[0]
             text, proceed = QInputDialog.getText(

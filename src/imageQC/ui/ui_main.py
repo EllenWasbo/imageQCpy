@@ -263,7 +263,7 @@ class MainWindow(QMainWindow):
         if file_list is False:
             fnames = QFileDialog.getOpenFileNames(
                 self, 'Open DICOM files',
-                filter="DICOM files (*.dcm);;All files (*)")
+                filter="DICOM files (*.dcm *.IMA);;All files (*)")
             file_list = fnames[0]
         if len(file_list) > 0:
             self.start_wait_cursor()
@@ -337,7 +337,7 @@ class MainWindow(QMainWindow):
         """View file as header."""
         fname = QFileDialog.getOpenFileName(
             self, 'Read DICOM header',
-            filter="DICOM files (*.dcm);;All files (*)")
+            filter="DICOM files (*.dcm *.IMA);;All files (*)")
         filename = fname[0]
         if filename != '':
             dcm.dump_dicom(self, filename=filename)
@@ -709,7 +709,9 @@ class MainWindow(QMainWindow):
         res = dlg.exec()  # returning TagPatternSort
         if res:
             sort_template = dlg.get_pattern()
+            self.start_wait_cursor()
             self.imgs, order = dcm.sort_imgs(self.imgs, sort_template, self.tag_infos)
+            self.stop_wait_cursor()
             self.tree_file_list.update_file_list()
             self.current_sort_pattern = sort_template
             if self.results:

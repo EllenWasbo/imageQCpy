@@ -1534,7 +1534,10 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     arr = np.ma.masked_array(image2d, mask=np.invert(roi_this))
                     avg_val = np.mean(arr)
                     var_val = np.var(arr)
-                    values.append(np.sqrt(2*(var_val - avg_val)) / avg_val)  # MTF
+                    if avg_val > 0 and var_val >= avg_val:  # avoid RuntimeWarning
+                        values.append(np.sqrt(2*(var_val - avg_val)) / avg_val)  # MTF
+                    else:
+                        values.append(np.nan)
 
                 const = 4./np.pi * np.sqrt(np.log(2))
                 bar_widths = np.array([paramset.bar_width_1, paramset.bar_width_2,
@@ -1543,6 +1546,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     bar_widths,
                     np.sqrt(np.log(1/np.array(values)))
                     )
+                
                 values.extend(list(fwhms))
                 res = Results(headers=headers, values=values)
             else:
@@ -2822,12 +2826,18 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                             LSF[i], np.max(LSF[i])/2)
                         fwtm, _ = mmcalc.get_width_center_at_threshold(
                             LSF[i], np.max(LSF[i])/10)
-                        dMTF_details['values'] = [step_size*fwhm, step_size*fwtm]
+                        if fwhm:
+                            dMTF_details['values'] = [step_size*fwhm, step_size*fwtm]
+                        else:
+                            dMTF_details['values'] = [None, None]
                         fwhm, _ = mmcalc.get_width_center_at_threshold(
                             gMTF_details['LSF_fit'], np.max(gMTF_details['LSF_fit'])/2)
                         fwtm, _ = mmcalc.get_width_center_at_threshold(
                             gMTF_details['LSF_fit'], np.max(gMTF_details['LSF_fit'])/10)
-                        gMTF_details['values'] = [step_size*fwhm, step_size*fwtm]
+                        if fwhm:
+                            gMTF_details['values'] = [step_size*fwhm, step_size*fwtm]
+                        else:
+                            gMTF_details['values'] = [None, None]
                     else:
                         if lp_vals is not None:
                             gMTF_details['values'] = mmcalc.get_curve_values(

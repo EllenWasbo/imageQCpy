@@ -1783,21 +1783,22 @@ class ResultPlotCanvas(PlotCanvas):
         self.ytitle = 'Difference from mean %'
         imgno = self.main.gui.active_img_no
         details_dict = self.main.results['Spe']['details_dict'][imgno]
-        xvals = details_dict['profile_pos']
-        self.curves.append(
-            {'label': 'profile', 'xvals': xvals,
-             'yvals': details_dict['diff_profile'], 'style': '-b'})
-        tolmax = {'label': 'tolerance max',
-                  'xvals': [min(xvals), max(xvals)],
-                  'yvals': [5, 5],
-                  'style': '--k'}
-        tolmin = tolmax.copy()
-        tolmin['yvals'] = [-5, -5]
-        tolmin['label'] = 'tolerance min'
-        self.curves.append(tolmin)
-        self.curves.append(tolmax)
-
-        self.default_range_y = self.test_values_outside_yrange([-7, 7])
+        if 'profile_pos' in details_dict:
+            xvals = details_dict['profile_pos']
+            self.curves.append(
+                {'label': 'profile', 'xvals': xvals,
+                 'yvals': details_dict['diff_profile'], 'style': '-b'})
+            tolmax = {'label': 'tolerance max',
+                      'xvals': [min(xvals), max(xvals)],
+                      'yvals': [5, 5],
+                      'style': '--k'}
+            tolmin = tolmax.copy()
+            tolmin['yvals'] = [-5, -5]
+            tolmin['label'] = 'tolerance min'
+            self.curves.append(tolmin)
+            self.curves.append(tolmax)
+    
+            self.default_range_y = self.test_values_outside_yrange([-7, 7])
 
     def Cro(self):
         """Prepare plot for test PET cross calibration."""

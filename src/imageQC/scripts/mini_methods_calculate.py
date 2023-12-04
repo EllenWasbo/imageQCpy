@@ -18,7 +18,7 @@ def get_distance_map_point(shape, center_dx=0., center_dy=0.):
     Parameters
     ----------
     shape : tuple
-        shape of array do generate
+        shape of array to generate
     center_dx : float, optional
         offset from center in shape. The default is 0..
     center_dy : float, optional

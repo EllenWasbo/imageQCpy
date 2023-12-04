@@ -759,7 +759,7 @@ class SharedSettingsWidget(StackWidget):
         hlo_cf.addWidget(QLabel('Config folder: '))
         hlo_cf.addWidget(self.lbl_config_folder)
         hlo_cf.addStretch()
-        btn_locate_config = QPushButton('Locate new or exisiting config folder')
+        btn_locate_config = QPushButton('Locate new or existing config folder')
         btn_locate_config.clicked.connect(self.locate_config)
         btn_import = QPushButton(
             'Import from another config folder')

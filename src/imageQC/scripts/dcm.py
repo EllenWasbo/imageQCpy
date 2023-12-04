@@ -1023,8 +1023,10 @@ def find_all_valid_dcm_files(
         if path_obj.is_dir():
             glob_string = '**/*' if search_subfolders else '*'
             if progress_modal is not None:
-                progress_modal.setLabelText('Searching for files with .dcm extension')
-            dcm_files = [x for x in path_obj.glob(glob_string) if x.suffix == '.dcm']
+                progress_modal.setLabelText(
+                    'Searching for files with .dcm or .IMA extension')
+            dcm_files = [x for x in path_obj.glob(glob_string)
+                         if x.suffix in ['.dcm', '.IMA']]
             if len(dcm_files) == 0:
                 if progress_modal is not None:
                     progress_modal.setLabelText(

@@ -138,7 +138,7 @@ class AutoDeleteDialog(ImageQCDialog):
         fname = QFileDialog.getOpenFileName(
                 self, 'Get attribute value from sample file',
                 self.search_path,
-                filter="DICOM file (*.dcm);;All files (*)")
+                filter="DICOM file (*.dcm *.IMA);;All files (*)")
         if len(fname[0]) > 0:
             tag_pattern_this = cfc.TagPatternFormat(list_tags=[self.attribute])
             tags = dcm.get_tags(
@@ -1810,7 +1810,7 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
         fname = QFileDialog.getOpenFileName(
                 self, 'Get station name (+ dicom criteria values) from sample file',
                 def_path,
-                filter="DICOM file (*.dcm);;All files (*)")
+                filter="DICOM file (*.dcm *.IMA);;All files (*)")
         if len(fname[0]) > 0:
             self.sample_filepath = fname[0]
             self.get_sample_file_data()

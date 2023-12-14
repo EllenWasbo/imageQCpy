@@ -256,11 +256,14 @@ class ImageCanvas(GenericImageCanvas):
     def roi_draw(self):
         """Update ROI countours on image."""
         for contour in self.contours:
-            for coll in contour.collections:
-                try:
-                    coll.remove()
-                except ValueError:
-                    pass
+            try:
+                for coll in contour.collections:
+                    try:
+                        coll.remove()
+                    except ValueError:
+                        pass
+            except AttributeError:
+                pass
         for scatter in self.scatters:
             try:
                 scatter.remove()

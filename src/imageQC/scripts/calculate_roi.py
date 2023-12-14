@@ -272,7 +272,7 @@ def get_rois(image, image_number, input_main):
                 paramset.mtf_roi_size_x / image_info.pix[0],
                 paramset.mtf_roi_size_y / image_info.pix[1]
                 ]
-            if paramset.mtf_auto_center:
+            if paramset.mtf_auto_center and paramset.mtf_type != 3:
                 if paramset.mtf_type in [0, 1]:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)

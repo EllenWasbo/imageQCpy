@@ -15,6 +15,15 @@ import imageQC.config.config_classes as cfc
 
 
 @dataclass
+class Gui():
+    """Class to keep roi offset data for pytest and assure default values if not gui."""
+
+    delta_x: int = 0
+    delta_y: int = 0
+    delta_a: float = 0.0
+
+
+@dataclass
 class InputMain:
     """Dataclass with values as MainWindow when calculate_qc without main window."""
 
@@ -35,3 +44,4 @@ class InputMain:
     active_img: np.ndarray = field(default_factory=lambda: np.zeros((2, 2)))
     current_roi: list = field(default_factory=list)
     summed_img: np.ndarray = field(default_factory=lambda: np.zeros((2, 2)))
+    gui: Gui = field(default_factory=Gui)

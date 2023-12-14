@@ -461,7 +461,7 @@ class ParamSetNM(ParamSetCommon):
     sni_sum_first: bool = False
     sni_eye_filter_c: float = 28.
     sni_ref_image: str = ''  # file name (without path and extension)
-    mtf_type: int = 1  # [Point, line (default), Two lines (, edge])
+    mtf_type: int = 1  # [Point, line (default), Two lines, edge]
     mtf_roi_size_x: float = 50.
     mtf_roi_size_y: float = 50.
     mtf_plot: int = 4  # xyprofiles, line, sorted, LSF, MTF (default)

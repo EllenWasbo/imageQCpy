@@ -317,7 +317,10 @@ class ParamsTabCommon(QTabWidget):
                 for details_dict in details_dicts:
                     if isinstance(details_dict, dict):
                         details_dict = [details_dict]
-                    new_values_this = details_dict[0][prefix + 'MTF_details']['values']
+                    try:
+                        new_values_this = details_dict[0][prefix + 'MTF_details']['values']
+                    except KeyError:
+                        new_values_this = []
                     try:
                         new_values_this.extend(
                                 details_dict[1][prefix + 'MTF_details']['values'])
@@ -1623,7 +1626,8 @@ class ParamsTabNM(ParamsTabCommon):
         self.mtf_roi_size_y = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.mtf_roi_size_y.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_roi_size_y'))
-        self.mtf_auto_center = QCheckBox('Auto center ROI on object signal')
+        self.mtf_auto_center = QCheckBox(
+            'Auto center ROI on object signal (ignored if MTF method is edge)')
         self.mtf_auto_center.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
         self.mtf_plot.addItems(['Centered xy profiles', 'Line fit',

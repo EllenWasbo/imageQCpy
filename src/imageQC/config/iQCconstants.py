@@ -27,7 +27,7 @@ else:
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.4'
+VERSION = '3.0.5'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
 
@@ -71,7 +71,7 @@ ALTERNATIVES = {
     'NM': {
         'ROI': ALTERNATIVES_ROI,
         'SNI': ['ROIs 2 large, 6 small', 'ROI grid, same size'],
-        'MTF': ['Point', 'One line source', 'Two perpendicular line sources']  # 'Edge']
+        'MTF': ['Point', 'One line source', 'Two perpendicular line sources', 'Edge']
         },
     'SPECT': {
         'ROI': ALTERNATIVES_ROI,
@@ -184,7 +184,7 @@ HEADERS = {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt1': ['FWHM', 'FWTM'],
             'alt2': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            # 'alt3': ['FWHM', 'FWTM']
+            'alt3': ['FWHM', 'FWTM'],
             },
         },
     'SPECT': {
@@ -279,7 +279,7 @@ HEADERS_SUP = {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt1': ['A1', 'sigma1'],
             'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            # 'alt3': ['A1', 'sigma1']
+            'alt3': ['A1', 'sigma1'],
             },
         },
     'SPECT': {
@@ -394,10 +394,3 @@ CONFIG_FNAMES = {
         'default': cfc.LastModified(),
         }
     }
-
-'''
-    'persons_to_notify': {
-        'saved_as': 'object_list',
-        'default': [],
-        },
-'''

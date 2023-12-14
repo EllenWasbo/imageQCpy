@@ -411,9 +411,13 @@ class RenameDicomDialog(ImageQCDialog):
                             self.new_names.append('')
                     idx_all_this = get_all_matches(self.new_names, '')
                     if len(idx_all_this):
-                        for i in idx_all_this.reverse():
-                            self.original_names.pop(i)
-                            self.new_names.pop(i)
+                        if len(idx_all_this) == 1:
+                            self.original_names.pop(idx_all_this[0])
+                            self.new_names.pop(idx_all_this[0])
+                        else:
+                            for i in idx_all_this.reverse():
+                                self.original_names.pop(i)
+                                self.new_names.pop(i)
                     progress_modal.reset()
                 else:
                     empty_tag_pattern = True
@@ -461,7 +465,8 @@ class RenameDicomDialog(ImageQCDialog):
                      'needed to generate names.'))
 
             if len(self.new_names) > 0:  # ensure unique names
-                self.new_names = self.get_uniq_filenames(self.new_names)
+                self.new_names = self.get_uniq_filenames(
+                    self.new_names, folder=start_with_folders)
 
             self.fill_table()
             if limit == 0 and len(self.new_names) > 0:
@@ -621,24 +626,28 @@ class RenameDicomDialog(ImageQCDialog):
 
         return (folder_names, sorted_dcm_files)
 
-    def get_uniq_filenames(self, names):
+    def get_uniq_filenames(self, names, folder=False):
         """Add suffix if some names are identical.
 
         Parameters
         ----------
         names : list of Path
+        folder : bool, Optional
+            True if returned name should be folder (i.e. without .dcm)
+            Default is False.
 
         Returns
         -------
         names
         """
         uniq_names = list(set(names))
+        ext = '' if folder else '.dcm'
         for name in uniq_names:
             n_same = names.count(name)
             if n_same > 1:
                 idxs = get_all_matches(names, name)
                 base_name = str(name.parent / name.stem)
                 for i, idx in enumerate(idxs):
-                    new_name = f'{base_name}_({i:03}).dcm'
+                    new_name = f'{base_name}_{i:03}{ext}'
                     names[idx] = Path(new_name)
         return names

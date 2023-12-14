@@ -371,7 +371,7 @@ def test_Xray_Var():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(np.array(input_main.results['Var']['values'][0]))
-    assert np.array_equal(values, np.array([ 31., 192.,  80.]))
+    assert np.array_equal(values, np.array([31., 192., 80.]))
 
 
 def test_NM_uniformity():
@@ -384,7 +384,7 @@ def test_NM_uniformity():
             uni_correct_pos_x=True,
             uni_correct_pos_y=True
             ),
-        current_quicktest=cfc.QuickTestTemplate(tests=[['Uni'],['Uni']]),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Uni'], ['Uni']]),
         tag_infos=tag_infos,
         automation_active=False
         )
@@ -479,7 +479,7 @@ def test_NM_SNI_sum():
         current_test='SNI',
         current_paramset=cfc.ParamSetNM(sni_sum_first=True, sni_area_ratio=0.9),
         current_quicktest=cfc.QuickTestTemplate(
-            tests=[['']] + [['SNI']]*65 + [['']] *66,
+            tests=[['']] + [['SNI']]*65 + [['']]*66,
             ),
         tag_infos=tag_infos,
         automation_active=False
@@ -546,7 +546,31 @@ def test_NM_MTF_2_linesources():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(10*np.array(input_main.results['MTF']['values'][0]))
-    assert np.array_equal(values, np.array([73., 134.,  74., 135.]))
+    assert np.array_equal(values, np.array([73., 133.,  74., 135.]))
+
+
+def test_NM_MTF_edge():
+    input_main = InputMain(
+        current_modality='NM',
+        current_test='MTF',
+        current_paramset=cfc.ParamSetNM(
+            mtf_type=3, mtf_roi_size_x=50, mtf_roi_size_y=50),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['MTF'], ['MTF']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_paths = [
+        path_tests / 'test_inputs' / 'NM' / 'edge_det1.dcm',
+        path_tests / 'test_inputs' / 'NM' / 'edge_det2.dcm']
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        file_paths, GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+    input_main.gui.delta_y = 50
+
+    calculate_qc.calculate_qc(input_main)
+    values = np.round(10*np.array(input_main.results['MTF']['values']))
+    assert np.array_equal(values, np.array([[35., 64.], [32., 58.]]))
 
 
 def test_SPECT_MTF_linesource():

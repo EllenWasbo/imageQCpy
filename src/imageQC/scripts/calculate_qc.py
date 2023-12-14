@@ -388,16 +388,15 @@ def calculate_qc(input_main, wid_auto=None,
         String representing session number if more than one image set found
     """
     current_test_before = input_main.current_test
-    delta_xya = [0, 0, 0.0]  # only for GUI version
     modality = input_main.current_modality
     errmsgs = []
     if 'MainWindow' in str(type(input_main)):
         input_main.start_wait_cursor()
         input_main.status_bar.showMessage('Calculating...')
-        delta_xya = [
-            input_main.gui.delta_x,
-            input_main.gui.delta_y,
-            input_main.gui.delta_a]
+    delta_xya = [
+        input_main.gui.delta_x,
+        input_main.gui.delta_y,
+        input_main.gui.delta_a]
 
     paramset = input_main.current_paramset
     if wid_auto is not None:
@@ -473,6 +472,7 @@ def calculate_qc(input_main, wid_auto=None,
             extra_tag_list_keep = False
             marked_3d = []
             input_main.current_group_indicators = ['' for i in range(n_img)]
+            force_new_roi = []  # tests where a new roi should be set pr image
             for i in range(n_analyse):
                 marked_3d.append([])
                 if modality == 'CT':
@@ -483,13 +483,35 @@ def calculate_qc(input_main, wid_auto=None,
                                 list_tags=['ConvolutionKernel'])
                             extra_tag_list = []
                             read_tags[i] = True
+                        else:
+                            if paramset.mtf_auto_center:
+                                force_new_roi.append('MTF')
+                    if 'Sli' in marked[i]:
+                        if paramset.sli_auto_center:
+                            force_new_roi.append('Sli')
+                    if 'CTn' in marked[i]:
+                        if paramset.ctn_auto_center:
+                            force_new_roi.append('CTn')
+                elif modality == 'Xray':
+                    if 'Noise' in marked[i]:
+                        force_new_roi.append('Noi')
+                    if 'MTF' in marked[i]:
+                        if paramset.mtf_auto_center:
+                            force_new_roi.append('MTF')
                 elif modality == 'NM':
                     if 'Uni' in marked[i]:
                         if paramset.uni_sum_first:
                             marked_3d[i].append('Uni')
+                        else:
+                            force_new_roi.append('Uni')
                     if 'SNI' in marked[i]:
                         if paramset.sni_sum_first:
                             marked_3d[i].append('SNI')
+                        else:
+                            force_new_roi.append('SNI')
+                    if 'MTF' in marked[i]:
+                        if paramset.mtf_auto_center:
+                            force_new_roi.append('MTF')
                 elif modality == 'SPECT':
                     if 'MTF' in marked[i]:
                         if paramset.mtf_type > 0:
@@ -515,6 +537,7 @@ def calculate_qc(input_main, wid_auto=None,
                     if 'SNR' in marked[i]:
                         if paramset.snr_type == 0:
                             marked_3d[i].append('SNR')
+                    #TODO? force_new_roi.append all with optimize center?
 
             # list of shape + pix for testing if new roi need to be calculated
             xypix = []
@@ -618,12 +641,15 @@ def calculate_qc(input_main, wid_auto=None,
                             if matrix[i] is None:  # only once pr image
                                 matrix[i] = image  # save image for later
                         else:
-                            calculate_new_roi = True
-                            try:
-                                if xypix[i] == prev_image_xypix[test]:
-                                    calculate_new_roi = False
-                            except KeyError:
-                                pass
+                            if test in force_new_roi:
+                                calculate_new_roi = True
+                            else:
+                                calculate_new_roi = True
+                                try:
+                                    if xypix[i] == prev_image_xypix[test]:
+                                        calculate_new_roi = False
+                                except KeyError:
+                                    pass
 
                             prev_image_xypix[test] = xypix[i]
 
@@ -1248,9 +1274,12 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 elif paramset.mtf_type == 1:
                     details, errmsg = calculate_MTF_2d_line_edge(
                         sub, image_info.pix[0], paramset, mode='line')
-                else:  # paramset.mtf_type == 2
+                elif paramset.mtf_type == 2:
                     details, errmsg = calculate_MTF_2d_line_edge(
                         sub, image_info.pix[0], paramset, mode='line', pr_roi=True)
+                else:  # type 3 edge
+                    details, errmsg = calculate_MTF_2d_line_edge(
+                        sub, image_info.pix[0], paramset, mode='edge')
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
                 try:
                     if isinstance(details, list):  # paramset.mtf_type 0 or 2
@@ -2827,17 +2856,12 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                         fwtm, _ = mmcalc.get_width_center_at_threshold(
                             LSF[i], np.max(LSF[i])/10)
                         if fwhm:
-                            dMTF_details['values'] = [step_size*fwhm, step_size*fwtm]
-                        else:
-                            dMTF_details['values'] = [None, None]
-                        fwhm, _ = mmcalc.get_width_center_at_threshold(
-                            gMTF_details['LSF_fit'], np.max(gMTF_details['LSF_fit'])/2)
-                        fwtm, _ = mmcalc.get_width_center_at_threshold(
-                            gMTF_details['LSF_fit'], np.max(gMTF_details['LSF_fit'])/10)
-                        if fwhm:
-                            gMTF_details['values'] = [step_size*fwhm, step_size*fwtm]
-                        else:
-                            gMTF_details['values'] = [None, None]
+                            fwhm  = step_size*fwhm
+                        if fwtm:
+                            fwtm  = step_size*fwtm
+                        dMTF_details['values'] = [fwhm, fwtm]
+                        gMTF_details['values'] = [gMTF_details['FWHM'],
+                                                  gMTF_details['FWTM']]
                     else:
                         if lp_vals is not None:
                             gMTF_details['values'] = mmcalc.get_curve_values(

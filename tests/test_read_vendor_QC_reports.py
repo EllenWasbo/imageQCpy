@@ -147,3 +147,22 @@ def test_Siemens_NM_energy_spectrum():
     res = read_vendor_QC_reports.read_e_spectrum_Siemens_gamma_camera(
         file_name.resolve())
     assert res['values'] == [32706.0, 141.350159, 12.678160069552563, 8.96932848130193]
+
+
+def test_Philips_MR_ACR_weekly():
+    """Test reading Philips MR ACR Report (weekly)."""
+    file_names = ['0123.pdf', '0223.pdf', '0323.pdf']
+    expected_res = [
+        ['06.01.2023', 'Weekly Tests', 0.2, 63886147, 1.2807,
+         189.45, 189.45, 190.59, 189.21, '1', '0', '1', '0', 10, 10, 10, 10],
+        ['13.01.2023', 'Weekly Tests', 0.3, 63886126, 1.2816,
+         189.45, 189.45, 189.21, 190.59, '1', '0', '1', '0', 10, 10, 10, 10],
+        ['20.01.2023', 'Weekly Tests', 0.2, 63886085, 1.2775,
+         189.45, 189.45, 189.21, 190.59, '1', '0', '0', '0', 10, 10, 10, 10]
+        ]
+
+    for i, f in enumerate(file_names):
+        p = path_tests / 'test_inputs' / 'vendor_QC_reports' / 'PhilipsMR' / f
+        txt = read_vendor_QC_reports.get_pdf_txt(p)
+        res = read_vendor_QC_reports.read_Philips_MR_ACR_report(txt)
+        assert res['values'] == expected_res[i]

@@ -446,18 +446,26 @@ class ResultPlotCanvas(PlotCanvas):
         for curve in self.curves:
             if yrange[0] is not None:
                 if limit_xrange is None:
-                    if min(curve['yvals']) < yrange[0]:
-                        yrange[0] = None
+                    if len(curve['yvals']) > 0:
+                        if min(curve['yvals']) < yrange[0]:
+                            yrange[0] = None
                 else:
-                    if min(get_yvals_to_eval(curve)) < yrange[0]:
-                        yrange[0] = None
+                    try:
+                        if min(get_yvals_to_eval(curve)) < yrange[0]:
+                            yrange[0] = None
+                    except ValueError:
+                        pass
             if yrange[1] is not None:
                 if limit_xrange is None:
-                    if max(curve['yvals']) > yrange[1]:
-                        yrange[1] = None
+                    if len(curve['yvals']) > 0:
+                        if max(curve['yvals']) > yrange[1]:
+                            yrange[1] = None
                 else:
-                    if max(get_yvals_to_eval(curve)) > yrange[1]:
-                        yrange[1] = None
+                    try:
+                        if max(get_yvals_to_eval(curve)) > yrange[1]:
+                            yrange[1] = None
+                    except ValueError:
+                        pass
             if not any(yrange):
                 break
         return yrange
@@ -935,7 +943,7 @@ class ResultPlotCanvas(PlotCanvas):
                     dd = details_dicts[ddno]
                     xvals = dd['LSF_x'] # TODO fix when this is error, expecting index
                     proceed = True
-                except IndexError:
+                except (IndexError, KeyError):
                     proceed = False
                 except TypeError:
                     proceed = False # TODO fix when this is error
@@ -949,6 +957,7 @@ class ResultPlotCanvas(PlotCanvas):
                         'style': linestyles[ddno] + 'r'
                          })
                     dd_this = dd['gMTF_details']
+                    curve_corrected = None
                     if prefilter:
                         xvals = dd_this['LSF_fit_x']
                         yvals = dd_this['LSF_prefit']
@@ -958,6 +967,18 @@ class ResultPlotCanvas(PlotCanvas):
                             'yvals': yvals,
                             'style': linestyles[ddno] + 'b'
                              })
+                        if 'LSF_corrected' in dd_this:
+                            yvals = dd_this['LSF_corrected']
+                            if yvals is not None:
+                                curve_corrected = {
+                                    'label': (
+                                        'LSF corrected - gaussian fit ' + suffix[ddno]),
+                                    'xvals': xvals,
+                                    'yvals': yvals,
+                                    'style': '--',
+                                    'color': 'green'
+                                     }
+
                     xvals = dd_this['LSF_fit_x']
                     yvals = dd_this['LSF_fit']
                     self.curves.append({
@@ -966,6 +987,8 @@ class ResultPlotCanvas(PlotCanvas):
                         'yvals': yvals,
                         'style': linestyles[ddno] + 'k'
                          })
+                    if curve_corrected:
+                        self.curves.append(curve_corrected)
 
                     if ddno == 0 and 'dMTF_details' in dd:
                         dd_this = dd['dMTF_details']

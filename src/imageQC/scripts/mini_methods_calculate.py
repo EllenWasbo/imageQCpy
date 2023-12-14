@@ -8,7 +8,7 @@ Collection of small functions used in ImageQC.
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter, rotate
-from scipy.ndimage.interpolation import geometric_transform
+from scipy.ndimage import geometric_transform
 from scipy.signal import convolve2d
 
 
@@ -82,7 +82,7 @@ def gauss_4param_fit(x, y):
     sigma = np.sqrt(sum(y * (x - mean) ** 2) / sum(y))
     try:
         popt, _ = curve_fit(gauss_4param, x, y, p0=[min(y), max(y), mean, sigma])
-    except RuntimeError:
+    except RuntimeError:  # consider ValueError if not strictly increasing
         popt = None
     return popt
 
@@ -105,7 +105,7 @@ def gauss_fit(x, y, fwhm=0):
             gauss, x, y, p0=[A, sigma],
             bounds=([0.9*A, 0.5*sigma], [1.1*A, 2*sigma])
             )
-    except RuntimeError:
+    except RuntimeError:  # consider ValueError if not strictly increasing
         popt = None
     return popt
 
@@ -276,17 +276,41 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
                 F2 = gauss(k_vals, A2*sigma2, 1/sigma2)
                 MTF = np.add(MTF, F2)
             MTF_filtered = None
-            if prefilter_sigma is not None:
-                if prefilter_sigma > 0:
-                    F_filter = gauss(k_vals, 1., 1/prefilter_sigma)
-                    MTF_filtered = 1/MTF[0] * MTF  # for display
-                    MTF = np.divide(MTF, F_filter)
+            if prefilter_sigma is None:
+                prefilter_sigma = 0
+            if prefilter_sigma > 0:
+                F_filter = gauss(k_vals, 1., 1/prefilter_sigma)
+                MTF_filtered = 1/MTF[0] * MTF  # for display
+                MTF = np.divide(MTF, F_filter)
             MTF = 1/MTF[0] * MTF
             k_vals = k_vals / (2*np.pi)
+
+            fwhm = None
+            fwtm = None
+            LSF_corrected = None
+            if gaussfit == 'single':
+                if prefilter_sigma == 0:
+                    fwhm = 2*np.sqrt(2*np.log(2))*sigma1
+                    fwtm = 2*np.sqrt(2*np.log(10))*sigma1
+                else:
+                    # Gaussian fit of the corrected MTF
+                    k_vals_symmetric = np.concatenate((-k_vals[::-1], k_vals[1:]))
+                    MTF_symmetric = np.concatenate((MTF[::-1], MTF[1:]))
+                    poptMTF = gauss_fit(k_vals_symmetric, MTF_symmetric)
+                    if poptMTF is not None:
+                        _, sigmaMTF = poptMTF
+                        LSF_corrected = gauss(
+                            LSF_x, np.max(LSF_fit), 1/(2*np.pi*sigmaMTF))
+                        LSF_sigma = 1./(2*np.pi*sigmaMTF)
+                        fwhm = 2*np.sqrt(2*np.log(2))*LSF_sigma
+                        fwtm = 2*np.sqrt(2*np.log(10))*LSF_sigma
+
             details = {
                 'LSF_fit_x': LSF_x, 'LSF_fit': LSF_fit, 'LSF_prefit': LSF,
+                'LSF_corrected': LSF_corrected,
                 'LSF_fit_params': popt,
-                'MTF_freq': k_vals, 'MTF': MTF, 'MTF_filtered': MTF_filtered
+                'MTF_freq': k_vals, 'MTF': MTF, 'MTF_filtered': MTF_filtered,
+                'FWHM': fwhm, 'FWTM': fwtm,
                 }
 
     return (details, errmsg)

@@ -1,9 +1,18 @@
+# v3.0.5
+_Dec 14, 2023_
+
+- Fixed bug with matplotlib 3.8.2 (for details see [Issue #4](https://github.com/EllenWasbo/imageQCpy/issues/4) on GitHub)
+- Added option to analyse Spatial resolution from edge for modality NM
+- Fixed updating ROI for each image during analysis (not only visually) when auto center is active
+- Bugfixes when plotting with missing data / failed results
+- Avoided paranthesis in file and folder names generated using RenameDICOM. Fixed bug where foldername generated dcm extension.
+- Added option to read Philips MR ACR weekly report (pdf).
 
 # v3.0.4
 _Dec 04, 2023_
 
 - added .IMA as DICOM extension variant (in addition to .dcm) - when searching for files and opening files
-- bugfixes on AutoWizard (for details see Issue #3 on GitHub)
+- bugfixes on AutoWizard (for details see  [Issue #3](https://github.com/EllenWasbo/imageQCpy/issues/3) on GitHub)
 - bugfixes (catching more errors for Rename DICOM)
 - bugfix when closing selected images
 

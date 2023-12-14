@@ -47,6 +47,9 @@ def read_vendor_template(template, filepath):
     elif template.file_type == 'Siemens PET-MR DailyQC Reports (.xml)':
         root = get_xml_tree(filepath)
         results = read_Siemens_PET_dailyQC_xml(root)
+    elif template.file_type == 'Philips MR ACR report (.pdf)':
+        txt = get_pdf_txt(filepath)
+        results = read_Philips_MR_ACR_report(txt)
     else:
         results = None
 
@@ -1623,6 +1626,172 @@ def read_Siemens_CT_QC(txt):
 
         status = True
 
+    return data
+
+
+def read_Philips_MR_ACR_report(txt):
+    """Read Philips MR ACR report from list of str.
+
+    Parameters
+    ----------
+    txt : list of str
+        text from pdf
+
+    Returns
+    -------
+    data : dict
+        'status': bool
+        'errmsg': list of str
+        'values': list of str,
+        'headers': list of str}
+    """
+    values = []
+    headers = []
+    errmsg = []
+    status = False
+
+    if 'ACR R' in txt[0]:
+
+        # ensure page break do not hamper results
+        to_remove = []
+        for i, line in enumerate(txt):
+            if line[0:6] == 'file:/' or 'ACR Report Page' in line:
+                to_remove.insert(0, i)
+        for i in to_remove:
+            txt.pop(i)
+
+        txt = [x.strip() for x in txt]
+        short_txt = [x[0:9] for x in txt]
+
+        # date
+        date = ''
+        search_txt = 'Acquisiti'
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            date_str = txt[rowno].split(',')
+            if len(date_str) == 3:  # expected
+                date_md = date_str[1].strip().split(' ')
+                if len(date_md) == 2:
+                    day = date_md[1]
+                    month_dt = datetime.datetime.strptime(date_md[0], '%B')
+                    month = f'{month_dt.month:02}'
+                    year = date_str[2].strip()
+                    date = f'{day}.{month}'
+                year = date_str[2].strip().split(' ')[0]
+                date = date + f'.{year}'
+
+        # test type
+        test_type = ''
+        search_txt = 'Test Type'
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            split_txt = txt[rowno].split(':')
+            test_type = split_txt[-1].strip()
+
+        # table position
+        table_position = None
+        search_txt = 'Table Pos'
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt) + 1  # (second lind)
+            split_txt = txt[rowno].split(' ')
+            try:
+                table_position = float(split_txt[-1])
+            except ValueError:
+                pass
+
+        # center frequency
+        center_frequency = None
+        search_txt = 'Center fr'
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            split_txt = txt[rowno].split(' ')
+            try:
+                center_frequency = int(split_txt[-1])
+            except ValueError:
+                pass
+
+        # Transmit Gain
+        transmit_gain = None
+        search_txt = 'Transmit '
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            split_txt = txt[rowno].split(' ')
+            try:
+                transmit_gain = float(split_txt[-1])
+            except ValueError:
+                pass
+
+        # Geometric Accuracy
+        geometric_vals = [None] * 4
+        search_txt = 'Geometric Measurement Table:'
+        if search_txt in txt:
+            rowno = txt.index(search_txt)
+            # slice 5, min max
+            rows = np.arange(5, 9) + rowno
+            vals = []
+            for row in rows:
+                split_txt = txt[row].split(' ')
+                try:
+                    val = float(split_txt[-1])
+                    vals.append(val)
+                except ValueError:
+                    pass
+            if len(vals) == 4:
+                geometric_vals = vals
+
+        # High /low contrast resolution
+        hc_vals = [None] * 4
+        lc_vals = [None] * 4
+        search_txt = 'Low-Contrast Detectability:'
+        if search_txt in txt:
+            rowno = txt.index(search_txt)
+            # High contrast
+            rows = np.arange(-2, 0) + rowno
+            vals = []
+            for row in rows:
+                split_txt = txt[row].split(')')
+                if len(split_txt) == 4:
+                    split_sub = split_txt[-2].strip().split(' ')
+                    vals.append(split_sub[0])  # 1.0mm
+                    vals.append(split_txt[-1].strip())  # 0.9mm
+                elif len(split_txt) == 3:
+                    split_sub = split_txt[-1].strip().split(' ')
+                    vals.append(split_sub[-2])  # 1.0mm
+                    vals.append(split_sub[-1])  # 0.9mm
+            if len(vals) == 4:
+                hc_vals = vals
+
+            # Low contrast
+            rows = np.arange(3, 7) + rowno
+            vals = []
+            for row in rows:
+                split_txt = txt[row].split(' ')
+                if len(split_txt) == 6:
+                    try:
+                        val = int(split_txt[-1])
+                        vals.append(val)
+                    except ValueError:
+                        pass
+            if len(vals) == 4:
+                lc_vals = vals
+
+        values = (
+            [date, test_type, table_position, center_frequency, transmit_gain]
+            + geometric_vals + hc_vals + lc_vals)
+        headers = ['Date', 'Test type', 'Table position (mm)',
+                   'Center frequency (Hz)', 'Transmit Gain',
+                   'Geometric top bottom', 'Geometric left right',
+                   'Geometric Diag-UL', 'Geometric Diag-UR',
+                   'HC Hor 1mm', 'HC Hor 0.9mm',
+                   'HC Ver 1mm', 'HC Ver 0.9mm',
+                   'LC Slice8 resolved', 'LC Slice9 resolved',
+                   'LC Slice10 resolved', 'LC Slice11 resolved'
+                   ]
+
+        status = True
+
+    data = {'status': status, 'errmsg': errmsg,
+            'values': values, 'headers': headers}
     return data
 
 

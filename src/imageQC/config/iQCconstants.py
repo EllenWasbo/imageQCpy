@@ -16,20 +16,12 @@ from imageQC.config import iQCconstants_functions
 
 USERNAME = os.getlogin()
 
-'''
-if getattr(sys, 'frozen', False):
-    APPLICATION_PATH = sys._MEIPASS  # if exe bundeled with pyinstaller
-    APP_TYPE = 'exe'
-else:
-    APPLICATION_PATH = Path(__file__).resolve().parent.parent
-    APP_TYPE = 'py'
-'''
-
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.5'
+VERSION = '3.0.6'
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
+# TODO alternative for Linux?
 
 # os.environ variable keys to save global settings in session
 ENV_USER_PREFS_PATH = 'IMAGEQC_USER_PREFS_PATH'
@@ -43,6 +35,7 @@ QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
     'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
+    'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'Gho', 'MTF', 'NPS'],
     'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
     'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Rin'],
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec'],
@@ -67,6 +60,9 @@ ALTERNATIVES = {
         'Hom': ['Avg and stdev for each ROI',
                 'Avg for each ROI + difference from avg of all',
                 'Avg for each ROI + % difference from avg of all']
+        },
+    'Mammo': {
+       'ROI': ALTERNATIVES_ROI,
         },
     'NM': {
         'ROI': ALTERNATIVES_ROI,
@@ -164,6 +160,28 @@ HEADERS = {
         'STP': {'alt0': ['Dose', 'Q', 'Mean pix', 'Stdev pix']},
         'Var': {'alt0': ['Min variance', 'Max variance', 'Median variance']},
         },
+    'Mammo': {
+        'ROI': {'alt0': roi_headers},
+        'Num': {},
+        'SDN': {
+            'alt0': ['Avg background', 'Std background',
+                     'Avg signal', 'Std signal', 'SDNR']
+            },
+        'Hom': {
+            'alt0': ['Avg', 'Avg SNR', 'n ROIs',
+                     'Deviating avgs', 'Deviating SNRs', 'Deviating ROIs',
+                     '% dev ROIs', 'Deviating pixels', '% dev pixels']
+            },
+        'Gho': {
+            'alt0': ['ROI_1_avg', 'ROI_2_avg', 'ROI_3_avg', 'Ghost factor']
+            },
+        'MTF': {
+            'alt0': ['MTF @ 1/mm', 'MTF @ 2/mm', 'MTF @ 3/mm',
+                     'MTF @ 4/mm', 'MTF @ 5/mm', 'Freq @ MTF 0.5']
+            },
+        'NPS': {'alt0': ['Average variance', 'Large area signal',
+                         'Large area stdev (noise)', 'AUC horiz/AUC vert']},
+         },
     'NM': {
         'ROI': {'alt0': roi_headers},
         'Num': {},
@@ -265,6 +283,15 @@ HEADERS_SUP = {
         'ROI': {'alt0': roi_headers_sup},
         'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2']}
         },
+    'Mammo': {
+       'ROI': {'alt0': roi_headers_sup},
+       'Hom': {
+           'alt0': ['Min pixel', 'Max pixel', 'Min Avg', 'Max Avg',
+                    'Min SNR', 'Max SNR', 'n ROIs x', 'n ROIs y',
+                    'n masked ROIs', 'n masked pixels']
+           },
+       'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2']}
+       },
     'NM': {
         'ROI': {'alt0': roi_headers_sup},
         'Uni': {
@@ -312,6 +339,7 @@ HEADERS_SUP = {
 VENDOR_FILE_OPTIONS = {
     'CT': ['Siemens CT Constancy/Daily Reports (.pdf)'],
     'Xray': ['GE QAP (.txt)'],
+    'Mammo': [],
     'NM': ['Siemens exported energy spectrum (.txt)'],
     'SPECT': [],
     'PET': ['Siemens PET-CT DailyQC Reports (.pdf)',

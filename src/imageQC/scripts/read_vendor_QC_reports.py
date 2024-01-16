@@ -8,6 +8,7 @@
 from fnmatch import fnmatch
 import datetime
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import numpy as np
 import pdfplumber
@@ -50,6 +51,8 @@ def read_vendor_template(template, filepath):
     elif template.file_type == 'Philips MR ACR report (.pdf)':
         txt = get_pdf_txt(filepath)
         results = read_Philips_MR_ACR_report(txt)
+    elif template.file_type == 'GE QAP (.txt)':
+        results = read_GE_QAP(filepath)
     else:
         results = None
 
@@ -1792,6 +1795,111 @@ def read_Philips_MR_ACR_report(txt):
 
     data = {'status': status, 'errmsg': errmsg,
             'values': values, 'headers': headers}
+    return data
+
+
+def read_GE_QAP(filepath):
+    """Read GE QAP report from txt-file.
+
+    Parameters
+    ----------
+    filepath : str
+        .txt file
+
+    Returns
+    -------
+    data : dict
+        'status': bool
+        'errmsg': list of str
+        'values': list of str,
+        'headers': list of str}
+    """
+    values = []
+    headers = []
+    errmsg = []
+    status = False
+
+    filepath = Path(filepath)
+    if len(filepath.name) > 8:
+        datestr = filepath.name[:8]
+        date = f'{datestr[6:8]}.{datestr[4:6]}.{datestr[:4]}'
+    else:
+        date = ''
+
+    txt = []
+    with open(filepath, 'r') as file:
+        txt = file.readlines()
+
+    short_txt = [x[0:9] for x in txt]
+
+    if len(txt) > 6:
+        if 'IMAGE QUALITY' in txt[0]:
+            detector_serial = txt[1].split()[-1]
+            stand = filepath.parent.name
+
+            overall_result = ''
+            search_txt = 'OVERALL R'
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                overall_result = txt[rowno].split()[-1]
+
+            bad_pixels = ''
+            search_txt = 'No. Of Ba'
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                try:
+                    bad_pixels = int(float(txt[rowno].split()[-4]))
+                except (IndexError, ValueError):
+                    pass
+
+            global_non_unif = ''
+            search_txt = 'Global Br'
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                try:
+                    global_non_unif = float(txt[rowno].split()[-4])
+                except (IndexError, ValueError):
+                    pass
+
+            local_non_unif = ''
+            search_txt = 'Local Bri'
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                try:
+                    local_non_unif = float(txt[rowno].split()[-4])
+                except (IndexError, ValueError):
+                    pass
+
+            SNR_non_unif = ''
+            search_txt = 'SNR Non U'
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                try:
+                    SNR_non_unif = float(txt[rowno].split()[-4])
+                except (IndexError, ValueError):
+                    pass
+
+            MTF_vals = [''] * 5
+            search_txt = 'Spatial M'
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                try:
+                    MTF_vals = [float(txt[rowno+i].split()[-4]) for i in range(5)]
+                except (IndexError, ValueError):
+                    pass
+
+            values = [date, detector_serial, stand, overall_result,
+                      bad_pixels, global_non_unif, local_non_unif, SNR_non_unif]
+            values.extend(MTF_vals)
+            headers = ['Date', 'Detector serial', 'Stand', 'Overall result',
+                       'Bad pixels', 'Global brightness non uniformity',
+                       'Local brightness non uniformity', 'SNR non uniformity',
+                       'MTF at 0.5 lp/mm', '1.0', '1.5', '2.0', '2.5']
+            status = True
+
+    data = {'status': status, 'errmsg': errmsg,
+            'values': values, 'headers': headers}
+
     return data
 
 

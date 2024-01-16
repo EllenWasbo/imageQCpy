@@ -131,6 +131,11 @@ def set_tag_patterns_special_default(quicktest_options, tag_infos):
         'AcquisitionDate', 'AcquisitionTime', 'KVP', 'mAs']
     tag_patterns_special['Xray'][2].list_format = [
         '', '|:.0f|', '|:.1f|kVp', '|:.1f|mAs']
+    tag_patterns_special['Mammo'][2].list_tags = [
+        'AcquisitionDate', 'AcquisitionTime', 'AnodeTargetMaterial', 'FilterMaterial',
+        'KVP', 'mAs']
+    tag_patterns_special['Mammo'][2].list_format = [
+        '', '|:.0f|', '', '', '|:.1f|kVp', '|:.1f|mAs']
     tag_patterns_special['NM'][2].list_tags = ['SeriesDescription']
     tag_patterns_special['NM'][2].list_format = ['']
     tag_patterns_special['SPECT'][2].list_tags = [

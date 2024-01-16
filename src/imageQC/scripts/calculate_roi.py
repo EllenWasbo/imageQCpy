@@ -59,90 +59,88 @@ def get_rois(image, image_number, input_main):
     except AttributeError:
         delta_xya = [0, 0, 0.0]
 
-    def ROI():
-        roi_array = []
+    def Bar():  # Bar phantom NM
+        return get_roi_NM_bar(image, image_info, paramset)
 
-        if paramset.roi_use_table in [0, 1]:
-            if paramset.roi_offset_mm:
-                extra_xy = np.array(paramset.roi_offset_xy) / image_info.pix[0]
-            else:
-                extra_xy = np.array(paramset.roi_offset_xy)
-            if paramset.roi_use_table == 0:
-                off_center_xys = [tuple(np.add(extra_xy, np.array(delta_xya[0:2])))]
-            else:  # 1
-                xs = [x + delta_xya[0] for x in paramset.roi_table.pos_x]
-                ys = [y + delta_xya[1] for y in paramset.roi_table.pos_y]
-                off_center_xys = [(xs[i], ys[i]) for i in range(len(xs))]
+    def Cro():  # PET Crosscalibration
+        roi_size_in_pix = paramset.cro_roi_size / image_info.pix[0]
+        return get_roi_circle(img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
 
-            # roi_type 0=circular, 1=rectangular, 2=rectangular wi
-            if paramset.roi_type == 0:
-                roi_size_in_pix = paramset.roi_radius / image_info.pix[0]
-                roi_array = [get_roi_circle(
-                    img_shape, off_xy, roi_size_in_pix) for off_xy in off_center_xys]
-            else:
-                w = paramset.roi_x / image_info.pix[0]
-                h = paramset.roi_y / image_info.pix[1]
-                roi_array = [get_roi_rectangle(
-                    img_shape, roi_width=w, roi_height=h,
-                    offcenter_xy=off_xy) for off_xy in off_center_xys]
-                if paramset.roi_type == 2 and paramset.roi_a != 0:  # rotated ROI
-                    roi_array_rotated = []
-                    for i, roi in enumerate(roi_array):
-                        if any(off_center_xys[i]):
-                            roi = mmcalc.rotate2d_offcenter(
-                                roi.astype(float), -paramset.roi_a, off_center_xys[i])
-                        else:
-                            roi = ndimage.rotate(
-                                roi.astype(float), -paramset.roi_a, reshape=False)
-                        roi = np.round(roi)
-                        roi = np.array(roi, dtype=bool)
-                        roi_array_rotated.append(roi)
-                    roi_array = roi_array_rotated
+    def CTn():  # CT number
+        return get_roi_CTn(image, image_info, paramset, delta_xya=delta_xya)
 
-        else:  # zoomed table
-            if len(paramset.roi_table.pos_x) > 0:
-                for i in range(len(paramset.roi_table.pos_x)):
-                    roi_array.append(get_roi_rectangle(
-                        img_shape,
-                        coords_x=paramset.roi_table.pos_x[i],
-                        coords_y=paramset.roi_table.pos_y[i]
-                        ))
+    def Dim():  # CT Dimensions
+        roi_this = []
+        roi_size_in_pix = 10./image_info.pix[0]  # search radius 10mm
+        dist = np.sqrt(2 * 25.**2)/image_info.pix[0]
+        # search centers +/- 25mm from center
 
-        return roi_array
+        rotation_radians = np.deg2rad(delta_xya[2] - 45)
+        delta_rot = [np.cos(rotation_radians), np.sin(rotation_radians)]
+        delta_rotation_xy = [dist * x for x in delta_rot]
 
-    def Num():
-        roi_array = []
-        if len(paramset.num_table.pos_x) > 0:
-            for i in range(len(paramset.num_table.pos_x)):
-                roi_array.append(get_roi_rectangle(
-                    img_shape,
-                    coords_x=paramset.num_table.pos_x[i],
-                    coords_y=paramset.num_table.pos_y[i],
-                    extra_offset=delta_xya[0:2]
-                    ))
+        centers = [delta_xya[0:2] for i in range(4)]
+        dd_0, dd_1 = delta_rotation_xy
+        centers[0][0] += dd_1  # 12 o'clock - 45
+        centers[0][1] -= dd_0
+        centers[1][0] += dd_0  # 15 o'clock - 45
+        centers[1][1] += dd_1
+        centers[2][0] -= dd_1  # 18 o'clock - 45
+        centers[2][1] += dd_0
+        centers[3][0] -= dd_0  # 21 o'clock - 45
+        centers[3][1] -= dd_1
 
-        return roi_array
+        for center in centers:
+            roi_this.append(get_roi_circle(
+                img_shape, center, roi_size_in_pix))
 
-    def Hom():
-        return get_roi_hom(
-            image_info, paramset, delta_xya=delta_xya,
-            modality=input_main.current_modality)
+        centers_x = [x[0] + img_shape[1] // 2 for x in centers]
+        centers_y = [x[1] + img_shape[0] // 2 for x in centers]
+        roi_this.append([centers_x, centers_y])
 
-    def Noi():
+        return (roi_this, errmsg)
+
+    def Geo():  # Geometry
+        return get_roi_circle_MR(
+            image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
+            )
+
+    def Gho():  # Ghost
         roi_this = None
-        if input_main.current_modality == 'CT':
-            roi_size_in_pix = paramset.noi_roi_size / image_info.pix[0]
-            roi_this = get_roi_circle(
-                img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
-        if input_main.current_modality == 'Xray':
-            w = 0.01 * paramset.noi_percent * img_shape[1]
-            h = 0.01 * paramset.noi_percent * img_shape[0]
-            roi_this = get_roi_rectangle(
-                img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
-
+        if input_main.current_modality == 'Mammo':
+            xs = [x for x in paramset.gho_table.pos_x]
+            if paramset.gho_relative_to_right:
+                xs = image_info.pix[0] * img_shape[1] / 2 - np.array(xs)
+            else:
+                xs = - image_info.pix[0] * img_shape[1] / 2 + np.array(xs)
+            ys = [y + delta_xya[1]*image_info.pix[1] for y in paramset.gho_table.pos_y]
+            xs = xs / image_info.pix[0]
+            ys = np.array(ys) / image_info.pix[0]
+            off_center_xys = [(xs[i], ys[i]) for i in range(len(xs))]
+            w = paramset.gho_roi_size / image_info.pix[0]
+            roi_this = [get_roi_rectangle(
+                img_shape, roi_width=w, roi_height=w,
+                offcenter_xy=off_xy) for off_xy in off_center_xys]
+        elif input_main.current_modality == 'MR':
+            roi_this = get_roi_circle_MR(
+                image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
+                )
         return roi_this
 
-    def HUw():
+    def Hom():  # Homogeneity
+        roi_array = get_roi_hom(image_info, paramset, delta_xya=delta_xya,
+                                modality=input_main.current_modality)
+
+        if input_main.current_modality == 'Mammo':
+            roi_mask = np.full(image_info.shape[0:2], False)
+            if paramset.hom_mask_max:
+                roi_mask = get_mask_max(image)
+                roi_mask[image == np.max(image)] = True
+            roi_array.append(roi_mask)
+
+        return roi_array
+
+    def HUw():  # CT HU water
         roi_size_in_pix = paramset.huw_roi_size / image_info.pix[0]
         return get_roi_circle(
             img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
@@ -202,7 +200,7 @@ def get_rois(image, image_number, input_main):
                 background_outer[roi_this[0] == True] = False
                 roi_this[1] = background_outer
 
-        elif input_main.current_modality in ['Xray', 'MR']:
+        elif input_main.current_modality in ['Xray', 'Mammo', 'MR']:
             dx = delta_xya[0]  # center of ROI
             dy = delta_xya[1]
             roi_sz_xy = [
@@ -306,56 +304,19 @@ def get_rois(image, image_number, input_main):
 
         return (roi_this, errmsg)
 
-    def CTn():
-        return get_roi_CTn(image, image_info, paramset, delta_xya=delta_xya)
-
-    def Sli():
-        roi_this, errmsg = get_slicethickness_start_stop(
-            image, image_info, paramset, delta_xya,
-            modality=input_main.current_modality)
-
-        return (roi_this, errmsg)
-
-    def Rin():
-        roi_this = [None, None]
-        rin_range_start = max(4*image_info.pix[0], paramset.rin_range_start)
-        inner_roi_size = rin_range_start / image_info.pix[0]
-        roi_this[0] = get_roi_circle(img_shape, (0, 0), inner_roi_size)
-        outer_roi_size = paramset.rin_range_stop / image_info.pix[0]
-        roi_this[1] = get_roi_circle(img_shape, (0, 0), outer_roi_size)
+    def Noi():  # Noise
+        roi_this = None
+        if input_main.current_modality == 'CT':
+            roi_size_in_pix = paramset.noi_roi_size / image_info.pix[0]
+            roi_this = get_roi_circle(
+                img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
+        if input_main.current_modality == 'Xray':
+            w = 0.01 * paramset.noi_percent * img_shape[1]
+            h = 0.01 * paramset.noi_percent * img_shape[0]
+            roi_this = get_roi_rectangle(
+                img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
 
         return roi_this
-
-    def Dim():
-        roi_this = []
-        roi_size_in_pix = 10./image_info.pix[0]  # search radius 10mm
-        dist = np.sqrt(2 * 25.**2)/image_info.pix[0]
-        # search centers +/- 25mm from center
-
-        rotation_radians = np.deg2rad(delta_xya[2] - 45)
-        delta_rot = [np.cos(rotation_radians), np.sin(rotation_radians)]
-        delta_rotation_xy = [dist * x for x in delta_rot]
-
-        centers = [delta_xya[0:2] for i in range(4)]
-        dd_0, dd_1 = delta_rotation_xy
-        centers[0][0] += dd_1  # 12 o'clock - 45
-        centers[0][1] -= dd_0
-        centers[1][0] += dd_0  # 15 o'clock - 45
-        centers[1][1] += dd_1
-        centers[2][0] -= dd_1  # 18 o'clock - 45
-        centers[2][1] += dd_0
-        centers[3][0] -= dd_0  # 21 o'clock - 45
-        centers[3][1] -= dd_1
-
-        for center in centers:
-            roi_this.append(get_roi_circle(
-                img_shape, center, roi_size_in_pix))
-
-        centers_x = [x[0] + img_shape[1] // 2 for x in centers]
-        centers_y = [x[1] + img_shape[0] // 2 for x in centers]
-        roi_this.append([centers_x, centers_y])
-
-        return (roi_this, errmsg)
 
     def NPS():
         if input_main.current_modality == 'CT':
@@ -372,7 +333,7 @@ def get_rois(image, image_number, input_main):
                 roi_array.append(get_roi_rectangle(
                     img_shape, roi_width=paramset.nps_roi_size,
                     roi_height=paramset.nps_roi_size, offcenter_xy=offcenter_roi))
-        elif input_main.current_modality == 'Xray':
+        elif input_main.current_modality in ['Xray', 'Mammo']:
             roi_array = []
             pos = 0.5 * paramset.nps_roi_size * (
                 np.arange(2*paramset.nps_n_sub-1) - (paramset.nps_n_sub-1))
@@ -386,44 +347,25 @@ def get_rois(image, image_number, input_main):
             roi_array = None
         return roi_array
 
-    def STP():
-        roi_size_in_pix = paramset.stp_roi_size / image_info.pix[0]
-        return get_roi_circle(img_shape, tuple(delta_xya[0:2]), roi_size_in_pix)
+    def Num():  # Number recognition
+        roi_array = []
+        if len(paramset.num_table.pos_x) > 0:
+            for i in range(len(paramset.num_table.pos_x)):
+                roi_array.append(get_roi_rectangle(
+                    img_shape,
+                    coords_x=paramset.num_table.pos_x[i],
+                    coords_y=paramset.num_table.pos_y[i],
+                    extra_offset=delta_xya[0:2]
+                    ))
 
-    def Var():
-        roi_size_in_pix = paramset.var_roi_size / image_info.pix[0]
-        roi_small = get_roi_rectangle(
-            img_shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
-        w = 0.01 * paramset.var_percent * img_shape[1]
-        h = 0.01 * paramset.var_percent * img_shape[0]
-        roi_large = get_roi_rectangle(
-            img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
-        return [roi_large, roi_small]
+        return roi_array
 
-    def Uni():
-        return get_ratio_NM(
-            image, image_info,
-            ufov_ratio=paramset.uni_ufov_ratio,
-            cfov_ratio=paramset.uni_cfov_ratio
+    def PIU():  # MR
+        return get_roi_circle_MR(
+            image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
             )
 
-    def Spe():
-        roi_height_in_pix = 10. * paramset.spe_height / image_info.pix[0]
-        return get_roi_rectangle(
-            img_shape, roi_width=paramset.spe_avg, roi_height=roi_height_in_pix,
-            offcenter_xy=delta_xya[0:2])
-
-    def Bar():
-        return get_roi_NM_bar(image, image_info, paramset)
-
-    def SNI():
-        return get_roi_SNI(image, image_info, paramset)
-
-    def Cro():
-        roi_size_in_pix = paramset.cro_roi_size / image_info.pix[0]
-        return get_roi_circle(img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
-
-    def Rec():
+    def Rec():  # Recovery Curve
         if 'MainWindow' in str(type(input_main)):
             if input_main.summed_img is None:  # avoid each time active slice changes
                 input_main.summed_img, _ = dcm.sum_marked_images(
@@ -436,6 +378,121 @@ def get_rois(image, image_number, input_main):
             summed_img = image
 
         return get_roi_recovery_curve(summed_img, image_info, paramset)
+
+    def Rin():  # Ring artifact
+        roi_this = [None, None]
+        rin_range_start = max(4*image_info.pix[0], paramset.rin_range_start)
+        inner_roi_size = rin_range_start / image_info.pix[0]
+        roi_this[0] = get_roi_circle(img_shape, (0, 0), inner_roi_size)
+        outer_roi_size = paramset.rin_range_stop / image_info.pix[0]
+        roi_this[1] = get_roi_circle(img_shape, (0, 0), outer_roi_size)
+
+        return roi_this
+
+    def ROI():  # single og multiple ROI statistics
+        roi_array = []
+
+        if paramset.roi_use_table in [0, 1]:
+            if paramset.roi_offset_mm:
+                extra_xy = np.array(paramset.roi_offset_xy) / image_info.pix[0]
+            else:
+                extra_xy = np.array(paramset.roi_offset_xy)
+            if paramset.roi_use_table == 0:
+                off_center_xys = [tuple(np.add(extra_xy, np.array(delta_xya[0:2])))]
+            else:  # 1
+                xs = [x for x in paramset.roi_table.pos_x]
+                xs = np.array(xs) / image_info.pix[0] + delta_xya[0]
+                ys = [y for y in paramset.roi_table.pos_y]
+                ys = np.array(ys) / image_info.pix[1] + delta_xya[1]
+                off_center_xys = [(xs[i], ys[i]) for i in range(len(xs))]
+
+            # roi_type 0=circular, 1=rectangular, 2=rectangular angled
+            if paramset.roi_type == 0:
+                roi_size_in_pix = paramset.roi_radius / image_info.pix[0]
+                roi_array = [get_roi_circle(
+                    img_shape, off_xy, roi_size_in_pix) for off_xy in off_center_xys]
+            else:
+                w = paramset.roi_x / image_info.pix[0]
+                h = paramset.roi_y / image_info.pix[1]
+                roi_array = [get_roi_rectangle(
+                    img_shape, roi_width=w, roi_height=h,
+                    offcenter_xy=off_xy) for off_xy in off_center_xys]
+                if paramset.roi_type == 2 and paramset.roi_a != 0:  # rotated ROI
+                    roi_array_rotated = []
+                    for i, roi in enumerate(roi_array):
+                        if any(off_center_xys[i]):
+                            roi = mmcalc.rotate2d_offcenter(
+                                roi.astype(float), -paramset.roi_a, off_center_xys[i])
+                        else:
+                            roi = ndimage.rotate(
+                                roi.astype(float), -paramset.roi_a, reshape=False)
+                        roi = np.round(roi)
+                        roi = np.array(roi, dtype=bool)
+                        roi_array_rotated.append(roi)
+                    roi_array = roi_array_rotated
+
+        else:  # zoomed table
+            if len(paramset.roi_table.pos_x) > 0:
+                for i in range(len(paramset.roi_table.pos_x)):
+                    roi_array.append(get_roi_rectangle(
+                        img_shape,
+                        coords_x=paramset.roi_table.pos_x[i],
+                        coords_y=paramset.roi_table.pos_y[i]
+                        ))
+
+        return roi_array
+
+    def SDN():  # SDNR Mammo
+        errmsg = None
+        off_xy = None
+        roi_sz = paramset.sdn_roi_size / image_info.pix[0]
+        roi_dist = paramset.sdn_roi_dist / image_info.pix[0]
+        mask_outer_pix = round(
+            paramset.sdn_auto_center_mask_outer / image_info.pix[0])  # ignore outer
+        if paramset.sdn_auto_center:
+            res = mmcalc.find_center_object(image, mask_outer=mask_outer_pix,
+                                            tolerances_width=[80, 120], sigma=5.)
+            if res is None:
+                errmsg = 'Failed finding center of object.'
+            else:
+                center_x, center_y, width_x, width_y = res
+
+                off_xy = [
+                    center_x - 0.5*image_info.shape[1],
+                    center_y - 0.5*image_info.shape[0]
+                    ]
+        if off_xy is None:
+            off_xy = delta_xya[0:2]
+
+        roi_this = [get_roi_rectangle(
+                img_shape, roi_width=roi_sz, roi_height=roi_sz,
+                offcenter_xy=off_xy)]
+        for delta_xy in [(-1, 0), (1, 0), (0, 1), (0, -1)]:
+            roi_this.append(
+                get_roi_rectangle(
+                    img_shape, roi_width=roi_sz, roi_height=roi_sz,
+                    offcenter_xy=[
+                        off_xy[0] + delta_xy[0]*roi_dist,
+                        off_xy[1] + delta_xy[1]*roi_dist])
+                )
+
+        if mask_outer_pix > 0:
+            inside = np.full(img_shape, False)
+            inside[mask_outer_pix:-mask_outer_pix,
+                   mask_outer_pix:-mask_outer_pix] = True
+            roi_this.append(inside)
+
+        return (roi_this, errmsg)
+
+    def Sli():
+        roi_this, errmsg = get_slicethickness_start_stop(
+            image, image_info, paramset, delta_xya,
+            modality=input_main.current_modality)
+
+        return (roi_this, errmsg)
+
+    def SNI():  # NM structured noise index
+        return get_roi_SNI(image, image_info, paramset)
 
     def SNR():
         central_ROI = get_roi_circle_MR(
@@ -463,20 +520,32 @@ def get_rois(image, image_number, input_main):
             roi_array = central_ROI
         return roi_array
 
-    def PIU():
-        return get_roi_circle_MR(
-            image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
+    def Spe():  # Speed WB NM
+        roi_height_in_pix = 10. * paramset.spe_height / image_info.pix[0]
+        return get_roi_rectangle(
+            img_shape, roi_width=paramset.spe_avg, roi_height=roi_height_in_pix,
+            offcenter_xy=delta_xya[0:2])
+
+    def STP():
+        roi_size_in_pix = paramset.stp_roi_size / image_info.pix[0]
+        return get_roi_circle(img_shape, tuple(delta_xya[0:2]), roi_size_in_pix)
+
+    def Uni():  # Uniformity NM
+        return get_ratio_NM(
+            image, image_info,
+            ufov_ratio=paramset.uni_ufov_ratio,
+            cfov_ratio=paramset.uni_cfov_ratio
             )
 
-    def Gho():
-        return get_roi_circle_MR(
-            image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
-            )
-
-    def Geo():
-        return get_roi_circle_MR(
-            image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
-            )
+    def Var():  # Variance Xray
+        roi_size_in_pix = paramset.var_roi_size / image_info.pix[0]
+        roi_small = get_roi_rectangle(
+            img_shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
+        w = 0.01 * paramset.var_percent * img_shape[1]
+        h = 0.01 * paramset.var_percent * img_shape[0]
+        roi_large = get_roi_rectangle(
+            img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
+        return [roi_large, roi_small]
 
     if image is not None:
         try:
@@ -724,11 +793,46 @@ def get_roi_hom(image_info,
         for i in range(5):
             roi_array.append(get_roi_circle(
                 image_info.shape, tuple(off_centers[i]), roi_size_in_pix))
-
+    elif modality == 'Mammo':
+        roi_small = get_roi_rectangle(
+            image_info.shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
+        roi_var_in_pix = paramset.hom_roi_size_variance / image_info.pix[0]
+        roi_variance = get_roi_rectangle(
+            image_info.shape, roi_width=roi_var_in_pix, roi_height=roi_var_in_pix)
+        roi_array = [roi_small, roi_variance]
     else:
         roi_array = None
 
     return roi_array
+
+
+def get_mask_max(image):
+    """Get mask area wher max in image. Assumed to be rectangular, continuous shape.
+
+    Parameters
+    ----------
+    image : np.array
+        dtype float
+
+    Returns
+    -------
+    mask_max : np.array
+        dtype bool
+    """
+    mask_max = np.full(image.shape, False)
+    row_maxs = np.max(image, axis=0)
+    row_max_id = np.where(row_maxs == np.max(image))
+    if row_max_id[0].size > 1:
+        row_test = np.arange(np.min(row_max_id), np.max(row_max_id) + 1)
+        if row_test.size == row_max_id[0].size:
+            col_maxs = np.max(image, axis=1)
+            col_max_id = np.where(col_maxs == np.max(image))
+            col_test = np.arange(np.min(col_max_id), np.max(col_max_id) + 1)
+            if col_test.size == col_max_id[0].size:
+                mask_max[np.min(row_test):np.max(row_test),
+                         np.min(col_test):np.max(col_test)] = True
+
+    return mask_max
 
 
 def get_roi_CTn(image, image_info, paramset, delta_xya=[0, 0, 0.]):

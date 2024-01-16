@@ -29,7 +29,7 @@ from imageQC.ui import ui_image_canvas
 from imageQC.config.iQCconstants import ENV_ICON_PATH, QUICKTEST_OPTIONS
 from imageQC.ui import settings
 from imageQC.scripts import automation
-from imageQC.scripts.mini_methods import get_all_matches
+from imageQC.scripts.mini_methods import get_all_matches, get_new_files_qap
 from imageQC.scripts.dcm import sort_imgs
 # imageQC block end
 
@@ -365,12 +365,12 @@ class OpenAutomationDialog(ImageQCDialog):
             QMessageBox.information(
                 self, 'Warning', 'Import path not defined or do not exist.')
 
-    def count_files(self, folder_path):
+    def count_files(self, auto_template):
         """Count number of files in path.
 
         Parameters
         ----------
-        path : str
+        auto_template : as defined in config_classes
 
         Returns
         -------
@@ -379,13 +379,17 @@ class OpenAutomationDialog(ImageQCDialog):
         """
         n_files = 0
         error_ex = None
-        try:
-            for path in os.listdir(folder_path):
-                if os.path.isfile(os.path.join(folder_path, path)):
-                    n_files += 1
-        except (FileNotFoundError, OSError) as ex:
-            n_files = -1
-            error_ex = f'{ex}'
+        if auto_template.file_type == 'GE QAP (.txt)':
+            files_qap = get_new_files_qap(auto_template)
+            n_files = len(files_qap)
+        else:
+            try:
+                for path in os.listdir(auto_template.input_path):
+                    if os.path.isfile(os.path.join(auto_template.input_path, path)):
+                        n_files += 1
+            except (FileNotFoundError, OSError) as ex:
+                n_files = -1
+                error_ex = f'{ex}'
 
         return (n_files, error_ex)
 
@@ -459,7 +463,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     else:
                         if temp.active:
                             if temp.path_input != '':
-                                n_files, err = self.count_files(temp.path_input)
+                                n_files, err = self.count_files(temp)
                                 if n_files > 0:
                                     arr[-1] = f'({n_files})\t{arr[-1]}'
                                 else:
@@ -488,7 +492,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     arr.append(name)
                     if temp.active:
                         if temp.path_input != '':
-                            n_files, err = self.count_files(temp.path_input)
+                            n_files, err = self.count_files(temp)
                             if n_files > 0:
                                 arr[-1] = f'({n_files})\t{arr[-1]}'
                             else:
@@ -552,7 +556,7 @@ class OpenAutomationDialog(ImageQCDialog):
                     temp_this = self.templates[mod][self.templates_id[idx]]
 
                 if temp_this.active and temp_this.path_input != '':
-                    n_files, err = self.count_files(temp_this.path_input)
+                    n_files, err = self.count_files(temp_this)
                     if n_files > 0:
                         txt = f'({n_files})\t{self.templates_displayed_names_all[idx]}'
                     else:

@@ -108,7 +108,11 @@ def extract_values(values, columns=[], calculation='='):
                 elif calculation == 'width (max-min)':
                     new_values = [float(np.max(allvals)) - float(np.min(allvals))]
             else:
-                new_values = [None]
+                is_zero = [val == 0 for val in allvals]
+                if all(is_zero):
+                    new_values = [0]
+                else:
+                    new_values = [None]
 
     return new_values
 
@@ -493,8 +497,15 @@ def calculate_qc(input_main, wid_auto=None,
                         if paramset.ctn_auto_center:
                             force_new_roi.append('CTn')
                 elif modality == 'Xray':
-                    if 'Noise' in marked[i]:
+                    if 'Noi' in marked[i]:
                         force_new_roi.append('Noi')
+                    if 'MTF' in marked[i]:
+                        if paramset.mtf_auto_center:
+                            force_new_roi.append('MTF')
+                elif modality == 'Mammo':
+                    if 'SDN' in marked[i]:
+                        if paramset.sdn_auto_center:
+                            force_new_roi.append('SDN')
                     if 'MTF' in marked[i]:
                         if paramset.mtf_auto_center:
                             force_new_roi.append('MTF')
@@ -863,200 +874,37 @@ def calculate_2d(image2d, roi_array, image_info, modality,
     -------
     result : Results
     """
-
-    def ROI():
-        values = []
-        values_sup = []
-        alt = paramset.roi_use_table
-        errmsgs = []
+    def Bar():
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
-        all_headers = headers + headers_sup
-        if alt > 0:
-            labels = paramset.roi_table.labels
-            if '' in labels:
-                for i, lbl in enumerate(labels):
-                    if lbl == '':
-                        labels[i] = f'ROI_{i}'
-            headers = [
-                f'{labels[i]}_{all_headers[paramset.roi_table_val]}'
-                for i in range(len(labels))]
-            headers_sup = [
-                f'{labels[i]}_{all_headers[paramset.roi_table_val_sup]}'
-                for i in range(len(labels))]
-        if image2d is not None:
-            if roi_array is None:
-                errmsgs.append('Found no ROI defined.')
+        # ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',
+        #    'FWHM1', 'FWHM2', 'FWHM3', 'FWHM4']
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            if len(roi_array) == 4:
+                values = []
+                for roi_this in roi_array:
+                    arr = np.ma.masked_array(image2d, mask=np.invert(roi_this))
+                    avg_val = np.mean(arr)
+                    var_val = np.var(arr)
+                    if avg_val > 0 and var_val >= avg_val:  # avoid RuntimeWarning
+                        values.append(np.sqrt(2*(var_val - avg_val)) / avg_val)  # MTF
+                    else:
+                        values.append(np.nan)
+
+                const = 4./np.pi * np.sqrt(np.log(2))
+                bar_widths = np.array([paramset.bar_width_1, paramset.bar_width_2,
+                                       paramset.bar_width_3, paramset.bar_width_4])
+                fwhms = const * np.multiply(
+                    bar_widths,
+                    np.sqrt(np.log(1/np.array(values)))
+                    )
+
+                values.extend(list(fwhms))
+                res = Results(headers=headers, values=values)
             else:
-                if alt in [0, 1]:
-                    for i, roi in enumerate(roi_array):
-                        arr = np.ma.masked_array(image2d, mask=np.invert(roi))
-                        vals = [np.mean(arr), np.std(arr), np.min(arr), np.max(arr)]
-                        if alt == 0:
-                            values = vals[:2]
-                            values_sup = vals[2:]
-                        else:
-                            values.append(vals[paramset.roi_table_val])
-                            values_sup.append(vals[paramset.roi_table_val_sup])
-                else:  # zoomed area
-                    for i, roi in enumerate(roi_array):
-                        rows = np.max(roi, axis=1)
-                        cols = np.max(roi, axis=0)
-                        sub = image2d[rows][:, cols]
-                        missing_roi = False
-                        if np.min(sub.shape) > 2:
-                            arr = np.ma.masked_array(image2d, mask=np.invert(roi))
-                            vals = [np.mean(arr), np.std(arr), np.min(arr), np.max(arr)]
-                            values.append(vals[paramset.roi_table_val])
-                            values_sup.append(vals[paramset.roi_table_val_sup])
-                        else:
-                            missing_roi = True
-                            values.append(None)
-                            values_sup.append(None)
+                res = Results(headers=headers)
 
-                        if missing_roi:
-                            errmsgs.append(
-                                f'ROI too small or outside image for {labels[i]}.')
-
-        res = Results(
-            headers=headers, values=values,
-            headers_sup=headers_sup, values_sup=values_sup,
-            alternative=alt, errmsg=errmsgs)
-        return res
-
-    def Num():
-        headers = paramset.num_table.labels
-        if '' in headers:
-            for i, lbl in enumerate(headers):
-                if lbl == '':
-                    headers[i] = f'ROI_{i}'
-        values = []
-        errmsgs = []
-        if image2d is not None:
-            if len(digit_templates) == 0:
-                errmsgs.append(f'No digit templates defined for {modality}.')
-            elif paramset.num_digit_label == '':
-                errmsgs.append(
-                    'No digit template defined in current parameter '
-                    f'set {paramset.label}.')
-            elif len(roi_array) > 0:
-                labels = [temp.label for temp in digit_templates]
-                if paramset.num_digit_label in labels:
-                    temp_idx = labels.index(paramset.num_digit_label)
-                else:
-                    temp_idx = None
-                    errmsgs.append(
-                        f'Digit template {paramset.num_digit_label} not found.')
-                if temp_idx is not None:
-                    digit_template = digit_templates[temp_idx]
-                    imgs_is_arr = [
-                        isinstance(img, (np.ndarray, list)) for img
-                        in digit_template.images[:-2]]
-                    if not any(imgs_is_arr):
-                        temp_idx = None
-                        errmsgs.append(
-                            'Digit template images not defined for any digit '
-                            f'of Digit template {paramset.num_digit_label}'
-                            f'[{modality}].')
-                if temp_idx is not None:
-                    for i, roi in enumerate(roi_array):
-                        rows = np.max(roi, axis=1)
-                        cols = np.max(roi, axis=0)
-                        sub = image2d[rows][:, cols]
-                        missing_roi = False
-                        if np.min(sub.shape) > 2:
-                            char_imgs, chop_idxs = (
-                                digit_methods.extract_char_blocks(sub))
-                        else:
-                            char_imgs = []
-                            missing_roi = True
-                        digit = None
-                        if len(char_imgs) == 0:
-                            if missing_roi:
-                                errmsgs.append(
-                                    f'ROI too small or outside image for {headers[i]}.')
-                            else:
-                                errmsgs.append(
-                                    f'Failed finding digits in {headers[i]}.')
-                        else:
-                            digit = digit_methods.compare_char_blocks_2_template(
-                                char_imgs, digit_template)
-                            if digit is None:
-                                errmsgs.append(
-                                    f'Found no match for the blocks of {headers[i]}.')
-                        values.append(digit)
-
-            else:
-                errmsgs.append('No ROIs defined.')
-
-        res = Results(headers=headers, values=values, errmsg=errmsgs)
-        return res
-
-    def Noi():
-        values = []
-        if image2d is not None:
-            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
-            avg_val = np.mean(arr)
-            std_val = np.std(arr)
-        if modality == 'CT':
-            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-            if image2d is not None:
-                values = [avg_val, std_val, 0, 0]
-        elif modality == 'Xray':
-            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-            if image2d is not None:
-                values = [avg_val, std_val]
-
-        res = Results(headers=headers, values=values)
-        return res
-
-    def Hom():
-        values = []
-        headers_sup = []
-        values_sup = []
-        avgs = []
-        stds = []
-        alt = 0
-        if image2d is not None:
-            for i in range(np.shape(roi_array)[0]):
-                arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
-                avgs.append(np.mean(arr))
-                stds.append(np.std(arr))
-
-        if modality == 'CT':
-            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-            headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
-            if image2d is not None:
-                values = [avgs[1], avgs[2], avgs[3], avgs[4], avgs[0],
-                          avgs[1] - avgs[0], avgs[2] - avgs[0],
-                          avgs[3] - avgs[0], avgs[4] - avgs[0]]
-                values_sup = [stds[1], stds[2], stds[3], stds[4], stds[0]]
-
-        elif modality == 'Xray':
-            alt = paramset.hom_tab_alt
-            headers = copy.deepcopy(HEADERS[modality][test_code]['alt'+str(alt)])
-            if image2d is not None:
-                if alt == 0:
-                    values = avgs + stds
-                else:
-                    avg_all = np.sum(avgs) / len(avgs)
-                    diffs = [(avg - avg_all) for avg in avgs]
-                    if alt == 1:
-                        values = avgs + diffs
-                    elif alt == 2:
-                        diffs_percent = [100. * (diff / avg_all) for diff in diffs]
-                        values = avgs + diffs_percent
-
-        elif modality == 'PET':
-            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-            if image2d is not None:
-                avg = sum(avgs) / len(avgs)
-                diffs = [100.*(avgs[i] - avg)/avg for i in range(5)]
-                values = avgs + diffs
-
-        res = Results(headers=headers, values=values,
-                      headers_sup=headers_sup, values_sup=values_sup,
-                      alternative=alt)
         return res
 
     def CTn():
@@ -1093,6 +941,238 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             res = Results(headers=headers, headers_sup=headers_sup)
         return res
 
+    def Dim():
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
+        if image2d is None:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
+            errmsg = ''
+            values = []
+            values_sup = []
+            details_dict = {}
+            dx, dy = roi_array[-1]
+            centers_x = []
+            centers_y = []
+            for i in range(4):
+                rows = np.max(roi_array[i], axis=1)
+                cols = np.max(roi_array[i], axis=0)
+                sub = image2d[rows][:, cols]
+                prof_y = np.sum(sub, axis=1)
+                prof_x = np.sum(sub, axis=0)
+                width_x, center_x = mmcalc.get_width_center_at_threshold(
+                    prof_x, 0.5 * (max(prof_x) + min(prof_x)))
+                width_y, center_y = mmcalc.get_width_center_at_threshold(
+                    prof_y, 0.5 * (max(prof_y) + min(prof_y)))
+                if center_x is not None:
+                    centers_x.append(center_x - prof_x.size / 2 + dx[i])
+                else:
+                    centers_x.append(None)
+                if center_y is not None:
+                    centers_y.append(center_y - prof_y.size / 2 + dy[i])
+                else:
+                    centers_y.append(None)
+            if all(centers_x) and all(centers_y):
+                pix = image_info.pix[0]
+                diffs = []
+                dds = []
+                dist = 50.
+                diag_dist = np.sqrt(2*50**2)
+                for i in range(4):
+                    diff = pix * np.sqrt(
+                        (centers_x[i] - centers_x[-i-1])**2
+                        + (centers_y[i] - centers_y[-i-1])**2
+                        )
+                    diffs.append(diff)
+                    dds.append(diff - dist)
+                d1 = pix * np.sqrt(
+                    (centers_x[2] - centers_x[0])**2
+                    + (centers_y[2] - centers_y[0])**2
+                    )
+                d2 = pix * np.sqrt(
+                    (centers_x[3] - centers_x[1])**2
+                    + (centers_y[3] - centers_y[1])**2
+                    )
+                values = [diffs[1], diffs[3], diffs[0], diffs[2], d1, d2]
+                values_sup = [dds[1], dds[3], dds[0], dds[2],
+                              d1 - diag_dist, d2 - diag_dist]
+                details_dict = {'centers_x': centers_x, 'centers_y': centers_y}
+            else:
+                errmsg = 'Could not find center of all 4 rods.'
+
+            values_info = 'Distance [mm] between rods'
+            values_sup_info = (
+                'Difference [mm] from expected distance (50 mm) between rods.')
+
+            res = Results(
+                headers=headers, values=values, values_info=values_info,
+                headers_sup=headers_sup, values_sup=values_sup,
+                values_sup_info=values_sup_info,
+                details_dict=details_dict, errmsg=errmsg)
+
+        return res
+
+    def Geo():
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        # ['width_0', 'width_90', 'width_45', 'width_135',
+        #         'GD_0', 'GD_90', 'GD_45', 'GD_135']
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            mask_outer = round(paramset.geo_mask_outer / image_info.pix[0])
+            actual_size = paramset.geo_actual_size
+            rotate = [0, 45]
+            widths = []
+            for r in rotate:
+                if r > 0:
+                    minval = np.min(image2d)
+                    inside = np.full(image_info.shape, False)
+                    inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
+                    image2d[inside == False] = minval
+                    im = sp.ndimage.rotate(image2d, r, reshape=False, cval=minval)
+                else:
+                    im = image2d
+                # get maximum profiles x and y
+                if mask_outer == 0:
+                    prof_y = np.max(im, axis=1)
+                    prof_x = np.max(im, axis=0)
+                else:
+                    prof_y = np.max(
+                        im[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=1)
+                    prof_x = np.max(
+                        im[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=0)
+                # get width at halfmax and center for profiles
+                width_x, center_x = mmcalc.get_width_center_at_threshold(
+                    prof_x, 0.5 * (
+                        max(prof_x[prof_x.size//4:-prof_x.size//4])+min(prof_x)),
+                    force_above=True)
+                width_y, center_y = mmcalc.get_width_center_at_threshold(
+                    prof_y, 0.5 * (
+                        max(prof_y[prof_y.size//4:-prof_y.size//4])+min(prof_y)),
+                    force_above=True)
+                if width_x is not None and width_y is not None:
+                    widths.append(width_x * image_info.pix[0])
+                    widths.append(width_y * image_info.pix[0])
+                else:
+                    break
+
+            if len(widths) == 4:
+                values = widths
+                GDs = 100./actual_size * (np.array(widths) - actual_size)
+                values.extend(list(GDs))
+                res = Results(headers=headers, values=values)
+            else:
+                res = Results(headers=headers, errmsg='Failed finding object size')
+
+        return res
+
+    def Gho():
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            avgs = []
+            for i in range(np.shape(roi_array)[0]):
+                arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
+                avgs.append(np.mean(arr))
+            values = avgs
+            if modality == 'Mammo':
+                ghost_factor = (avgs[2] - avgs[1]) / (avgs[0] - avgs[1])
+                values.append(ghost_factor)
+            elif modality == 'MR':
+                PSG = abs(100.*0.5*(
+                    (avgs[3]+avgs[4]) - (avgs[1]+avgs[2])
+                    )/avgs[0])
+                values.append(PSG)
+            res = Results(headers=headers, values=values)
+
+        return res
+
+    def Hom():
+        values = []
+        headers_sup = []
+        values_sup = []
+        avgs = []
+        stds = []
+        alt = 0
+        res = None
+        if image2d is not None:
+            for i in range(np.shape(roi_array)[0]):
+                arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
+                avgs.append(np.mean(arr))
+                stds.append(np.std(arr))
+
+        if modality == 'CT':
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
+            if image2d is not None:
+                values = [avgs[1], avgs[2], avgs[3], avgs[4], avgs[0],
+                          avgs[1] - avgs[0], avgs[2] - avgs[0],
+                          avgs[3] - avgs[0], avgs[4] - avgs[0]]
+                values_sup = [stds[1], stds[2], stds[3], stds[4], stds[0]]
+
+        elif modality == 'Xray':
+            alt = paramset.hom_tab_alt
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt'+str(alt)])
+            if image2d is not None:
+                if alt == 0:
+                    values = avgs + stds
+                else:
+                    avg_all = np.sum(avgs) / len(avgs)
+                    diffs = [(avg - avg_all) for avg in avgs]
+                    if alt == 1:
+                        values = avgs + diffs
+                    elif alt == 2:
+                        diffs_percent = [100. * (diff / avg_all) for diff in diffs]
+                        values = avgs + diffs_percent
+
+        elif modality == 'Mammo':
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
+            if image2d is not None:
+                details = calculate_flatfield_mammo(
+                    image2d, roi_array[-1], image_info, paramset)
+                if details:
+                    matrix_shape = details['deviating_rois'].shape
+                    values = [
+                        np.mean(details['averages']),
+                        np.mean(details['snrs']),
+                        details['n_rois'],
+                        details['n_deviating_averages'],
+                        details['n_deviating_snrs'],
+                        details['n_deviating_rois'],
+                        100 * details['n_deviating_rois'] / details['n_rois'],
+                        details['n_deviating_pixels'],
+                        100 * details['n_deviating_pixels'] / details['n_pixels'],
+                        ]
+                    masked_image = np.ma.masked_array(image2d, mask=roi_array[-1])
+                    values_sup = [
+                        np.min(masked_image), np.max(masked_image),
+                        np.min(details['averages']), np.max(details['averages']),
+                        np.min(details['snrs']), np.max(details['snrs']),
+                        details['deviating_rois'].shape[1],
+                        details['deviating_rois'].shape[0],
+                        details['n_masked_rois'], details['n_masked_pixels']
+                        ]
+
+                    res = Results(
+                        headers=headers, values=values,
+                        headers_sup=headers_sup, values_sup=values_sup,
+                        details_dict=details)
+
+        elif modality == 'PET':
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            if image2d is not None:
+                avg = sum(avgs) / len(avgs)
+                diffs = [100.*(avgs[i] - avg)/avg for i in range(5)]
+                values = avgs + diffs
+
+        if res is None:
+            res = Results(headers=headers, values=values,
+                          headers_sup=headers_sup, values_sup=values_sup,
+                          alternative=alt)
+        return res
+
     def HUw():
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         values = []
@@ -1102,58 +1182,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             std_val = np.std(arr)
             values = [avg_val, std_val]
         res = Results(headers=headers, values=values)
-        return res
-
-    def Sli():
-        if modality == 'CT':
-            alt = paramset.sli_type
-            headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
-            if image2d is not None:
-                lines = roi_array
-                values, details_dict, errmsg = calculate_slicethickness(
-                    image2d, image_info, paramset, lines, delta_xya)
-                if alt == 0:
-                    try:
-                        values.append(np.mean(values[1:]))
-                        values.append(100. * (values[-1] - values[0]) / values[0])
-                    except TypeError:
-                        values.append(None)
-                        values.append(None)
-                res = Results(
-                    headers=headers, values=values,
-                    details_dict=details_dict,
-                    alternative=alt, errmsg=errmsg)
-            else:
-                res = Results(headers=headers, alternative=alt)
-        elif modality == 'MR':
-            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-            # ['Nominal (mm)', 'Slice thickness (mm)', 'Diff (mm)', 'Diff (%)']
-            headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
-            # FWHM1, FWHM2
-            if image2d is not None:
-                lines = roi_array
-                values, details_dict, errmsg = calculate_slicethickness(
-                    image2d, image_info, paramset, lines, delta_xya, modality='MR')
-                values_sup = values[1:3]
-                try:
-                    fwhm = values[1:3]
-                    harmonic_mean = 2 * (fwhm[0] * fwhm[1])/(fwhm[0] + fwhm[1])
-                    slice_thickness = paramset.sli_tan_a * harmonic_mean
-                    values[1] = slice_thickness
-                    values[2] = values[1] - values[0]
-                    values.append(100. * values[2] / values[0])
-                except (TypeError, IndexError):
-                    values = [values[0], None, None, None]
-                res = Results(
-                    headers=headers, values=values,
-                    headers_sup=headers_sup, values_sup=values_sup,
-                    details_dict=details_dict,
-                    alternative=0, errmsg=errmsg)
-            else:
-                res = Results(headers=headers)
-        else:
-            res = Results()
-
         return res
 
     def MTF():
@@ -1200,7 +1228,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     res = Results(
                         headers=headers, headers_sup=headers_sup, errmsg=errmsg)
 
-        elif modality in ['Xray', 'MR']:
+        elif modality in ['Xray', 'Mammo', 'MR']:
             headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
             headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
             if image2d is None:
@@ -1308,6 +1336,128 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     # TODO better handle this, seen when NM point input, calc line
         return res
 
+    def Noi():
+        values = []
+        if image2d is not None:
+            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
+            avg_val = np.mean(arr)
+            std_val = np.std(arr)
+        if modality == 'CT':
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            if image2d is not None:
+                values = [avg_val, std_val, 0, 0]
+        elif modality == 'Xray':
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            if image2d is not None:
+                values = [avg_val, std_val]
+
+        res = Results(headers=headers, values=values)
+        return res
+
+    def NPS():
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            values, details_dict = calculate_NPS(
+                image2d, roi_array, image_info, paramset,
+                modality=modality)
+            res = Results(headers=headers, values=values,
+                          details_dict=details_dict)
+        return res
+
+    def Num():
+        headers = paramset.num_table.labels
+        if '' in headers:
+            for i, lbl in enumerate(headers):
+                if lbl == '':
+                    headers[i] = f'ROI_{i}'
+        values = []
+        errmsgs = []
+        if image2d is not None:
+            if len(digit_templates) == 0:
+                errmsgs.append(f'No digit templates defined for {modality}.')
+            elif paramset.num_digit_label == '':
+                errmsgs.append(
+                    'No digit template defined in current parameter '
+                    f'set {paramset.label}.')
+            elif len(roi_array) > 0:
+                labels = [temp.label for temp in digit_templates]
+                if paramset.num_digit_label in labels:
+                    temp_idx = labels.index(paramset.num_digit_label)
+                else:
+                    temp_idx = None
+                    errmsgs.append(
+                        f'Digit template {paramset.num_digit_label} not found.')
+                if temp_idx is not None:
+                    digit_template = digit_templates[temp_idx]
+                    imgs_is_arr = [
+                        isinstance(img, (np.ndarray, list)) for img
+                        in digit_template.images[:-2]]
+                    if not any(imgs_is_arr):
+                        temp_idx = None
+                        errmsgs.append(
+                            'Digit template images not defined for any digit '
+                            f'of Digit template {paramset.num_digit_label}'
+                            f'[{modality}].')
+                if temp_idx is not None:
+                    for i, roi in enumerate(roi_array):
+                        rows = np.max(roi, axis=1)
+                        cols = np.max(roi, axis=0)
+                        sub = image2d[rows][:, cols]
+                        missing_roi = False
+                        if np.min(sub.shape) > 2:
+                            char_imgs, chop_idxs = (
+                                digit_methods.extract_char_blocks(sub))
+                        else:
+                            char_imgs = []
+                            missing_roi = True
+                        digit = None
+                        if len(char_imgs) == 0:
+                            if missing_roi:
+                                errmsgs.append(
+                                    f'ROI too small or outside image for {headers[i]}.')
+                            else:
+                                errmsgs.append(
+                                    f'Failed finding digits in {headers[i]}.')
+                        else:
+                            digit = digit_methods.compare_char_blocks_2_template(
+                                char_imgs, digit_template)
+                            if digit is None:
+                                errmsgs.append(
+                                    f'Found no match for the blocks of {headers[i]}.')
+                        values.append(digit)
+
+            else:
+                errmsgs.append('No ROIs defined.')
+
+        res = Results(headers=headers, values=values, errmsg=errmsgs)
+        return res
+
+    def PIU():
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        # ['min', 'max', 'PIU'],
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
+        # ['x min (pix from upper left)', 'y min', 'x max', 'y max']
+        if image2d is None:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
+            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
+            min_val = np.min(arr)
+            max_val = np.max(arr)
+            piu = 100.*(1-(max_val-min_val)/(max_val+min_val))
+            values = [min_val, max_val, piu]
+
+            min_idx, max_idx = mmcalc.get_min_max_pos_2d(image2d, roi_array)
+            values_sup = [min_idx[1], min_idx[0],
+                          max_idx[1], max_idx[0]]
+
+            res = Results(
+                headers=headers, values=values,
+                headers_sup=headers_sup, values_sup=values_sup)
+
+        return res
+
     def Rin():
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         if image2d is None:
@@ -1349,87 +1499,207 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
         return res
 
-    def Dim():
+    def ROI():
+        values = []
+        values_sup = []
+        alt = paramset.roi_use_table
+        errmsgs = []
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
-        if image2d is None:
-            res = Results(headers=headers, headers_sup=headers_sup)
-        else:
-            errmsg = ''
-            values = []
-            values_sup = []
-            details_dict = {}
-            dx, dy = roi_array[-1]
-            centers_x = []
-            centers_y = []
-            for i in range(4):
-                rows = np.max(roi_array[i], axis=1)
-                cols = np.max(roi_array[i], axis=0)
-                sub = image2d[rows][:, cols]
-                prof_y = np.sum(sub, axis=1)
-                prof_x = np.sum(sub, axis=0)
-                width_x, center_x = mmcalc.get_width_center_at_threshold(
-                    prof_x, 0.5 * (max(prof_x) + min(prof_x)))
-                width_y, center_y = mmcalc.get_width_center_at_threshold(
-                    prof_y, 0.5 * (max(prof_y) + min(prof_y)))
-                if center_x is not None:
-                    centers_x.append(center_x - prof_x.size / 2 + dx[i])
-                else:
-                    centers_x.append(None)
-                if center_y is not None:
-                    centers_y.append(center_y - prof_y.size / 2 + dy[i])
-                else:
-                    centers_y.append(None)
-            if all(centers_x) and all(centers_y):
-                pix = image_info.pix[0]
-                diffs = []
-                dds = []
-                dist = 50.
-                diag_dist = np.sqrt(2*50**2)
-                for i in range(4):
-                    diff = pix * np.sqrt(
-                        (centers_x[i] - centers_x[-i-1])**2
-                        + (centers_y[i] - centers_y[-i-1])**2
-                        )
-                    diffs.append(diff)
-                    dds.append(diff - dist)
-                d1 = pix * np.sqrt(
-                    (centers_x[2] - centers_x[0])**2
-                    + (centers_y[2] - centers_y[0])**2
-                    )
-                d2 = pix * np.sqrt(
-                    (centers_x[3] - centers_x[1])**2
-                    + (centers_y[3] - centers_y[1])**2
-                    )
-                values = [diffs[1], diffs[3], diffs[0], diffs[2], d1, d2]
-                values_sup = [dds[1], dds[3], dds[0], dds[2],
-                              d1 - diag_dist, d2 - diag_dist]
-                details_dict = {'centers_x': centers_x, 'centers_y': centers_y}
+        all_headers = headers + headers_sup
+        if alt > 0:
+            labels = paramset.roi_table.labels
+            if '' in labels:
+                for i, lbl in enumerate(labels):
+                    if lbl == '':
+                        labels[i] = f'ROI_{i}'
+            headers = [
+                f'{labels[i]}_{all_headers[paramset.roi_table_val]}'
+                for i in range(len(labels))]
+            headers_sup = [
+                f'{labels[i]}_{all_headers[paramset.roi_table_val_sup]}'
+                for i in range(len(labels))]
+        if image2d is not None:
+            if roi_array is None:
+                errmsgs.append('Found no ROI defined.')
             else:
-                errmsg = 'Could not find center of all 4 rods.'
+                if alt in [0, 1]:
+                    for i, roi in enumerate(roi_array):
+                        arr = np.ma.masked_array(image2d, mask=np.invert(roi))
+                        vals = [np.mean(arr), np.std(arr), np.min(arr), np.max(arr)]
+                        if alt == 0:
+                            values = vals[:2]
+                            values_sup = vals[2:]
+                        else:
+                            values.append(vals[paramset.roi_table_val])
+                            values_sup.append(vals[paramset.roi_table_val_sup])
+                else:  # zoomed area
+                    for i, roi in enumerate(roi_array):
+                        rows = np.max(roi, axis=1)
+                        cols = np.max(roi, axis=0)
+                        sub = image2d[rows][:, cols]
+                        missing_roi = False
+                        if np.min(sub.shape) > 2:
+                            arr = np.ma.masked_array(image2d, mask=np.invert(roi))
+                            vals = [np.mean(arr), np.std(arr), np.min(arr), np.max(arr)]
+                            values.append(vals[paramset.roi_table_val])
+                            values_sup.append(vals[paramset.roi_table_val_sup])
+                        else:
+                            missing_roi = True
+                            values.append(None)
+                            values_sup.append(None)
 
-            values_info = 'Distance [mm] between rods'
-            values_sup_info = (
-                'Difference [mm] from expected distance (50 mm) between rods.')
+                        if missing_roi:
+                            errmsgs.append(
+                                f'ROI too small or outside image for {labels[i]}.')
 
-            res = Results(
-                headers=headers, values=values, values_info=values_info,
-                headers_sup=headers_sup, values_sup=values_sup,
-                values_sup_info=values_sup_info,
-                details_dict=details_dict, errmsg=errmsg)
-
+        res = Results(
+            headers=headers, values=values,
+            headers_sup=headers_sup, values_sup=values_sup,
+            alternative=alt, errmsg=errmsgs)
         return res
 
-    def NPS():
+    def SDN():
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         if image2d is None:
             res = Results(headers=headers)
         else:
-            values, details_dict = calculate_NPS(
-                image2d, roi_array, image_info, paramset,
-                modality=modality)
+            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[0]))
+            signal_mean = np.mean(arr)
+            signal_std = np.std(arr)
+            bg_means = []
+            bg_stds = []
+            for i in range(1, 5):
+                arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
+                bg_means.append(np.mean(arr))
+                bg_stds.append(np.std(arr))
+            bg_mean = np.mean(bg_means)
+            bg_std = np.mean(bg_stds)
+            sdnr = np.abs(signal_mean - bg_mean) / np.sqrt(
+                (bg_std ** 2 + signal_std ** 2) / 2)
+            values = [bg_mean, bg_std, signal_mean, signal_std, sdnr]
+
+            res = Results(headers=headers, values=values)
+
+        return res
+
+    def SNI():
+        alt = paramset.sni_type
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
+        if image2d is None:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
+            reference_image = None
+            if extras is not None:
+                if 'reference_image' in extras:
+                    reference_image = extras['reference_image'][image_info.frame_number]
+
+            values, values_sup, details_dict, errmsg = calculate_NM_SNI(
+                image2d, roi_array, image_info, paramset, reference_image)
+
+            res = Results(
+                headers=headers, values=values,
+                headers_sup=headers_sup, values_sup=values_sup,
+                details_dict=details_dict, errmsg=errmsg)
+
+        return res
+
+    def SNR():
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt1'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt1'])
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[0]))
+            central_mean = np.mean(arr)
+            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[1]))
+            background_stdev = np.std(arr)
+            image_noise = background_stdev/0.66  # NEMA MS 1-2008 method 4
+            snr = central_mean / image_noise
+            values = [central_mean, background_stdev, image_noise, snr]
+            values_sup = [np.count_nonzero(roi_array[1])]
+
             res = Results(headers=headers, values=values,
-                          details_dict=details_dict)
+                          headers_sup=headers_sup, values_sup=values_sup)
+
+        return res
+
+    def Sli():
+        if modality == 'CT':
+            alt = paramset.sli_type
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
+            if image2d is not None:
+                lines = roi_array
+                values, details_dict, errmsg = calculate_slicethickness(
+                    image2d, image_info, paramset, lines, delta_xya)
+                if alt == 0:
+                    try:
+                        values.append(np.mean(values[1:]))
+                        values.append(100. * (values[-1] - values[0]) / values[0])
+                    except TypeError:
+                        values.append(None)
+                        values.append(None)
+                res = Results(
+                    headers=headers, values=values,
+                    details_dict=details_dict,
+                    alternative=alt, errmsg=errmsg)
+            else:
+                res = Results(headers=headers, alternative=alt)
+        elif modality == 'MR':
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            # ['Nominal (mm)', 'Slice thickness (mm)', 'Diff (mm)', 'Diff (%)']
+            headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
+            # FWHM1, FWHM2
+            if image2d is not None:
+                lines = roi_array
+                values, details_dict, errmsg = calculate_slicethickness(
+                    image2d, image_info, paramset, lines, delta_xya, modality='MR')
+                values_sup = values[1:3]
+                try:
+                    fwhm = values[1:3]
+                    harmonic_mean = 2 * (fwhm[0] * fwhm[1])/(fwhm[0] + fwhm[1])
+                    slice_thickness = paramset.sli_tan_a * harmonic_mean
+                    values[1] = slice_thickness
+                    values[2] = values[1] - values[0]
+                    values.append(100. * values[2] / values[0])
+                except (TypeError, IndexError):
+                    values = [values[0], None, None, None]
+                res = Results(
+                    headers=headers, values=values,
+                    headers_sup=headers_sup, values_sup=values_sup,
+                    details_dict=details_dict,
+                    alternative=0, errmsg=errmsg)
+            else:
+                res = Results(headers=headers)
+        else:
+            res = Results()
+
+        return res
+
+    def Spe():
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            rows = np.max(roi_array, axis=1)
+            cols = np.max(roi_array, axis=0)
+            sub = image2d[rows][:, cols]
+            profile = np.mean(sub, axis=1)
+            if paramset.spe_filter_w > 0:
+                profile = sp.ndimage.gaussian_filter(
+                    profile, sigma=paramset.spe_filter_w)
+            profile_pos = np.arange(profile.size) * image_info.pix[0]
+            mean_profile = np.mean(profile)
+            diff_profile = 100. * (profile - mean_profile) / mean_profile
+            details_dict = {'profile': profile, 'profile_pos': profile_pos,
+                            'mean_profile': mean_profile, 'diff_profile': diff_profile}
+            values = [np.min(diff_profile), np.max(diff_profile)]
+
+            res = Results(
+                headers=headers, values=values,
+                details_dict=details_dict)
+
         return res
 
     def STP():
@@ -1441,28 +1711,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             values = [None, None, avg_val, std_val]
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         res = Results(headers=headers, values=values)
-        return res
-
-    def Var():
-        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        if image2d is None:
-            res = Results(headers=headers)
-        else:
-            # code adapted from:
-            # https://www.imageeprocessing.com/2015/10/edge-detection-using-local-variance.html
-            roi_size_in_pix = round(paramset.var_roi_size / image_info.pix[0])
-            kernel = np.full((roi_size_in_pix, roi_size_in_pix),
-                             1./(roi_size_in_pix**2))
-            mu = sp.signal.fftconvolve(image2d, kernel, mode='same')
-            ii = sp.signal.fftconvolve(image2d ** 2, kernel, mode='same')
-            variance_image = ii - mu**2
-            rows = np.max(roi_array[0], axis=1)
-            cols = np.max(roi_array[0], axis=0)
-            sub = variance_image[rows][:, cols]
-            values = [np.min(sub), np.max(sub), np.median(sub)]
-            details_dict = {'variance_image': sub}
-            res = Results(headers=headers, values=values,
-                          details_dict=details_dict)
         return res
 
     def Uni():
@@ -1503,201 +1751,26 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
         return res
 
-    def SNI():
-        alt = paramset.sni_type
-        headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
-        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
-        if image2d is None:
-            res = Results(headers=headers, headers_sup=headers_sup)
-        else:
-            reference_image = None
-            if extras is not None:
-                if 'reference_image' in extras:
-                    reference_image = extras['reference_image'][image_info.frame_number]
-
-            values, values_sup, details_dict, errmsg = calculate_NM_SNI(
-                image2d, roi_array, image_info, paramset, reference_image)
-
-            res = Results(
-                headers=headers, values=values,
-                headers_sup=headers_sup, values_sup=values_sup,
-                details_dict=details_dict, errmsg=errmsg)
-
-        return res
-
-    def Spe():
+    def Var():
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         if image2d is None:
             res = Results(headers=headers)
         else:
-            rows = np.max(roi_array, axis=1)
-            cols = np.max(roi_array, axis=0)
-            sub = image2d[rows][:, cols]
-            profile = np.mean(sub, axis=1)
-            if paramset.spe_filter_w > 0:
-                profile = sp.ndimage.gaussian_filter(
-                    profile, sigma=paramset.spe_filter_w)
-            profile_pos = np.arange(profile.size) * image_info.pix[0]
-            mean_profile = np.mean(profile)
-            diff_profile = 100. * (profile - mean_profile) / mean_profile
-            details_dict = {'profile': profile, 'profile_pos': profile_pos,
-                            'mean_profile': mean_profile, 'diff_profile': diff_profile}
-            values = [np.min(diff_profile), np.max(diff_profile)]
-
-            res = Results(
-                headers=headers, values=values,
-                details_dict=details_dict)
-
-        return res
-
-    def Bar():
-        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        # ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',
-        #    'FWHM1', 'FWHM2', 'FWHM3', 'FWHM4']
-        if image2d is None:
-            res = Results(headers=headers)
-        else:
-            if len(roi_array) == 4:
-                values = []
-                for roi_this in roi_array:
-                    arr = np.ma.masked_array(image2d, mask=np.invert(roi_this))
-                    avg_val = np.mean(arr)
-                    var_val = np.var(arr)
-                    if avg_val > 0 and var_val >= avg_val:  # avoid RuntimeWarning
-                        values.append(np.sqrt(2*(var_val - avg_val)) / avg_val)  # MTF
-                    else:
-                        values.append(np.nan)
-
-                const = 4./np.pi * np.sqrt(np.log(2))
-                bar_widths = np.array([paramset.bar_width_1, paramset.bar_width_2,
-                                       paramset.bar_width_3, paramset.bar_width_4])
-                fwhms = const * np.multiply(
-                    bar_widths,
-                    np.sqrt(np.log(1/np.array(values)))
-                    )
-                
-                values.extend(list(fwhms))
-                res = Results(headers=headers, values=values)
-            else:
-                res = Results(headers=headers)
-
-        return res
-
-    def SNR():
-        headers = copy.deepcopy(HEADERS[modality][test_code]['alt1'])
-        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt1'])
-        if image2d is None:
-            res = Results(headers=headers)
-        else:
-            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[0]))
-            central_mean = np.mean(arr)
-            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[1]))
-            background_stdev = np.std(arr)
-            image_noise = background_stdev/0.66  # NEMA MS 1-2008 method 4
-            snr = central_mean / image_noise
-            values = [central_mean, background_stdev, image_noise, snr]
-            values_sup = [np.count_nonzero(roi_array[1])]
-
+            # code adapted from:
+            # https://www.imageeprocessing.com/2015/10/edge-detection-using-local-variance.html
+            roi_size_in_pix = round(paramset.var_roi_size / image_info.pix[0])
+            kernel = np.full((roi_size_in_pix, roi_size_in_pix),
+                             1./(roi_size_in_pix**2))
+            mu = sp.signal.fftconvolve(image2d, kernel, mode='same')
+            ii = sp.signal.fftconvolve(image2d ** 2, kernel, mode='same')
+            variance_image = ii - mu**2
+            rows = np.max(roi_array[0], axis=1)
+            cols = np.max(roi_array[0], axis=0)
+            sub = variance_image[rows][:, cols]
+            values = [np.min(sub), np.max(sub), np.median(sub)]
+            details_dict = {'variance_image': sub}
             res = Results(headers=headers, values=values,
-                          headers_sup=headers_sup, values_sup=values_sup)
-
-        return res
-
-    def PIU():
-        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        # ['min', 'max', 'PIU'],
-        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
-        # ['x min (pix from upper left)', 'y min', 'x max', 'y max']
-        if image2d is None:
-            res = Results(headers=headers, headers_sup=headers_sup)
-        else:
-            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
-            min_val = np.min(arr)
-            max_val = np.max(arr)
-            piu = 100.*(1-(max_val-min_val)/(max_val+min_val))
-            values = [min_val, max_val, piu]
-
-            min_idx, max_idx = mmcalc.get_min_max_pos_2d(image2d, roi_array)
-            values_sup = [min_idx[1], min_idx[0],
-                          max_idx[1], max_idx[0]]
-
-            res = Results(
-                headers=headers, values=values,
-                headers_sup=headers_sup, values_sup=values_sup)
-
-        return res
-
-    def Gho():
-        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        # ['Center', 'top', 'bottom', 'left', 'right', 'PSG']
-        if image2d is None:
-            res = Results(headers=headers)
-        else:
-            avgs = []
-            for i in range(np.shape(roi_array)[0]):
-                arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
-                avgs.append(np.mean(arr))
-            PSG = abs(100.*0.5*(
-                (avgs[3]+avgs[4]) - (avgs[1]+avgs[2])
-                )/avgs[0])
-            values = avgs
-            values.append(PSG)
-            res = Results(headers=headers, values=values)
-
-        return res
-
-    def Geo():
-        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        # ['width_0', 'width_90', 'width_45', 'width_135',
-        #         'GD_0', 'GD_90', 'GD_45', 'GD_135']
-        if image2d is None:
-            res = Results(headers=headers)
-        else:
-            mask_outer = round(paramset.geo_mask_outer / image_info.pix[0])
-            actual_size = paramset.geo_actual_size
-            rotate = [0, 45]
-            widths = []
-            for r in rotate:
-                if r > 0:
-                    minval = np.min(image2d)
-                    inside = np.full(image_info.shape, False)
-                    inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
-                    image2d[inside == False] = minval
-                    im = sp.ndimage.rotate(image2d, r, reshape=False, cval=minval)
-                else:
-                    im = image2d
-                # get maximum profiles x and y
-                if mask_outer == 0:
-                    prof_y = np.max(im, axis=1)
-                    prof_x = np.max(im, axis=0)
-                else:
-                    prof_y = np.max(
-                        im[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=1)
-                    prof_x = np.max(
-                        im[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=0)
-                # get width at halfmax and center for profiles
-                width_x, center_x = mmcalc.get_width_center_at_threshold(
-                    prof_x, 0.5 * (
-                        max(prof_x[prof_x.size//4:-prof_x.size//4])+min(prof_x)),
-                    force_above=True)
-                width_y, center_y = mmcalc.get_width_center_at_threshold(
-                    prof_y, 0.5 * (
-                        max(prof_y[prof_y.size//4:-prof_y.size//4])+min(prof_y)),
-                    force_above=True)
-                if width_x is not None and width_y is not None:
-                    widths.append(width_x * image_info.pix[0])
-                    widths.append(width_y * image_info.pix[0])
-                else:
-                    break
-
-            if len(widths) == 4:
-                values = widths
-                GDs = 100./actual_size * (np.array(widths) - actual_size)
-                values.extend(list(GDs))
-                res = Results(headers=headers, values=values)
-            else:
-                res = Results(headers=headers, errmsg='Failed finding object size')
-
+                          details_dict=details_dict)
         return res
 
     try:
@@ -2819,6 +2892,10 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
             gaussfit_type = 'double_both_positive'
             lp_vals = [0.5, 1, 1.5, 2, 2.5]
             mtf_vals = [0.5]
+        elif isinstance(paramset, cfc.ParamSetMammo):
+            gaussfit_type = 'double_both_positive'
+            lp_vals = [1, 2, 3, 4, 5]
+            mtf_vals = [0.5]
         elif isinstance(paramset, cfc.ParamSetCT):  # wire 3d
             gaussfit_type = 'double'
             lp_vals = None
@@ -2856,9 +2933,9 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                         fwtm, _ = mmcalc.get_width_center_at_threshold(
                             LSF[i], np.max(LSF[i])/10)
                         if fwhm:
-                            fwhm  = step_size*fwhm
+                            fwhm = step_size * fwhm
                         if fwtm:
-                            fwtm  = step_size*fwtm
+                            fwtm = step_size * fwtm
                         dMTF_details['values'] = [fwhm, fwtm]
                         gMTF_details['values'] = [gMTF_details['FWHM'],
                                                   gMTF_details['FWTM']]
@@ -3052,9 +3129,9 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
     roi_array : list of numpy.ndarray
     img_info :  DcmInfo
         as defined in scripts/dcm.py
-    paramset : ParamSetCT or ParamsetXray
+    paramset : ParamSetCT, ParamsetXray or ParamSetMammo
     modality: str
-        'CT' or 'Xray'
+        'CT', 'Xray' or 'Mammo'
 
     Returns
     -------
@@ -3066,7 +3143,7 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
         radial_profile: power spectrum
         median_freq: median_frequency of power spectrum
         median_val: value at median frequency
-        if Xray:
+        if Xray/Mammo:
         freq: frequency values x -dir
         u_profile: power spectrum x-dir
         v_profile: power spectrum y-dir
@@ -3110,7 +3187,7 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
         details_dict['median_freq'] = median_frequency
         details_dict['median_val'] = median_val
 
-    elif modality == 'Xray':
+    elif modality in ['Xray', 'Mammo']:
         large_area_roi = np.array(roi_array)
         # replace large area with trend-subtracted values
         roi = np.sum(large_area_roi, axis=0, dtype=bool)
@@ -3174,6 +3251,130 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
     details_dict['large_area_signal'] = large_area_signal
 
     return (values, details_dict)
+
+
+def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
+    """Calculate homogeneity Mammo according to EU guidelines.
+
+    Parameters
+    ----------
+    image2d : numpy.ndarray
+        input image
+    mask_max : numpy.ndarray
+        mask of max values if paramset.hom_mask_max is set
+    image_info : DcmInfo
+        as defined in scripts/dcm.py
+    paramset : cfc.ParamSetMammo
+
+    Returns
+    -------
+    details : dict
+    """
+    details = {}
+
+    roi_size_in_pix = round(paramset.hom_roi_size / image_info.pix[0])
+    if roi_size_in_pix % 2 == 1:
+        roi_size_in_pix += 1  # ensure even number roi size to move roi by half
+    offset = 0  # left here if to be used later
+    large_roi_shape = (np.array(image_info.shape) - 2 * offset)
+    n_steps = np.ceil(large_roi_shape / (roi_size_in_pix / 2))  # shift < half ROI
+    step_size = large_roi_shape / n_steps
+    xstarts = np.arange(offset, image_info.shape[1] - (offset + roi_size_in_pix) + 1,
+                        step=step_size[1])
+    ystarts = np.arange(offset, image_info.shape[0] - (offset + roi_size_in_pix) + 1,
+                        step=step_size[0])
+    xstarts = [round(val) for val in list(xstarts)]
+    ystarts = [round(val) for val in list(ystarts)]
+    xstarts[-1] = image_info.shape[1] - 1 - (offset + roi_size_in_pix)
+    ystarts[-1] = image_info.shape[0] - 1 - (offset + roi_size_in_pix)
+    matrix_shape = (len(ystarts), len(xstarts))
+
+    roi_mask = np.full(image2d.shape[0:2], False)
+    if paramset.hom_mask_max:
+        roi_mask[image2d == np.max(image2d)] = True
+    masked_image = np.ma.masked_array(image2d, mask=roi_mask)
+
+    avgs = np.zeros(matrix_shape)
+    snrs = np.zeros(matrix_shape)
+    variances = np.zeros(matrix_shape)
+    masked_roi_matrix = np.full(matrix_shape, False)
+
+    roi_var_in_pix = round(paramset.hom_roi_size_variance / image_info.pix[0])
+    if roi_var_in_pix < 3:
+        roi_var_in_pix = 3
+    kernel = np.full((roi_var_in_pix, roi_var_in_pix),
+                     1./(roi_var_in_pix**2))
+
+    for j, ystart in enumerate(ystarts):
+        for i, xstart in enumerate(xstarts):
+            sub = masked_image[ystart:ystart+roi_size_in_pix,
+                               xstart:xstart+roi_size_in_pix]
+            if np.ma.count_masked(sub) == 0:  # avoid trouble with mask
+                avg_sub = np.mean(sub)
+                avgs[j, i] = avg_sub
+                std_sub = np.std(sub)
+                if std_sub != 0 and roi_var_in_pix < roi_size_in_pix:
+                    if np.ma.count_masked(sub) == 0:
+                        snrs[j, i] = avg_sub / np.std(sub)
+                        mu = sp.signal.fftconvolve(sub, kernel, mode='same')
+                        ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='same')
+                        variance_sub = ii - mu**2
+                        variances[j, i] = np.mean(variance_sub)
+                else:
+                    variances[j, i] = np.inf
+            else:
+                masked_roi_matrix[j, i] = True
+
+    n_masked_rois = np.count_nonzero(masked_roi_matrix)
+    n_rois = avgs.size - n_masked_rois
+    n_masked_pixels = np.count_nonzero(mask_max)
+    n_pixels = image2d.size - n_masked_pixels
+
+    masked_avgs = np.ma.masked_array(avgs, mask=masked_roi_matrix)
+    masked_snrs = np.ma.masked_array(snrs, mask=masked_roi_matrix)
+    overall_avg = np.mean(masked_avgs)
+    diff_avgs = 100 / overall_avg * (avgs - overall_avg)
+    diff_snrs = 100 / np.mean(masked_snrs) * (snrs - np.mean(masked_snrs))
+    deviating_rois = np.zeros(matrix_shape, dtype=bool)
+    deviating_rois[np.logical_or(
+        np.abs(diff_avgs) > paramset.hom_deviating_rois,
+        np.abs(diff_snrs) > paramset.hom_deviating_rois)] = True
+    deviating_rois[masked_roi_matrix == True] = False
+    n_dev_rois = np.count_nonzero(deviating_rois)
+
+    deviating_avgs = np.zeros(matrix_shape, dtype=bool)
+    deviating_avgs[np.abs(diff_avgs) > paramset.hom_deviating_rois] = True
+    deviating_avgs[masked_roi_matrix == True] = False
+    deviating_snrs = np.zeros(matrix_shape, dtype=bool)
+    deviating_snrs[np.abs(diff_snrs) > paramset.hom_deviating_rois] = True
+    deviating_snrs[masked_roi_matrix == True] = False
+    n_dev_avgs = np.count_nonzero(deviating_avgs)
+    n_dev_snrs = np.count_nonzero(deviating_snrs)
+
+    variances = np.ma.masked_array(variances, mask=masked_roi_matrix)
+    diff_avgs = np.ma.masked_array(diff_avgs, mask=masked_roi_matrix)
+    diff_snrs = np.ma.masked_array(diff_snrs, mask=masked_roi_matrix)
+    deviating_rois = np.ma.masked_array(deviating_rois, mask=masked_roi_matrix)
+
+    diff_pixels = 100 / overall_avg * (image2d - overall_avg)
+    deviating_pixels = np.zeros(image_info.shape, dtype=bool)
+    deviating_pixels[np.abs(diff_pixels) > paramset.hom_deviating_pixels] = True
+    deviating_pixels[mask_max == True] = False
+    n_deviating_pixels = np.count_nonzero(deviating_pixels)
+    deviating_pixels = np.ma.masked_array(deviating_pixels, mask=mask_max)
+    diff_pixels = np.ma.masked_array(diff_pixels, mask=roi_mask)
+
+    details = {'variances': variances, 'averages': masked_avgs, 'snrs': masked_snrs,
+               'diff_averages': diff_avgs, 'diff_snrs': diff_snrs,
+               'diff_pixels': diff_pixels, 'deviating_rois': deviating_rois,
+               'n_deviating_averages': n_dev_avgs, 'n_deviating_snrs': n_dev_snrs,
+               'n_deviating_rois': n_dev_rois,
+               'n_rois': n_rois, 'n_masked_rois': n_masked_rois,
+               'deviating_pixels': deviating_pixels,
+               'n_deviating_pixels': n_deviating_pixels,
+               'n_pixels': n_pixels, 'n_masked_pixels': n_masked_pixels}
+
+    return details
 
 
 def get_corrections_point_source(

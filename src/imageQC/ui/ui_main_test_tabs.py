@@ -155,6 +155,10 @@ class ParamsTabCommon(QTabWidget):
                     self.num_table_widget.table.current_table = copy.deepcopy(
                         paramset.num_table)
                     self.num_table_widget.table.update_table()
+                elif field.name == 'gho_table':
+                    self.gho_table_widget.table.current_table = copy.deepcopy(
+                        paramset.gho_table)
+                    self.gho_table_widget.table.update_table()
                 elif field.name == 'roi_table':
                     self.roi_table_widget.table.current_table = copy.deepcopy(
                         paramset.roi_table)
@@ -288,6 +292,7 @@ class ParamsTabCommon(QTabWidget):
                         self.roi_table_widget.setEnabled(False)
                     else:
                         self.roi_table_widget.setEnabled(True)
+                        self.set_offset('roi_offset_xy', reset=True)
                 if all([self.main.current_modality == 'Xray',
                         self.main.current_test == 'NPS']):
                     self.update_NPS_independent_pixels()
@@ -366,13 +371,26 @@ class ParamsTabCommon(QTabWidget):
         reset : bool
             Reset offset to [0,0]. Default is False.
         """
-        if reset:
-            pos = [0., 0.]
-        else:
-            sz_img_y, sz_img_x = np.shape(self.main.active_img)
-            xpos = self.main.gui.last_clicked_pos[0] - 0.5 * sz_img_x
-            ypos = self.main.gui.last_clicked_pos[1] - 0.5 * sz_img_y
-            pos = [xpos, ypos]
+        pos = [0., 0.]
+        if not reset:
+            proceed = True
+            if self.main.current_test == 'ROI':
+                if self.main.current_paramset.roi_use_table > 0:
+                    QMessageBox.warning(
+                        self, 'Extra offset ignored',
+                        'Extra offsets are ignored when table is used.')
+                    proceed = False
+            if proceed:
+                sz_img_y, sz_img_x = np.shape(self.main.active_img)
+                xpos = self.main.gui.last_clicked_pos[0] - 0.5 * sz_img_x
+                ypos = self.main.gui.last_clicked_pos[1] - 0.5 * sz_img_y
+                attr_mm = attribute[:3] + '_offset_mm'
+                val_mm = getattr(self.main.current_paramset, attr_mm, False)
+                if val_mm:
+                    image_info = self.main.imgs[self.main.gui.active_img_no]
+                    xpos = np.round(xpos * image_info.pix[0], decimals=1)
+                    ypos = np.round(ypos * image_info.pix[1], decimals=1)
+                pos = [xpos, ypos]
         self.param_changed_from_gui(attribute=attribute, content=pos)
         self.update_displayed_params()
 
@@ -556,7 +574,7 @@ class ParamsTabCommon(QTabWidget):
                                                 clear_results=False))
 
     def create_tab_mtf_xray_mr(self):
-        """GUI of tab MTF - common to Xray and MR."""
+        """GUI of tab MTF - common to Xray/Mammo and MR."""
         self.mtf_roi_size_x = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.mtf_roi_size_x.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_roi_size_x'))
@@ -616,6 +634,60 @@ class ParamsTabCommon(QTabWidget):
         flo3.addRow(QLabel('Plot'), self.mtf_plot)
         vlo2.addLayout(flo3)
         self.tab_mtf.hlo.addLayout(vlo2)
+
+    def create_tab_nps_xray(self):
+        """GUI of tab NPS Xray and Mammo."""
+        self.tab_nps = ParamsWidget(self, run_txt='Calculate NPS')
+        self.tab_nps.hlo_top.addWidget(uir.LabelItalic('Noise Power Spectrum (NPS)'))
+        info_txt = '''
+        The large area (combined all ROIs) will be trend corrected using a second order
+        polynomial fit.<br>
+        The resulting corrected large area can be visualized in the Result Image tab.
+        <br>
+        The horizontal and vertical 1d NPS curves are extracted from the 7 lines at each
+        side of the axis (excluding the axis).<br>
+        Also the values closest to 0 frequency are excluded from the resampled curves.
+        <br>
+        And the axis is set to zero in the NPS array (see Result Image tab).
+        '''
+        self.tab_nps.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
+        self.nps_roi_size = QDoubleSpinBox(decimals=0, minimum=22, maximum=10000)
+        self.nps_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_roi_size'))
+        self.nps_n_sub = QDoubleSpinBox(decimals=0, minimum=3)
+        self.nps_n_sub.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='nps_n_sub'))
+
+        flo = QFormLayout()
+        flo.addRow(QLabel('ROI size (pix)'), self.nps_roi_size)
+        flo.addRow(QLabel('Total area to analyse (n x ROI size)^2, n = '),
+                   self.nps_n_sub)
+        self.tab_nps.hlo.addLayout(flo)
+        self.add_NPS_plot_settings()
+        self.nps_plot.addItems(['NPS pr image', 'NPS all images'])
+        self.nps_plot_profile = QComboBox()
+        self.nps_plot_profile.currentIndexChanged.connect(
+            self.main.refresh_results_display)
+        self.nps_plot_profile.addItems([
+            'horizontal and vertical', 'horizontal', 'vertical', 'radial', 'all'])
+        self.nps_show_image = QComboBox()
+        self.nps_show_image.currentIndexChanged.connect(
+            self.main.refresh_results_display)
+        self.nps_show_image.addItems(['2d NPS', 'large area - trend subtracted'])
+        self.flo_nps_plot.addRow(QLabel('Show profile'), self.nps_plot_profile)
+        self.flo_nps_plot.addRow(QLabel('Result image'), self.nps_show_image)
+        self.tab_nps.hlo.addWidget(uir.VLine())
+        self.tab_nps.hlo.addLayout(self.flo_nps_plot)
+
+        hlo_npix = QHBoxLayout()
+        hlo_npix.addWidget(uir.LabelItalic(
+            'Number of independent pixels/image = ((n*2-1)*roi size)^2 = '))
+        self.nps_npix = QLabel('? mill    ')
+        hlo_npix.addWidget(self.nps_npix)
+        hlo_npix.addWidget(uir.LabelItalic('(preferrably > 4 mill)'))
+        hlo_npix.addStretch()
+        self.tab_nps.vlo.addLayout(hlo_npix)
 
     def create_tab_rin(self):
         """GUI of tab for Ring artefacts CT+SPECT."""
@@ -1111,57 +1183,7 @@ class ParamsTabXray(ParamsTabCommon):
 
     def create_tab_nps(self):
         """GUI of tab NPS."""
-        self.tab_nps = ParamsWidget(self, run_txt='Calculate NPS')
-        self.tab_nps.hlo_top.addWidget(uir.LabelItalic('Noise Power Spectrum (NPS)'))
-        info_txt = '''
-        The large area (combined all ROIs) will be trend corrected using a second order
-        polynomial fit.<br>
-        The resulting corrected large area can be visualized in the Result Image tab.
-        <br>
-        The horizontal and vertical 1d NPS curves are extracted from the 7 lines at each
-        side of the axis (excluding the axis).<br>
-        Also the values closest to 0 frequency are excluded from the resampled curves.
-        <br>
-        And the axis is set to zero in the NPS array (see Result Image tab).
-        '''
-        self.tab_nps.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
-
-        self.nps_roi_size = QDoubleSpinBox(decimals=0, minimum=22, maximum=10000)
-        self.nps_roi_size.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='nps_roi_size'))
-        self.nps_n_sub = QDoubleSpinBox(decimals=0, minimum=3)
-        self.nps_n_sub.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='nps_n_sub'))
-
-        flo = QFormLayout()
-        flo.addRow(QLabel('ROI size (pix)'), self.nps_roi_size)
-        flo.addRow(QLabel('Total area to analyse (n x ROI size)^2, n = '),
-                   self.nps_n_sub)
-        self.tab_nps.hlo.addLayout(flo)
-        self.add_NPS_plot_settings()
-        self.nps_plot.addItems(['NPS pr image', 'NPS all images'])
-        self.nps_plot_profile = QComboBox()
-        self.nps_plot_profile.currentIndexChanged.connect(
-            self.main.refresh_results_display)
-        self.nps_plot_profile.addItems([
-            'horizontal and vertical', 'horizontal', 'vertical', 'radial', 'all'])
-        self.nps_show_image = QComboBox()
-        self.nps_show_image.currentIndexChanged.connect(
-            self.main.refresh_results_display)
-        self.nps_show_image.addItems(['2d NPS', 'large area - trend subtracted'])
-        self.flo_nps_plot.addRow(QLabel('Show profile'), self.nps_plot_profile)
-        self.flo_nps_plot.addRow(QLabel('Result image'), self.nps_show_image)
-        self.tab_nps.hlo.addWidget(uir.VLine())
-        self.tab_nps.hlo.addLayout(self.flo_nps_plot)
-
-        hlo_npix = QHBoxLayout()
-        hlo_npix.addWidget(uir.LabelItalic(
-            'Number of independent pixels/image = ((n*2-1)*roi size)^2 = '))
-        self.nps_npix = QLabel('? mill    ')
-        hlo_npix.addWidget(self.nps_npix)
-        hlo_npix.addWidget(uir.LabelItalic('(preferrably > 4 mill)'))
-        hlo_npix.addStretch()
-        self.tab_nps.vlo.addLayout(hlo_npix)
+        self.create_tab_nps_xray()
 
     def create_tab_stp(self):
         """GUI of tab STP."""
@@ -1211,6 +1233,181 @@ class ParamsTabXray(ParamsTabCommon):
         """Change alternative method (columns to display)."""
         self.param_changed_from_gui(
             attribute='hom_tab_alt', content=self.hom_tab_alt.checkedId())
+
+
+class ParamsTabMammo(ParamsTabCommon):
+    """Copy for modality tests."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+
+        self.create_tab_sdn()
+        self.create_tab_hom()
+        self.create_tab_gho()
+        self.create_tab_mtf()
+        self.create_tab_nps()
+
+        self.addTab(self.tab_sdn, "SDNR")
+        self.addTab(self.tab_hom, "Homogeneity")
+        self.addTab(self.tab_gho, "Ghost")
+        self.addTab(self.tab_mtf, "MTF")
+        self.addTab(self.tab_nps, "NPS")
+
+    def create_tab_sdn(self):
+        """GUI of tab SDNR."""
+        self.tab_sdn = ParamsWidget(self, run_txt='Calculate SDNR')
+
+        self.tab_sdn.hlo_top.addWidget(uir.LabelItalic(
+            'Signal-difference-to-noise ratio (SDNR)'))
+        info_txt = '''
+        Signal found from one central ROI and background from four ROIs at a distance
+        from this.<br>
+        Std background is the mean of the standard deviation of all four background
+        ROIs.<br>
+        <br>
+        Based on European guidelines for quality assurance in breast cancer screening
+        and diagnosis<br>
+        <a href="https://op.europa.eu/en/publication-detail/-/publication/4e74ee9b-df80-4c91-a5fb-85efb0fdda2b">
+        Fourth edition Supplements (2013)</a>
+        '''
+        self.tab_sdn.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
+        self.sdn_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=100., singleStep=0.1)
+        self.sdn_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sdn_roi_size'))
+
+        self.sdn_roi_dist = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=100., singleStep=0.1)
+        self.sdn_roi_dist.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sdn_roi_dist'))
+
+        self.sdn_auto_center = QCheckBox()
+        self.sdn_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='sdn_auto_center'))
+
+        self.sdn_auto_center_mask_outer = QDoubleSpinBox(
+            decimals=0, minimum=0, maximum=200, singleStep=1)
+        self.sdn_auto_center_mask_outer.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='sdn_auto_center_mask_outer'))
+
+        flo = QFormLayout()
+        flo.addRow(QLabel('ROI size (mm)'), self.sdn_roi_size)
+        flo.addRow(QLabel('Distance to background ROI (mm)'), self.sdn_roi_dist)
+        flo.addRow(QLabel('Auto center ROI on object signal'), self.sdn_auto_center)
+        flo.addRow(QLabel('If auto center, ignore outer mm'),
+                   self.sdn_auto_center_mask_outer)
+
+        self.tab_sdn.hlo.addLayout(flo)
+        self.tab_sdn.hlo.addStretch()
+
+    def create_tab_hom(self):
+        """GUI of tab Homogeneity."""
+        self.tab_hom = ParamsWidget(self, run_txt='Calculate Homogeneity')
+
+        info_txt = '''
+        Based on European guidelines for quality assurance in breast cancer screening
+        and diagnosis<br>
+        Fourth edition Supplements (2013)<br>
+        <br>
+        Variance matrix added as specified in the European guidelines.<br>
+        <br>
+        For Siemens equipment one courner may be filled with a high value.<br>
+        Use the option to mask these values from the analysis.
+        '''
+        self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
+        self.hom_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
+        self.hom_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
+        self.hom_roi_size_variance = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
+        self.hom_roi_size_variance.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_roi_size_variance'))
+        self.hom_mask_max = QCheckBox()
+        self.hom_mask_max.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_mask_max'))
+        self.hom_deviating_pixels = QDoubleSpinBox(
+            decimals=0, minimum=1, singleStep=1)
+        self.hom_deviating_pixels.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_deviating_pixels'))
+        self.hom_deviating_rois = QDoubleSpinBox(
+            decimals=0, minimum=1, singleStep=1)
+        self.hom_deviating_rois.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_deviating_rois'))
+
+        self.hom_result_image = QComboBox()
+        self.hom_result_image.addItems(
+            [
+                'Variance pr ROI map',
+                'Average pr ROI map',
+                'SNR pr ROI map',
+                'Average pr ROI - % difference from global average',
+                'SNR pr ROI - % difference from global SNR',
+                'Pixel values - % difference from global average',
+                'Deviating ROIs',
+                'Deviating pixels'
+             ])
+        self.hom_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+
+        flo = QFormLayout()
+        flo.addRow(QLabel('ROI size (mm)'), self.hom_roi_size)
+        flo.addRow(QLabel('ROI size variance (mm)'), self.hom_roi_size_variance)
+        flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
+        flo.addRow(QLabel('Deviating pixels (% from average)'),
+                   self.hom_deviating_pixels)
+        flo.addRow(QLabel('Deviating ROIs (% from average)'),
+                   self.hom_deviating_rois)
+        self.tab_hom.hlo.addLayout(flo)
+        self.tab_hom.hlo.addWidget(uir.VLine())
+        hlo_right = QHBoxLayout()
+        hlo_right.addWidget(QLabel('Result image'))
+        hlo_right.addWidget(self.hom_result_image)
+        self.tab_hom.hlo.addLayout(hlo_right)
+
+    def create_tab_gho(self):
+        """GUI of tab Ghost factor."""
+        self.tab_gho = ParamsWidget(self, run_txt='Calculate ghost factor')
+
+        self.gho_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1,  maximum=10000,
+                                           singleStep=0.1)
+        self.gho_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='gho_roi_size'))
+
+        self.gho_relative_to_right = BoolSelectTests(
+            self, attribute='gho_relative_to_right',
+            text_true='Right', text_false='Left')
+
+        self.gho_table_widget = PositionWidget(
+                self, self.main, table_attribute_name='gho_table')
+        self.gho_table_widget.act_add.setVisible(False)
+        self.gho_table_widget.act_delete.setVisible(False)
+        self.gho_table_widget.act_import.setVisible(False)
+        self.gho_table_widget.act_get_pos.setVisible(False)
+        self.gho_table_widget.table.setFixedHeight(150)
+
+        vlo_left = QVBoxLayout()
+        self.tab_gho.hlo.addLayout(vlo_left)
+
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('ROI width and height (mm)'), self.gho_roi_size)
+        flo1.addRow(QLabel('Pos x in table = distance to image border'),
+                    self.gho_relative_to_right)
+        vlo_left.addLayout(flo1)
+        vlo_left.addWidget(self.gho_table_widget)
+
+        self.tab_gho.hlo.addStretch()
+
+    def create_tab_mtf(self):
+        """GUI of tab MTF."""
+        super().create_tab_mtf()
+        self.create_tab_mtf_xray_mr()
+
+    def create_tab_nps(self):
+        """GUI of tab NPS."""
+        self.create_tab_nps_xray()
 
 
 class GroupBoxCorrectPointSource(QGroupBox):
@@ -2523,27 +2720,28 @@ class PositionWidget(QWidget):
         hlo = QHBoxLayout()
         self.setLayout(hlo)
 
-        act_import = QAction(
+        self.act_import = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
             'Import table from clipboard or predefined tables', self)
-        act_import.triggered.connect(self.import_table)
-        act_copy = QAction(
+        self.act_import.triggered.connect(self.import_table)
+        self.act_copy = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}copy.png'),
             'Copy table to clipboard', self)
-        act_copy.triggered.connect(self.copy_table)
-        act_add = QAction(
+        self.act_copy.triggered.connect(self.copy_table)
+        self.act_add = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
             'Add row', self)
-        act_add.triggered.connect(self.add_row)
-        act_delete = QAction(
+        self.act_add.triggered.connect(self.add_row)
+        self.act_delete = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
             'Delete row', self)
-        act_delete.triggered.connect(self.delete_row)
+        self.act_delete.triggered.connect(self.delete_row)
         self.act_get_pos = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}selectArrow.png'),
             self.get_position_tooltips[0], self)
         toolb = QToolBar()
-        toolb.addActions([act_import, act_copy, act_add, act_delete, self.act_get_pos])
+        toolb.addActions([self.act_import, self.act_copy, self.act_add,
+                          self.act_delete, self.act_get_pos])
         toolb.setOrientation(Qt.Vertical)
         hlo.addWidget(toolb)
         hlo.addWidget(self.table)
@@ -2555,10 +2753,12 @@ class PositionWidget(QWidget):
             self.act_get_pos.setToolTip(self.get_position_tooltips[1])
             self.act_get_pos.disconnect()
             self.act_get_pos.triggered.connect(self.get_zoomed_area)
+            self.table.headers = ['ROI label', '(x1,x2)', '(y1,y2)']
         else:
             self.act_get_pos.setToolTip(self.get_position_tooltips[0])
             self.act_get_pos.disconnect()
             self.act_get_pos.triggered.connect(self.get_pos_mouse)
+            self.table.headers = ['ROI label', 'pos x [mm]', 'pos y [mm]']
         if self.table.current_table is not None and silent is False:
             if len(self.table.current_table.labels) > 0:
                 reply = QMessageBox.question(
@@ -2571,6 +2771,8 @@ class PositionWidget(QWidget):
                 self.table.current_table = cfc.PositionTable()
                 self.table.update_table()
                 self.main.update_roi()
+            else:
+                self.table.update_table()
 
     def import_table(self):
         """Import contents to table from clipboard or from predefined."""
@@ -2707,10 +2909,7 @@ class PositionWidget(QWidget):
         if self.main.active_img is not None:
             sz_acty, sz_actx = np.shape(self.main.active_img)
             image_info = self.main.imgs[self.main.gui.active_img_no]
-            if self.test_name == 'roi':
-                in_mm = self.main.current_paramset.roi_offset_mm
-            else:
-                in_mm = True
+            in_mm = True  # used to be a choise left here if later as choise
             dx = self.main.gui.last_clicked_pos[0] - 0.5 * sz_actx
             dy = self.main.gui.last_clicked_pos[1] - 0.5 * sz_acty
             if in_mm:

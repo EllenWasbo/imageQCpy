@@ -470,6 +470,107 @@ class ResultPlotCanvas(PlotCanvas):
                 break
         return yrange
 
+    def Cro(self):
+        """Prepare plot for test PET cross calibration."""
+        self.title = 'z profile'
+        self.xtitle = 'Slice position (mm)'
+        self.ytitle = 'Average in ROI (Bq/ml)'
+        details_dict = self.main.results['Cro']['details_dict']
+        self.curves.append(
+            {'label': 'all slices', 'xvals': details_dict['zpos'],
+             'yvals': details_dict['roi_averages'], 'style': '-k'})
+        self.curves.append(
+            {'label': 'used slices', 'xvals': details_dict['used_zpos'],
+             'yvals': details_dict['used_roi_averages'], 'style': '-r'})
+
+    def CTn(self):
+        """Prepare plot for test CTn."""
+
+        def prepare_plot_HU_min_max(percent=False):
+            unit = '(%)' if percent else '(HU)'
+            self.ytitle = f'Difference from set HU min/max {unit}'
+            imgno = self.main.gui.active_img_no
+            meas_vals = self.main.results['CTn']['values'][imgno]
+            proceed = True
+            try:
+                diff_max = np.subtract(self.main.current_paramset.ctn_table.max_HU,
+                                       meas_vals)
+                diff_min = np.subtract(self.main.current_paramset.ctn_table.min_HU,
+                                       meas_vals)
+                if percent:
+                    diff_max = 100. * np.divide(diff_max, meas_vals)
+                    diff_min = 100. * np.divide(diff_min, meas_vals)
+            except TypeError:
+                self.main.status_bar.showMessage(
+                    'Some set HU min or max is not valid', 2000, warning=True)
+                proceed = False
+
+            if proceed:
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [np.min(meas_vals), np.max(meas_vals)],
+                    'yvals': [0, 0],
+                    'style': ':',
+                    'color': 'blue'}
+                    )
+                self.curves.append(
+                    {'label': 'set max - measured', 'xvals': meas_vals,
+                     'yvals': diff_max, 'style': 'bv'})
+                self.curves.append(
+                    {'label': 'set min - measured', 'xvals': meas_vals,
+                     'yvals': diff_min, 'style': 'b^'})
+                if np.max(diff_min) > 0:
+                    idxs = np.where(diff_min > 0)
+                    xvals = [meas_vals[i] for i in idxs[0]]
+                    yvals = [diff_min[i] for i in idxs[0]]
+                    self.curves.append({
+                        'label': '_nolegend_', 'xvals': xvals, 'yvals': yvals,
+                        'style': 'r^'
+                        })
+                if np.min(diff_max) < 0:
+                    idxs = np.where(diff_max < 0)
+                    xvals = [meas_vals[i] for i in idxs[0]]
+                    yvals = [diff_max[i] for i in idxs[0]]
+                    self.curves.append({
+                        'label': '_nolegend_', 'xvals': xvals, 'yvals': yvals,
+                        'style': 'rv'
+                        })
+                self.xtitle = 'HU value'
+
+        def prepare_plot_linear():
+            self.ytitle = self.main.current_paramset.ctn_table.linearity_unit
+            yvals = self.main.current_paramset.ctn_table.linearity_axis
+            imgno = self.main.gui.active_img_no
+            xvals = self.main.results['CTn']['values'][imgno]
+            self.curves.append(
+                {'label': 'HU mean', 'xvals': xvals,
+                 'yvals': yvals, 'style': '-bo'})
+            if self.main.results['CTn']['values_sup'][imgno][0] is not None:
+                fit_r2 = self.main.results['CTn']['values_sup'][imgno][0]
+                fit_b = self.main.results['CTn']['values_sup'][imgno][1]
+                fit_a = self.main.results['CTn']['values_sup'][imgno][2]
+                yvals = fit_a * np.array(xvals) + fit_b
+                self.curves.append(
+                    {'label': 'fitted', 'xvals': xvals,
+                     'yvals': yvals, 'style': 'b:'}
+                    )
+                at = matplotlib.offsetbox.AnchoredText(
+                    f'$R^2$ = {fit_r2:.4f}', loc='lower right')
+                self.ax.add_artist(at)
+            self.xtitle = 'HU value'
+
+        test_widget = self.main.stack_test_tabs.currentWidget()
+        try:
+            sel_text = test_widget.ctn_plot.currentText()
+        except AttributeError:
+            sel_text = ''
+        if 'HU' in sel_text:
+            # percent = True if '%' in sel_text else False
+            prepare_plot_HU_min_max()  # percent=percent)
+        else:
+            prepare_plot_linear()
+        self.title = sel_text
+
     def DCM(self):
         """Prepare plot for test DCM."""
         widget = self.main.stack_test_tabs.currentWidget()
@@ -496,41 +597,6 @@ class ResultPlotCanvas(PlotCanvas):
             self.ytitle = self.main.results['DCM']['headers'][param_no]
             self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
             self.ax.set_xticks(xvals)
-
-    def ROI(self):
-        """Prepare plot for test ROI."""
-        xvals = []
-        yvals = []
-        for i, row in enumerate(self.main.results['ROI']['values']):
-            if len(row) > 0:
-                xvals.append(i)
-                if self.main.current_paramset.roi_use_table == 0:
-                    yvals.append(row[0])
-                else:
-                    yvals.append(row)
-        if self.main.current_paramset.roi_use_table == 0:
-            curve = {'label': 'Average',
-                     'xvals': xvals,
-                     'yvals': yvals,
-                     'style': '-b'}
-            self.curves.append(curve)
-            self.ytitle = 'Average pixel value'
-        else:
-            headers = self.main.results['ROI']['headers']
-            colors = mmf.get_color_list(n_colors=len(headers))
-            for i in range(len(yvals[0])):
-                curve = {'label': headers[i],
-                         'xvals': xvals,
-                         'yvals': [vals[i] for vals in yvals],
-                         'style': '-',
-                         'color': colors[i]}
-                self.curves.append(curve)
-            test_widget = self.main.stack_test_tabs.currentWidget()
-            val_text = test_widget.roi_table_val.currentText()
-            self.ytitle = val_text
-        self.xtitle = 'Image index'
-        self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
-        self.ax.set_xticks(xvals)
 
     def Hom(self):
         """Prepare plot for test Hom."""
@@ -624,94 +690,6 @@ class ResultPlotCanvas(PlotCanvas):
             self.curves.append(tolmax)
             self.default_range_y = self.test_values_outside_yrange([-7, 7])
 
-    def CTn(self):
-        """Prepare plot for test CTn."""
-
-        def prepare_plot_HU_min_max(percent=False):
-            unit = '(%)' if percent else '(HU)'
-            self.ytitle = f'Difference from set HU min/max {unit}'
-            imgno = self.main.gui.active_img_no
-            meas_vals = self.main.results['CTn']['values'][imgno]
-            proceed = True
-            try:
-                diff_max = np.subtract(self.main.current_paramset.ctn_table.max_HU,
-                                       meas_vals)
-                diff_min = np.subtract(self.main.current_paramset.ctn_table.min_HU,
-                                       meas_vals)
-                if percent:
-                    diff_max = 100. * np.divide(diff_max, meas_vals)
-                    diff_min = 100. * np.divide(diff_min, meas_vals)
-            except TypeError:
-                self.main.status_bar.showMessage(
-                    'Some set HU min or max is not valid', 2000, warning=True)
-                proceed = False
-
-            if proceed:
-                self.curves.append({
-                    'label': '_nolegend_',
-                    'xvals': [np.min(meas_vals), np.max(meas_vals)],
-                    'yvals': [0, 0],
-                    'style': ':',
-                    'color': 'blue'}
-                    )
-                self.curves.append(
-                    {'label': 'set max - measured', 'xvals': meas_vals,
-                     'yvals': diff_max, 'style': 'bv'})
-                self.curves.append(
-                    {'label': 'set min - measured', 'xvals': meas_vals,
-                     'yvals': diff_min, 'style': 'b^'})
-                if np.max(diff_min) > 0:
-                    idxs = np.where(diff_min > 0)
-                    xvals = [meas_vals[i] for i in idxs[0]]
-                    yvals = [diff_min[i] for i in idxs[0]]
-                    self.curves.append({
-                        'label': '_nolegend_', 'xvals': xvals, 'yvals': yvals,
-                        'style': 'r^'
-                        })
-                if np.min(diff_max) < 0:
-                    idxs = np.where(diff_max < 0)
-                    xvals = [meas_vals[i] for i in idxs[0]]
-                    yvals = [diff_max[i] for i in idxs[0]]
-                    self.curves.append({
-                        'label': '_nolegend_', 'xvals': xvals, 'yvals': yvals,
-                        'style': 'rv'
-                        })
-                self.xtitle = 'HU value'
-
-        def prepare_plot_linear():
-            self.ytitle = self.main.current_paramset.ctn_table.linearity_unit
-            yvals = self.main.current_paramset.ctn_table.linearity_axis
-            imgno = self.main.gui.active_img_no
-            xvals = self.main.results['CTn']['values'][imgno]
-            self.curves.append(
-                {'label': 'HU mean', 'xvals': xvals,
-                 'yvals': yvals, 'style': '-bo'})
-            if self.main.results['CTn']['values_sup'][imgno][0] is not None:
-                fit_r2 = self.main.results['CTn']['values_sup'][imgno][0]
-                fit_b = self.main.results['CTn']['values_sup'][imgno][1]
-                fit_a = self.main.results['CTn']['values_sup'][imgno][2]
-                yvals = fit_a * np.array(xvals) + fit_b
-                self.curves.append(
-                    {'label': 'fitted', 'xvals': xvals,
-                     'yvals': yvals, 'style': 'b:'}
-                    )
-                at = matplotlib.offsetbox.AnchoredText(
-                    f'$R^2$ = {fit_r2:.4f}', loc='lower right')
-                self.ax.add_artist(at)
-            self.xtitle = 'HU value'
-
-        test_widget = self.main.stack_test_tabs.currentWidget()
-        try:
-            sel_text = test_widget.ctn_plot.currentText()
-        except AttributeError:
-            sel_text = ''
-        if 'HU' in sel_text:
-            # percent = True if '%' in sel_text else False
-            prepare_plot_HU_min_max()  # percent=percent)
-        else:
-            prepare_plot_linear()
-        self.title = sel_text
-
     def HUw(self):
         """Prepare plot for test HUw."""
         xvals = []
@@ -742,74 +720,6 @@ class ResultPlotCanvas(PlotCanvas):
         self.curves.append(tolmin)
         self.curves.append(tolmax)
         self.default_range_y = self.test_values_outside_yrange([-6, 6])
-
-    def Sli(self):
-        """Prepare plot for test Sli."""
-        if self.main.current_modality in ['CT', 'MR']:
-            self.title = 'Profiles for slice thickness calculations'
-            imgno = self.main.gui.active_img_no
-            details_dict = self.main.results['Sli']['details_dict'][imgno]
-
-            # ROI h_colors = ['b', 'lime']
-            # ROI v_colors = ['c', 'r', 'm', 'darkorange']
-            if self.main.current_modality == 'CT':
-                if self.main.current_paramset.sli_type == 0:
-                    colors = ['b', 'lime', 'c', 'r']
-                elif self.main.current_paramset.sli_type == 1:
-                    colors = ['b', 'lime', 'c', 'r', 'm', 'darkorange']
-                elif self.main.current_paramset.sli_type == 2:
-                    colors = ['c', 'r']
-                if self.main.tab_ct.sli_plot.currentIndex() == 0:  # plot all
-                    l_idxs = list(np.arange(len(details_dict['profiles'])))
-                else:
-                    l_idxs = [self.main.tab_ct.sli_plot.currentIndex() - 1]
-            else:
-                colors = ['b', 'lime']
-                if self.main.tab_mr.sli_plot.currentIndex() == 0:  # plot both
-                    l_idxs = list(np.arange(len(details_dict['profiles'])))
-                else:
-                    l_idxs = [self.main.tab_mr.sli_plot.currentIndex() - 1]
-
-            for l_idx in l_idxs:
-                n_pix = len(details_dict['profiles'][l_idx])
-                xvals = [details_dict['dx'] * i for i in range(n_pix)]
-                self.curves.append({
-                    'label': details_dict['labels'][l_idx],
-                    'xvals': xvals,
-                    'yvals': details_dict['profiles'][l_idx],
-                    'color': colors[l_idx]})
-
-                try:
-                    self.curves.append(
-                        {'label': f'{details_dict["labels"][l_idx]} envelope',
-                         'xvals': xvals,
-                         'yvals': details_dict[
-                             'envelope_profiles'][l_idx],
-                         'style': '--',
-                         'color': colors[l_idx]})
-                except IndexError:
-                    pass
-                self.curves.append({
-                    'label': '_nolegend_',
-                    'xvals': [min(xvals), max(xvals)],
-                    'yvals': [details_dict['background'][l_idx]] * 2,
-                    'style': ':',
-                    'color': colors[l_idx]})
-                self.curves.append({
-                    'label': '_nolegend_',
-                    'xvals': [min(xvals), max(xvals)],
-                    'yvals': [details_dict['peak'][l_idx]] * 2,
-                    'style': ':',
-                    'color': colors[l_idx]})
-                self.curves.append({
-                    'label': '_nolegend_',
-                    'xvals': [details_dict['start_x'][l_idx],
-                              details_dict['end_x'][l_idx]],
-                    'yvals': [details_dict['halfpeak'][l_idx]] * 2,
-                    'style': '--',
-                    'color': colors[l_idx]})
-            self.xtitle = 'pos (mm)'
-            self.ytitle = 'HU' if self.main.current_modality == 'CT' else 'Pixel value'
 
     def MTF(self):
         """Prepare plot for test MTF."""
@@ -893,11 +803,14 @@ class ResultPlotCanvas(PlotCanvas):
                 # MTF %
                 if self.main.current_modality != 'NM':
                     values = self.main.results[self.main.current_test]['values'][rowno]
-                    if self.main.current_modality == 'Xray':
+                    if self.main.current_modality in ['Xray', 'Mammo']:
                         yvals = [[.5, .5]]
                         xvals = [[0, values[-1]]]
                         yvals.extend([[0, values[i]] for i in range(5)])
-                        xvals.extend([[.5, .5], [1, 1], [1.5, 1.5], [2, 2], [2.5, 2.5]])
+                        if self.main.current_modality in 'Xray':
+                            xvals.extend([[.5, .5], [1, 1], [1.5, 1.5], [2, 2], [2.5, 2.5]])
+                        else:
+                            xvals.extend([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])
                         for i in range(len(xvals)):
                             self.curves.append({
                                 'label': '_nolegend_',
@@ -1297,33 +1210,6 @@ class ResultPlotCanvas(PlotCanvas):
             prepare_plot_zprofile()
         self.title = sel_text
 
-    def Rin(self):
-        """Prepare plot for test Rin."""
-        imgno = self.main.gui.active_img_no
-        self.title = 'Radial profile'
-        self.ytitle = 'HU'
-        self.xtitle = 'Position from center (mm)'
-        try:
-            details_dict = self.main.results['Rin']['details_dict'][imgno]
-            xvals = details_dict['radial_profile_x']
-            self.curves.append(
-                {'label': 'Radial profile', 'xvals': xvals,
-                 'yvals': details_dict['radial_profile'], 'style': '-b'})
-            if 'radial_profile_smoothed' in details_dict:
-                self.curves.append(
-                    {'label': 'Radial profile smoothed', 'xvals': xvals,
-                     'yvals': details_dict['radial_profile_smoothed'], 'style': '-k'})
-            if 'radial_profile_trend' in details_dict:
-                self.curves.append(
-                    {'label': 'Radial profile trend', 'xvals': xvals,
-                     'yvals': details_dict['radial_profile_trend'], 'style': '-r'})
-            else:
-                self.curves.append(
-                    {'label': 'Radial profile mean', 'xvals': [xvals[0], xvals[-1]],
-                     'yvals': [details_dict['mean_profile']] * 2, 'style': '-r'})
-        except (KeyError, IndexError):
-            pass
-
     def NPS(self):
         """Prepare plot for test NPS."""
         imgno = self.main.gui.active_img_no
@@ -1332,7 +1218,7 @@ class ResultPlotCanvas(PlotCanvas):
         self.xtitle = 'NPS (pr mm)'
         normalize = self.main.current_paramset.nps_normalize
 
-        if self.main.current_modality == 'Xray':
+        if self.main.current_modality in ['Xray', 'Mammo']:
             test_widget = self.main.stack_test_tabs.currentWidget()
             sel_text = test_widget.nps_plot_profile.currentText()
             profile_keys = []
@@ -1518,89 +1404,216 @@ class ResultPlotCanvas(PlotCanvas):
             plot_all_NPS()
         self.title = sel_text
 
-    def Uni(self):
-        """Prepare plot for test Uni."""
-        plot_idx = self.main.tab_nm.uni_plot.currentIndex()
-        if plot_idx == 0:
-            self.title = 'Uniformity result for all images'
-            yvals_iu_ufov = []
-            yvals_du_ufov = []
-            yvals_iu_cfov = []
-            yvals_du_cfov = []
-            xvals = []
-            for i, row in enumerate(self.main.results['Uni']['values']):
-                if len(row) > 0:
-                    xvals.append(i)
-                    yvals_iu_ufov.append(row[0])
-                    yvals_du_ufov.append(row[1])
-                    yvals_iu_cfov.append(row[2])
-                    yvals_du_cfov.append(row[3])
-            if len(xvals) > 1:
-                self.xtitle = 'Image number'
+    def Rec(self):
+        """Prepare plot for test PET recovery curve."""
+        details_dict = self.main.results['Rec']['details_dict']
+        test_widget = self.main.stack_test_tabs.currentWidget()
 
+        def plot_Rec_curve(title):
+            """Plot Rec values together with EARL tolerances."""
+            self.title = title
+            self.xtitle = 'Sphere diameter (mm)'
+            roi_sizes = self.main.current_paramset.rec_sphere_diameters
+            rec_type = test_widget.rec_type.currentIndex()
             self.curves.append(
-                {'label': 'IU UFOV', 'xvals': xvals,
-                 'yvals': yvals_iu_ufov, 'style': '-bo'})
+                {'label': 'measured values', 'xvals': roi_sizes,
+                 'yvals': details_dict['values'][rec_type][:-1], 'style': '-bo'})
+            if rec_type < 3:
+                self.ytitle = 'Recovery coefficient'
+                idx = test_widget.rec_earl.currentIndex()
+                if idx > 0:
+                    proceed = True
+                    if idx == 1 and rec_type == 2:
+                        proceed = False
+                    if roi_sizes != [10., 13., 17., 22., 28., 37.]:  # EARL tolerances
+                        proceed = False
+                    if proceed:
+                        if idx == 1:  # EARL 1
+                            yvals = [[.27, .44, .57, .63, .72, .76],  # lower A50
+                                     [.43, .6, .73, .78, .85, .89],  # upper A50
+                                     [.34, .59, .73, .83, .91, .95],  # lower max
+                                     [.57, .85, 1.01, 1.09, 1.13, 1.16],  # upper max
+                                     [None] * 6, [None] * 6  # peak
+                                     ]
+                        elif idx == 2:  # EARL 2
+                            yvals = [[.39, .63, .76, .8, .82, .85],  # lower A50
+                                     [.61, .86, .97, .99, .97, 1.],  # upper A50
+                                     [.52, .85, 1., 1.01, 1.01, 1.05],  # lower max
+                                     [.88, 1.22, 1.38, 1.32, 1.26, 1.29],  # upper max
+                                     [.3, .46, 0.75, 0.9, 0.9, 0.9],  # lower peak
+                                     [.43, .7, 0.98, 1.1, 1.1, 1.1]  # upper peak
+                                     ]
+                        idx_lower = 2 * (rec_type % 3)
+                        tolmin = {'label': f'EARL{idx} lower',
+                                  'xvals': roi_sizes,
+                                  'yvals': yvals[idx_lower],
+                                  'style': '--k'}
+                        tolmax = {'label': f'EARL{idx} upper',
+                                  'xvals': roi_sizes,
+                                  'yvals': yvals[idx_lower + 1],
+                                  'style': '--k'}
+                        self.curves.append(tolmin)
+                        self.curves.append(tolmax)
+            else:
+                self.ytitle = 'Image values (Bq/ml)'
+
+        def plot_z_profile():
+            """Plot z-profile of used slices."""
+            self.title = 'z profile'
+            self.xtitle = 'Slice position (mm)'
+            self.ytitle = 'Pixel value'
             self.curves.append(
-                {'label': 'DU UFOV', 'xvals': xvals,
-                 'yvals': yvals_du_ufov, 'style': '-ro'})
+                {'label': 'first background ROI average, all',
+                 'xvals': details_dict['zpos'],
+                 'yvals': details_dict['roi_averages'], 'style': '-k'})
             self.curves.append(
-                {'label': 'IU CFOV', 'xvals': xvals,
-                 'yvals': yvals_iu_cfov, 'style': ':bo'})
+                {'label': 'first background ROI average, used slices',
+                 'xvals': details_dict['used_zpos'],
+                 'yvals': details_dict['used_roi_averages'], 'style': '-r'})
             self.curves.append(
-                {'label': 'DU CFOV', 'xvals': xvals,
-                 'yvals': yvals_du_cfov, 'style': ':ro'})
-            self.xtitle = 'Image number'
-            self.ytitle = 'Uniformity %'
-            self.default_range_y = self.test_values_outside_yrange([0, 7])
-        elif plot_idx == 1:
-            self.title = 'Curvature correction check'
-            imgno = self.main.gui.active_img_no
-            try:
-                details_dict = self.main.results['Uni']['details_dict'][imgno]
-                if 'correction_matrix' in details_dict:
-                    # averaging central 10% rows/cols
-                    temp_img = self.main.active_img
-                    corrected_img = details_dict['corrected_image']
-                    sz_y, sz_x = corrected_img.shape
-                    nx = round(0.05 * sz_x)
-                    ny = round(0.05 * sz_y)
-                    xhalf = round(sz_x/2)
-                    yhalf = round(sz_y/2)
-                    prof_y = np.mean(temp_img[:, xhalf-nx:xhalf+nx], axis=1)
-                    prof_x = np.mean(temp_img[yhalf-ny:yhalf+ny, :], axis=0)
-                    corr_prof_y = np.mean(
-                        corrected_img[:, xhalf-nx:xhalf+nx], axis=1)
-                    corr_prof_x = np.mean(
-                        corrected_img[yhalf-ny:yhalf+ny, :], axis=0)
-                    self.curves.append({'label': 'Central 10% rows corrected',
-                                        'xvals': np.arange(len(corr_prof_x)),
-                                        'yvals': corr_prof_x,
-                                        'style': 'r'})
-                    self.curves.append({'label': 'Central 10% rows original',
-                                        'xvals': np.arange(len(prof_x)),
-                                        'yvals': prof_x,
-                                        'style': ':r'})
-                    self.curves.append({'label': 'Central 10% columns corrected',
-                                        'xvals': np.arange(len(corr_prof_y)),
-                                        'yvals': corr_prof_y,
-                                        'style': 'b'})
-                    self.curves.append({'label': 'Central 10% columns original',
-                                        'xvals': np.arange(len(prof_y)),
-                                        'yvals': prof_y,
-                                        'style': ':b'})
-                    self.xtitle = 'pixel number'
-                    self.ytitle = 'Average pixel value'
-                    self.legend_location = 'lower center'
+                {'label': 'max in image, used slices spheres',
+                 'xvals': details_dict['used_zpos_spheres'],
+                 'yvals': details_dict['used_roi_maxs'], 'style': '-b'})
+
+        try:
+            sel_text = test_widget.rec_plot.currentText()
+        except AttributeError:
+            sel_text = ''
+        if 'z-profile' in sel_text:
+            plot_z_profile()
+        else:
+            sel_text = test_widget.rec_type.currentText()
+            plot_Rec_curve(sel_text)
+
+    def Rin(self):
+        """Prepare plot for test Rin."""
+        imgno = self.main.gui.active_img_no
+        self.title = 'Radial profile'
+        self.ytitle = 'HU'
+        self.xtitle = 'Position from center (mm)'
+        try:
+            details_dict = self.main.results['Rin']['details_dict'][imgno]
+            xvals = details_dict['radial_profile_x']
+            self.curves.append(
+                {'label': 'Radial profile', 'xvals': xvals,
+                 'yvals': details_dict['radial_profile'], 'style': '-b'})
+            if 'radial_profile_smoothed' in details_dict:
+                self.curves.append(
+                    {'label': 'Radial profile smoothed', 'xvals': xvals,
+                     'yvals': details_dict['radial_profile_smoothed'], 'style': '-k'})
+            if 'radial_profile_trend' in details_dict:
+                self.curves.append(
+                    {'label': 'Radial profile trend', 'xvals': xvals,
+                     'yvals': details_dict['radial_profile_trend'], 'style': '-r'})
+            else:
+                self.curves.append(
+                    {'label': 'Radial profile mean', 'xvals': [xvals[0], xvals[-1]],
+                     'yvals': [details_dict['mean_profile']] * 2, 'style': '-r'})
+        except (KeyError, IndexError):
+            pass
+
+    def ROI(self):
+        """Prepare plot for test ROI."""
+        xvals = []
+        yvals = []
+        for i, row in enumerate(self.main.results['ROI']['values']):
+            if len(row) > 0:
+                xvals.append(i)
+                if self.main.current_paramset.roi_use_table == 0:
+                    yvals.append(row[0])
                 else:
-                    at = matplotlib.offsetbox.AnchoredText(
-                        'No curvature correction applied',
-                        prop=dict(size=self.main.gui.annotations_font_size,
-                                  color='red'),
-                        frameon=False, loc='upper left')
-                    self.ax.add_artist(at)
-            except IndexError:
-                pass
+                    yvals.append(row)
+        if self.main.current_paramset.roi_use_table == 0:
+            curve = {'label': 'Average',
+                     'xvals': xvals,
+                     'yvals': yvals,
+                     'style': '-b'}
+            self.curves.append(curve)
+            self.ytitle = 'Average pixel value'
+        else:
+            headers = self.main.results['ROI']['headers']
+            colors = mmf.get_color_list(n_colors=len(headers))
+            for i in range(len(yvals[0])):
+                curve = {'label': headers[i],
+                         'xvals': xvals,
+                         'yvals': [vals[i] for vals in yvals],
+                         'style': '-',
+                         'color': colors[i]}
+                self.curves.append(curve)
+            test_widget = self.main.stack_test_tabs.currentWidget()
+            val_text = test_widget.roi_table_val.currentText()
+            self.ytitle = val_text
+        self.xtitle = 'Image index'
+        self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
+        self.ax.set_xticks(xvals)
+
+    def Sli(self):
+        """Prepare plot for test Sli."""
+        if self.main.current_modality in ['CT', 'MR']:
+            self.title = 'Profiles for slice thickness calculations'
+            imgno = self.main.gui.active_img_no
+            details_dict = self.main.results['Sli']['details_dict'][imgno]
+
+            # ROI h_colors = ['b', 'lime']
+            # ROI v_colors = ['c', 'r', 'm', 'darkorange']
+            if self.main.current_modality == 'CT':
+                if self.main.current_paramset.sli_type == 0:
+                    colors = ['b', 'lime', 'c', 'r']
+                elif self.main.current_paramset.sli_type == 1:
+                    colors = ['b', 'lime', 'c', 'r', 'm', 'darkorange']
+                elif self.main.current_paramset.sli_type == 2:
+                    colors = ['c', 'r']
+                if self.main.tab_ct.sli_plot.currentIndex() == 0:  # plot all
+                    l_idxs = list(np.arange(len(details_dict['profiles'])))
+                else:
+                    l_idxs = [self.main.tab_ct.sli_plot.currentIndex() - 1]
+            else:
+                colors = ['b', 'lime']
+                if self.main.tab_mr.sli_plot.currentIndex() == 0:  # plot both
+                    l_idxs = list(np.arange(len(details_dict['profiles'])))
+                else:
+                    l_idxs = [self.main.tab_mr.sli_plot.currentIndex() - 1]
+
+            for l_idx in l_idxs:
+                n_pix = len(details_dict['profiles'][l_idx])
+                xvals = [details_dict['dx'] * i for i in range(n_pix)]
+                self.curves.append({
+                    'label': details_dict['labels'][l_idx],
+                    'xvals': xvals,
+                    'yvals': details_dict['profiles'][l_idx],
+                    'color': colors[l_idx]})
+
+                try:
+                    self.curves.append(
+                        {'label': f'{details_dict["labels"][l_idx]} envelope',
+                         'xvals': xvals,
+                         'yvals': details_dict[
+                             'envelope_profiles'][l_idx],
+                         'style': '--',
+                         'color': colors[l_idx]})
+                except IndexError:
+                    pass
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [min(xvals), max(xvals)],
+                    'yvals': [details_dict['background'][l_idx]] * 2,
+                    'style': ':',
+                    'color': colors[l_idx]})
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [min(xvals), max(xvals)],
+                    'yvals': [details_dict['peak'][l_idx]] * 2,
+                    'style': ':',
+                    'color': colors[l_idx]})
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [details_dict['start_x'][l_idx],
+                              details_dict['end_x'][l_idx]],
+                    'yvals': [details_dict['halfpeak'][l_idx]] * 2,
+                    'style': '--',
+                    'color': colors[l_idx]})
+            self.xtitle = 'pos (mm)'
+            self.ytitle = 'HU' if self.main.current_modality == 'CT' else 'Pixel value'
 
     def SNI(self):
         """Prepare plot for test NM SNI test."""
@@ -1820,102 +1833,92 @@ class ResultPlotCanvas(PlotCanvas):
             tolmin['label'] = 'tolerance min'
             self.curves.append(tolmin)
             self.curves.append(tolmax)
-    
+
             self.default_range_y = self.test_values_outside_yrange([-7, 7])
 
-    def Cro(self):
-        """Prepare plot for test PET cross calibration."""
-        self.title = 'z profile'
-        self.xtitle = 'Slice position (mm)'
-        self.ytitle = 'Average in ROI (Bq/ml)'
-        details_dict = self.main.results['Cro']['details_dict']
-        self.curves.append(
-            {'label': 'all slices', 'xvals': details_dict['zpos'],
-             'yvals': details_dict['roi_averages'], 'style': '-k'})
-        self.curves.append(
-            {'label': 'used slices', 'xvals': details_dict['used_zpos'],
-             'yvals': details_dict['used_roi_averages'], 'style': '-r'})
+    def Uni(self):
+        """Prepare plot for test Uni."""
+        plot_idx = self.main.tab_nm.uni_plot.currentIndex()
+        if plot_idx == 0:
+            self.title = 'Uniformity result for all images'
+            yvals_iu_ufov = []
+            yvals_du_ufov = []
+            yvals_iu_cfov = []
+            yvals_du_cfov = []
+            xvals = []
+            for i, row in enumerate(self.main.results['Uni']['values']):
+                if len(row) > 0:
+                    xvals.append(i)
+                    yvals_iu_ufov.append(row[0])
+                    yvals_du_ufov.append(row[1])
+                    yvals_iu_cfov.append(row[2])
+                    yvals_du_cfov.append(row[3])
+            if len(xvals) > 1:
+                self.xtitle = 'Image number'
 
-    def Rec(self):
-        """Prepare plot for test PET recovery curve."""
-        details_dict = self.main.results['Rec']['details_dict']
-        test_widget = self.main.stack_test_tabs.currentWidget()
-
-        def plot_Rec_curve(title):
-            """Plot Rec values together with EARL tolerances."""
-            self.title = title
-            self.xtitle = 'Sphere diameter (mm)'
-            roi_sizes = self.main.current_paramset.rec_sphere_diameters
-            rec_type = test_widget.rec_type.currentIndex()
             self.curves.append(
-                {'label': 'measured values', 'xvals': roi_sizes,
-                 'yvals': details_dict['values'][rec_type][:-1], 'style': '-bo'})
-            if rec_type < 3:
-                self.ytitle = 'Recovery coefficient'
-                idx = test_widget.rec_earl.currentIndex()
-                if idx > 0:
-                    proceed = True
-                    if idx == 1 and rec_type == 2:
-                        proceed = False
-                    if roi_sizes != [10., 13., 17., 22., 28., 37.]:  # EARL tolerances
-                        proceed = False
-                    if proceed:
-                        if idx == 1:  # EARL 1
-                            yvals = [[.27, .44, .57, .63, .72, .76],  # lower A50
-                                     [.43, .6, .73, .78, .85, .89],  # upper A50
-                                     [.34, .59, .73, .83, .91, .95],  # lower max
-                                     [.57, .85, 1.01, 1.09, 1.13, 1.16],  # upper max
-                                     [None] * 6, [None] * 6  # peak
-                                     ]
-                        elif idx == 2:  # EARL 2
-                            yvals = [[.39, .63, .76, .8, .82, .85],  # lower A50
-                                     [.61, .86, .97, .99, .97, 1.],  # upper A50
-                                     [.52, .85, 1., 1.01, 1.01, 1.05],  # lower max
-                                     [.88, 1.22, 1.38, 1.32, 1.26, 1.29],  # upper max
-                                     [.3, .46, 0.75, 0.9, 0.9, 0.9],  # lower peak
-                                     [.43, .7, 0.98, 1.1, 1.1, 1.1]  # upper peak
-                                     ]
-                        idx_lower = 2 * (rec_type % 3)
-                        tolmin = {'label': f'EARL{idx} lower',
-                                  'xvals': roi_sizes,
-                                  'yvals': yvals[idx_lower],
-                                  'style': '--k'}
-                        tolmax = {'label': f'EARL{idx} upper',
-                                  'xvals': roi_sizes,
-                                  'yvals': yvals[idx_lower + 1],
-                                  'style': '--k'}
-                        self.curves.append(tolmin)
-                        self.curves.append(tolmax)
-            else:
-                self.ytitle = 'Image values (Bq/ml)'
-
-        def plot_z_profile():
-            """Plot z-profile of used slices."""
-            self.title = 'z profile'
-            self.xtitle = 'Slice position (mm)'
-            self.ytitle = 'Pixel value'
+                {'label': 'IU UFOV', 'xvals': xvals,
+                 'yvals': yvals_iu_ufov, 'style': '-bo'})
             self.curves.append(
-                {'label': 'first background ROI average, all',
-                 'xvals': details_dict['zpos'],
-                 'yvals': details_dict['roi_averages'], 'style': '-k'})
+                {'label': 'DU UFOV', 'xvals': xvals,
+                 'yvals': yvals_du_ufov, 'style': '-ro'})
             self.curves.append(
-                {'label': 'first background ROI average, used slices',
-                 'xvals': details_dict['used_zpos'],
-                 'yvals': details_dict['used_roi_averages'], 'style': '-r'})
+                {'label': 'IU CFOV', 'xvals': xvals,
+                 'yvals': yvals_iu_cfov, 'style': ':bo'})
             self.curves.append(
-                {'label': 'max in image, used slices spheres',
-                 'xvals': details_dict['used_zpos_spheres'],
-                 'yvals': details_dict['used_roi_maxs'], 'style': '-b'})
-
-        try:
-            sel_text = test_widget.rec_plot.currentText()
-        except AttributeError:
-            sel_text = ''
-        if'z-profile' in sel_text:
-            plot_z_profile()
-        else:
-            sel_text = test_widget.rec_type.currentText()
-            plot_Rec_curve(sel_text)
+                {'label': 'DU CFOV', 'xvals': xvals,
+                 'yvals': yvals_du_cfov, 'style': ':ro'})
+            self.xtitle = 'Image number'
+            self.ytitle = 'Uniformity %'
+            self.default_range_y = self.test_values_outside_yrange([0, 7])
+        elif plot_idx == 1:
+            self.title = 'Curvature correction check'
+            imgno = self.main.gui.active_img_no
+            try:
+                details_dict = self.main.results['Uni']['details_dict'][imgno]
+                if 'correction_matrix' in details_dict:
+                    # averaging central 10% rows/cols
+                    temp_img = self.main.active_img
+                    corrected_img = details_dict['corrected_image']
+                    sz_y, sz_x = corrected_img.shape
+                    nx = round(0.05 * sz_x)
+                    ny = round(0.05 * sz_y)
+                    xhalf = round(sz_x/2)
+                    yhalf = round(sz_y/2)
+                    prof_y = np.mean(temp_img[:, xhalf-nx:xhalf+nx], axis=1)
+                    prof_x = np.mean(temp_img[yhalf-ny:yhalf+ny, :], axis=0)
+                    corr_prof_y = np.mean(
+                        corrected_img[:, xhalf-nx:xhalf+nx], axis=1)
+                    corr_prof_x = np.mean(
+                        corrected_img[yhalf-ny:yhalf+ny, :], axis=0)
+                    self.curves.append({'label': 'Central 10% rows corrected',
+                                        'xvals': np.arange(len(corr_prof_x)),
+                                        'yvals': corr_prof_x,
+                                        'style': 'r'})
+                    self.curves.append({'label': 'Central 10% rows original',
+                                        'xvals': np.arange(len(prof_x)),
+                                        'yvals': prof_x,
+                                        'style': ':r'})
+                    self.curves.append({'label': 'Central 10% columns corrected',
+                                        'xvals': np.arange(len(corr_prof_y)),
+                                        'yvals': corr_prof_y,
+                                        'style': 'b'})
+                    self.curves.append({'label': 'Central 10% columns original',
+                                        'xvals': np.arange(len(prof_y)),
+                                        'yvals': prof_y,
+                                        'style': ':b'})
+                    self.xtitle = 'pixel number'
+                    self.ytitle = 'Average pixel value'
+                    self.legend_location = 'lower center'
+                else:
+                    at = matplotlib.offsetbox.AnchoredText(
+                        'No curvature correction applied',
+                        prop=dict(size=self.main.gui.annotations_font_size,
+                                  color='red'),
+                        frameon=False, loc='upper left')
+                    self.ax.add_artist(at)
+            except IndexError:
+                pass
 
     def vendor(self):
         """Prepare plot if vendor test results contain details."""

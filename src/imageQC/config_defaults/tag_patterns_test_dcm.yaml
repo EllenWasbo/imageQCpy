@@ -7,6 +7,10 @@ Xray:
   list_tags: [KVP, mAs, ExposureIndex, DAP, SID,
     DetectorID]
   list_format: ['|:.1f|', '|:.2f|', '|:.1f|', '|:.3f|', '|:.1f|', '']
+Mammo:
+- label: default
+  list_tags: [KVP, mAs, mA, ExposureTime, AnodeTargetMaterial, FilterMaterial]
+  list_format: ['|:.1f|', '|:.2f|', '|:.2f|', '|:.1f|', '', '']
 NM:
 - label: default
   list_tags: [CountsAccumulated, ActualFrameDuration]

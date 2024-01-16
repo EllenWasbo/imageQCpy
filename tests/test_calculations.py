@@ -374,6 +374,59 @@ def test_Xray_Var():
     assert np.array_equal(values, np.array([31., 192., 80.]))
 
 
+def test_Mammo_SDN():
+    input_main = InputMain(
+        current_modality='Mammo',
+        current_test='SDN',
+        current_paramset=cfc.ParamSetMammo(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['SDN'], ['SDN']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (path_tests / 'test_inputs' / 'Mammo' / 'AluObject')
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        [file_path / 'img1.dcm', file_path / 'img2.dcm'],
+        GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    assert round(input_main.results['SDN']['values'][0][-1]) == 13
+    assert round(input_main.results['SDN']['values'][1][-1]) == 11
+
+
+def test_Mammo_Hom():
+    input_main = InputMain(
+        current_modality='Mammo',
+        current_test='Hom',
+        current_paramset=cfc.ParamSetMammo(hom_mask_max=True),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Hom'], ['Hom']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (path_tests / 'test_inputs' / 'Mammo' / 'Hom')
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        [file_path / 'hom.dcm', file_path / 'hom_to_mask.dcm'],
+        GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    vals_0 = np.round(np.array(input_main.results['Hom']['values'][0]))
+    vals_1 = np.round(np.array(input_main.results['Hom']['values'][1]))
+    sup_0 = np.round(np.array(input_main.results['Hom']['values_sup'][0]))
+    sup_1 = np.round(np.array(input_main.results['Hom']['values_sup'][1]))
+    vals_0_exp = np.array([786., 110., 2628., 0., 870., 870., 33., 0., 0.])
+    vals_1_exp = np.array([375., 59., 2710., 0., 1039., 1039., 38., 0., 0.])
+    sup_0_exp = np.array([685., 835., 724., 808., 62., 134., 47., 56., 4., 1.])
+    sup_1_exp = np.array([3.030e+02, 4.140e+02, 3.500e+02, 3.860e+02, 3.100e+01,
+                          7.200e+01, 4.600e+01, 5.900e+01, 4.000e+00, 1.298e+04])
+    assert np.array_equal(vals_0, vals_0_exp)
+    assert np.array_equal(vals_1, vals_1_exp)
+    assert np.array_equal(sup_0, sup_0_exp)
+    assert np.array_equal(sup_1, sup_1_exp)
+
+
 def test_NM_uniformity():
 
     input_main = InputMain(

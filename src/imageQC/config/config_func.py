@@ -27,7 +27,7 @@ from imageQC.scripts.mini_methods import get_included_tags, get_all_matches
 # imageQC block end
 
 
-def calculate_version_difference(version_string):
+def calculate_version_difference(version_string, reference_version=None):
     """Calculate version difference for comparing versions.
 
     x.y.z-bw = x*1000000 + y*10000 + z*100 + w (i.e. max 100 for each subversion)
@@ -36,6 +36,8 @@ def calculate_version_difference(version_string):
     ----------
     version_string : str
         version string to compare VERSION (current version) to
+    reference_version : str or None
+        to override VERSION
 
     Returns
     -------
@@ -62,33 +64,40 @@ def calculate_version_difference(version_string):
 
         return version_number
 
+    if reference_version is None:
+        reference_version = VERSION
     version_difference = (
-        calculate_version_number(VERSION) - calculate_version_number(version_string))
+        calculate_version_number(reference_version)
+        - calculate_version_number(version_string))
 
     return version_difference
 
 
 def version_control(input_main):
-    """Compare version number of tag_infos with current saved."""
+    """Compare version number of settings with current for updates."""
     _, _, last_mod = load_settings(fname='last_modified')
+
+    # tag infos
     res = getattr(last_mod, 'tag_infos')
-    if len(res) > 0:
-        if len(res) == 2:
+    path = get_config_filename('tag_infos')
+    if len(res) > 0 or path:
+        if len(res) < 3:
             version_string = ''
         else:
             _, _, version_string = res
 
         version_diff = calculate_version_difference(version_string)
         if version_diff > 0:  # current version newer than saved tag_infos
+
             # compare protected tags in current versus saved version
             res = tag_infos_difference_default(input_main.tag_infos)
-            change, added, protected, new_tag_infos = res
+            change, added, adjusted, mammo_changes, new_tag_infos = res
             tags_in_added = [
-                '\t' + str((tag.attribute_name, tag.tag, tag.sequence))
+                '\t' + str((tag.attribute_name, tag.tag, tag.sequence, tag.limited2mod))
                 for tag in added]
-            tags_in_protected = [
-                '\t' + str((tag.attribute_name, tag.tag, tag.sequence))
-                for tag in protected]
+            tags_adjusted = [
+                '\t' + str((tag.attribute_name, tag.tag, tag.sequence, tag.limited2mod))
+                for tag in adjusted]
             if change:
                 if 'MainWindow' not in str(type(input_main)):
                     print('Warning: Current version of imageQC is newer than the '
@@ -97,26 +106,33 @@ def version_control(input_main):
                 else:
                     if len(tags_in_added):
                         tags_in_added.insert(0, 'Add tags:')
-                    if len(tags_in_protected):
-                        tags_in_protected.insert(0, 'Changed protection:')
+                    if len(tags_adjusted):
+                        tags_adjusted.insert(
+                            0, 'Changed protection, unit or modalities:')
+                    mammo_msg = ['']
+                    if mammo_changes:
+                        mammo_msg = [
+                            'Mammo added as modality. All tag infos marked for '
+                            'Xray also marked for Mammo. '
+                            'Some specific mammo tags added.']
                     res = messageboxes.QuestionBox(
                         parent=input_main, title='Update tag infos with new defaults?',
                         msg=(
                             'The current version of imageQC is newer than the '
                             'version previously used to save DICOM tag settings. '
                             'Found default tags missing in your saved version '
-                            'and/or changes to protection settings. '
-                            'Add default tags and update protection settings?'
+                            'and/or changes to protection, unit or modality settings. '
+                            'Add missing and update current settings?'
                             ),
-                        info='Find added and protection changed tags in details.',
-                        details=(tags_in_added + tags_in_protected),
+                        info='Find added and changed tags in details.',
+                        details=(tags_in_added + tags_adjusted + mammo_msg),
                         msg_width=800
                         )
                     if res.exec():
                         if len(tags_in_added) > 0:
                             reply = QMessageBox.question(
                                 input_main, 'Sort tags?',
-                                'Added tags are currently at end om list. '
+                                'Added tags are currently at end of list. '
                                 'Sort tags alphabetically?',
                                 QMessageBox.Yes, QMessageBox.No)
                             if reply == QMessageBox.Yes:
@@ -135,6 +151,52 @@ def version_control(input_main):
                             # update version number
                             _, _ = save_settings(
                                 input_main.tag_infos, fname='tag_infos')
+
+    # paramset ROI offset_xy_mm False together with roi_use_table 1?
+    _, _, paramsets = load_settings(fname='paramsets')
+    warnings = []
+    for mod, paramset_mod in paramsets.items():
+        res = getattr(last_mod, f'paramsets_{mod}')
+        proceed = False
+        if len(res) == 3:
+            _, _, version_string = res
+            diff = calculate_version_difference(
+                version_string, reference_version='3.0.6')
+            if diff > 0:
+                proceed = True
+        else:
+            proceed = True
+
+        if proceed:
+            for paramset in paramset_mod:
+                if paramset.roi_use_table == 1:
+                    warnings.append(f'{mod}: {paramset.label}')
+
+    if len(warnings) > 0:
+        dlg = messageboxes.MessageBoxWithDetails(
+            input_main, title='Warnings',
+            msg='For test ROI using table of ROIs with same shape the behaviour have '
+            'been inconsistent in terms of indicating mm or pixels. This will now be '
+            'in mm as the headers always have indicated. Some of your parameter sets '
+            'make use of this option. Verify and possibly correct the use of the '
+            'ROIs as intented for these parameter sets and save '
+            'to avoid this warning to appear once again.',
+            info='See details for which Parameter sets this might be an issue',
+            icon=QMessageBox.Warning,
+            details=warnings)
+        dlg.exec()
+
+    # remove version info if file missing
+    fnames = [a for a in dir(last_mod) if not a.startswith('__')]
+    changes = False
+    for fname in fnames:
+        res = getattr(last_mod, fname)
+        path = get_config_filename(fname)
+        if path == '' and len(res) > 0:
+            setattr(last_mod, fname, [])
+            changes = True
+    if changes:
+        _, _ = save_settings(last_mod, fname='last_modified')
 
 
 def verify_config_folder(widget):
@@ -548,12 +610,6 @@ def load_settings(fname='', temp_config_folder=''):
                                 if fname == 'tag_infos':
                                     updated_doc = verify_input_dict(doc, cfc.TagInfo())
                                     settings.append(cfc.TagInfo(**updated_doc))
-                                '''
-                                elif fname == 'persons_to_notify':
-                                    updated_doc = verify_input_dict(
-                                        doc, cfc.PersonToNotify())
-                                    settings.append(cfc.PersonToNotify(**updated_doc))
-                                '''
                         if fname == 'tag_infos':
                             taginfos_reset_sort_index(settings)
                     except OSError as error:
@@ -613,6 +669,10 @@ def load_settings(fname='', temp_config_folder=''):
                                             upd = verify_input_dict(doc['ctn_table'],
                                                                     cfc.HUnumberTable())
                                             doc['ctn_table'] = cfc.HUnumberTable(**upd)
+                                        elif modality == 'Mammo':
+                                            upd = verify_input_dict(doc['gho_table'],
+                                                                    cfc.PositionTable())
+                                            doc['gho_table'] = cfc.PositionTable(**upd)
                                         elif modality == 'PET':
                                             if 'rec_table' in doc:
                                                 upd = verify_input_dict(
@@ -638,10 +698,11 @@ def load_settings(fname='', temp_config_folder=''):
                 status = True
 
             elif CONFIG_FNAMES[fname_]['saved_as'] == 'modality_dict':
+                settings = {
+                    modality: [] for modality in [*QUICKTEST_OPTIONS]}
                 try:
                     with open(path, 'r') as file:
                         docs = yaml.safe_load(file)
-                        settings = {}
                         for mod, doc in docs.items():
                             settings[mod] = []
                             for temp in doc:
@@ -708,6 +769,11 @@ def load_settings(fname='', temp_config_folder=''):
                 except Exception as error:
                     print(f'config_func.py load_settings: {str(error)}')
                     return_default = True
+                len_items = [len(mod_list) for key, mod_list in settings.items()]
+                if 0 in len_items:
+                    idx = len_items.index(0)
+                    mod = [*QUICKTEST_OPTIONS][idx]
+                    settings[mod] = copy.deepcopy(CONFIG_FNAMES[fname]['default'][mod])
             else:  # settings as one object
                 try:
                     with open(path, 'r') as file:
@@ -1345,31 +1411,43 @@ def tag_infos_difference_default(current_tag_infos):
         True if changes available
     added_tags : list of TagInfo
         tags added
-    protected_tags : list of TagInfo
+    adjusted_tags : list of TagInfo
         tags with changed protection
-    adjusted_tag_infos : list of TagInfo
+    updated_tag_infos : list of TagInfo
         updated tags infos
     """
     changes = False
     added_tags = []
-    protected_tags = []
+    adjusted_tags = []
     current_attr = [tag.attribute_name for tag in current_tag_infos]
     default_tag_infos = CONFIG_FNAMES['tag_infos']['default']
     tag_attr = [*asdict(default_tag_infos[0])]
     unit_idx = tag_attr.index('unit')
+    input_tag_infos = copy.deepcopy(current_tag_infos)
 
+    # add Mammo to all tags with Xray if none with Mammo (new modality v3.0.6)
+    mammo_changes = False
+    idx_with_mammo = [tag.sort_index for tag in input_tag_infos
+                      if 'Mammo' in tag.limited2mod]
+    if len(idx_with_mammo) == 0:
+        for tag in input_tag_infos:
+            if 'Xray' in tag.limited2mod:
+                tag.limited2mod.append('Mammo')
+        changes = True
+        mammo_changes = True
+
+    updated_tag_infos = copy.deepcopy(input_tag_infos)
     default_attr = [tag.attribute_name for tag in default_tag_infos]
-    adjusted_tag_infos = copy.deepcopy(current_tag_infos)
     for attr in list(set(default_attr)):
         if attr not in current_attr:
             new_tags = [tag for tag in default_tag_infos if tag.attribute_name == attr]
-            adjusted_tag_infos.extend(new_tags)
+            updated_tag_infos.extend(new_tags)
             changes = True
             added_tags.extend(new_tags)
         else:
             # find all tags with attr as name and compare tag except protection
             curr_taginfos = [
-                tag for tag in current_tag_infos if tag.attribute_name == attr]
+                tag for tag in input_tag_infos if tag.attribute_name == attr]
             curr_vals = []
             for tag in curr_taginfos:
                 this_vals = [val for key, val in asdict(tag).items()][1:]
@@ -1384,19 +1462,20 @@ def tag_infos_difference_default(current_tag_infos):
 
                 if def_vals not in curr_vals:
                     curr_wo_prot = [vals[:-1] for vals in curr_vals]
-                    try:  # replace if only protection (and possibly unit) differ
+                    try:  # replace if only protection or unit differ
                         idx_curr_this = curr_wo_prot.index(def_vals[:-1])
                         curr_idxs = [
-                            i for i, tag in enumerate(current_tag_infos)
+                            i for i, tag in enumerate(input_tag_infos)
                             if tag.attribute_name == attr]
                         curr_idx = curr_idxs[idx_curr_this]
-                        adjusted_tag_infos[curr_idx].protected = def_vals[-1]
-                        protected_tags.append(adjusted_tag_infos[curr_idx])
+                        updated_tag_infos[curr_idx].protected = def_vals[-1]
+                        adjusted_tags.append(updated_tag_infos[curr_idx])
                     except ValueError:
-                        adjusted_tag_infos.append(default_tag_infos[idx])
+                        updated_tag_infos.append(default_tag_infos[idx])
                         added_tags.append(default_tag_infos[idx])
                     changes = True
-    return (changes, added_tags, protected_tags, adjusted_tag_infos)
+
+    return (changes, added_tags, adjusted_tags, mammo_changes, updated_tag_infos)
 
 
 def attribute_names_used_in(old_new_names=[], name='', limited2mod=['']):

@@ -510,11 +510,13 @@ class MainWindow(QMainWindow):
         """Recalculate ROI."""
         errmsg = None
         if self.active_img is not None:
+            self.start_wait_cursor()
             self.status_bar.showMessage('Updating ROI...')
             self.current_roi, errmsg = get_rois(
                 self.active_img,
                 self.gui.active_img_no, self)
             self.status_bar.clearMessage()
+            self.stop_wait_cursor()
         else:
             self.current_roi = None
         self.wid_image_display.canvas.roi_draw()
@@ -667,14 +669,13 @@ class MainWindow(QMainWindow):
     def refresh_img_display(self):
         """Refresh image related gui."""
         if self.active_img is not None:
-            self.current_roi, _ = get_rois(
-                self.active_img,
-                self.gui.active_img_no, self)
+            self.current_roi = None
             self.wid_image_display.canvas.img_draw()
             self.wid_window_level.canvas.plot(self.active_img)
             self.wid_dcm_header.refresh_img_info(
                 self.imgs[self.gui.active_img_no].info_list_general,
                 self.imgs[self.gui.active_img_no].info_list_modality)
+            self.update_roi()
         else:
             self.wid_image_display.canvas.img_is_missing()
 
@@ -1204,6 +1205,7 @@ class MainWindow(QMainWindow):
         self.stack_test_tabs = QStackedWidget()
         self.tab_ct = ui_main_test_tabs.ParamsTabCT(self)
         self.tab_xray = ui_main_test_tabs.ParamsTabXray(self)
+        self.tab_mammo = ui_main_test_tabs.ParamsTabMammo(self)
         self.tab_nm = ui_main_test_tabs.ParamsTabNM(self)
         self.tab_spect = ui_main_test_tabs.ParamsTabSPECT(self)
         self.tab_pet = ui_main_test_tabs.ParamsTabPET(self)
@@ -1212,6 +1214,7 @@ class MainWindow(QMainWindow):
 
         self.stack_test_tabs.addWidget(self.tab_ct)
         self.stack_test_tabs.addWidget(self.tab_xray)
+        self.stack_test_tabs.addWidget(self.tab_mammo)
         self.stack_test_tabs.addWidget(self.tab_nm)
         self.stack_test_tabs.addWidget(self.tab_spect)
         self.stack_test_tabs.addWidget(self.tab_pet)

@@ -679,6 +679,75 @@ def optimize_center(image, mask_outer=0, max_from_part=4):
     return res
 
 
+def find_center_object(image, mask_outer=0, tolerances_width=[None, None], sigma=0):
+    """Find center and width of object in image (high or low signal).
+
+    Parameters
+    ----------
+    image : np.2darray
+    mask_outer : int, optional (float ok)
+        Number of outer pixels to mask when searching. The default is 0.
+    tolerances_width : list of float or None
+        min max acceptable widths to accept result and break loop
+    sigma : float, options
+        smooth by gaussian filter before finding center.
+        NB - might drag signal to one side
+
+    Returns
+    -------
+    res : tuple of float or None
+        center_x, center_y, widht_x, width_y
+    """
+    res = None
+    mask_outer = round(mask_outer)
+    smoothed_image = gaussian_filter(image, sigma=sigma)
+    # get min and max profiles x and y
+    for getmax in [True, False]:
+        if mask_outer == 0:
+            if getmax:
+                prof_y = np.max(smoothed_image, axis=1)
+                prof_x = np.max(smoothed_image, axis=0)
+            else:
+                prof_y = np.min(smoothed_image, axis=1)
+                prof_x = np.min(smoothed_image, axis=0)
+        else:
+            if getmax:
+                prof_y = np.max(
+                    smoothed_image[mask_outer:-mask_outer, mask_outer:-mask_outer],
+                    axis=1)
+                prof_x = np.max(
+                    smoothed_image[mask_outer:-mask_outer, mask_outer:-mask_outer],
+                    axis=0)
+            else:
+                prof_y = np.min(
+                    smoothed_image[mask_outer:-mask_outer, mask_outer:-mask_outer],
+                    axis=1)
+                prof_x = np.min(
+                    smoothed_image[mask_outer:-mask_outer, mask_outer:-mask_outer],
+                    axis=0)
+        # get width at halfmax and center for profiles
+        width_x, center_x = get_width_center_at_threshold(
+            prof_x, 0.5 * (np.mean(prof_x) + min(prof_x)),
+            force_above=getmax)
+        width_y, center_y = get_width_center_at_threshold(
+            prof_y, 0.5 * (np.mean(prof_y) + min(prof_y)),
+            force_above=getmax)
+        if width_x is not None and width_y is not None:
+            center_x += mask_outer
+            center_y += mask_outer
+            proceed = True
+            if tolerances_width[0] is not None:
+                if width_x < tolerances_width[0] or width_y < tolerances_width[0]:
+                    proceed = False
+            if tolerances_width[1] is not None:
+                if width_x > tolerances_width[1] or width_y > tolerances_width[1]:
+                    proceed = False
+            if proceed:
+                res = (center_x, center_y, width_x, width_y)
+                break
+    return res
+
+
 def ESF_to_LSF(ESF, prefilter_sigma):
     """Calculate LSF spread function from edge spread function.
 

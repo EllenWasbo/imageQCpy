@@ -6,6 +6,8 @@
 """
 
 import os
+import copy
+import numpy as np
 
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5 import QtCore
@@ -13,7 +15,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
     QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QListWidget, QTextEdit,
-    QLabel, QRadioButton, QCheckBox, QFileDialog
+    QPushButton, QLabel, QRadioButton, QCheckBox, QFileDialog
     )
 
 # imageQC block start
@@ -399,8 +401,10 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         self.setMinimumHeight(300)
         self.setMinimumWidth(300)
         files_or_folders = 'files'
+        self.sort_mtime = None
         if len(files) > 0:
             self.list_elements = [file.name for file in files]
+            self.sort_mtime = np.argsort([file.stat().st_mtime for file in files])
         else:
             self.list_elements = [folder.name for folder in directories]
             files_or_folders = 'folders'
@@ -408,6 +412,10 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         vlo = QVBoxLayout()
         self.setLayout(vlo)
 
+        self.sort_by_name = True
+        self.txt_by_name_or_date = ['Sort by last modified date', 'Sort by name']
+        self.btn_by_name_or_date = QPushButton(self.txt_by_name_or_date[0])
+        self.btn_by_name_or_date.clicked.connect(self.update_sort)
         self.list_file_or_dirs = QListWidget()
         self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)
         self.list_file_or_dirs.addItems(self.list_elements)
@@ -418,6 +426,8 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         vlo.addStretch()
         vlo.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
         vlo.addWidget(self.list_file_or_dirs)
+        if len(files) > 0:
+            vlo.addWidget(self.btn_by_name_or_date)
         vlo.addStretch()
         hlo_buttons = QHBoxLayout()
         vlo.addLayout(hlo_buttons)
@@ -428,11 +438,29 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         self.buttonBox.rejected.connect(self.reject)
         vlo.addWidget(self.buttonBox)
 
+    def update_sort(self):
+        """Sort elements by name or date."""
+        self.list_file_or_dirs.clear()
+        self.btn_by_name_or_date.setText(self.txt_by_name_or_date[
+            int(self.sort_by_name)])
+        self.sort_by_name = not self.sort_by_name
+        list_elements = copy.deepcopy(self.list_elements)
+        if self.sort_by_name is False:
+            list_elements = list(np.array(list_elements)[self.sort_mtime])
+        self.list_file_or_dirs.addItems(list_elements)
+        self.list_file_or_dirs.setCurrentRow(len(list_elements) - 1)
+
     def get_idxs(self):
         """Return selected indexes in list."""
         idxs = []
-        for sel in self.list_file_or_dirs.selectedIndexes():
-            idxs.append(sel.row())
+        if self.sort_by_name:
+            for sel in self.list_file_or_dirs.selectedIndexes():
+                idxs.append(sel.row())
+        else:
+            orig_sort = np.arange(len(self.list_elements))
+            mtime_sort = orig_sort[self.sort_mtime]
+            for sel in self.list_file_or_dirs.selectedIndexes():
+                idxs.append(mtime_sort[sel.row()])
         return idxs
 
 

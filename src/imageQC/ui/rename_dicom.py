@@ -41,6 +41,10 @@ class RenameDicomDialog(ImageQCDialog):
         self.new_names = []  # list for generated new names (first step)
         self.valid_dict = {}  # dict for folders (first) + files (second step)
 
+        # for testmode
+        self.testmode_msgs = []
+        self.testmode_errmsgs = []
+
         self.setWindowTitle('Rename DICOM')
         splitter = QSplitter(Qt.Vertical)
         vlo = QVBoxLayout()
@@ -132,8 +136,10 @@ class RenameDicomDialog(ImageQCDialog):
         """Fill table with original and generated names."""
         self.table.clear()
         if len(self.original_names) > 0 and len(self.new_names) > 0:
-            orignames = [x.name for x in self.original_names]
-            newnames = [x.name for x in self.new_names]
+            orignames = [x.name for x in self.original_names
+                         if x != Path(self.path.text())]
+            newnames = [x.name for x in self.new_names
+                        if x != Path(self.path.text())]
             if len(orignames) > len(newnames):  # limited to a few
                 orignames = orignames[:len(newnames)]
 
@@ -379,9 +385,11 @@ class RenameDicomDialog(ImageQCDialog):
         dcm_files = self.valid_dict['files']
         if len(dcm_folders) > 0:
             start_with_folders = True
+            rename_files = False
             if len(dcm_folders) == 1 and dcm_folders[0] == Path(
                     self.path.text()):
                 start_with_folders = False
+                rename_files = True
 
             empty_tag_pattern = False
             if start_with_folders:
@@ -398,17 +406,21 @@ class RenameDicomDialog(ImageQCDialog):
                     progress_modal.setLabelText('Generate new folder names...')
                     for i, folder in enumerate(dcm_folders):
                         progress_modal.setValue(i)
-                        pyd, _, _ = dcm.read_dcm(dcm_files[i][0].resolve())
-                        if pyd:
-                            name_parts = dcm.get_dcm_info_list(
-                                pyd, tag_pattern, self.wid_rename_pattern.tag_infos,
-                                prefix_separator='', suffix_separator='',
-                                not_found_text='')
-                            new_name = "_".join(name_parts)
-                            new_name = valid_path(new_name, folder=True)
-                            self.new_names.append(folder.parent / new_name)
+                        if folder == Path(self.path.text()):  # selected top folder
+                            rename_files = dcm_files[i]
+                            self.new_names.append(folder)
                         else:
-                            self.new_names.append('')
+                            pyd, _, _ = dcm.read_dcm(dcm_files[i][0].resolve())
+                            if pyd:
+                                name_parts = dcm.get_dcm_info_list(
+                                    pyd, tag_pattern, self.wid_rename_pattern.tag_infos,
+                                    prefix_separator='', suffix_separator='',
+                                    not_found_text='')
+                                new_name = "_".join(name_parts)
+                                new_name = valid_path(new_name, folder=True)
+                                self.new_names.append(folder.parent / new_name)
+                            else:
+                                self.new_names.append('')
                     idx_all_this = get_all_matches(self.new_names, '')
                     if len(idx_all_this):
                         if len(idx_all_this) == 1:
@@ -422,14 +434,22 @@ class RenameDicomDialog(ImageQCDialog):
                 else:
                     empty_tag_pattern = True
 
-            else:  # no subfolders, only files directly in search path
+            n_folders = 0
+            if rename_files:
                 tag_pattern = cfc.TagPatternFormat(
                     list_tags=self.wid_rename_pattern.current_template.list_tags2,
                     list_format=self.wid_rename_pattern.current_template.list_format2)
                 if len(tag_pattern.list_tags) > 0:
-                    dcm_files = dcm_files[0]
-                    self.original_names = dcm_files
-                    self.new_names = []
+                    if start_with_folders:
+                        dcm_files = rename_files
+                        n_folders = len(self.original_names)
+                        self.original_names.extend(dcm_files)
+                    else:
+                        # no subfolders, only files directly in search path
+                        dcm_files = dcm_files[0]
+                        self.new_names = []
+                        self.original_names = dcm_files
+
                     if limit > 0:
                         if len(dcm_files) > limit:
                             dcm_files = dcm_files[:limit]
@@ -458,64 +478,105 @@ class RenameDicomDialog(ImageQCDialog):
                 else:
                     empty_tag_pattern = True
 
-            if empty_tag_pattern:
+            if empty_tag_pattern and start_with_folders is False:
                 QMessageBox.warning(
                     self, 'Empty tag pattern',
                     ('Tag pattern is empty. Tag pattern is '
                      'needed to generate names.'))
 
             if len(self.new_names) > 0:  # ensure unique names
-                self.new_names = self.get_uniq_filenames(
-                    self.new_names, folder=start_with_folders)
+                if start_with_folders and rename_files:  # mix
+                    uniq_folders = []
+                    uniq_files = []
+                    if n_folders > 1:
+                        uniq_folders = self.get_uniq_filenames(
+                            self.new_names[1:n_folders + 1], folder=True)
+                    if len(self.new_names) > n_folders:
+                        uniq_files = self.get_uniq_filenames(
+                            self.new_names[n_folders + 1:], folder=False)
+                    self.new_names = [self.new_names[0]]
+                    if len(uniq_folders) > 0:
+                        self.new_names.extend(uniq_folders)
+                    if len(uniq_files) > 0:
+                        self.new_names.extend(uniq_files)
+                else:
+                    self.new_names = self.get_uniq_filenames(
+                        self.new_names, folder=start_with_folders)
 
             self.fill_table()
             if limit == 0 and len(self.new_names) > 0:
                 self.btn_rename.setDisabled(False)
 
-    def rename(self):
+    def rename(self, testmode=False):
         """Rename folders or files."""
         errmsg = []
         confirm_msgs = []
+        self.testmode_msgs = []
+        self.testmode_errmsgs = []
+        n_folders = 0
+        n_files = 0
         proceed = False
         if len(self.original_names) > 0:
             if len(self.original_names) == len(self.new_names):
                 proceed = True
+                n_folders = [path.is_dir() for path in self.original_names].count(True)
+                n_files = [path.is_file() for path in self.original_names].count(True)
 
-        type_name = 'folder(s)' if self.new_names[0].is_dir() else 'file(s)'
-        n_first = 0
+        n_first_folders = 0
+        n_first_files = 0
         if proceed:  # rename first step
             max_val = len(self.original_names)
             progress_modal = uir.ProgressModal(
                 "Renaming ...", "Stop", 0, max_val, self)
             for i, path in enumerate(self.original_names):
                 progress_modal.setValue(i)
-                try:
-                    path.rename(self.new_names[i])
-                    n_first += 1
-                except (PermissionError, OSError) as err:
-                    errmsg.append(f'{path.resolve}: {err}')
+                if path != Path(self.path.text()):  # avoid renaming selected folder
+                    try:
+                        if testmode is False:
+                            path.rename(self.new_names[i])
+                            if self.new_names[i].is_dir():
+                                n_first_folders += 1
+                            elif self.new_names[i].is_file():
+                                n_first_files += 1
+                        else:  # not renamed
+                            if self.original_names[i].is_dir():
+                                n_first_folders += 1
+                            elif self.original_names[i].is_file():
+                                n_first_files += 1
+                    except (PermissionError, OSError) as err:
+                        errmsg.append(f'{path.resolve}: {err}')
                 if progress_modal.wasCanceled():
                     break
             progress_modal.reset()
-        if n_first > 0:
-            confirm_msgs.append(f'Renamed {n_first} {type_name} out of '
-                                f'{len(self.original_names)}')
+        if n_first_folders + n_first_files > 0:
+            if Path(self.path.text()) in self.new_names:
+                n_folders = n_folders - 1  # this selected folder is ignored
+            if n_folders > 0:
+                confirm_msgs.append(
+                    f'Renamed {n_first_folders} subfolder(s) out of {n_folders}')
+                if n_first_files > 0:
+                    confirm_msgs.append(
+                        f'Renamed {n_first_files} file(s) out of {n_files} '
+                        'in selected folder')
+            else:
+                confirm_msgs.append(f'Renamed {n_first_files} file(s) out of {n_files}')
 
+        # alse rename files of subfolders (not yet given names)
         tag_pattern = cfc.TagPatternFormat(
             list_tags=self.wid_rename_pattern.current_template.list_tags2,
             list_format=self.wid_rename_pattern.current_template.list_format2)
-        if (proceed and self.new_names[0].is_dir()
-                and len(tag_pattern.list_tags) > 0):
-            proceed = False
-            if self.valid_dict['folders'] == self.original_names:
+        if (proceed and n_folders > 0 and len(tag_pattern.list_tags) > 0):
+            if testmode is False:
                 proceed = messageboxes.proceed_question(
-                    self,
-                    'Proceed renaming files?')
+                    self, 'Proceed renaming files in the subfolders?')
+            else:
+                proceed = True
         else:
             proceed = False
 
         if proceed:  # rename files in subfolders
-            max_val = sum(len(li) for li in self.valid_dict['files'])
+            max_val = sum(len(li) for li in self.valid_dict['files']) - n_files
+            # n_files already renamed if mix files/folders at top level
             progress_modal = uir.ProgressModal(
                 "Renaming files in subfolders...", "Stop",
                 0, max_val, self)
@@ -524,7 +585,18 @@ class RenameDicomDialog(ImageQCDialog):
             n_renamed = 0
             for folder_no, file_list in enumerate(self.valid_dict['files']):
                 new_folder = self.new_names[folder_no]
+                proceed = False
                 if new_folder.exists():
+                    if new_folder.is_dir():
+                        if new_folder != Path(self.path.text()):  # already renamed
+                            proceed = True
+                elif testmode:
+                    if new_folder != Path(self.path.text()):  # already renamed
+                        proceed = True
+                        new_folder = self.original_names[folder_no]  # not renamed
+                if proceed:
+                    old_locs = []
+                    new_locs = []
                     for file in file_list:
                         progress_modal.setValue(counter)
                         file_new_loc = new_folder / file.name
@@ -536,34 +608,47 @@ class RenameDicomDialog(ImageQCDialog):
                                 not_found_text='')
                             new_name = "_".join(name_parts)
                             new_name = valid_path(new_name) + '.dcm'
-                            try:
-                                file_new_loc.rename(
-                                    file_new_loc.parent / new_name)
-                                n_renamed += 1
-                            except (PermissionError, OSError) as err:
-                                errmsg.append(f'{file.resolve}: {err}')
+                            old_locs.append(file_new_loc)
+                            new_locs.append(file_new_loc.parent / new_name)
                         else:
                             errmsg.append(pyd_err)
                         if progress_modal.wasCanceled():
                             break
                         counter += 1
+
+                    if len(new_locs) > 0:
+                        uniq_files = self.get_uniq_filenames(
+                            new_locs, folder=False)
+                        for idx, new_loc in enumerate(uniq_files):
+                            try:
+                                if testmode is False:
+                                    old_locs[idx].rename(new_loc)
+                                else:
+                                    print(f'old: {old_locs[idx].resolve()}')
+                                    print(f'new: {new_loc.resolve()}')
+                                n_renamed += 1
+                            except (PermissionError, OSError) as err:
+                                errmsg.append(f'{old_locs[idx].resolve}: {err}')
                 if progress_modal.wasCanceled():
                     break
             progress_modal.reset()
-            confirm_msgs.append(f'Renamed {n_renamed} files(s) out of {max_val}')
+            confirm_msgs.append(f'Renamed {n_renamed} file(s) out of {max_val}')
 
-        if len(errmsg) > 0:
+        if len(errmsg) > 0 and testmode is False:
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Failed renaming',
                 msg='Failed renaming one or more files. See details',
                 details=errmsg, icon=QMessageBox.Warning)
             dlg.exec()
-        if len(confirm_msgs) > 0:
+        if len(confirm_msgs) > 0 and testmode is False:
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Finished renaming',
                 msg='Finished renaming:',
                 info='\n'.join(confirm_msgs), icon=QMessageBox.Information)
             dlg.exec()
+        if testmode:
+            self.testmode_msgs = confirm_msgs
+            self.testmode_errmsgs = errmsg
 
     def sort_seriesUID(self, dcm_files, progress_widget=None):
         """Sort images based on series UID.

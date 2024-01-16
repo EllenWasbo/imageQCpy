@@ -86,7 +86,8 @@ class ParamsTabVendor(QWidget):
                 'Siemens PET-CT DailyQC Reports (.pdf)',
                 'Siemens PET-MR DailyQC Reports (.xml)',
                 'Siemens exported energy spectrum (.txt)',
-                'Philips MR ACR report (.pdf)'
+                'Philips MR ACR report (.pdf)',
+                'GE QAP (.txt)',
                 ]
             if file_type in implemented_types:
                 file_suffix = file_type.split('(')[1]

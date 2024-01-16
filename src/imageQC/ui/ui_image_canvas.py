@@ -371,25 +371,12 @@ class ImageCanvas(GenericImageCanvas):
         #   for i, collection in enumerate(self.contours.collections):
         #      collection.set_edgecolor(colors[i % len(colors)])
 
-    def ROI(self):
-        """Drow ROIs with labels if any."""
-        if self.main.current_paramset.roi_use_table > 0:
-            labels = self.main.current_paramset.roi_table.labels
-            colors = get_color_list(n_colors=len(labels))
-        else:
-            labels = None
-            colors = None
-        self.add_contours_to_all_rois(labels=labels, colors=colors)
-
-    def Num(self):
-        """Draw  ROIs with labels."""
+    def Bar(self):
+        """Draw Bar ROIs."""
         self.add_contours_to_all_rois(
-            labels=self.main.current_paramset.num_table.labels)
-
-    def Hom(self):
-        """Draw Hom ROI."""
-        colors = ['red', 'blue', 'green', 'yellow', 'cyan']
-        self.add_contours_to_all_rois(colors=colors)
+            colors=['red', 'blue', 'lime', 'cyan'],
+            labels=[str(i+1) for i in range(4)]
+            )
 
     def CTn(self):
         """Draw CTn ROI."""
@@ -408,6 +395,195 @@ class ImageCanvas(GenericImageCanvas):
                 roi_indexes=[i for i in range(nroi, 2 * nroi)],
                 reset_contours=False
                 )
+
+    def Dim(self):
+        """Draw search ROI for rods and resulting centerpositions if any."""
+        self.add_contours_to_all_rois(roi_indexes=[0, 1, 2, 3])
+        if 'Dim' in self.main.results:
+            if 'details_dict' in self.main.results['Dim']:
+                details_dict = self.main.results['Dim'][
+                    'details_dict'][self.main.gui.active_img_no]
+                if 'centers_x' in details_dict:
+                    xs = details_dict['centers_x']
+                    ys = details_dict['centers_y']
+                    for i in range(4):
+                        self.ax.add_artist(matplotlib.lines.Line2D(
+                            [xs[i-1], xs[i]], [ys[i-1], ys[i]],
+                            color='r', linewidth=self.linewidth,
+                            linestyle='dotted',
+                            ))
+
+    def Gho(self):
+        """Draw Ghosting ROIs."""
+        colors = ['red', 'blue', 'green', 'yellow', 'cyan']
+        try:
+            labels = self.main.current_paramset.gho_table.labels
+        except AttributeError:
+            labels = None
+        self.add_contours_to_all_rois(colors=colors, labels=labels)
+
+    def Hom(self):
+        """Draw Hom ROI."""
+        if self.main.current_modality == 'Mammo':
+            self.add_contours_to_all_rois(colors=['blue', 'blue'], roi_indexes=[0, 1])
+            if self.main.current_paramset.hom_mask_max:
+                self.add_contours_to_all_rois(
+                    colors=['red'], roi_indexes=[2],
+                    filled=True, hatches=['////'])
+        else:
+            colors = ['red', 'blue', 'green', 'yellow', 'cyan']
+            self.add_contours_to_all_rois(colors=colors)
+
+    def MTF(self):
+        """Draw MTF ROI."""
+        if (
+                self.main.current_modality in ['CT', 'SPECT']
+                and self.main.current_paramset.mtf_type in [0, 1]):
+            # bead show background rim
+            if self.main.current_roi[1].any():
+                self.add_contours_to_all_rois(roi_indexes=[1])
+            else:
+                self.add_contours_to_all_rois(roi_indexes=[0])
+        elif self.main.current_modality == 'NM':
+            self.add_contours_to_all_rois(colors=['red', 'blue'])
+        else:
+            if isinstance(self.main.current_roi, list):
+                roi_indexes = list(range(len(self.main.current_roi) - 1))
+                self.add_contours_to_all_rois(
+                    roi_indexes=roi_indexes,
+                    colors=['red', 'blue', 'green', 'cyan'])
+                mask = np.where(self.main.current_roi[-1], 0, 1)
+                contour = self.ax.contour(
+                    mask, levels=[0.9],
+                    colors='red', alpha=0.5, linewidths=self.linewidth,
+                    linestyles='dotted')
+                self.contours.append(contour)
+            else:
+                self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
+
+            if 'MTF' in self.main.results and self.main.current_modality == 'CT':
+                try:
+                    if 'details_dict' in self.main.results['MTF']:
+                        if self.main.current_paramset.mtf_type == 2:  # circular disc
+                            roi_disc = self.main.results[
+                                'MTF']['details_dict'][0]['found_disc_roi']
+                            mask = np.where(roi_disc, 0, 1)
+                            contour = self.ax.contour(
+                                mask, levels=[0.9],
+                                colors='blue', alpha=0.5, linewidths=self.linewidth,
+                                linestyles='dotted')
+                            self.contours.append(contour)
+                except (TypeError, KeyError, IndexError):
+                    pass
+
+    def NPS(self):
+        """Draw NPS ROIs."""
+        if self.main.current_modality == 'CT':
+            self.add_contours_to_all_rois(
+                colors=['w']*self.main.current_paramset.nps_n_sub, filled=True)
+        elif self.main.current_modality in ['Xray', 'Mammo']:
+            n_sub = self.main.current_paramset.nps_n_sub
+            idxs = [0, n_sub*2-2, n_sub*2, n_sub*4, -(n_sub*2-1), -1]
+            self.add_contours_to_all_rois(
+                colors=['r']*6, filled=True, roi_indexes=idxs)
+        else:
+            pass
+
+    def Num(self):
+        """Draw  ROIs with labels."""
+        self.add_contours_to_all_rois(
+            labels=self.main.current_paramset.num_table.labels)
+
+    def PIU(self):
+        """Draw MR PIU ROI."""
+        self.add_contours_to_all_rois()
+        # display min, max pos
+        self.scatters = []
+        min_idx, max_idx = get_min_max_pos_2d(
+            self.main.active_img, self.main.current_roi)
+        scatter = self.ax.scatter(min_idx[1], min_idx[0], s=40,
+                                  c='blue', marker='D')
+        self.scatters.append(scatter)
+        self.ax.text(min_idx[1], min_idx[0]+10,
+                     'min', fontsize=self.fontsize, color='blue')
+        scatter = self.ax.scatter(max_idx[1], max_idx[0], s=40,
+                                  c='fuchsia', marker='D')
+        self.scatters.append(scatter)
+        self.ax.text(max_idx[1], max_idx[0]+10,
+                     'max', fontsize=self.fontsize, color='fuchsia')
+
+    def Rec(self):
+        """Draw PET Rec ROI."""
+        labels = self.main.current_paramset.rec_table.labels
+        self.add_contours_to_all_rois(
+            labels=labels,
+            labels_pos='center',
+            roi_indexes=[i for i in range(len(labels))])
+        self.add_contours_to_all_rois(
+            labels=['center'],
+            roi_indexes=[len(labels)], reset_contours=False)
+        if self.main.results:
+            if 'Rec' in self.main.results:
+                if self.main.results['Rec']:
+                    if 'details_dict' in self.main.results['Rec']:
+                        zpos_this = self.main.imgs[self.main.gui.active_img_no].zpos
+                        dd = self.main.results['Rec']['details_dict']
+                        if 'used_zpos' in dd:
+                            if zpos_this in dd['used_zpos_spheres']:
+                                idx = np.where(dd['used_zpos_spheres'] == zpos_this)
+                                idx = idx[0][0]
+                                if 'roi_spheres' in dd:
+                                    for roi in dd['roi_spheres']:
+                                        if roi[idx] is not None:
+                                            mask = np.where(roi[idx], 0, 1)
+                                            contour = self.ax.contour(
+                                                mask, levels=[0.9],
+                                                colors='blue', alpha=0.5,
+                                                linewidths=self.linewidth)
+                                            self.contours.append(contour)
+                                    for roi in dd['roi_peaks']:
+                                        if roi[idx] is not None:
+                                            mask = np.where(roi[idx], 0, 1)
+                                            contour = self.ax.contour(
+                                                mask, levels=[0.9],
+                                                colors='green', alpha=0.5,
+                                                linewidths=self.linewidth)
+                                            self.contours.append(contour)
+                                    mask = np.where(
+                                        np.zeros(self.main.active_img.shape) == 0)
+                                    c1 = self.ax.contour(
+                                        mask, colors='blue', alpha=0.5,
+                                        linewidths=self.linewidth)
+                                    h1, _ = c1.legend_elements()
+                                    c2 = self.ax.contour(
+                                        mask, colors='green', alpha=0.5,
+                                        linewidths=self.linewidth)
+                                    h2, _ = c2.legend_elements()
+                                    self.ax.legend(
+                                        [h1[0], h2[0]], ['Sphere VOI', 'Peak VOI'])
+
+    def ROI(self):
+        """Drow ROIs with labels if any."""
+        if self.main.current_paramset.roi_use_table > 0:
+            labels = self.main.current_paramset.roi_table.labels
+            colors = get_color_list(n_colors=len(labels))
+        else:
+            labels = None
+            colors = None
+        self.add_contours_to_all_rois(labels=labels, colors=colors)
+
+    def SDN(self):
+        """Mammo SDNR ROIs."""
+        if isinstance(self.main.current_roi, list):
+            roi_indexes = list(range(5))
+            self.add_contours_to_all_rois(roi_indexes=roi_indexes)
+            if len(self.main.current_roi) == 6:
+                mask = np.where(self.main.current_roi[-1], 0, 1)
+                contour = self.ax.contour(
+                    mask, levels=[0.9],
+                    colors='blue', alpha=0.5, linewidths=self.linewidth,
+                    linestyles='dotted')
+                self.contours.append(contour)
 
     def Sli(self):
         """Draw Slicethickness search lines."""
@@ -471,89 +647,6 @@ class ImageCanvas(GenericImageCanvas):
                 color=v_colors[l_idx], linewidth=0.5*self.linewidth
                 ))
 
-    def MTF(self):
-        """Draw MTF ROI."""
-        if (
-                self.main.current_modality in ['CT', 'SPECT']
-                and self.main.current_paramset.mtf_type in [0, 1]):
-            # bead show background rim
-            if self.main.current_roi[1].any():
-                self.add_contours_to_all_rois(roi_indexes=[1])
-            else:
-                self.add_contours_to_all_rois(roi_indexes=[0])
-        elif self.main.current_modality == 'NM':
-            self.add_contours_to_all_rois(colors=['red', 'blue'])
-        else:
-            if isinstance(self.main.current_roi, list):
-                roi_indexes = list(range(len(self.main.current_roi) - 1))
-                self.add_contours_to_all_rois(
-                    roi_indexes=roi_indexes,
-                    colors=['red', 'blue', 'green', 'cyan'])
-                mask = np.where(self.main.current_roi[-1], 0, 1)
-                contour = self.ax.contour(
-                    mask, levels=[0.9],
-                    colors='red', alpha=0.5, linewidths=self.linewidth,
-                    linestyles='dotted')
-                self.contours.append(contour)
-            else:
-                self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
-
-            if 'MTF' in self.main.results and self.main.current_modality == 'CT':
-                try:
-                    if 'details_dict' in self.main.results['MTF']:
-                        if self.main.current_paramset.mtf_type == 2:  # circular disc
-                            roi_disc = self.main.results[
-                                'MTF']['details_dict'][0]['found_disc_roi']
-                            mask = np.where(roi_disc, 0, 1)
-                            contour = self.ax.contour(
-                                mask, levels=[0.9],
-                                colors='blue', alpha=0.5, linewidths=self.linewidth,
-                                linestyles='dotted')
-                            self.contours.append(contour)
-                except (TypeError, KeyError, IndexError):
-                    pass
-
-    def Uni(self):
-        """Draw NM uniformity ROI."""
-        self.add_contours_to_all_rois(colors=['red', 'blue'])
-
-    def Dim(self):
-        """Draw search ROI for rods and resulting centerpositions if any."""
-        self.add_contours_to_all_rois(roi_indexes=[0, 1, 2, 3])
-        if 'Dim' in self.main.results:
-            if 'details_dict' in self.main.results['Dim']:
-                details_dict = self.main.results['Dim'][
-                    'details_dict'][self.main.gui.active_img_no]
-                if 'centers_x' in details_dict:
-                    xs = details_dict['centers_x']
-                    ys = details_dict['centers_y']
-                    for i in range(4):
-                        self.ax.add_artist(matplotlib.lines.Line2D(
-                            [xs[i-1], xs[i]], [ys[i-1], ys[i]],
-                            color='r', linewidth=self.linewidth,
-                            linestyle='dotted',
-                            ))
-
-    def NPS(self):
-        """Draw NPS ROIs."""
-        if self.main.current_modality == 'CT':
-            self.add_contours_to_all_rois(
-                colors=['w']*self.main.current_paramset.nps_n_sub, filled=True)
-        elif self.main.current_modality == 'Xray':
-            n_sub = self.main.current_paramset.nps_n_sub
-            idxs = [0, n_sub*2-2, n_sub*2, n_sub*4, -(n_sub*2-1), -1]
-            self.add_contours_to_all_rois(
-                colors=['r']*6, filled=True, roi_indexes=idxs)
-        else:
-            pass
-
-    def Bar(self):
-        """Draw Bar ROIs."""
-        self.add_contours_to_all_rois(
-            colors=['red', 'blue', 'lime', 'cyan'],
-            labels=[str(i+1) for i in range(4)]
-            )
-
     def SNI(self):
         """Draw NM uniformity ROI."""
         if self.main.current_paramset.sni_type == 0:
@@ -585,56 +678,6 @@ class ImageCanvas(GenericImageCanvas):
                         np.where(self.main.current_roi[row][col], 0, 1),
                         levels=[0, 0.5], colors='red', alpha=0.3))
 
-    def Rec(self):
-        """Draw PET Rec ROI."""
-        labels = self.main.current_paramset.rec_table.labels
-        self.add_contours_to_all_rois(
-            labels=labels,
-            labels_pos='center',
-            roi_indexes=[i for i in range(len(labels))])
-        self.add_contours_to_all_rois(
-            labels=['center'],
-            roi_indexes=[len(labels)], reset_contours=False)
-        if self.main.results:
-            if 'Rec' in self.main.results:
-                if self.main.results['Rec']:
-                    if 'details_dict' in self.main.results['Rec']:
-                        zpos_this = self.main.imgs[self.main.gui.active_img_no].zpos
-                        dd = self.main.results['Rec']['details_dict']
-                        if 'used_zpos' in dd:
-                            if zpos_this in dd['used_zpos_spheres']:
-                                idx = np.where(dd['used_zpos_spheres'] == zpos_this)
-                                idx = idx[0][0]
-                                if 'roi_spheres' in dd:
-                                    for roi in dd['roi_spheres']:
-                                        if roi[idx] is not None:
-                                            mask = np.where(roi[idx], 0, 1)
-                                            contour = self.ax.contour(
-                                                mask, levels=[0.9],
-                                                colors='blue', alpha=0.5,
-                                                linewidths=self.linewidth)
-                                            self.contours.append(contour)
-                                    for roi in dd['roi_peaks']:
-                                        if roi[idx] is not None:
-                                            mask = np.where(roi[idx], 0, 1)
-                                            contour = self.ax.contour(
-                                                mask, levels=[0.9],
-                                                colors='green', alpha=0.5,
-                                                linewidths=self.linewidth)
-                                            self.contours.append(contour)
-                                    mask = np.where(
-                                        np.zeros(self.main.active_img.shape) == 0)
-                                    c1 = self.ax.contour(
-                                        mask, colors='blue', alpha=0.5,
-                                        linewidths=self.linewidth)
-                                    h1, _ = c1.legend_elements()
-                                    c2 = self.ax.contour(
-                                        mask, colors='green', alpha=0.5,
-                                        linewidths=self.linewidth)
-                                    h2, _ = c2.legend_elements()
-                                    self.ax.legend(
-                                        [h1[0], h2[0]], ['Sphere VOI', 'Peak VOI'])
-
     def SNR(self):
         """Draw MR SNR ROI(s)."""
         if self.main.current_paramset.snr_type == 0:
@@ -642,28 +685,9 @@ class ImageCanvas(GenericImageCanvas):
         else:
             self.add_contours_to_all_rois(colors=['red', 'lime'])
 
-    def PIU(self):
-        """Draw MR PIU ROI."""
-        self.add_contours_to_all_rois()
-        # display min, max pos
-        self.scatters = []
-        min_idx, max_idx = get_min_max_pos_2d(
-            self.main.active_img, self.main.current_roi)
-        scatter = self.ax.scatter(min_idx[1], min_idx[0], s=40,
-                                  c='blue', marker='D')
-        self.scatters.append(scatter)
-        self.ax.text(min_idx[1], min_idx[0]+10,
-                     'min', fontsize=self.fontsize, color='blue')
-        scatter = self.ax.scatter(max_idx[1], max_idx[0], s=40,
-                                  c='fuchsia', marker='D')
-        self.scatters.append(scatter)
-        self.ax.text(max_idx[1], max_idx[0]+10,
-                     'max', fontsize=self.fontsize, color='fuchsia')
-
-    def Gho(self):
-        """Draw MR Ghosting ROI."""
-        colors = ['red', 'blue', 'green', 'yellow', 'cyan']
-        self.add_contours_to_all_rois(colors=colors)
+    def Uni(self):
+        """Draw NM uniformity ROI."""
+        self.add_contours_to_all_rois(colors=['red', 'blue'])
 
 
 class ResultImageCanvas(GenericImageCanvas):
@@ -680,6 +704,7 @@ class ResultImageCanvas(GenericImageCanvas):
         self.min_val = None
         self.max_val = None
         self.title = ''
+        self.positive_negative = False  # display positive as red, negative as blue
 
         if self.main.current_test in self.main.results:
             if self.main.results[self.main.current_test] is not None:
@@ -692,6 +717,12 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.min_val = np.min(self.current_image)
             if self.max_val is None:
                 self.max_val = np.max(self.current_image)
+            if self.positive_negative:
+                if self.min_val != - self.max_val:
+                    maxv = np.max(np.abs([self.min_val, self.max_val]))
+                    self.min_val = -maxv
+                    self.max_val = maxv
+                self.cmap = 'coolwarm'
             self.img = self.ax.imshow(
                 self.current_image,
                 cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
@@ -707,20 +738,42 @@ class ResultImageCanvas(GenericImageCanvas):
         self.ax.axis('off')
         self.draw()
 
-    def Rin(self):
-        """Prepare result image for test Rin."""
-        try:
-            details_dict = self.main.results['Rin']['details_dict'][
-                self.main.gui.active_img_no]
-        except KeyError:
-            details_dict = {}
-        self.cmap = 'viridis'
-        if self.main.current_paramset.rin_sigma_image > 0:
-            self.title = 'Gaussian filtered and masked image'
-        else:
-            self.title = 'Masked image'
-        if 'processed_image' in details_dict:
-            self.current_image = details_dict['processed_image']
+    def Hom(self):
+        """Prepare images of Mammo-Homogeneity."""
+        if self.main.current_modality == 'Mammo':
+            self.cmap = 'viridis'
+            try:
+                details_dict = self.main.results['Hom']['details_dict'][
+                    self.main.gui.active_img_no]
+            except (IndexError, KeyError):
+                details_dict = None
+            if details_dict:
+                sel_txt = self.main.tab_mammo.hom_result_image.currentText()
+                self.title = sel_txt
+                try:
+                    if sel_txt == 'Variance pr ROI map':
+                        self.current_image = details_dict['variances']
+                    elif sel_txt == 'Average pr ROI map':
+                        self.current_image = details_dict['averages']
+                    elif sel_txt == 'SNR pr ROI map':
+                        self.current_image = details_dict['snrs']
+                    elif sel_txt == 'Average pr ROI - % difference from global average':
+                        self.current_image = details_dict['diff_averages']
+                        self.positive_negative = True
+                    elif sel_txt == 'SNR pr ROI - % difference from global SNR':
+                        self.current_image = details_dict['diff_snrs']
+                        self.positive_negative = True
+                    elif sel_txt == 'Pixel values - % difference from global average':
+                        self.current_image = details_dict['diff_pixels']
+                        self.positive_negative = True
+                    elif sel_txt == 'Deviating ROIs':
+                        self.current_image = details_dict['deviating_rois']
+                        self.cmap = 'RdYlGn_r'
+                    elif sel_txt == 'Deviating pixels':
+                        self.current_image = details_dict['deviating_pixels']
+                        self.cmap = 'RdYlGn_r'
+                except KeyError:
+                    pass
 
     def NPS(self):
         """Prepare result image for test NPS."""
@@ -735,7 +788,7 @@ class ResultImageCanvas(GenericImageCanvas):
             self.title = '2d Noise Power Spectrum - average of ROIs'
             if 'NPS_array' in details_dict:
                 self.current_image = details_dict['NPS_array']
-        elif self.main.current_modality == 'Xray':
+        elif self.main.current_modality in ['Xray', 'Mammo']:
             test_widget = self.main.stack_test_tabs.currentWidget()
             sel_text = test_widget.nps_show_image.currentText()
             if 'NPS' in sel_text:
@@ -747,53 +800,20 @@ class ResultImageCanvas(GenericImageCanvas):
                 if 'trend_corrected_sub_matrix' in details_dict:
                     self.current_image = details_dict['trend_corrected_sub_matrix']
 
-    def Var(self):
-        """Prepare variance image."""
+    def Rin(self):
+        """Prepare result image for test Rin."""
         try:
-            details_dict = self.main.results['Var']['details_dict'][
+            details_dict = self.main.results['Rin']['details_dict'][
                 self.main.gui.active_img_no]
-            self.cmap = 'viridis'
-            self.title = (
-                f'Variance image of central {self.main.current_paramset.var_percent} %')
-            self.current_image = details_dict['variance_image']
         except KeyError:
-            pass
-
-    def Uni(self):
-        """Prepare result image for test Uni."""
-        if self.main.current_paramset.uni_sum_first:
-            try:
-                details_dict = self.main.results['Uni']['details_dict'][0]
-            except KeyError:
-                details_dict = {}
-        else:
-            try:
-                details_dict = self.main.results['Uni']['details_dict'][
-                    self.main.gui.active_img_no]
-            except KeyError:
-                details_dict = {}
+            details_dict = {}
         self.cmap = 'viridis'
-        type_img = self.main.tab_nm.uni_result_image.currentIndex()
-        if type_img == 0:
-            self.title = 'Differential uniformity map in UFOV (max in x/y direction)'
-            if 'du_matrix' in details_dict:
-                self.current_image = details_dict['du_matrix']
-        elif type_img == 1:
-            self.title = 'Processed image ~ 6.4 mm pr pix'
-            if 'matrix' in details_dict:
-                self.current_image = details_dict['matrix']
-        elif type_img == 2:
-            self.title = 'Processed image ~ 6.4 mm pr pix, UFOV part'
-            if 'matrix_ufov' in details_dict:
-                self.current_image = details_dict['matrix_ufov']
-        elif type_img == 3:
-            self.title = 'Curvature corrected image'
-            if 'corrected_image' in details_dict:
-                self.current_image = details_dict['corrected_image']
-        elif type_img == 4:
-            self.title = 'Summed image'
-            if 'sum_image' in details_dict:
-                self.current_image = details_dict['sum_image']
+        if self.main.current_paramset.rin_sigma_image > 0:
+            self.title = 'Gaussian filtered and masked image'
+        else:
+            self.title = 'Masked image'
+        if 'processed_image' in details_dict:
+            self.current_image = details_dict['processed_image']
 
     def SNI(self):
         """Prepare result image for test SNI."""
@@ -837,3 +857,51 @@ class ResultImageCanvas(GenericImageCanvas):
                         if len(row) > 0])
                     if max_in_res > 0:
                         self.max_val = max_in_res
+
+    def Uni(self):
+        """Prepare result image for test Uni."""
+        if self.main.current_paramset.uni_sum_first:
+            try:
+                details_dict = self.main.results['Uni']['details_dict'][0]
+            except KeyError:
+                details_dict = {}
+        else:
+            try:
+                details_dict = self.main.results['Uni']['details_dict'][
+                    self.main.gui.active_img_no]
+            except KeyError:
+                details_dict = {}
+        self.cmap = 'viridis'
+        type_img = self.main.tab_nm.uni_result_image.currentIndex()
+        if type_img == 0:
+            self.title = 'Differential uniformity map in UFOV (max in x/y direction)'
+            if 'du_matrix' in details_dict:
+                self.current_image = details_dict['du_matrix']
+        elif type_img == 1:
+            self.title = 'Processed image ~ 6.4 mm pr pix'
+            if 'matrix' in details_dict:
+                self.current_image = details_dict['matrix']
+        elif type_img == 2:
+            self.title = 'Processed image ~ 6.4 mm pr pix, UFOV part'
+            if 'matrix_ufov' in details_dict:
+                self.current_image = details_dict['matrix_ufov']
+        elif type_img == 3:
+            self.title = 'Curvature corrected image'
+            if 'corrected_image' in details_dict:
+                self.current_image = details_dict['corrected_image']
+        elif type_img == 4:
+            self.title = 'Summed image'
+            if 'sum_image' in details_dict:
+                self.current_image = details_dict['sum_image']
+
+    def Var(self):
+        """Prepare variance image."""
+        try:
+            details_dict = self.main.results['Var']['details_dict'][
+                self.main.gui.active_img_no]
+            self.cmap = 'viridis'
+            self.title = (
+                f'Variance image of central {self.main.current_paramset.var_percent} %')
+            self.current_image = details_dict['variance_image']
+        except KeyError:
+            pass

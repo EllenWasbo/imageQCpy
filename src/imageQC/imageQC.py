@@ -49,7 +49,7 @@ def prepare_debug():
 if __name__ == '__main__':
     print('imageQC is starting up...', flush=True)
     warnings = []
-    developer_mode = False
+    developer_mode = True
     if developer_mode:
         prepare_debug()  # type c to continue, developer_mode=False in imageQC.py to deactivate debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()

@@ -32,6 +32,7 @@ class LastModified:
     digit_templates: list = field(default_factory=list)
     paramsets_CT: list = field(default_factory=list)
     paramsets_Xray: list = field(default_factory=list)
+    paramsets_Mammo: list = field(default_factory=list)
     paramsets_NM: list = field(default_factory=list)
     paramsets_SPECT: list = field(default_factory=list)
     paramsets_PET: list = field(default_factory=list)
@@ -438,6 +439,45 @@ class ParamSetXray(ParamSetCommon):
 
 
 @dataclass
+class ParamSetMammo(ParamSetCommon):
+    """Set of parameters regarding Mammo tests."""
+
+    sdn_roi_size: float = 5.
+    sdn_roi_dist: float = 10.
+    sdn_auto_center: bool = True
+    sdn_auto_center_mask_outer: int = 30  # mask outer mm
+    hom_roi_size: float = 10.
+    hom_roi_size_variance: float = 2.
+    hom_mask_max: bool = False
+    hom_deviating_pixels: float = 20.
+    hom_deviating_rois: float = 15.
+    gho_roi_size: float = 10.
+    gho_relative_to_right: bool = True  # if false relative to left
+    gho_table: PositionTable = field(
+        default_factory=lambda: PositionTable(
+            labels=['ROI_1', 'ROI_2', 'ROI_3'],
+            pos_x=[20, 80, 80], pos_y=[30, 30, -30]))
+    mtf_roi_size_x: int = 20.
+    mtf_roi_size_y: int = 50.
+    mtf_plot: int = 3
+    mtf_gaussian: bool = True  # True= use gaussian fit, False = discrete FFT
+    mtf_cut_lsf: bool = True
+    mtf_cut_lsf_w: float = 3.
+    mtf_offset_xy: list[float] = field(default_factory=lambda: [0., 0.])
+    mtf_offset_mm: bool = False  # False = pix, True = mm
+    mtf_auto_center: bool = False
+    mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
+    mtf_auto_center_mask_outer: int = 30  # mask outer mm
+    mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
+    nps_roi_size: int = 256
+    nps_n_sub: int = 5
+    nps_smooth_width: float = 0.05  # 1/mm
+    nps_sampling_frequency: float = 0.01  # 1/mm
+    nps_normalize: int = 0  # normalize curve by 0 = None, 1 = AUC, 2 = large area sign
+    nps_plot: int = 0  # default plot 0=pr image, 1=avg, 2=pr image+avg, 3=all img+avg
+
+
+@dataclass
 class ParamSetNM(ParamSetCommon):
     """Set of parameters regarding NM tests."""
 
@@ -581,6 +621,7 @@ class ParamSet:
 
     CT: ParamSetCT = field(default_factory=ParamSetCT)
     Xray: ParamSetXray = field(default_factory=ParamSetXray)
+    Mammo: ParamSetMammo = field(default_factory=ParamSetMammo)
     NM: ParamSetNM = field(default_factory=ParamSetNM)
     SPECT: ParamSetSPECT = field(default_factory=ParamSetSPECT)
     PET: ParamSetPET = field(default_factory=ParamSetPET)

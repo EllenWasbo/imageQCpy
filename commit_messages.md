@@ -1,3 +1,22 @@
+# v3.0.6
+_Jan 16, 2024_
+
+New functionalities:
+- Added Mammo as modality with a few tests and additional defualt dicom tags to read.
+
+Fixes:
+- RenameDicom have had some issues if there is a mix of files and folders directly in the selected path. This should no longer be a problem.
+- Fixed incorrect behaviour if extra offset (test ROI and MTF).
+- Fixed test ROI
+	- tabulated ROIs with same shape - table used to show mm, but ROI effect was pixels if offset set to pixels
+	- tabulated ROIs defined individually - mm removed from table headers - this option will always be pr pix, not mm
+- Corrected tag Grid 0019,1166 to 0018,1166. This need to be corrected manually if tag info settings have been saved locally.
+- Added cleanup code at startup to remove info about saved config files that has been removed manually from the config folder.
+- Fixed nan result to zero for QuickTest output when all input values are zero.
+
+Code structure:
+- Reordered methods for the specific test - ordered alphabetically after test codes.
+
 # v3.0.5
 _Dec 14, 2023_
 

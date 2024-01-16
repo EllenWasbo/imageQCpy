@@ -616,8 +616,8 @@ def get_modality(modalityStr):
     variants = {
         'CT': 'CT',
         'DX': 'Xray', 'CR': 'Xray', 'DR': 'Xray', 'RG': 'Xray',
-        'XA': 'Xray', 'RF': 'Xray', 'MG': 'Xray', 'PX': 'Xray',
-        'RTIMAGE': 'Xray',
+        'XA': 'Xray', 'RF': 'Xray', 'PX': 'Xray', 'RTIMAGE': 'Xray',
+        'MG': 'Mammo', 'MA': 'Mammo',
         'NM': 'NM',
         'ST': 'SPECT',
         'PT': 'PET',

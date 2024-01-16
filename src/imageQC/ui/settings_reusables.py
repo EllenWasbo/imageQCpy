@@ -618,6 +618,7 @@ class ModTempSelector(QWidget):
         self.cbox_modality.addItems([*QUICKTEST_OPTIONS])
         self.cbox_modality.currentIndexChanged.connect(
             self.parent.update_modality)
+        self.cbox_modality.setFixedWidth(150)
         hlo_modality.addWidget(self.cbox_modality)
         hlo_modality.addStretch()
         self.vlo.addSpacing(10)

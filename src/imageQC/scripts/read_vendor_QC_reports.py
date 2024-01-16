@@ -1880,11 +1880,14 @@ def read_GE_QAP(filepath):
                     pass
 
             MTF_vals = [''] * 5
+            MTF_headers = ['MTF at 0.5 lp/mm', '1.0', '1.5', '2.0', '2.5']
             search_txt = 'Spatial M'
             if search_txt in short_txt:
                 rowno = short_txt.index(search_txt)
                 try:
                     MTF_vals = [float(txt[rowno+i].split()[-4]) for i in range(5)]
+                    MTF_headers = [f'MTF at {txt[rowno+i].split()[3]} lp/mm' for i
+                                   in range(5)]
                 except (IndexError, ValueError):
                     pass
 
@@ -1893,8 +1896,8 @@ def read_GE_QAP(filepath):
             values.extend(MTF_vals)
             headers = ['Date', 'Detector serial', 'Stand', 'Overall result',
                        'Bad pixels', 'Global brightness non uniformity',
-                       'Local brightness non uniformity', 'SNR non uniformity',
-                       'MTF at 0.5 lp/mm', '1.0', '1.5', '2.0', '2.5']
+                       'Local brightness non uniformity', 'SNR non uniformity']
+            headers.append(MTF_headers)
             status = True
 
     data = {'status': status, 'errmsg': errmsg,

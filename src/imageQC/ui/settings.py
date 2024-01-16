@@ -732,6 +732,8 @@ class UserSettingsWidget(StackWidget):
             self.status_label.setText(f'Changes saved to {path}')
             self.flag_edit(False)
             cff.add_user_to_active_users()
+            self.dlg_settings.main.update_settings()
+            cff.version_control(self.dlg_settings.main)
         else:
             QMessageBox.Warning(self, 'Warning',
                                 f'Failed to save changes to {path}')
@@ -837,6 +839,8 @@ class SharedSettingsWidget(StackWidget):
         if dlg.exec():
             config_folder = dlg.selectedFiles()[0]
             self.change_config_user_prefs(config_folder)
+            self.dlg_settings.main.update_settings()
+            cff.version_control(self.dlg_settings.main)
 
     def change_config_user_prefs(self, folder):
         """Save new config folder and update."""

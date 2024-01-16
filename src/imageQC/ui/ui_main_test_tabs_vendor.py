@@ -125,7 +125,7 @@ class ParamsTabVendor(QWidget):
             res_this = read_vendor_template(template=template, filepath=file)
             if res_this['status']:
                 if len(results) > 0:
-                    if len(res_this['headers']) == len(results[0]['headers']):
+                    if res_this['headers'] == results[0]['headers']:
                         results.append(res_this)
                     else:
                         file_not_match.append(file)

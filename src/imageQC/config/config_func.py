@@ -310,7 +310,7 @@ def init_user_prefs(path=APPDATA, config_folder=''):
             os.mkdir(path)
         else:
             errmsg = '\n'.join(['Missing writing permission:',
-                                Path(path).parent])
+                                str(Path(path).parent)])
 
     if errmsg == '':
         userpref = cfc.UserPreferences()

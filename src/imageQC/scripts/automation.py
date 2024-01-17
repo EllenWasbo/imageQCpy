@@ -1302,6 +1302,7 @@ def archive_files_qap(filepath, parent_path):
 
     return errmsg
 
+
 def print_progress(pretext, value, maxvalue, width=40):
     """Generate progress bar in print console."""
     ratio = value/maxvalue

@@ -4,14 +4,12 @@ Convert config.dat from IDL version of imageQC to config_classes of py version.
 
 @author: EllenWasbo
 """
-#import scipy.io
 import numpy as np
 import copy
 
 # imageQC block start
 import imageQC.config.modified_scipy_io_idl as mod_scipy_io_idl
 import imageQC.config.config_classes as cfc
-import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants_functions import empty_template_dict
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
 # imageQC block end
@@ -202,8 +200,6 @@ class ConfigIdl2Py():
             acNames = ac.dtype.names  # [key for key, val in ac.items()]
             if 'AUTOIMPORTPATH' in acNames:
                 self.auto_common.import_path = try_decode(ac.AUTOIMPORTPATH[0])
-            #if 'AUTOCONTINUE' in acNames:
-            #    self.auto_common.auto_continue = bool(ac.AUTOCONTINUE[0])
             if 'IGNORESINCE' in acNames:
                 self.auto_common.ignore_since = ac.IGNORESINCE[0]
 
@@ -429,13 +425,6 @@ class ConfigIdl2Py():
                 sni_correct_pos = list(cp.SNICORRPOS[0])
                 paramset.NM.sni_correct_pos_x = not bool(sni_correct_pos[0])
                 paramset.NM.sni_correct_pos_y = not bool(sni_correct_pos[1])
-            #if 'SNI_FCD' in param_names:
-            #    fcr = list(cp.SNI_FCD[0])
-            #    paramset.NM.sni_eye_filter_f = fcr[0]
-            #    paramset.NM.sni_eye_filter_c = fcr[1]
-            #    paramset.NM.sni_eye_filter_r = fcr[2]
-            # if 'PLOTSNI' in param_names:
-            #     paramset.NM.sni_plot = cp.PLOTSNI[0]
             if 'MTFTYPENM' in param_names:
                 paramset.NM.mtf_type = cp.MTFTYPENM[0]
             if 'MTFROISZNM' in param_names:
@@ -653,9 +642,9 @@ class ConfigIdl2Py():
                     pass
             if len(list_out) > 1:
                 if modality == 'XRAY':
-                    list_out.sort(key = lambda i: QUICKTEST_OPTIONS['Xray'].index(i))
+                    list_out.sort(key=lambda i: QUICKTEST_OPTIONS['Xray'].index(i))
                 else:
-                    list_out.sort(key = lambda i: QUICKTEST_OPTIONS[modality].index(i))
+                    list_out.sort(key=lambda i: QUICKTEST_OPTIONS[modality].index(i))
 
         if len(test_names) > 0:
             old_test_strings = [
@@ -699,7 +688,7 @@ class ConfigIdl2Py():
             quickTout (quicktest output temps) in config.dat converted from IDL
         """
         def calc_str(no):
-            strs = ['=', 'min','max','mean','stdev','max abs']
+            strs = ['=', 'min', 'max', 'mean', 'stdev', 'max abs']
             try:
                 outstr = strs[no]
             except IndexError:
@@ -726,7 +715,8 @@ class ConfigIdl2Py():
                                     if int(v[0].ALT[0]) == -1:
                                         try:
                                             dict_tags = self.as_dict(v[0].TAGS[0])
-                                            dict_formats = self.as_dict(v[0].TAGFORMATS[0])
+                                            dict_formats = self.as_dict(
+                                                v[0].TAGFORMATS[0])
                                             tag_pattern = self.convert_tag_pattern(
                                                 dict_tags, dict_formats)
                                             tag_pattern.label = tmp
@@ -830,7 +820,7 @@ class ConfigIdl2Py():
                                         if len(name) > 0:
                                             if name[-1] == ' ':
                                                 name = name[:-1]
-                                                # IDL and Python seem to get these diffently
+                                                # IDL and Python get these diffently
                                         auto_temp.station_name = name
                                     except IndexError:
                                         pass
@@ -839,10 +829,9 @@ class ConfigIdl2Py():
                                         auto_temp.path_output = try_decode(autv[0][0])
                                     except IndexError:
                                         pass
-                                #elif aut == 'ARCHIVE':
-                                #    auto_temp.archive = bool(autv[0])
                                 elif aut == 'ALTERNATIVE':
-                                    file_type, suffix = get_filetype(vendor_alt, mod_py(m))
+                                    file_type, suffix = get_filetype(
+                                        vendor_alt, mod_py(m))
                                     auto_temp.file_type = file_type
                                     auto_temp.file_suffix = suffix
                                 else:
@@ -862,7 +851,7 @@ class ConfigIdl2Py():
                                         if len(name) > 0:
                                             if name[-1] == ' ':
                                                 name = name[:-1]
-                                                # IDL and Python seem to get these diffently
+                                                # IDL and Python get these diffently
                                         auto_temp.station_name = name
                                     except IndexError:
                                         pass
@@ -881,7 +870,7 @@ class ConfigIdl2Py():
                                         if len(val) > 0:
                                             if val[-1] == ' ':
                                                 val = val[:-1]
-                                                # IDL and Python seem to get these diffently
+                                                # IDL and Python get these diffently
                                         auto_temp.dicom_crit_values = [val]
                                 elif aut == 'SORTBY':
                                     if isinstance(autv[0], np.ndarray):
@@ -1060,7 +1049,6 @@ class ConfigIdl2Py():
     def convert_format(self, arr):
         """Convert format string from idl to python f-string."""
         formatstr = arr.decode('UTF-8').replace('(', '').replace(')', '')
-        origformatstr = formatstr
         if 'i' in formatstr:  # integer
             if formatstr == 'i0':
                 formatstr = ''

@@ -49,7 +49,7 @@ def prepare_debug():
 if __name__ == '__main__':
     print('imageQC is starting up...', flush=True)
     warnings = []
-    developer_mode = True
+    developer_mode = False
     if developer_mode:
         prepare_debug()  # type c to continue, developer_mode=False in imageQC.py to deactivate debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
@@ -102,7 +102,8 @@ if __name__ == '__main__':
                                 help='Run templates in both DICOM and vendor based '
                                 'templates (-a all) or just from DICOM based '
                                 '(-a dicom) or vendor base templates (-a vendor).')
-            parser.add_argument('modality_temp', metavar='modality1 modality2/temp7', nargs='*',
+            parser.add_argument('modality_temp', metavar='modality1 modality2/temp7',
+                                nargs='*',
                                 help='Limit the run for specified modalities '
                                 'or the specified modality/templatename '
                                 'e.g. CT Xray/lab9 MR/lab3.')

@@ -23,7 +23,6 @@ from imageQC.config.iQCconstants import (
     APPDATA, TEMPDIR, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER, ENV_ICON_PATH
     )
 from imageQC.config.config_func import init_user_prefs
-from imageQC.config.read_config_idl import ConfigIdl2Py
 from imageQC.ui import messageboxes
 from imageQC.ui import reusable_widgets as uir
 import imageQC.resources
@@ -144,8 +143,8 @@ class StartUpDialog(ImageQCDialog):
             As hospitals typically have different restrictions on how local
             settings can be saved these options are offered:</p>
             <ul>
-            <li>Path saved on AppData <i>({APPDATA})</i></li>
-            <li>Path saved on Temp <i>({TEMPDIR})</i></li>
+            <li>Path saved in <i>({APPDATA})</i></li>
+            <li>Path saved in <i>({TEMPDIR})</i></li>
             <li>Don't save the path, locate the path each time on startup</li>
             </ul>
             </body></html>"""
@@ -160,8 +159,8 @@ class StartUpDialog(ImageQCDialog):
         self.bGroup = QButtonGroup()
 
         btnTexts = [
-            "Initiate user_preferences.yaml in AppData",
-            "Initiate user_preferences.yaml in Temp",
+            f"Initiate user_preferences.yaml in {APPDATA}",
+            f"Initiate user_preferences.yaml in {TEMPDIR}",
             "Locate configuration folder for this session only",
             "No, I'll just have a look. Continue without config options."
             ]
@@ -171,10 +170,6 @@ class StartUpDialog(ImageQCDialog):
             lo.addWidget(rb)
 
         self.bGroup.button(0).setChecked(True)
-
-        self.chk_import_idl = QCheckBox(
-            'Import config.dat file from IDL version'
-            '(could also be done from the Settings manager later')
 
         layout.addWidget(gb)
         layout.addStretch()
@@ -216,22 +211,9 @@ class StartUpDialog(ImageQCDialog):
 
         return config_folder
 
-    def convert_idl(self):
-        """Convert config.dat from IDL version to yaml files."""
-        fname = QFileDialog.getOpenFileName(
-            self, 'Convert config.dat from IDL version of imageQC',
-            filter="dat file (*.dat)")
-        if fname[0] != '':
-            config_idl = ConfigIdl2Py(fname[0])
-            if len(config_idl.errmsg) > 0:
-                QMessageBox.warning(
-                    self, 'Warnings', '\n'.join(config_idl.errmsg))
-            # TODO ....
-
     def press_ok(self):
         """Verify selections when OK is pressed."""
         selection = self.bGroup.checkedId()
-        convert_idl = self.chk_import_idl.isChecked()
         if selection == 3:
             self.reject()
         else:
@@ -244,9 +226,9 @@ class StartUpDialog(ImageQCDialog):
             if selection == 0:  # APPDATA
                 status, user_prefs_path, errmsg = init_user_prefs(
                     path=APPDATA, config_folder=config_folder)
-                if status:  # TEMPDIR
+                if status:
                     os.environ[ENV_USER_PREFS_PATH] = user_prefs_path
-            elif selection == 1:
+            elif selection == 1:  # TEMPDIR
                 status, user_prefs_path, errmsg = init_user_prefs(
                     path=TEMPDIR, config_folder=config_folder)
                 if status:
@@ -257,14 +239,7 @@ class StartUpDialog(ImageQCDialog):
 
             os.environ[ENV_CONFIG_FOLDER] = config_folder
 
-            if convert_idl:
-                self.convert_idl()
-
             self.accept()
-
-    def get_selection(self):
-        """To get final selection from main window."""
-        return (self.bGroup.checkedId(), self.chk_import_idl.isChecked())
 
 
 class EditAnnotationsDialog(ImageQCDialog):
@@ -489,4 +464,3 @@ class TextDisplay(ImageQCDialog):
         self.setWindowTitle(title)
         self.setMinimumWidth(min_width)
         self.setMinimumHeight(min_height)
-        #self.show()

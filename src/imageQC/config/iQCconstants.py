@@ -7,6 +7,7 @@ Constants accessible for several modules within imageQC.
 """
 
 import os
+import sys
 
 # imageQC block start
 import imageQC.config.config_classes as cfc
@@ -19,9 +20,13 @@ USERNAME = os.getlogin()
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 VERSION = '3.0.6'
+
+#if sys.platform.startswith("win"):
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
 TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
-# TODO alternative for Linux?
+#else:  # assume Linux for now
+#    APPDATA = os.path.expanduser('~/.config/imageQC')
+#    TEMPDIR = r'/etc/opt/imageQC'
 
 # os.environ variable keys to save global settings in session
 ENV_USER_PREFS_PATH = 'IMAGEQC_USER_PREFS_PATH'
@@ -31,6 +36,8 @@ ENV_ICON_PATH = 'IMAGEQC_ICON_PATH'
 
 USER_PREFS_FNAME = 'user_preferences.yaml'
 
+# dict: with lists defining modalities and their corresponding
+#  list of tests with QuickTest as option."""
 QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
@@ -40,13 +47,14 @@ QUICKTEST_OPTIONS = {
     'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Rin'],
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec'],
     'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF']}
-"""dict: with lists defining modalities and their corresponding
-list of tests with QuickTest as option."""
+
 
 HALFLIFE = {'F18': 109.77}
 ALTERNATIVES_ROI = ['One ROI',
                     'ROIs from table, same shape',
                     'ROIs from table, rectangle defined per ROI']
+# dict: with lists defining the alternative methods/table displays
+#  if more than one option leading to different columns in table."""
 ALTERNATIVES = {
     'CT': {
         'ROI': ALTERNATIVES_ROI,
@@ -90,9 +98,6 @@ ALTERNATIVES = {
         'Sli': ['Ramp', 'Wedge']
         }
     }
-
-"""dict: with lists defining the alternative methods/table displays
- if more than one option leading to different columns in table."""
 
 CALCULATION_OPTIONS = ['=', 'min', 'max', 'mean', 'stdev', 'max abs', 'width (max-min)']
 #  options for QuickTestOutput settings - type of calculations

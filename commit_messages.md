@@ -3,6 +3,7 @@ _Jan 16, 2024_
 
 New functionalities:
 - Added Mammo as modality with a few tests and additional defualt dicom tags to read.
+- Automation - functionality to move files out of archive now also include option to sort files by modification time, not only file name. Useful f.x for vendor QC files.
 
 Fixes:
 - RenameDicom have had some issues if there is a mix of files and folders directly in the selected path. This should no longer be a problem.
@@ -13,6 +14,11 @@ Fixes:
 - Corrected tag Grid 0019,1166 to 0018,1166. This need to be corrected manually if tag info settings have been saved locally.
 - Added cleanup code at startup to remove info about saved config files that has been removed manually from the config folder.
 - Fixed nan result to zero for QuickTest output when all input values are zero.
+- Fixes for Linux users (alternative locations for APPDATA and TEMPDIR).
+
+Security:
+- Added functionality in GitHub to auto-detect potential security alerts for imported packages (Dependabot alerts). Added minimum version number criterias in requirements.txt according to these advices.
+(werkzeug>=2.38, numpy>=1.22, scipy>=1.10.0). Consider updating these packages if not running a full install when upgrading imageQC.
 
 Code structure:
 - Reordered methods for the specific test - ordered alphabetically after test codes.

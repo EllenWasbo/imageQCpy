@@ -838,6 +838,12 @@ class MainWindow(QMainWindow):
             _, _, dash_settings = cff.load_settings(fname='dash_settings')
             self.dash_worker = DashWorker(dash_settings=dash_settings)
             self.dash_worker.start()
+            QMessageBox.information(
+                self, 'Dashboard in webbrowser',
+                '''Results will open in a webbrowser. If large datasets or slow
+                file-access you might have to refresh the webpage. Look for
+                "Serving on http...
+                in the command window when finished (or issues).''')
             url = f'http://{dash_settings.host}:{dash_settings.port}'
             webbrowser.open(url=url, new=1)
             self.dash_worker.exit()

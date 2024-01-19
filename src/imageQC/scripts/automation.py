@@ -104,6 +104,9 @@ def run_automation_non_gui(args):
     ok = True
     if len(args.modality_temp) > 0:
         ok, set_modalities, set_templates = validate_modality_temps()
+    else:
+        set_modalities = []
+        set_templates = []
 
     if ok:
         # load from yaml
@@ -213,6 +216,7 @@ def run_automation_non_gui(args):
                                 warnings_all.append(warnings)
                 if len(set_modalities) == 0 and len(set_templates) == 0:
                     set_modalities = actual_modalities  # all if not specified
+
                 if len(set_modalities) > 0:
                     for mod in set_modalities:
                         if labels[mod][0] != '':

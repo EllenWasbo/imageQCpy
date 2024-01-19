@@ -129,6 +129,8 @@ def get_data():
                         except FileNotFoundError as ferror:
                             print(temp.path_output)
                             print(ferror)
+                        except OSError as oerror:
+                            print(oerror)
                         except pd.errors.EmptyDataError as error:
                             print(temp.path_output)
                             print(error)
@@ -391,44 +393,51 @@ def run_dash_app(dash_settings=None):
         ],
     )
     def on_template_select(modality_value, template_value):
-        mod = [*modality_dict][modality_value]
-        data = modality_dict[mod][template_value].data
-        lim_plots = modality_dict[mod][template_value].limits_and_plot_template
-        titles = [title for i, title in enumerate(lim_plots.groups_title)
-                  if lim_plots.groups_hide[i] is False]
-        n_rows = len(titles)
-        fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=True,
-                            subplot_titles=titles)
-        rowno = 1
-        for group_idx, group in enumerate(lim_plots.groups):
-            if lim_plots.groups_hide[group_idx] is False:
-                for header in group:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=data[data.columns[0]], y=data[header],
-                            name=header, mode='lines+markers', showlegend=False,
-                            ),
-                        row=rowno, col=1,
-                        )
-                if any(lim_plots.groups_limits[group_idx]):
-                    for lim in lim_plots.groups_limits[group_idx]:
-                        if lim is not None:
-                            fig.add_hline(y=lim, line_dash='dash', line_color='red',
-                                          row=rowno, col=1)
-                if any(lim_plots.groups_ranges[group_idx]):
-                    set_range = lim_plots.groups_ranges[group_idx]
-                    # TODO if None in set_range:
-                    fig.update_yaxes(range=set_range, row=rowno, col=1)
-                rowno += 1
-        fig.update_xaxes(
-            dtick="M1",
-            tickformat="%b\n%Y",
-            ticklabelmode="period")
-        fig.update_layout(height=dash_settings.plot_height*n_rows,
-                          title_text=modality_dict[mod][template_value].label)
-        template_content = html.Div([
-            dcc.Graph(figure=fig),
-            ])
+        proceed = True
+        try:
+            mod = [*modality_dict][modality_value]
+        except IndexError:
+            proceed = False
+        if proceed:
+            data = modality_dict[mod][template_value].data
+            lim_plots = modality_dict[mod][template_value].limits_and_plot_template
+            titles = [title for i, title in enumerate(lim_plots.groups_title)
+                      if lim_plots.groups_hide[i] is False]
+            n_rows = len(titles)
+            fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=True,
+                                subplot_titles=titles)
+            rowno = 1
+            for group_idx, group in enumerate(lim_plots.groups):
+                if lim_plots.groups_hide[group_idx] is False:
+                    for header in group:
+                        fig.add_trace(
+                            go.Scatter(
+                                x=data[data.columns[0]], y=data[header],
+                                name=header, mode='lines+markers', showlegend=False,
+                                ),
+                            row=rowno, col=1,
+                            )
+                    if any(lim_plots.groups_limits[group_idx]):
+                        for lim in lim_plots.groups_limits[group_idx]:
+                            if lim is not None:
+                                fig.add_hline(y=lim, line_dash='dash', line_color='red',
+                                              row=rowno, col=1)
+                    if any(lim_plots.groups_ranges[group_idx]):
+                        set_range = lim_plots.groups_ranges[group_idx]
+                        # TODO if None in set_range:
+                        fig.update_yaxes(range=set_range, row=rowno, col=1)
+                    rowno += 1
+            fig.update_xaxes(
+                dtick="M1",
+                tickformat="%b\n%Y",
+                ticklabelmode="period")
+            fig.update_layout(height=dash_settings.plot_height*n_rows,
+                              title_text=modality_dict[mod][template_value].label)
+            template_content = html.Div([
+                dcc.Graph(figure=fig),
+                ])
+        else:
+            template_content = html.Div([])
         return template_content
 
     try:

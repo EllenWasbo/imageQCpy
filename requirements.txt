@@ -11,4 +11,4 @@ PyYAML==6.0
 scikit_image==0.19.2
 scipy>=1.10.0
 waitress==2.1.2
-werkzeug=>2.3.8
+werkzeug==2.3.8

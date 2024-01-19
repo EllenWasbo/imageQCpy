@@ -18,7 +18,8 @@ Fixes:
 
 Security:
 - Added functionality in GitHub to auto-detect potential security alerts for imported packages (Dependabot alerts). Added minimum version number criterias in requirements.txt according to these advices.
-(werkzeug>=2.38, numpy>=1.22, scipy>=1.10.0). Consider updating these packages if not running a full install when upgrading imageQC.
+(werkzeug==2.3.8, numpy>=1.22, scipy>=1.10.0). Consider updating these packages if not running a full install when upgrading imageQC.
+Werkzeug 3.0.1 had some issues so therefore set to ==2.3.8
 
 Code structure:
 - Reordered methods for the specific test - ordered alphabetically after test codes.

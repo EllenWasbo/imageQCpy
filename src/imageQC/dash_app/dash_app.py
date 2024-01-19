@@ -237,8 +237,8 @@ def run_dash_app(dash_settings=None):
         return dbc.Container([
             dcc.Store(id='results'),
             dbc.Row([
-                dbc.Col(html.Img(src=dash_settings.url_logo), width=2),
                 dbc.Col(html.H1(dash_settings.header)),
+                dbc.Col(html.Img(src=dash_settings.url_logo)),
                 ]),
             dbc.Row(html.Div([
                 dbc.Tabs([

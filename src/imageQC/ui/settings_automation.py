@@ -2186,6 +2186,14 @@ class DashSettingsWidget(StackWidget):
             self.get_current_template()
             self.dash_worker = DashWorker(dash_settings=self.templates)
             self.dash_worker.start()
+            dlg = messageboxes.MessageBoxWithDetails(
+                self, title='Dashboard in webbrowser',
+                msg='Results will open in a webbrowser.',
+                info=('If large datasets or slow file-access you might have to refresh '
+                      'the webpage. Look for "Serving on http... in the command window '
+                      'when finished (or issues).'),
+                icon=QMessageBox.Information)
+            dlg.exec()
             url = f'http://{self.templates.host}:{self.templates.port}'
             webbrowser.open(url=url, new=1)
             self.dash_worker.exit()

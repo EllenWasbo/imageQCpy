@@ -74,12 +74,14 @@ def get_data():
         items = list of Templates defined above
         ignored modalities and templates with no results
     """
+    print('Reading data from result files...')
     modality_dict = {}
     _, _, auto_templates = cff.load_settings(fname='auto_templates')
     _, _, auto_vendor_templates = cff.load_settings(fname='auto_vendor_templates')
     _, _, paramsets = cff.load_settings(fname='paramsets')
     _, _, lim_plots = cff.load_settings(fname='limits_and_plot_templates')
     all_templates = [auto_templates, auto_vendor_templates]
+    n_processed_files = 0
     for auto_no, template in enumerate(all_templates):
         for mod, template_list in template.items():
             param_labels = []
@@ -127,9 +129,12 @@ def get_data():
                             if dataframe.index.size > 1:
                                 proceed = True
                         except FileNotFoundError as ferror:
+                            print('FileNotFoundError                                ')
                             print(temp.path_output)
                             print(ferror)
                         except OSError as oerror:
+                            print('OSError - could not read file                    ')
+                            print(temp.path_output)
                             print(oerror)
                         except pd.errors.EmptyDataError as error:
                             print(temp.path_output)
@@ -155,6 +160,8 @@ def get_data():
                                     print(f'Failed reading {temp.path_output}')
                                     print(str(error))
                         if proceed:
+                            print(f'Reading results for {mod}/{temp.label}',
+                                  end='\r', flush=True)
                             dataframe.dropna(
                                 how='all', inplace=True)  # ignore empty rows
                             date_header = dataframe.columns[0]
@@ -189,6 +196,9 @@ def get_data():
                                     [col] for col in dataframe.columns[1:]])
                             temp_this.limits_and_plot_template = lim_temp
                             modality_dict[mod].append(temp_this)
+                            n_processed_files += 1
+
+    print(f'Processed {n_processed_files} result files.                               ')
 
     # remove empty modality from list dict
     len_temp_lists = [len(template_list)

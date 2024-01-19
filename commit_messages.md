@@ -15,6 +15,7 @@ Fixes:
 - Added cleanup code at startup to remove info about saved config files that has been removed manually from the config folder.
 - Fixed nan result to zero for QuickTest output when all input values are zero.
 - Fixes for Linux users (alternative locations for APPDATA and TEMPDIR).
+- Fixes to Dashboard for trends. Handle more errors and more informative print messages to command window.
 
 Security:
 - Added functionality in GitHub to auto-detect potential security alerts for imported packages (Dependabot alerts). Added minimum version number criterias in requirements.txt according to these advices.

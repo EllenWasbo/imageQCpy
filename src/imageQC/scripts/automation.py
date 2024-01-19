@@ -23,8 +23,7 @@ from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm
 from imageQC.scripts.mini_methods import (
-    get_all_matches, string_to_float, get_headers_first_values_in_path,
-    get_new_files_qap)
+    get_all_matches, string_to_float, get_headers_first_values_in_path)
 from imageQC.scripts.mini_methods_format import valid_path, val_2_str
 import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
@@ -743,7 +742,7 @@ def test_limits(headers=None, values=None,
                             f'limits and plot template {limits_label}.')
             elif len(missing) > 0:
                 msgs.append('Some column headers in limits and plot template '
-                            f'{limits_label} do not match headeres in output.')
+                            f'{limits_label} do not match headers in output.')
                 proceed = True
             else:
                 proceed = True
@@ -1069,14 +1068,11 @@ def run_template_vendor(auto_template, modality,
         if proceed:
             p_input = Path(auto_template.path_input)
             if p_input.is_dir():
-                if auto_template.file_type == 'GE QAP (.txt)':
-                    files = get_new_files_qap(auto_template)
-                else:
-                    files = [
-                        x for x in p_input.glob('*')
-                        if x.suffix == auto_template.file_suffix
-                        ]
-                    files.sort(key=lambda t: t.stat().st_mtime)
+                files = [
+                    x for x in p_input.glob('*')
+                    if x.suffix == auto_template.file_suffix
+                    ]
+                files.sort(key=lambda t: t.stat().st_mtime)
         if len(files) > 0:
             write_ok = os.access(auto_template.path_output, os.W_OK)
             if write_ok is False:
@@ -1127,12 +1123,9 @@ def run_template_vendor(auto_template, modality,
                                 not_written.append(print_array)
                     else:
                         if auto_template.archive:
-                            if auto_template.file_type == 'GE QAP (.txt)':
-                                archive_files_qap(
-                                    filepath=file,
-                                    parentpath=Path(auto_template.path_input))
-                            else:
-                                archive_files(filepath=file)
+                            errmsg = archive_files(filepath=file)
+                            if errmsg is not None:
+                                log.append(errmsg)
 
     if len(log) > 0:
         log.insert(0, log_pre)
@@ -1263,42 +1256,6 @@ def archive_files(input_main_imgs=None, filepath=None):
                 this_file.rename(archive_path / this_file.name)
             except FileExistsError:
                 n_fail += 1
-    if n_fail > 0:
-        errmsg = (
-            f'\t{n_fail} files failed to archive, name already exist.'
-            'Left in input path.')
-
-    return errmsg
-
-
-def archive_files_qap(filepath, parent_path):
-    """Move file into Archive folder after GE QAP file analysed.
-
-    Parameters
-    ----------
-    filepath : pathlib.Path
-        txt file to be archived.
-    parentpath : pathlib.Path
-        path above Archive
-
-    Returns
-    -------
-    errmsg : string or None
-    """
-    parent_file = filepath.parent
-    archive_path = parent_path / 'Archive'
-    archive_path.mkdir(exist_ok=True)
-    n_fail = 0
-    if parent_path != parent_file:  # file not directly in input folder
-        # move files to Archive subfolder
-        archive_path = archive_path / parent_file.name
-        archive_path.mkdir(exist_ok=True)
-
-    try:
-        filepath.rename(archive_path / filepath.name)
-    except FileExistsError:
-        n_fail += 1
-
     if n_fail > 0:
         errmsg = (
             f'\t{n_fail} files failed to archive, name already exist.'

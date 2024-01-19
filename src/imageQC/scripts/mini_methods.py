@@ -192,33 +192,3 @@ def get_headers_first_values_in_path(path):
             if first_values is not None:
                 first_values.pop(0)
     return headers, first_values
-
-
-def get_new_files_qap(auto_template):
-    """Get list of GE QAP files outside Archive.
-
-    Parameters
-    ----------
-    auto_template : config_classes.AutoVendorTemplate
-
-    Returns
-    -------
-    list of pathlib.Path
-        sorted by name
-    """
-    filepaths = []
-    input_p = Path(auto_template.path_input)
-    if input_p.exists():
-        folders = [
-            x for x in input_p.glob('*') if x.name != 'Archive']
-        if len(folders) > 0:
-            for folder in folders:
-                files_this = [
-                    x for x in input_p.glob('*')
-                    if x.suffix == auto_template.file_suffix
-                    ]
-                if len(files_this) > 0:
-                    filepaths.extend(files_this)
-        filepaths.sort(key=lambda t: t.name)
-
-    return filepaths

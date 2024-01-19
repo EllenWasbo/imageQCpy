@@ -29,7 +29,7 @@ from imageQC.ui import ui_image_canvas
 from imageQC.config.iQCconstants import ENV_ICON_PATH, QUICKTEST_OPTIONS
 from imageQC.ui import settings
 from imageQC.scripts import automation
-from imageQC.scripts.mini_methods import get_all_matches, get_new_files_qap
+from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.scripts.dcm import sort_imgs
 # imageQC block end
 
@@ -379,22 +379,14 @@ class OpenAutomationDialog(ImageQCDialog):
         """
         n_files = 0
         error_ex = None
-        qap = False
+
         try:
-            if auto_template.file_type == 'GE QAP (.txt)':
-                files_qap = get_new_files_qap(auto_template)
-                n_files = len(files_qap)
-                qap = True
-        except AttributeError:
-            pass
-        if not qap:
-            try:
-                for path in os.listdir(auto_template.path_input):
-                    if os.path.isfile(os.path.join(auto_template.path_input, path)):
-                        n_files += 1
-            except (FileNotFoundError, OSError) as ex:
-                n_files = -1
-                error_ex = f'{ex}'
+            for path in os.listdir(auto_template.path_input):
+                if os.path.isfile(os.path.join(auto_template.path_input, path)):
+                    n_files += 1
+        except (FileNotFoundError, OSError) as ex:
+            n_files = -1
+            error_ex = f'{ex}'
 
         return (n_files, error_ex)
 

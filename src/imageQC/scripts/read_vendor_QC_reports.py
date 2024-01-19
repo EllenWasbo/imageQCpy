@@ -1835,7 +1835,6 @@ def read_GE_QAP(filepath):
     if len(txt) > 6:
         if 'IMAGE QUALITY' in txt[0]:
             detector_serial = txt[1].split()[-1]
-            stand = filepath.parent.name
 
             overall_result = ''
             search_txt = 'OVERALL R'
@@ -1879,8 +1878,8 @@ def read_GE_QAP(filepath):
                 except (IndexError, ValueError):
                     pass
 
-            MTF_vals = [''] * 5
-            MTF_headers = ['MTF at 0.5 lp/mm', '1.0', '1.5', '2.0', '2.5']
+            MTF_vals = []
+            MTF_headers = []
             search_txt = 'Spatial M'
             if search_txt in short_txt:
                 rowno = short_txt.index(search_txt)
@@ -1891,13 +1890,14 @@ def read_GE_QAP(filepath):
                 except (IndexError, ValueError):
                     pass
 
-            values = [date, detector_serial, stand, overall_result,
+            values = [date, detector_serial, overall_result,
                       bad_pixels, global_non_unif, local_non_unif, SNR_non_unif]
-            values.extend(MTF_vals)
-            headers = ['Date', 'Detector serial', 'Stand', 'Overall result',
+            headers = ['Date', 'Detector serial', 'Overall result',
                        'Bad pixels', 'Global brightness non uniformity',
                        'Local brightness non uniformity', 'SNR non uniformity']
-            headers.append(MTF_headers)
+            if len(MTF_vals) > 0 and len(MTF_headers) > 0:
+                values.extend(MTF_vals)
+                headers.extend(MTF_headers)
             status = True
 
     data = {'status': status, 'errmsg': errmsg,

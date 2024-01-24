@@ -19,7 +19,7 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.6'
+VERSION = '3.0.7'
 
 #if sys.platform.startswith("win"):
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')

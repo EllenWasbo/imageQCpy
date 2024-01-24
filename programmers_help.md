@@ -103,7 +103,6 @@ pyinstaller -i="iQC_icon.ico" --clean --hidden-import=['charset_normalizer.md__m
 
 - avoid -w (--windowed) to make argparse work running imageQC with arguments for automation. Drawback is that cmd window always shown.
 
-Have seen trouble with scipy (pip install scipy==1.9.1 have worked - trouble with later versione)
 Fixed missing module when using import-hidden by adding from charset_normalizer import md_mypyc
 
 - Create an empty config_defaults folder in folder dist (result from pyinstaller process)

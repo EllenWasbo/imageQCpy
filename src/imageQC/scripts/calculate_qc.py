@@ -2008,7 +2008,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                               errmsg=errmsgs)
         return res
 
-    def Rec(images_to_test):
+    def Rec(images_to_test, test_mode=False):
         """PET Recovery Curve."""
         alt = paramset.rec_type
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
@@ -2028,6 +2028,11 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             errmsgs.append(
                 'Automation not available for Recovery Curve, GUI input needed')
             proceed = False
+        try:
+            if input_main.test_mode is True:
+                proceed = True  # force proceed without activity_dict
+        except AttributeError:
+            pass
         if len(images_to_test) < 3:
             if len(images_to_test) > 0:
                 errmsgs.append('Too few images to analyse.')
@@ -2154,7 +2159,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     rec_type = rec_type + 3  # image values, not RC values
                     headers = copy.deepcopy(
                         HEADERS[modality][test_code]['alt' + str(rec_type)])
-                    input_main.tab_pet.rec_type.setCurrentIndex(rec_type)
+                    try:
+                        input_main.tab_pet.rec_type.setCurrentIndex(rec_type)
+                    except AttributeError:
+                        pass
                     values_sup = [scan_start, None, None]
 
                 details_dict['values'] = rc_values_all + details_dict['values']
@@ -3881,7 +3889,35 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
 
 
 def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, background):
-    """Find spheres and calculculate recovery curve values."""
+    """Find spheres and calculculate recovery curve values.
+
+    Parameters
+    ----------
+    matrix : list of np.2darray
+        slices +/- largest sphere diameter from slice with max pixelvalue
+    image_info :  DcmInfo
+        as defined in scripts/dcm.py
+    center_roi : np.2darray
+        bool array with circular roi at found center
+    zpos : np.array
+        zpos for each slice in input matrix
+    paramset : cfc.ParamsetPET
+    background : float
+        found pixel value for background activity
+
+    Returns
+    -------
+    details_dict : dict
+        DESCRIPTION.
+        'values': [
+            avg_values + [background],
+            max_values + [background],
+            peak_values + [background]
+            ],
+        'roi_spheres': list of foud rois representing the spheres,
+        'roi_peaks': list of found rois representing the peak 1ccs
+    errmsg : str or None
+    """
     errmsg = None
     size_y, size_x = matrix[0].shape
     dist = paramset.rec_sphere_dist / img_info.pix[0]  # distance from center
@@ -3933,12 +3969,28 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
             pos_y = - pos_x * tan_angles[i]
             roi_dx_dy[order] = (pos_x + dx, pos_y + dy)
 
+        # smooth matrix by 1cc spheres for peak-values
+        radius_1cc = 10 * (3 / (4 * np.pi)) ** (1/3)
+        pix_kernel = int(np.round(radius_1cc / img_info.pix[0]) * 2 + 1)
+        dz = np.abs(zpos[1]-zpos[0])
+        n_slice_kernel = int(np.ceil(radius_1cc / dz) * 2 + 1)
+        peak_kernel = np.zeros((n_slice_kernel, pix_kernel, pix_kernel))
+        dzs = dz * (np.arange(n_slice_kernel) - n_slice_kernel // 2)
+        for i, zz in enumerate(dzs):
+            radsq = radius_1cc ** 2 - zz ** 2
+            if radsq > 0:
+                radius_this = np.sqrt(radsq)
+                if radius_this > 0:
+                    peak_kernel[i] = get_roi_circle((pix_kernel, pix_kernel), (0, 0),
+                                                    radius_this/img_info.pix[0])
+        peak_kernel = 1./np.sum(peak_kernel) * peak_kernel
+        matrix_smoothed_1cc = sp.signal.fftconvolve(matrix, peak_kernel, mode='same')
+        peak_kernel_bool = np.full(peak_kernel.shape, False)
+        peak_kernel_bool[peak_kernel > 0] = True
+
         # for each sphere - get spheric roi
         roi_radii = np.array(paramset.rec_sphere_diameters)  # search radius=Ø
         roi_radii[0] = roi_radii[1]  # smallest a bit extra margin
-        radius_1cc = 10 * (3 / (4 * np.pi)) ** (1/3)
-        #TODO SUVpeak closer to EARL:
-            # 12mm diameter, spherical positioned to yield highest uptake (not centered on max)
         zpos_center = zpos[len(zpos) // 2]
         zpos_diff = np.abs(zpos - zpos_center)
         roi_spheres = []
@@ -3959,8 +4011,9 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
                     this_roi.append(None)
             roi_spheres.append(this_roi)
             values = None
-            values_peak = None
+            #values_peak = None
             max_all = []
+            max_all_smoothed_1cc = []
             for i, image in enumerate(matrix):
                 if this_roi[i] is not None:
                     mask = np.where(this_roi[i], 0, 1)
@@ -3970,9 +4023,13 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
                     else:
                         values = np.append(values, image[mask_pos].flatten())
                     max_all.append(np.max(image[mask_pos]))
+                    max_this_smoothed = np.max(matrix_smoothed_1cc[i][mask_pos])
+                    max_all_smoothed_1cc.append(max_this_smoothed)
                 else:
                     max_all.append(None)
+                    max_all_smoothed_1cc.append(0)
             max_this = np.max(values)
+            max_this_1cc = np.max(max_all_smoothed_1cc)
             max_values.append(max_this)
             if max_this is not None:
                 threshold = paramset.rec_sphere_percent * 0.01 * (
@@ -3980,7 +4037,28 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
                 threshold = threshold + background
                 avg_values.append(np.mean(values[values > threshold]))
 
-                # find peak
+                # find peak - new
+                peak_values.append(max_this_1cc)
+                slice_where_max_1cc = np.where(
+                    max_all_smoothed_1cc == max_this_1cc)
+                peak_idx = slice_where_max_1cc[0][0]
+                arr = np.ma.masked_array(
+                    matrix_smoothed_1cc[peak_idx],
+                    mask=np.invert(this_roi[peak_idx]))
+                max_pos = np.where(arr == max_this_1cc)
+                peak_xy = (max_pos[1][0], max_pos[0][0])
+                this_roi_peak = [None for i in range(len(matrix))]
+
+                for i in range(n_slice_kernel):
+                    roi_this = np.full(image.shape, False)
+                    xstart = peak_xy[0] - pix_kernel // 2
+                    ystart = peak_xy[1] - pix_kernel // 2
+                    roi_this[ystart:ystart + pix_kernel,
+                             xstart:xstart + pix_kernel] = peak_kernel_bool[i]
+                    this_roi_peak[peak_idx - n_slice_kernel // 2 + i] = roi_this
+
+                '''
+                # find peak - old
                 slice_where_max_this = np.where(max_all == max_this)
                 peak_idx = slice_where_max_this[0][0]
                 arr = np.ma.masked_array(
@@ -4006,6 +4084,7 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
                     else:
                         this_roi_peak.append(None)
                 peak_values.append(np.mean(values_peak))
+                '''
             else:
                 avg_values.append(None)
                 peak_values.append(None)

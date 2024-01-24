@@ -1,3 +1,13 @@
+# v3.0.7
+_mon dd, yyyy_
+
+
+
+Fixes:
+- Fixed rounding error for center when defining circular roi. Effect is that circular ROIs might be placed 1 pixel scewed compared to previous version.
+- PET Recovery curve peak values now similar to EARL with finding 1cc with highest average rather than average of 1cc around max pixelvalue
+
+
 # v3.0.6
 _Jan 16, 2024_
 

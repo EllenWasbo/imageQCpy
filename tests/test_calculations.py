@@ -683,7 +683,7 @@ def test_PET_Rec():
         current_paramset=cfc.ParamSetPET(),
         current_quicktest=cfc.QuickTestTemplate(tests=[['Rec']]*36),
         tag_infos=tag_infos,
-        automation_active=False
+        automation_active=False, test_mode=True
         )
 
     file_path = path_tests / 'test_inputs' / 'PET' / 'body_phantom'
@@ -691,13 +691,22 @@ def test_PET_Rec():
     img_infos, ignored_files, _ = dcm.read_dcm_info(
         files, GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
-
     calculate_qc.calculate_qc(input_main)
-    values = np.round(np.array(input_main.results['Rec']['values']))
-    '''assert np.array_equal(
+    # avg
+    values = np.round(np.array(input_main.results['Rec']['details_dict']['values'][3]))
+    assert np.array_equal(
         values,
-        np.array([7.3000e+01, 1.1599e+04, 1.1835e+04, 1.0000e+00, 1.0000e+00]))'''
-    assert 1 == 1
+        np.array([10766., 14281., 15373., 15403., 16304., 16695.,  2133.]))
+    # max
+    values = np.round(np.array(input_main.results['Rec']['details_dict']['values'][4]))
+    assert np.array_equal(
+        values,
+        np.array([14467., 19557., 21250., 20156., 20717., 20389.,  2133.]))
+    # peak
+    values = np.round(np.array(input_main.results['Rec']['details_dict']['values'][5]))
+    assert np.array_equal(
+        values,
+        np.array([7867., 11378., 15615., 18612., 18994., 18938.,  2133.]))
 
 
 def test_MR_SNR():

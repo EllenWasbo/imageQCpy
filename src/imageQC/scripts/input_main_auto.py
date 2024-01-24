@@ -27,6 +27,7 @@ class Gui():
 class InputMain:
     """Dataclass with values as MainWindow when calculate_qc without main window."""
 
+    test_mode: bool = False
     current_modality: str = 'CT'
     current_test: str = 'DCM'
     current_paramset: dict = field(default_factory=dict)

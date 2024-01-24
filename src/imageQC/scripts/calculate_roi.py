@@ -647,8 +647,10 @@ def get_roi_circle(image_shape, delta_xy, radius):
         np.arange(0, image_shape[1], dtype=int),
         np.arange(0, image_shape[0], dtype=int),
         sparse=True)
-    center_pos = [delta_xy[0] + round(0.5*image_shape[1]),
-                  delta_xy[1] + round(0.5*image_shape[0])]
+    #center_pos = [delta_xy[0] + round(0.5*image_shape[1]),
+    #              delta_xy[1] + round(0.5*image_shape[0])]
+    center_pos = [delta_xy[0] + image_shape[1] // 2,
+                  delta_xy[1] + image_shape[0] // 2]
 
     zs = np.sqrt((xs-center_pos[0]) ** 2 + (ys-center_pos[1]) ** 2)
     inside = zs <= radius

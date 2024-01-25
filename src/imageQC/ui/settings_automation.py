@@ -555,7 +555,6 @@ class LimitsAndPlotContent(QWidget):
         self.cbox_output_paths = QComboBox()
         self.cbox_output_paths.currentIndexChanged.connect(self.update_output_path)
         self.txt_sample_file_path = QLineEdit(sample_file_path)
-        #self.txt_sample_file_path.textChanged.connect(self.update_from_sample_file)
 
         self.list_headers = QListWidget()
         self.list_headers.setFixedWidth(300)
@@ -2104,7 +2103,6 @@ class DashSettingsWidget(StackWidget):
         self.n_colors = 7
         self.colortable = QTableWidget(1, self.n_colors)
         self.colortable.setFixedHeight(50)
-        #self.colortable.setFixedWidth(700)
         self.colortable.setSelectionMode(QTableWidget.SingleSelection)
         self.colortable.horizontalHeader().setVisible(False)
         self.colortable.verticalHeader().setVisible(False)

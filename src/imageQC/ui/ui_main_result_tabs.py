@@ -138,6 +138,7 @@ class ResultTable(QTableWidget):
         self.customContextMenuRequested.connect(self.generate_ctxmenu)
 
     def generate_ctxmenu(self, pos):
+        """Dropdown menu on right click."""
         menu = QMenu(self)
         act_copy = menu.addAction('Copy selected cells to clipboard (Ctrl+C)')
         act_copy.triggered.connect(self.copy_selection)
@@ -810,9 +811,11 @@ class ResultPlotCanvas(PlotCanvas):
                         xvals = [[0, values[-1]]]
                         yvals.extend([[0, values[i]] for i in range(5)])
                         if self.main.current_modality in 'Xray':
-                            xvals.extend([[.5, .5], [1, 1], [1.5, 1.5], [2, 2], [2.5, 2.5]])
+                            xvals.extend([
+                                [.5, .5], [1, 1], [1.5, 1.5], [2, 2], [2.5, 2.5]])
                         else:
-                            xvals.extend([[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])
+                            xvals.extend([
+                                [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]])
                         for i in range(len(xvals)):
                             self.curves.append({
                                 'label': '_nolegend_',
@@ -856,12 +859,12 @@ class ResultPlotCanvas(PlotCanvas):
             for ddno in range(2):
                 try:
                     dd = details_dicts[ddno]
-                    xvals = dd['LSF_x'] # TODO fix when this is error, expecting index
+                    xvals = dd['LSF_x']  # TODO fix when this is error, expecting index
                     proceed = True
                 except (IndexError, KeyError):
                     proceed = False
                 except TypeError:
-                    proceed = False # TODO fix when this is error
+                    proceed = False  # TODO fix when this is error
                 if proceed:
                     xvals = dd['LSF_x']
                     yvals = dd['LSF']
@@ -1811,7 +1814,7 @@ class ResultPlotCanvas(PlotCanvas):
                 plot_filtered_NPS(roi_name=sel_text[-2:])
         elif 'all' in sel_text:
             plot_all_NPS()
-        elif'correction' in sel_text:
+        elif 'correction' in sel_text:
             plot_curve_corr_check()
 
     def Spe(self):

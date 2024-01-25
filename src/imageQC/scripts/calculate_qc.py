@@ -548,7 +548,7 @@ def calculate_qc(input_main, wid_auto=None,
                     if 'SNR' in marked[i]:
                         if paramset.snr_type == 0:
                             marked_3d[i].append('SNR')
-                    #TODO? force_new_roi.append all with optimize center?
+                    # TODO? force_new_roi.append all with optimize center?
 
             # list of shape + pix for testing if new roi need to be calculated
             xypix = []
@@ -1133,7 +1133,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 details = calculate_flatfield_mammo(
                     image2d, roi_array[-1], image_info, paramset)
                 if details:
-                    matrix_shape = details['deviating_rois'].shape
                     values = [
                         np.mean(details['averages']),
                         np.mean(details['snrs']),

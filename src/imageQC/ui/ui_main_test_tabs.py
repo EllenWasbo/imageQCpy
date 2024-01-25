@@ -323,7 +323,8 @@ class ParamsTabCommon(QTabWidget):
                     if isinstance(details_dict, dict):
                         details_dict = [details_dict]
                     try:
-                        new_values_this = details_dict[0][prefix + 'MTF_details']['values']
+                        new_values_this = details_dict[0][
+                            prefix + 'MTF_details']['values']
                     except KeyError:
                         new_values_this = []
                     try:
@@ -1378,7 +1379,7 @@ class ParamsTabMammo(ParamsTabCommon):
         self.rlr_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='rlr_roi_size'))
         self.rlr_x_mm = QDoubleSpinBox(decimals=1, minimum=0.1,  maximum=10000,
-                                           singleStep=0.1)
+                                       singleStep=0.1)
         self.rlr_x_mm.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='rlr_x_mm'))
 

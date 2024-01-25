@@ -11,7 +11,6 @@ from pathlib import Path
 import imageQC.scripts.dcm as dcm
 import imageQC.config.config_classes as cfc
 from imageQC.scripts.input_main_auto import InputMain
-import imageQC.scripts.calculate_roi as calculate_roi
 import imageQC.scripts.calculate_qc as calculate_qc
 import imageQC.resources
 
@@ -43,7 +42,9 @@ def read_tag_infos_from_yaml():
 
 tag_infos = read_tag_infos_from_yaml()
 
+
 def test_CTn():
+    """Test CT test CTn."""
     input_main = InputMain(
         current_modality='CT',
         current_test='CTn',

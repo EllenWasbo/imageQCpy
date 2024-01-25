@@ -361,7 +361,6 @@ class MainWindow(QMainWindow):
     def update_active_img(self, current):
         """Overwrite pixmap in memory with new active image, refresh GUI."""
         if len(self.imgs) > 0:
-            old_number = self.gui.active_img_no
             if current is not None:
                 self.gui.active_img_no = self.tree_file_list.indexOfTopLevelItem(
                     current)

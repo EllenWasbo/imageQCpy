@@ -29,12 +29,12 @@ To be able to plot during pytest:
 ## When adding new testcode (analyse type)
 - add testcode (three letters at least first capital) in config/iQCconstants.py QUICKTEST_OPTIONS same order as tabs for the tests
 - add result table headers in config/iQCconstants.py HEADERS (and HEADERS_SUP if supplement data)
-- add configurable parameters in config/config_classes.py ParamSet<Modality> (or ParamsetCommon if available to all paramsets)
-- add GUI in ui/ui_main_test_tabs.py TestTab<Modality> order of tabs should fit QUICKTEST_OPTIONS order
-	- self.<same as paramname in ParamSet> as gui element
-	- if same as for other modality consider adding (moving) create_tab_<testcode> to the Common tab
+- add configurable parameters in config/config_classes.py ParamSet&lt;Modality&gt; (or ParamsetCommon if available to all paramsets)
+- add GUI in ui/ui_main_test_tabs.py TestTab&lt;Modality&gt; order of tabs should fit QUICKTEST_OPTIONS order
+	- self.&lt;same as paramname in ParamSet&gt; as gui element
+	- if same as for other modality consider adding (moving) create_tab_&lt;testcode&gt; to the Common tab
 	- verify that type of widget supported by params_changed_from_gui and update_displayed_params
-- add roi in scripts/calculate_roi.py (in get_rois method <testcode>
+- add roi in scripts/calculate_roi.py (in get_rois method &lt;testcode&gt;)
 - if more than four colored rois / other visualization needs: add visualization of roi in ui/ui_image_canvas - ImageCanvas.roi_draw()
 - add test calculations to calculate_qc
 - add test visualizations to plot canvas (ui/ui_main_result_tabs - ResultPlotCanvas)
@@ -45,7 +45,7 @@ To be able to plot during pytest:
 - add template type to config_classes + add to last_modified
 - start with a widget (inheriting from StackWidget of settings_reusables) that will have a similar use
 - create the widgets and add to SettingsDialog __init__ (settings.py)
-- in config_func.py load_settings - add code to if fname == '<the new fname>'
+- in config_func.py load_settings - add code to if fname == '&lt;the new fname&gt;'
 - if more than only the fname to load:
 	- search for "'patterns'" in  settings_reusables.py - you will probably have to make these places work for you new template
 - if coupled in auto_template or paramset or tag_infos by labels/attribute names - consider warnings (verify_auto_template / 
@@ -77,11 +77,11 @@ To be able to plot during pytest:
 
 - conda install -c anaconda git
 Clone git from github
-- git clone https://github.com/EllenWasbo/imageQCpy.wiki.git <some path>\imageQCpy_wiki
+- git clone https://github.com/EllenWasbo/imageQCpy.wiki.git &lt;some path&gt;\imageQCpy_wiki
 - or update with Pull and GitHub Desktop
 
 - cd to wikidoc-master
-- python wikidoc.py C:\Programfiler\wkhtmltopdf\bin\wkhtmltopdf.exe <some path>\\imageQCpy_wiki\
+- python wikidoc.py C:\Programfiler\wkhtmltopdf\bin\wkhtmltopdf.exe &lt;some path&gt;\\imageQCpy_wiki\
 
 Note that code used by wikidoc are within the .md files of imageQCpy/wiki
 
@@ -113,4 +113,4 @@ Fixed missing module when using import-hidden by adding from charset_normalizer 
 
 To run the exe file from cmd.exe:
 - cd .....\dist\imageQC
-- imageQC <arg1> <arg2>
+- imageQC &lt;arg1&gt; &lt;arg2&gt;

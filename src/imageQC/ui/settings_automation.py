@@ -15,8 +15,8 @@ from PyQt5.QtGui import QIcon, QBrush, QColor
 from PyQt5.QtWidgets import (
     QApplication, qApp, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QToolBar, QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox,
-    QListWidget, QComboBox, QDoubleSpinBox, QAbstractItemView,
-    QMessageBox, QDialogButtonBox, QInputDialog, QFileDialog
+    QListWidget, QComboBox, QDoubleSpinBox, QAbstractItemView, QTableWidget,
+    QMessageBox, QDialogButtonBox, QInputDialog, QFileDialog, QColorDialog
     )
 
 # imageQC block start
@@ -2100,10 +2100,27 @@ class DashSettingsWidget(StackWidget):
         hlo_table_headers.addWidget(self.txt_table_headers_2)
         #TODO add when ready status: hlo_table_headers.addWidget(self.txt_table_headers_3)
         hlo_table_headers.addStretch()
+
+        self.n_colors = 7
+        self.colortable = QTableWidget(1, self.n_colors)
+        self.colortable.setFixedHeight(50)
+        #self.colortable.setFixedWidth(700)
+        self.colortable.setSelectionMode(QTableWidget.SingleSelection)
+        self.colortable.horizontalHeader().setVisible(False)
+        self.colortable.verticalHeader().setVisible(False)
+        for i in range(self.n_colors):
+            self.colortable.setColumnWidth(i, 120)
+            self.colortable.setCellWidget(
+                0, i, uir.PushColorCell(self, initial_color="#000000", row=0, col=i))
+        hlo_colors = QHBoxLayout()
+        vlo_left.addLayout(hlo_colors)
+        hlo_colors.addWidget(QLabel('Plot colors (click to edit):'))
+        hlo_colors.addWidget(self.colortable)
+        hlo_colors.addStretch()
         vlo_left.addStretch()
         vlo_left.addWidget(uir.LabelItalic(
             'If changes do not affect the dashboard - '
-            'try changing the port number to force an update.'))
+            'try changing the port number to force an update or restart imageQC.'))
         vlo_left.addStretch()
 
         if self.import_review_mode:
@@ -2147,6 +2164,23 @@ class DashSettingsWidget(StackWidget):
         self.txt_table_headers_1.setText(self.templates.overview_table_headers[1])
         self.txt_table_headers_2.setText(self.templates.overview_table_headers[2])
         self.txt_table_headers_3.setText(self.templates.overview_table_headers[3])
+
+        for i in range(self.n_colors):
+            w = self.colortable.cellWidget(0, i)
+            w.setStyleSheet(
+                f'QPushButton{{background-color: {self.templates.colors[i]};}}')
+            w.setText(self.templates.colors[i])
+
+    def color_edit(self, row, col):
+        """Edit color for active cell."""
+        color = QColorDialog.getColor()
+        if color.isValid():
+            self.templates.colors[col] = color.name()
+            w = self.colortable.cellWidget(0, col)
+            w.setStyleSheet(
+                f'QPushButton{{background-color: {self.templates.colors[col]};}}')
+            w.setText(self.templates.colors[col])
+            self.flag_edit(True)
 
     def get_current_template(self):
         """Update self.templates with current values."""

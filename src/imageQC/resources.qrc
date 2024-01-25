@@ -16,6 +16,7 @@
 		<file alias="clear.png">icons\clear.png</file>
 		<file alias="copy.png">icons\copy.png</file>
 		<file alias="copy2clipboard.png">icons\copy2clipboard.png</file>
+		<file alias="decimal_all.png">icons\decimal_all.png</file>
 		<file alias="decimal_comma.png">icons\decimal_comma.png</file>
 		<file alias="decimal_point.png">icons\decimal_point.png</file>
 		<file alias="delete.png">icons\delete.png</file>
@@ -93,6 +94,7 @@
 		<file alias="clear.png">icons\darkmode\clear.png</file>
 		<file alias="copy.png">icons\darkmode\copy.png</file>
 		<file alias="copy2clipboard.png">icons\darkmode\copy2clipboard.png</file>
+		<file alias="decimal_all.png">icons\darkmode\decimal_all.png</file>
 		<file alias="decimal_comma.png">icons\darkmode\decimal_comma.png</file>
 		<file alias="decimal_point.png">icons\darkmode\decimal_point.png</file>
 		<file alias="delete.png">icons\darkmode\delete.png</file>

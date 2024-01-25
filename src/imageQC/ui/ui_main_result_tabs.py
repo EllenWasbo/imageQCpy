@@ -75,10 +75,12 @@ class ResultTableWidget(QWidget):
         decimal_mark = '.'
         if self.tb_copy.tool_decimal.isChecked():
             decimal_mark = ','
+        lock_format = self.tb_copy.tool_decimal_all.isChecked()
         values = [
             mmf.val_2_str(
                 col,
-                decimal_mark=decimal_mark)
+                decimal_mark=decimal_mark,
+                lock_format=lock_format)
             for col in self.result_table.values]
 
         if row_range is not None and col_range is not None:
@@ -206,6 +208,7 @@ class ResultTable(QTableWidget):
         decimal_mark = '.'
         if self.parent.tb_copy.tool_decimal.isChecked():
             decimal_mark = ','
+        lock_format = self.parent.tb_copy.tool_decimal_all.isChecked()
 
         def mtf_multiply_10(row):
             """Multiply MTF values by 10 to cy/cm (cy/mm default), accept None."""
@@ -283,7 +286,6 @@ class ResultTable(QTableWidget):
                 if vendor:
                     this_col = values_cols[c]  # formatted above
                 else:
-                    lock_format = False
                     if self.main.current_test == 'DCM':
                         if self.main.current_paramset.dcm_tagpattern.list_format[c] != '':
                             lock_format = True

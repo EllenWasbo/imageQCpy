@@ -409,6 +409,10 @@ def run_dash_app(dash_settings=None):
         except IndexError:
             proceed = False
         if proceed:
+            #colorlist = [
+            #    '#000000', '#5165d5', '#a914a6', '#7f9955', '#efb412',
+            #    '#97d2d1', '#b3303b']
+            colorlist = dash_settings.colors
             data = modality_dict[mod][template_value].data
             lim_plots = modality_dict[mod][template_value].limits_and_plot_template
             titles = [title for i, title in enumerate(lim_plots.groups_title)
@@ -419,11 +423,13 @@ def run_dash_app(dash_settings=None):
             rowno = 1
             for group_idx, group in enumerate(lim_plots.groups):
                 if lim_plots.groups_hide[group_idx] is False:
-                    for header in group:
+                    for lineno, header in enumerate(group):
                         fig.add_trace(
                             go.Scatter(
                                 x=data[data.columns[0]], y=data[header],
-                                name=header, mode='lines+markers', showlegend=False,
+                                line_color=colorlist[lineno % len(colorlist)],
+                                name=header, mode='lines+markers', showlegend=True,
+                                legendgroup=str(group_idx)
                                 ),
                             row=rowno, col=1,
                             )
@@ -441,8 +447,13 @@ def run_dash_app(dash_settings=None):
                 dtick="M1",
                 tickformat="%b\n%Y",
                 ticklabelmode="period")
-            fig.update_layout(height=dash_settings.plot_height*n_rows,
-                              title_text=modality_dict[mod][template_value].label)
+            fig_height = dash_settings.plot_height * n_rows
+            tracegroupgap = (
+                fig.layout.yaxis.domain[1] - fig.layout.yaxis.domain[0]) * fig_height
+            fig.update_layout(margin=dict(t=100, b=0, l=0, r=0))
+            fig.update_layout(height=fig_height,
+                              title_text=modality_dict[mod][template_value].label,
+                              legend_tracegroupgap=tracegroupgap)
             template_content = html.Div([
                 dcc.Graph(figure=fig),
                 ])

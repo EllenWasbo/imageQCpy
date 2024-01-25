@@ -389,6 +389,21 @@ def get_rois(image, image_number, input_main):
 
         return roi_this
 
+    def RLR():  # ROI left/righy mammo
+        roi_this = None
+        if input_main.current_modality == 'Mammo':
+            x_pos = paramset.rlr_x_mm / image_info.pix[0]
+            if paramset.rlr_relative_to_right:
+                x_pos = image_info.pix[0] * img_shape[1] / 2 - paramset.rlr_x_mm
+            else:
+                x_pos = - image_info.pix[0] * img_shape[1] / 2 + paramset.rlr_x_mm
+            x_pos = x_pos / image_info.pix[0]
+            w = paramset.rlr_roi_size / image_info.pix[0]
+            roi_this = get_roi_rectangle(
+                img_shape, roi_width=w, roi_height=w,
+                offcenter_xy=(x_pos, 0))
+        return roi_this
+
     def ROI():  # single og multiple ROI statistics
         roi_array = []
 

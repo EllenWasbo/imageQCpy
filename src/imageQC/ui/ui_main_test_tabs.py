@@ -1243,12 +1243,14 @@ class ParamsTabMammo(ParamsTabCommon):
 
         self.create_tab_sdn()
         self.create_tab_hom()
+        self.create_tab_rlr()
         self.create_tab_gho()
         self.create_tab_mtf()
         self.create_tab_nps()
 
         self.addTab(self.tab_sdn, "SDNR")
         self.addTab(self.tab_hom, "Homogeneity")
+        self.addTab(self.tab_rlr, "ROI left/right")
         self.addTab(self.tab_gho, "Ghost")
         self.addTab(self.tab_mtf, "MTF")
         self.addTab(self.tab_nps, "NPS")
@@ -1366,6 +1368,35 @@ class ParamsTabMammo(ParamsTabCommon):
         hlo_right.addWidget(QLabel('Result image'))
         hlo_right.addWidget(self.hom_result_image)
         self.tab_hom.hlo.addLayout(hlo_right)
+
+    def create_tab_rlr(self):
+        """GUI of tab ROI left/right."""
+        self.tab_rlr = ParamsWidget(self, run_txt='Calculate ROI values')
+
+        self.rlr_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1,  maximum=10000,
+                                           singleStep=0.1)
+        self.rlr_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rlr_roi_size'))
+        self.rlr_x_mm = QDoubleSpinBox(decimals=1, minimum=0.1,  maximum=10000,
+                                           singleStep=0.1)
+        self.rlr_x_mm.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='rlr_x_mm'))
+
+        self.rlr_relative_to_right = BoolSelectTests(
+            self, attribute='rlr_relative_to_right',
+            text_true='Right', text_false='Left')
+
+        vlo_left = QVBoxLayout()
+        self.tab_rlr.hlo.addLayout(vlo_left)
+
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('ROI width and height (mm)'), self.rlr_roi_size)
+        flo1.addRow(QLabel('ROI distance to image border (mm)'), self.rlr_x_mm)
+        flo1.addRow(QLabel('Distance to image border'),
+                    self.rlr_relative_to_right)
+        vlo_left.addLayout(flo1)
+
+        self.tab_rlr.hlo.addStretch()
 
     def create_tab_gho(self):
         """GUI of tab Ghost factor."""

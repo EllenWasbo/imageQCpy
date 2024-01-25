@@ -1499,6 +1499,22 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
         return res
 
+    def RLR():
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
+        if image2d is None:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
+            arr = np.ma.masked_array(image2d, mask=np.invert(roi_array))
+            values = [np.mean(arr), np.std(arr)]
+            values_sup = [np.min(arr), np.max(arr)]
+
+            res = Results(
+                headers=headers, values=values,
+                headers_sup=headers_sup, values_sup=values_sup)
+
+        return res
+
     def ROI():
         values = []
         values_sup = []
@@ -1577,7 +1593,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             bg_std = np.mean(bg_stds)
             sdnr = np.abs(signal_mean - bg_mean) / np.sqrt(
                 (bg_std ** 2 + signal_std ** 2) / 2)
-            values = [bg_mean, bg_std, signal_mean, signal_std, sdnr]
+            values = [signal_mean, signal_std, bg_mean, bg_std, sdnr]
 
             res = Results(headers=headers, values=values)
 

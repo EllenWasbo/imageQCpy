@@ -308,6 +308,7 @@ class QuickTestOutputTemplate:
     include_header: bool = False
     transpose_table: bool = False
     decimal_mark: str = '.'
+    decimal_all: bool = False
     include_filename: bool = False  # for quickTest
     group_by: list = field(default_factory=lambda: ['SeriesInstanceUID'])
     # if per_group is set in QuickTestOutputSub
@@ -451,6 +452,9 @@ class ParamSetMammo(ParamSetCommon):
     hom_mask_max: bool = False
     hom_deviating_pixels: float = 20.
     hom_deviating_rois: float = 15.
+    rlr_roi_size: float = 5.
+    rlr_relative_to_right: bool = True  # if false relative to left
+    rlr_x_mm: float = 60.  # distance to left or right border
     gho_roi_size: float = 10.
     gho_relative_to_right: bool = True  # if false relative to left
     gho_table: PositionTable = field(
@@ -910,4 +914,8 @@ class DashSettings:
             'Template', 'Last results', 'Days since', 'Status'])
     days_since_limit: int = 30
     plot_height: int = 200
+    colors: list[
+        str] = field(default_factory=lambda: [
+            '#000000', '#5165d5', '#a914a6', '#7f9955', '#efb412',
+            '#97d2d1', '#b3303b'])
     override_css: bool = False  # TODO option to put css in config folder

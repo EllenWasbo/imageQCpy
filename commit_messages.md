@@ -1,7 +1,15 @@
 # v3.0.7
-_mon dd, yyyy_
+_Jan 26, 2024_
 
+New functionalities:
+- Added option to show all decimals in results table (last button in toolbar)
+- Added test for Mammo where ROI of specific size can be placed relative to left or right image border.
+- Dashboard:
+	- Added legend per subplot and adjustable colorsettings (repeated for each subplot).
+	- Added option to display dashboard from codeline (-d or --dash).
 
+Changes:
+- Reordered result table columns of Mammo test SDNR (signal before background) 
 
 Fixes:
 - Fixed rounding error for center when defining circular roi. Effect is that circular ROIs might be placed 1 pixel scewed compared to previous version.

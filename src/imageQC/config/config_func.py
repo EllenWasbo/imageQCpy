@@ -646,12 +646,17 @@ def load_settings(fname='', temp_config_folder=''):
                                                     sub, cfc.QuickTestOutputSub())
                                                 tests[key].append(
                                                     cfc.QuickTestOutputSub(**upd))
+                                        try:
+                                            decimal_all = doc['output']['decimal_all']
+                                        except KeyError:
+                                            decimal_all = False
                                         doc['output'] = cfc.QuickTestOutputTemplate(
                                             include_header=doc[
                                                 'output']['include_header'],
                                             transpose_table=doc[
                                                 'output']['transpose_table'],
                                             decimal_mark=doc['output']['decimal_mark'],
+                                            decimal_all=decimal_all,
                                             include_filename=doc[
                                                 'output']['include_filename'],
                                             group_by=doc['output']['group_by'],

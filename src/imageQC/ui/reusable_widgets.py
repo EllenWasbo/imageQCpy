@@ -315,9 +315,18 @@ class ToolBarTableExport(QToolBar):
         self.tool_decimal.clicked.connect(self.clicked_decimal)
         self.tool_decimal.setCheckable(True)
 
+        self.tool_decimal_all = QToolButton()
+        self.tool_decimal_all.setToolTip(
+            "Toggle to show all decimals")
+        self.tool_decimal_all.setIcon(QIcon(
+            f'{os.environ[ENV_ICON_PATH]}decimal_all.png'))
+        self.tool_decimal_all.clicked.connect(self.clicked_decimal_all)
+        self.tool_decimal_all.setCheckable(True)
+
         self.addWidget(self.tool_transpose)
         self.addWidget(self.tool_header)
         self.addWidget(self.tool_decimal)
+        self.addWidget(self.tool_decimal_all)
 
         if self.parameters_output is not None:
             self.update_checked()
@@ -332,14 +341,13 @@ class ToolBarTableExport(QToolBar):
             The default is False.
         """
         if icon_only is False:
-            self.tool_transpose.setChecked(
-                self.parameters_output.transpose_table)
-            self.tool_header.setChecked(
-                self.parameters_output.include_header)
+            self.tool_transpose.setChecked(self.parameters_output.transpose_table)
+            self.tool_header.setChecked(self.parameters_output.include_header)
             if self.parameters_output.decimal_mark == ',':
                 self.tool_decimal.setChecked(True)
             else:
                 self.tool_decimal.setChecked(False)
+            self.tool_decimal_all.setChecked(self.parameters_output.decimal_all)
 
         if self.parameters_output.include_header:
             self.tool_header.setIcon(QIcon(
@@ -377,6 +385,17 @@ class ToolBarTableExport(QToolBar):
             self.parameters_output.decimal_mark = '.'
         else:
             self.parameters_output.decimal_mark = ','
+        self.update_checked(icon_only=True)
+        try:
+            self.parent.main.refresh_results_display()  # if main window
+        except AttributeError:
+            pass
+        if self.flag_edit:
+            self.parent.flag_edit(True)
+
+    def clicked_decimal_all(self):
+        """Actions when decimal_all button clicked."""
+        self.parameters_output.decimal_all = self.tool_decimal_all.isChecked()
         self.update_checked(icon_only=True)
         try:
             self.parent.main.refresh_results_display()  # if main window
@@ -450,6 +469,20 @@ class LineCell(QLineEdit):
         self.parent = parent
         self.setText(initial_text)
         self.textEdited.connect(self.parent.flag_edit)
+
+
+class PushColorCell(QPushButton):
+    """Button to show and edit colors from cell widget in table."""
+
+    def __init__(self, parent, initial_color='#000000', row=-1, col=-1):
+        super().__init__(initial_color)
+        self.setStyleSheet(
+            f'QPushButton{{background-color: {initial_color};}}')
+        self.parent = parent
+        self.clicked.connect(
+            lambda: self.parent.color_edit(self.row, self.col))
+        self.row = row
+        self.col = col
 
 
 class BoolSelect(QWidget):

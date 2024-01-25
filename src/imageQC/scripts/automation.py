@@ -28,7 +28,12 @@ from imageQC.scripts.mini_methods_format import valid_path, val_2_str
 import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
 from imageQC.ui import reusable_widgets as uir
+from imageQC.ui.settings_automation import DashWorker
+import webbrowser
 # imageQC block end
+'''
+from imageQC.dash_app import dash_app
+'''
 
 logger = logging.getLogger('imageQC')
 
@@ -94,7 +99,7 @@ def run_automation_non_gui(args):
                     status = False
 
         if status is False:
-            print('python imageQC.py [-i [-ndays=n] [-a all/dicom/vendor] '
+            print('python imageQC.py [-i [-ndays=n] [-a all/dicom/vendor] [-d/dash] '
                   '[<mod>] [<mod>/<temp>]')
 
         return (status, modalities, templates)
@@ -255,8 +260,19 @@ def run_automation_non_gui(args):
                     with open(warnings[0], "a") as file:
                         file.write('\n'.join(warnings[1:]))
                 else:
-                    append_log('Failed adding warnings for violated limits to '
-                               f'{warnings[0]}')
+                    append_log(['Failed adding warnings for violated limits to '
+                               f'{warnings[0]}'])
+
+        if args.dash:
+            append_log(['---Updating and displaying dashboard---'])
+            _, _, dash_settings = cff.load_settings(fname='dash_settings')
+            dash_worker = DashWorker(dash_settings=dash_settings)
+            dash_worker.start()
+            url = f'http://{dash_settings.host}:{dash_settings.port}'
+            webbrowser.open(url=url, new=1)
+            exit_input = input(
+                'Dashboard runs as long as this program runs. '
+                'Press enter to exit program')
 
 
 def import_incoming(auto_common, templates, tag_infos, parent_widget=None,

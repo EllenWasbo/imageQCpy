@@ -42,7 +42,7 @@ QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
     'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
-    'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'Gho', 'MTF', 'NPS'],
+    'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'RLR', 'Gho', 'MTF', 'NPS'],
     'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
     'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Rin'],
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec'],
@@ -169,13 +169,16 @@ HEADERS = {
         'ROI': {'alt0': roi_headers},
         'Num': {},
         'SDN': {
-            'alt0': ['Avg background', 'Std background',
-                     'Avg signal', 'Std signal', 'SDNR']
+            'alt0': ['Avg signal', 'Std signal',
+                     'Avg background', 'Std background', 'SDNR']
             },
         'Hom': {
             'alt0': ['Avg', 'Avg SNR', 'n ROIs',
                      'Deviating avgs', 'Deviating SNRs', 'Deviating ROIs',
                      '% dev ROIs', 'Deviating pixels', '% dev pixels']
+            },
+        'RLR': {
+            'alt0': ['Average', 'Stdev']
             },
         'Gho': {
             'alt0': ['ROI_1_avg', 'ROI_2_avg', 'ROI_3_avg', 'Ghost factor']
@@ -290,6 +293,9 @@ HEADERS_SUP = {
         },
     'Mammo': {
        'ROI': {'alt0': roi_headers_sup},
+       'RLR': {
+           'alt0': ['Min', 'Max']
+           },
        'Hom': {
            'alt0': ['Min pixel', 'Max pixel', 'Min Avg', 'Max Avg',
                     'Min SNR', 'Max SNR', 'n ROIs x', 'n ROIs y',

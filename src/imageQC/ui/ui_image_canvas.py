@@ -264,6 +264,7 @@ class ImageCanvas(GenericImageCanvas):
                         pass
             except AttributeError:
                 pass
+
         for scatter in self.scatters:
             try:
                 scatter.remove()
@@ -429,7 +430,7 @@ class ImageCanvas(GenericImageCanvas):
             if self.main.current_paramset.hom_mask_max:
                 self.add_contours_to_all_rois(
                     colors=['red'], roi_indexes=[2],
-                    filled=True, hatches=['////'])
+                    filled=True, hatches=['////'], reset_contours=False)
         else:
             colors = ['red', 'blue', 'green', 'yellow', 'cyan']
             self.add_contours_to_all_rois(colors=colors)

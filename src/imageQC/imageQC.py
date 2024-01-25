@@ -102,42 +102,15 @@ if __name__ == '__main__':
                                 help='Run templates in both DICOM and vendor based '
                                 'templates (-a all) or just from DICOM based '
                                 '(-a dicom) or vendor base templates (-a vendor).')
+            parser.add_argument('-d', '--dash', action='store_true',
+                                help='Display dashboard')
             parser.add_argument('modality_temp', metavar='modality1 modality2/temp7',
                                 nargs='*',
                                 help='Limit the run for specified modalities '
                                 'or the specified modality/templatename '
                                 'e.g. CT Xray/lab9 MR/lab3.')
-            #try:
             args = parser.parse_args()
-            '''
-            except AttributeError:  # run exe
-                print(f'sys.argv[1:] {sys.argv[1:]}')
-                argvals = sys.argv[1:]
-                import_images = True if '-i' in argvals else False
-                ndays = -2
-                auto_string = 'none'
-                list_mod_temp = []
-                if '-n' in argvals:
-                    idx = argvals.index('-n') + 1
-                    try:
-                        ndays = int(argvals[idx])
-                    except (ValueError, TypeError):
-                        pass
-                if '-a' in argvals:
-                    idx = argvals.index('-a') + 1
-                    if argvals[idx] in ['none', 'all', 'dicom', 'vendor']:
-                        auto_string = argvals[idx]
 
-                    if len(argvals) > idx + 1:
-                        list_mod_temp = argvals[idx+1:]
-                args = {
-                    'import_images': import_images,
-                    'ndays': ndays,
-                    'auto': auto_string,
-                    'modality_temp': list_mod_temp
-                    }
-                print(f'args {args}')
-                '''
             automation.run_automation_non_gui(args)
 
         sys.exit('Program exits')

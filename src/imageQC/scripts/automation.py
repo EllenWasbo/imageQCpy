@@ -14,6 +14,7 @@ import logging
 from datetime import date, datetime
 from time import time
 import shutil
+import webbrowser
 
 # imageQC block start
 import imageQC.config.config_func as cff
@@ -29,11 +30,7 @@ import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui.settings_automation import DashWorker
-import webbrowser
 # imageQC block end
-'''
-from imageQC.dash_app import dash_app
-'''
 
 logger = logging.getLogger('imageQC')
 
@@ -43,6 +40,15 @@ def run_automation_non_gui(args):
     actual_modalities = [*QUICKTEST_OPTIONS]
 
     def append_log(log_this, not_written=[]):
+        """Append messages to log.
+
+        Parameters
+        ----------
+        log_this : list of str
+            messages to append to log
+        not_written : list of str
+            result-filepaths where results not written to file
+        """
         if len(log_this) > 0:
             for msg in log_this:
                 logger.info(msg)
@@ -104,15 +110,15 @@ def run_automation_non_gui(args):
 
         return (status, modalities, templates)
 
-    logger.info('-----------------Automation started from command-----------------')
-    ok = True
+    logger.info('---------------imageQC automation started-----------------')
+    ok_mod_temp = True
     if len(args.modality_temp) > 0:
-        ok, set_modalities, set_templates = validate_modality_temps()
+        ok_mod_temp, set_modalities, set_templates = validate_modality_temps()
     else:
         set_modalities = []
         set_templates = []
 
-    if ok:
+    if ok_mod_temp:
         # load from yaml
         auto_common = None
         auto_templates = None
@@ -122,7 +128,7 @@ def run_automation_non_gui(args):
         lastload_auto_common = time()
         ndays = args.ndays
         if args.import_images or args.auto in ['all', 'dicom']:
-            ok_common, path, auto_common = cff.load_settings(fname='auto_common')
+            _, path, auto_common = cff.load_settings(fname='auto_common')
             if ndays == -2:
                 ndays = auto_common.ignore_since
             _, _, tag_infos = cff.load_settings(fname='tag_infos')
@@ -264,13 +270,15 @@ def run_automation_non_gui(args):
                                f'{warnings[0]}'])
 
         if args.dash:
-            append_log(['---Updating and displaying dashboard---'])
+            logger.info('------------Updating and displaying dashboard-------------')
+            logger.info('NB! Dashboard runs as long as this program runs. '
+                        'PRESS ENTER to EXIT program.')
             _, _, dash_settings = cff.load_settings(fname='dash_settings')
             dash_worker = DashWorker(dash_settings=dash_settings)
             dash_worker.start()
             url = f'http://{dash_settings.host}:{dash_settings.port}'
             webbrowser.open(url=url, new=1)
-            exit_input = input(
+            _ = input(
                 'Dashboard runs as long as this program runs. '
                 'Press enter to exit program')
 
@@ -383,8 +391,8 @@ def import_incoming(auto_common, templates, tag_infos, parent_widget=None,
             else:
                 # get modality and station name from file
                 station_name = pyd.get('StationName', '')
-                modalityDCM = pyd.get('Modality', '')
-                mod = dcm.get_modality(modalityDCM)['key']
+                modality_dcm = pyd.get('Modality', '')
+                mod = dcm.get_modality(modality_dcm)['key']
 
                 # generate new name
                 name_parts = dcm.get_dcm_info_list(
@@ -666,13 +674,13 @@ def verify_automation_possible(templates, templates_vendor):
     status_vendor = False
     messages = []
 
-    for mod, temps in templates:
+    for _, temps in templates:
         labels = [temp.label for temp in temps]
         if len(labels) > 0 and '' not in labels:
             status = True
             break
 
-    for mod, temps in templates_vendor:
+    for _, temps in templates_vendor:
         labels = [temp.label for temp in temps]
         if len(labels) > 0 and '' not in labels:
             status_vendor = True
@@ -999,7 +1007,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                 log.append(f'{date_str}: WARNING')
                                 log.extend(input_main_this.errmsgs)
 
-                            status, print_array = append_auto_res(
+                            _, print_array = append_auto_res(
                                 auto_template, header_list, value_list,
                                 to_file=write_ok
                                 )

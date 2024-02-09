@@ -358,12 +358,18 @@ class TagPatternWidget(QWidget):
     """
 
     def __init__(self, parent, typestr='sort', lock_on_general=False,
+                 lock_on_modality=None,
                  rename_pattern=False, open_files_pattern=False,
                  editable=True):
         super().__init__()
         self.parent = parent
         self.typestr = typestr
-        self.lock_on_general = lock_on_general
+        if lock_on_modality:
+            self.lock_on_general = False
+            self.lock_on_modality = lock_on_modality
+        else:
+            self.lock_on_general = lock_on_general
+            self.lock_on_modality = None
         self.rename_pattern = rename_pattern
         self.open_files_pattern = open_files_pattern
 

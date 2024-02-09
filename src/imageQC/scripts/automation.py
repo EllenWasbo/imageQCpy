@@ -948,6 +948,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                 )
 
                         n_sessions = len(uniq_date_uids)
+                        finish_text = (
+                            f'Finished analysing template ({n_sessions} sessions)')
                         if parent_widget is not None:
                             curr_val = parent_widget.progress_modal.value()
                             diff = curr_val - start_progress_val
@@ -960,6 +962,13 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                       'for template ',
                                       f'{modality}/{auto_template.label} ...',
                                       sep='', end='', flush=True)
+                            else:
+                                if parent_widget.progress_modal.wasCanceled():
+                                    finish_text = (
+                                        'Analysis was cancelled after '
+                                        f'{ses_no} sessions.'
+                                        )
+                                    break
                             date_str = (
                                 uniq_date_uid[6:8] + '.'
                                 + uniq_date_uid[4:6] + '.'
@@ -979,6 +988,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             # reset
                             input_main_this.results = {}
                             input_main_this.current_group_indicators = []
+                            input_main_this.errmsgs = []
 
                             calculate_qc(
                                 input_main_this, wid_auto=parent_widget,
@@ -1023,9 +1033,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             print(
                                 '\rFinished analysing template                        ',
                                 '                                                     ')
-                        log.append(
-                            f'Finished analysing template ({n_sessions} sessions)'
-                            )
+                        log.append(finish_text)
+
         else:
             if auto_template.import_only is False:
                 if os.path.exists(auto_template.path_input) is False:
@@ -1109,11 +1118,15 @@ def run_template_vendor(auto_template, modality,
                     auto_template.path_output)
             for fileno, file in enumerate(files):
                 if parent_widget is not None:
-                    parent_widget.progress_modal.setLabelText(
-                        f'{log_pre} Extracting data from file {fileno}/{len(files)}...')
-                    curr_val = parent_widget.progress_modal.value()
-                    new_val = curr_val + int(100/len(files))
-                    parent_widget.progress_modal.setValue(new_val)
+                    if parent_widget.progress_modal.wasCanceled():
+                        break
+                    else:
+                        parent_widget.progress_modal.setLabelText(
+                            f'{log_pre} Extracting data from file '
+                            f'{fileno}/{len(files)}...')
+                        curr_val = parent_widget.progress_modal.value()
+                        new_val = curr_val + int(100/len(files))
+                        parent_widget.progress_modal.setValue(new_val)
                 res = read_vendor_QC_reports.read_vendor_template(auto_template, file)
                 if res is None:
                     log.append(f'\t Found no expected content in {file}')

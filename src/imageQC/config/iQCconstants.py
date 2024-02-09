@@ -7,7 +7,6 @@ Constants accessible for several modules within imageQC.
 """
 
 import os
-import sys
 
 # imageQC block start
 import imageQC.config.config_classes as cfc
@@ -19,7 +18,7 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.7'
+VERSION = '3.0.8_b1'
 
 #if sys.platform.startswith("win"):
 APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -39,7 +38,7 @@ USER_PREFS_FNAME = 'user_preferences.yaml'
 # dict: with lists defining modalities and their corresponding
 #  list of tests with QuickTest as option."""
 QUICKTEST_OPTIONS = {
-    'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
+    'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'TTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
     'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
     'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'RLR', 'Gho', 'MTF', 'NPS'],
@@ -48,6 +47,7 @@ QUICKTEST_OPTIONS = {
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec'],
     'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF']}
 
+COLORS = ['r', 'b', 'g', 'y', 'c', 'm', 'skyblue', 'orange']
 
 HALFLIFE = {'F18': 109.77}
 ALTERNATIVES_ROI = ['One ROI',
@@ -133,6 +133,9 @@ HEADERS = {
             'alt1': ['MTFx 50%', 'MTFx 10%', 'MTFx 2%',
                      'MTFy 50%', 'MTFy 10%', 'MTFy 2%'],
             'alt2': ['MTF 50%', 'MTF 10%', 'MTF 2%']
+            },
+        'TTF': {
+            'alt0': ['Material', 'MTF 50%', 'MTF 10%', 'MTF 2%'],
             },
         'HUw': {'alt0': ['CT number (HU)', 'Noise=Stdev']},
         'Dim': {
@@ -276,6 +279,9 @@ HEADERS_SUP = {
                        'Stdev Center']
             },
         'CTn': {'altAll': ['R-squared', 'fitted intercept', 'fitted slope']},
+        'TTF': {
+            'alt0': ['Material', 'A1', 'sigma1', 'A2', 'sigma2'],
+            },
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
                      'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],

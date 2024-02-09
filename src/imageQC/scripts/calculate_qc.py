@@ -154,9 +154,9 @@ def quicktest_output(input_main):
         if len(input_main.current_quicktest.image_names) > 0:
             set_names = input_main.current_quicktest.image_names
             if any(set_names):
-                for i in range(n_imgs):
-                    if set_names[i] != '':
-                        image_names[i] = set_names[i]
+                for i, set_name in enumerate(set_names):
+                    if set_name != '' and i < len(image_names):
+                        image_names[i] = set_name
         uniq_group_ids_all = mm.get_uniq_ordered(input_main.current_group_indicators)
         group_names = []
         for i in range(n_imgs):
@@ -490,6 +490,12 @@ def calculate_qc(input_main, wid_auto=None,
                         else:
                             if paramset.mtf_auto_center:
                                 force_new_roi.append('MTF')
+                    if 'TTF' in marked[i]:
+                        marked_3d[i].append('TTF')
+                        extra_tag_pattern = cfc.TagPatternFormat(
+                            list_tags=['SeriesUID'])
+                        extra_tag_list = []
+                        read_tags[i] = True
                     if 'Sli' in marked[i]:
                         if paramset.sli_auto_center:
                             force_new_roi.append('Sli')
@@ -833,11 +839,14 @@ def calculate_qc(input_main, wid_auto=None,
             input_main.current_test = set_current_test
             input_main.refresh_results_display()
             # refresh image display if result contain rois to display
-            if 'MTF' in input_main.results and input_main.current_modality == 'CT':
-                if paramset.mtf_type == 2:
+            if input_main.current_modality == 'CT':
+                if 'MTF' in input_main.results and paramset.mtf_type == 2:
+                    input_main.refresh_img_display()
+                if 'TTF' in input_main.results:
                     input_main.refresh_img_display()
             elif 'Rec' in input_main.results:
-                input_main.wid_window_level.set_window_level('min_max', set_tools=True)
+                input_main.wid_window_level.tb_wl.set_window_level(
+                    'min_max', set_tools=True)
                 input_main.set_active_img(
                     input_main.results['Rec']['details_dict']['max_slice_idx'])
             input_main.stop_wait_cursor()
@@ -1918,6 +1927,83 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                               errmsg=errmsg)
         else:
             res = None
+
+        return res
+
+    def TTF(images_to_test):
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
+        materials = paramset.ttf_table.labels
+        if len(images_to_test) == 0 or len(materials) == 0:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
+            details_dict_all = []  # list of dict
+            values = []
+            values_sup = []
+            errmsgs = []
+            prefix = 'g' if paramset.ttf_gaussian else 'd'
+
+            sum_image = matrix[images_to_test[0]]
+            if len(images_to_test) > 1:
+                for imgNo in images_to_test[1:]:
+                    sum_image = np.add(sum_image, matrix[imgNo])
+            roi_array_all, errmsg = get_rois(
+                sum_image, images_to_test[0], input_main)
+
+            paramset_ttf_fix = copy.deepcopy(paramset)
+            paramset_ttf_fix.mtf_cut_lsf = paramset_ttf_fix.ttf_cut_lsf
+            paramset_ttf_fix.mtf_cut_lsf_w = paramset_ttf_fix.ttf_cut_lsf_w
+            paramset_ttf_fix.mtf_cut_lsf_w_fade = paramset_ttf_fix.ttf_cut_lsf_w_fade
+            for idx, roi_array in enumerate(roi_array_all):
+                rows = np.max(roi_array, axis=1)
+                cols = np.max(roi_array, axis=0)
+                sub = []
+                for sli in matrix:
+                    if sli is not None:
+                        this_sub = sli[rows][:, cols]
+                        sub.append(this_sub)
+                    else:
+                        sub.append(None)
+
+                details_dict, errmsg = calculate_MTF_circular_edge(
+                    sub, roi_array[rows][:, cols],
+                    img_infos[images_to_test[0]].pix[0],
+                    paramset_ttf_fix, images_to_test)
+                if errmsg:
+                    errmsgs.append(f'{materials[idx]}:')
+                    errmsgs.extend(errmsg)
+                if details_dict['disc_radius_mm'] is not None:
+                    row0 = np.where(rows)[0][0]
+                    col0 = np.where(cols)[0][0]
+                    dx_dy = (
+                        col0 + details_dict['center_xy'][0] - sum_image.shape[1]//2,
+                        row0 + details_dict['center_xy'][1] - sum_image.shape[0]//2
+                        )
+                    roi_disc = get_roi_circle(
+                        sum_image.shape, dx_dy,
+                        details_dict['disc_radius_mm'] / img_infos[
+                            images_to_test[0]].pix[0])
+                    details_dict['found_disc_roi'] = roi_disc
+                details_dict_all.append(details_dict)
+
+                try:
+                    values.append(
+                        [materials[idx]]
+                        + details_dict[prefix + 'MTF_details']['values'])
+                except TypeError:
+                    values.append([materials[idx]] + [None] * 3)
+                try:
+                    values_sup.append(
+                        [materials[idx]]
+                        + list(details_dict['gMTF_details']['LSF_fit_params']))
+                except TypeError:
+                    values_sup.append([materials[idx]] + [None] * 4)
+
+            res = Results(headers=headers, values=values,
+                          headers_sup=headers_sup, values_sup=values_sup,
+                          details_dict=details_dict_all,
+                          pr_image=False,
+                          errmsg=errmsgs)
 
         return res
 

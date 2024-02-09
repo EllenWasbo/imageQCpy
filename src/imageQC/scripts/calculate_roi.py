@@ -67,7 +67,7 @@ def get_rois(image, image_number, input_main):
         return get_roi_circle(img_shape, (delta_xya[0], delta_xya[1]), roi_size_in_pix)
 
     def CTn():  # CT number
-        return get_roi_CTn(image, image_info, paramset, delta_xya=delta_xya)
+        return get_roi_CTn_TTF('ctn', image, image_info, paramset, delta_xya=delta_xya)
 
     def Dim():  # CT Dimensions
         roi_this = []
@@ -545,6 +545,9 @@ def get_rois(image, image_number, input_main):
         roi_size_in_pix = paramset.stp_roi_size / image_info.pix[0]
         return get_roi_circle(img_shape, tuple(delta_xya[0:2]), roi_size_in_pix)
 
+    def TTF():
+        return get_roi_CTn_TTF('ttf', image, image_info, paramset, delta_xya=delta_xya)
+
     def Uni():  # Uniformity NM
         return get_ratio_NM(
             image, image_info,
@@ -852,11 +855,13 @@ def get_mask_max(image):
     return mask_max
 
 
-def get_roi_CTn(image, image_info, paramset, delta_xya=[0, 0, 0.]):
+def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
     """Calculate roi array with center roi and periferral rois.
 
     Parameters
     ----------
+    test: str
+        CTn or TTF
     image : np.ndarray
         pixeldata
     image_info : DcmInfo
@@ -874,25 +879,28 @@ def get_roi_CTn(image, image_info, paramset, delta_xya=[0, 0, 0.]):
         x 2 = first for actual ROI, next for search ROI (larger)
     errmsg
     """
-    roi_size_in_pix = round(paramset.ctn_roi_size / image_info.pix[0])
+    test = test.lower()
+    roi_size_mm = getattr(paramset, f'{test}_roi_size', 0)
+    roi_size_in_pix = round(roi_size_mm / image_info.pix[0])
 
     roi_array = None
     errmsg = None
 
     if roi_size_in_pix > 0:
-        if paramset.ctn_auto_center:
+        if paramset.ctn_auto_center and test == 'ctn':
             res = mmcalc.optimize_center(image, 0)
             if res is not None:
                 center_x, center_y, _, _ = res
                 delta_xya[0] = center_x - 0.5*image_info.shape[1]
                 delta_xya[1] = center_y - 0.5*image_info.shape[0]
         filt_image = ndimage.gaussian_filter(image, sigma=5)
-        n_rois = len(paramset.ctn_table.pos_x)
+        pos_table = getattr(paramset, f'{test}_table')
+        n_rois = len(pos_table.pos_x)
         off_centers = []
         rot_a = np.deg2rad(delta_xya[2])
         for r in range(n_rois):
-            x = paramset.ctn_table.pos_x[r] / image_info.pix[0]
-            y = paramset.ctn_table.pos_y[r] / image_info.pix[0]
+            x = pos_table.pos_x[r] / image_info.pix[0]
+            y = pos_table.pos_y[r] / image_info.pix[0]
             x += delta_xya[0]
             y += delta_xya[1]
             if rot_a != 0:
@@ -904,7 +912,7 @@ def get_roi_CTn(image, image_info, paramset, delta_xya=[0, 0, 0.]):
             off_centers.append([x, y])
 
         roi_search_array = []
-        if paramset.ctn_search:  # optimize off_centers
+        if test == 'ctn' and paramset.ctn_search:  # optimize off_centers
             search_size_in_pix = round(
                 paramset.ctn_search_size / image_info.pix[0])
             for r in range(n_rois):

@@ -377,6 +377,13 @@ class ParamSetCT(ParamSetCommon):
     mtf_offset_mm: bool = False  # False = pix, True = mm
     mtf_auto_center: bool = False
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
+    ttf_roi_size: float = 11.
+    ttf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
+    ttf_cut_lsf: bool = True
+    ttf_cut_lsf_w: float = 3.  # lsf_w from halfmax x FWHM
+    ttf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
+    ttf_sampling_frequency: float = 0.01  # mm-1 for gaussian
+    ttf_table:  PositionTable = field(default_factory=PositionTable)
     ctn_roi_size: float = 3.
     ctn_search_size: float = 11.
     ctn_search: bool = True
@@ -630,6 +637,36 @@ class ParamSet:
     SPECT: ParamSetSPECT = field(default_factory=ParamSetSPECT)
     PET: ParamSetPET = field(default_factory=ParamSetPET)
     MR: ParamSetMR = field(default_factory=ParamSetMR)
+
+
+@dataclass
+class ParamSetCT_TaskBased:
+    """Parameter set used for automated task based analysis."""
+
+    label: str = ''
+    output: QuickTestOutputTemplate = field(
+        default_factory=QuickTestOutputTemplate)
+    dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
+    ttf_roi_size: float = 11.
+    ttf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
+    ttf_cut_lsf: bool = True
+    ttf_cut_lsf_w: float = 3.  # lsf_w from halfmax x FWHM
+    ttf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
+    ttf_sampling_frequency: float = 0.01  # mm-1 for gaussian
+    ttf_table:  PositionTable = field(default_factory=PositionTable)
+    nps_roi_size: int = 64
+    nps_roi_distance_match_ttf: bool = True
+    nps_roi_distance: float = 50.  # ignored if _match_ttf is True
+    nps_n_sub: int = 65
+    nps_smooth_width: float = 0.05  # 1/mm
+    # nps_sampling_frequency: float = 0.01  # 1/mm, should match ttf_sampling_frequency
+    nps_normalize: int = 0  # normalize curve by 0 = None, 1 = AUC, 2 = large area sign
+    nps_plot: int = 0  # default plot 0=pr image, 1=avg, 2=pr image+avg, 3=all img+avg
+    # d-prime task features
+    dpr_size: int = 10
+    dpr_contrast: int = 10
+    dpr_profile: bool = True  # False = rect func, True = designer contrast profile func
+    dpr_profile_n: int = 1
 
 
 @dataclass

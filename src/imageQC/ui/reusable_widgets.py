@@ -6,18 +6,24 @@ User interface classes for different uses and reuses in ImageQC.
 @author: Ellen Wasbo
 """
 import os
+import numpy as np
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtWidgets import (
     qApp, QWidget, QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayout, QFrame,
     QToolBar, QAction, QComboBox, QRadioButton, QButtonGroup, QToolButton,
-    QLabel, QPushButton, QListWidget, QLineEdit, QCheckBox,
+    QLabel, QPushButton, QListWidget, QLineEdit, QCheckBox, QGroupBox, QSlider,
     QProgressDialog, QProgressBar, QStatusBar
     )
 
+import matplotlib
+import matplotlib.figure
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+
 # imageQC block start
 from imageQC.config.iQCconstants import ENV_ICON_PATH
+from imageQC.ui.ui_dialogs import WindowLevelEditDialog
 # imageQC block end
 
 
@@ -34,7 +40,7 @@ class UnderConstruction(QWidget):
         toolb.addActions([act_warn])
         hlo.addWidget(toolb)
         if txt == '':
-            txt = ('Sorry - Test is under construction. Do not trust the results. '
+            txt = ('Sorry - under construction. Do not trust the results. '
                    'Run test might cause crash or breakpoint.')
         hlo.addWidget(LabelItalic(txt))
         hlo.addStretch()
@@ -403,6 +409,327 @@ class ToolBarTableExport(QToolBar):
             pass
         if self.flag_edit:
             self.parent.flag_edit(True)
+
+
+class ToolBarWindowLevel(QToolBar):
+    """Toolbar for reuse with setting window level."""
+
+    def __init__(self, parent):
+        """Initialize.
+
+        Parameters
+        ----------
+        parent : WindowLevelWidget
+        """
+        super().__init__()
+        self.parent = parent
+
+        self.tool_min_max_wl = QToolButton()
+        self.tool_min_max_wl.setToolTip("Set WL to [min,max] of active image")
+        self.tool_min_max_wl.setIcon(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}minmax.png'))
+        self.tool_min_max_wl.clicked.connect(
+            lambda: self.clicked_window_level('min_max'))
+        self.tool_range_wl = QToolButton()
+        self.tool_range_wl.setToolTip(
+            "Set WL to [mean-std,mean+std] of active image")
+        self.tool_range_wl.setIcon(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}range.png'))
+        self.tool_range_wl.clicked.connect(
+            lambda: self.clicked_window_level('mean_stdev'))
+        self.tool_dcm_wl = QToolButton()
+        self.tool_dcm_wl.setToolTip(
+            "Set WL as defined in the DICOM header of active image")
+        self.tool_dcm_wl.setIcon(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}fileDCM.png'))
+        self.tool_dcm_wl.clicked.connect(
+            lambda: self.clicked_window_level('dcm'))
+        self.tool_edit_wl = QToolButton()
+        self.tool_edit_wl.setToolTip("Edit WL by numbers")
+        self.tool_edit_wl.setIcon(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'))
+        self.tool_edit_wl.clicked.connect(self.set_window_level_by_numbers)
+        self.addWidget(self.tool_min_max_wl)
+        self.addWidget(self.tool_range_wl)
+        self.addWidget(self.tool_dcm_wl)
+        self.addWidget(self.tool_edit_wl)
+        self.chk_wl_update = QCheckBox('Lock WL')
+        self.chk_wl_update.toggled.connect(self.update_window_level_mode)
+        self.addWidget(self.chk_wl_update)
+
+    def update_window_level_mode(self):
+        """Set and unset lock on window level when selecting a new image."""
+        if self.chk_wl_update.isChecked():
+            self.tool_min_max_wl.setCheckable(False)
+            self.tool_range_wl.setCheckable(False)
+            self.tool_dcm_wl.setCheckable(False)
+        else:
+            self.tool_min_max_wl.setCheckable(True)
+            self.tool_range_wl.setCheckable(True)
+            self.tool_dcm_wl.setCheckable(True)
+            # default
+            self.tool_range_wl.setChecked(True)
+            self.set_window_level('mean_stdev')
+
+    def get_min_max(self):
+        """Get lower and upper window level based on image.
+
+        Returns
+        -------
+        min_wl : int
+            lower window level
+        max_wl : TYPE
+            upper window level
+        """
+        print('get_min_max')
+        print(self.chk_wl_update.isChecked(),
+              self.tool_min_max_wl.isChecked(),
+              self.tool_range_wl.isChecked()
+              )
+        if self.chk_wl_update.isChecked() is False:
+            if self.tool_min_max_wl.isChecked():
+                self.set_window_level('min_max')
+            elif self.tool_range_wl.isChecked():
+                self.set_window_level('mean_stdev')
+            else:
+                self.set_window_level('dcm')
+
+        return self.parent.read_min_max()
+
+    def clicked_window_level(self, arg):
+        """When one of the window level toolbuttons is toggled.
+
+        Parameters
+        ----------
+        arg : str
+            type of window level 'dcm', 'min_max', 'mean_stdev'
+        """
+        if self.chk_wl_update.isChecked() is False:
+            # unCheck others, check selected
+            if arg == 'min_max':
+                self.tool_min_max_wl.setChecked(True)
+                self.tool_range_wl.setChecked(False)
+                self.tool_dcm_wl.setChecked(False)
+            elif arg == 'mean_stdev':
+                self.tool_min_max_wl.setChecked(False)
+                self.tool_range_wl.setChecked(True)
+                self.tool_dcm_wl.setChecked(False)
+            elif arg == 'dcm':
+                self.tool_min_max_wl.setChecked(False)
+                self.tool_range_wl.setChecked(False)
+                self.tool_dcm_wl.setChecked(True)
+
+        self.set_window_level(arg)
+
+    def set_window_level_by_numbers(self):
+        """Dialog box to set min/max or center/width and option to lock."""
+        dlg = WindowLevelEditDialog(
+            min_max=[self.parent.min_wl.value(), self.parent.max_wl.value()])
+        res = dlg.exec()
+        if res:
+            minval, maxval, lock = dlg.get_min_max_lock()
+            self.chk_wl_update.setChecked(lock)
+            self.parent.update_window_level(minval, maxval)
+            if lock:
+                self.update_window_level_mode()
+
+    def set_window_level(self, arg, set_tools=False):
+        """Set window level based on active image content.
+
+        Parameters
+        ----------
+        arg : str
+            type of window level 'dcm', 'min_max', 'mean_stdev'
+        set_tools : bool, optional
+            Also set the tool-buttons to change. Default is False.
+        """
+        if set_tools:
+            self.tool_min_max_wl.setChecked(arg == 'min_max')
+            self.tool_range_wl.setChecked(arg == 'mean_stdev')
+            self.tool_dcm_wl.setChecked(arg == 'dcm')
+        try:
+            image = self.parent.parent.active_img
+        except AttributeError:
+            try:
+                image = self.parent.parent.canvas.current_image
+            except AttributeError:
+                image = None
+        print(f'set_window_level image {arg}')
+        print(image)
+        if image is not None:
+            minval = 0
+            maxval = 0
+            if arg == 'dcm':
+                try:
+                    imgno = self.parent.parent.gui.active_img_no
+                    img_info = self.parent.parent.imgs[imgno]
+                    if img_info.window_width > 0:
+                        minval = img_info.window_center - 0.5*img_info.window_width
+                        maxval = img_info.window_center + 0.5*img_info.window_width
+                except (AttributeError, IndexError):
+                    pass
+            elif arg == 'min_max':
+                minval = np.amin(image)
+                maxval = np.amax(image)
+            elif arg == 'mean_stdev':
+                meanval = np.mean(image)
+                stdval = np.std(image)
+                minval = meanval-stdval
+                maxval = meanval+stdval
+
+            if maxval == minval:
+                minval = np.amin(image)
+                maxval = np.amax(image)
+
+            minval = np.round(minval)
+            maxval = np.round(maxval)
+
+            self.parent.update_window_level(minval, maxval)
+
+
+class WindowLevelWidget(QGroupBox):
+    """Widget with groupbox holding WindowLevel display."""
+
+    def __init__(self, parent, show_dicom_wl=True, show_lock_wl=True):
+        """Initialize.
+
+        Parameters
+        ----------
+        parent : MainWindow or ResultImageWidget
+            need method set_active_image_min_max(minval, maxval)
+        show_dicom_wl : bool, optional
+            Show button dicom window level. The default is True.
+        show_lock_wl : bool, optional
+            Show checkbox to lock window level. The default is True.
+        """
+        super().__init__('Window Level')
+        self.parent = parent
+        self.setFont(FontItalic())
+
+        self.tb_wl = ToolBarWindowLevel(self)
+        self.tb_wl.setOrientation(Qt.Horizontal)
+        if show_dicom_wl is False:
+            self.tb_wl.tool_dcm_wl.setVisible(False)
+        if show_lock_wl is False:
+            self.tb_wl.chk_wl_update.setVisible(False)
+        self.min_wl = QSlider(Qt.Horizontal)
+        self.max_wl = QSlider(Qt.Horizontal)
+        self.lbl_min_wl = QLabel('-200')
+        self.lbl_max_wl = QLabel('200')
+        self.canvas = WindowLevelHistoCanvas()
+
+        self.max_wl.setRange(-200, 200)
+        self.max_wl.setValue(200)
+        self.min_wl.setRange(-200, 200)
+        self.min_wl.setValue(-200)
+        self.min_wl.sliderReleased.connect(self.correct_window_level_sliders)
+        self.max_wl.sliderReleased.connect(self.correct_window_level_sliders)
+        self.decimals = 0  # 1 if difference < 10, 2 if difference < 1
+        self.lbl_center = QLabel('0')
+        self.lbl_width = QLabel('400')
+
+        vlo_wl = QVBoxLayout()
+        hlo_slider = QHBoxLayout()
+        vlo_min = QVBoxLayout()
+        vlo_min.addSpacing(20)
+        vlo_min.addWidget(self.lbl_min_wl)
+        vlo_min.addStretch()
+        hlo_slider.addLayout(vlo_min)
+        vlo_slider = QVBoxLayout()
+        vlo_slider.addWidget(self.min_wl)
+        vlo_slider.addWidget(self.max_wl)
+        vlo_slider.addWidget(self.canvas)
+        hlo_slider.addLayout(vlo_slider)
+        vlo_max = QVBoxLayout()
+        vlo_max.addSpacing(20)
+        vlo_max.addWidget(self.lbl_max_wl)
+        vlo_max.addStretch()
+        hlo_slider.addLayout(vlo_max)
+        vlo_wl.addWidget(self.tb_wl)
+        vlo_wl.addLayout(hlo_slider)
+        hbox_cw = QHBoxLayout()
+        hbox_cw.addStretch()
+        hbox_cw.addWidget(QLabel('C: '))
+        hbox_cw.addWidget(self.lbl_center)
+        hbox_cw.addSpacing(20)
+        hbox_cw.addWidget(QLabel('W: '))
+        hbox_cw.addWidget(self.lbl_width)
+        hbox_cw.addStretch()
+        vlo_wl.addLayout(hbox_cw)
+        self.setLayout(vlo_wl)
+
+        self.tb_wl.update_window_level_mode()
+
+    def read_min_max(self):
+        """Get current min max."""
+        print(f'read_min_max {self.min_wl.value()}, {self.max_wl.value()}')
+        return (self.min_wl.value() / (10 ^ self.decimals),
+                self.max_wl.value() / (10 ^ self.decimals))
+
+    def update_window_level(self, minval, maxval):
+        """Update GUI for window level sliders and labels + active image.
+
+        Parameters
+        ----------
+        minval : float
+        maxval : float
+        """
+        print('update window level')
+        print(f'minval, maxval {minval}, {maxval}  n_decimals {self.decimals}')
+        self.min_wl.setValue(round(minval * 10 ** self.decimals))
+        self.max_wl.setValue(round(maxval * 10 ** self.decimals))
+        formatstr = f'.{self.decimals}f'
+        self.lbl_min_wl.setText(f'{minval:{formatstr}}')
+        self.lbl_max_wl.setText(f'{maxval:{formatstr}}')
+        self.lbl_center.setText(f'{0.5*(minval+maxval):{formatstr}}')
+        self.lbl_width.setText(f'{(maxval-minval):{formatstr}}')
+
+        self.parent.set_active_image_min_max(minval, maxval)
+
+    def correct_window_level_sliders(self):
+        """Make sure min_wl < max_wl after user input."""
+        if self.max_wl.value() < self.min_wl.value():
+            maxval = self.min_wl.value()
+            minval = self.max_wl.value()
+        else:
+            minval = self.min_wl.value()
+            maxval = self.max_wl.value()
+        minval = minval / (10 ** self.decimals)
+        maxval = maxval / (10 ** self.decimals)
+        self.update_window_level(minval, maxval)
+
+
+class WindowLevelHistoCanvas(FigureCanvasQTAgg):
+    """Canvas for display of histogram for the active image."""
+
+    def __init__(self):
+        self.fig = matplotlib.figure.Figure(figsize=(2, 1))
+        self.fig.subplots_adjust(0., 0., 1., 1.)
+        FigureCanvasQTAgg.__init__(self, self.fig)
+
+    def plot(self, nparr):
+        """Refresh histogram."""
+        self.fig.clear()
+        self.ax = self.fig.add_subplot(111)
+
+        amin, amax = (np.amin(nparr), np.amax(nparr))
+        try:
+            hist, bins = np.histogram(nparr, bins=np.arange(
+                amin, amax, (amax - amin)/100.))
+            self.ax.plot(bins[:-1], hist)
+            self.ax.axis('off')
+            at_min = matplotlib.offsetbox.AnchoredText(
+                f'Min:\n {amin:.0f}',
+                prop=dict(size=12), frameon=False, loc='upper left')
+            at_max = matplotlib.offsetbox.AnchoredText(
+                f'Max:\n {amax:.0f}',
+                prop=dict(size=12), frameon=False, loc='upper right')
+            self.ax.add_artist(at_min)
+            self.ax.add_artist(at_max)
+
+            self.draw()
+        except ValueError:
+            pass
 
 
 class ListWidgetCheckable(QListWidget):

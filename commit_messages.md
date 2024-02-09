@@ -1,3 +1,20 @@
+# v3.0.8
+_mon dd, 2024_
+
+New functionalities:
+- ----------under construction-------------Added CT test TTF (task based MTF)
+- ----------under construction-------------Added window level widget for result image
+
+Changes:
+- Cancel when running automation templates now stops during one template running, not just between templates.
+- Test Num:
+	- considerably more robust for Siemens gamma camera savescreens that differ in screen size from day to day
+	- default templates updated with larger ROIs to handle these day to day changes
+
+Bugfixes:
+- fixed error when using image names for QuickTest where more images than expected are loaded (IndexError on set_names[i], calculate_qc.py line 158)
+
+
 # v3.0.7
 _Jan 26, 2024_
 

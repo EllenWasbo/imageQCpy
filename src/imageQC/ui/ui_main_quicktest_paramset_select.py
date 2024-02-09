@@ -386,10 +386,10 @@ class SelectQuickTestWidget(SelectTemplateWidget):
 class SelectParamsetWidget(SelectTemplateWidget):
     """Widget for selecting and saving parameter sets."""
 
-    def __init__(self, parent):
+    def __init__(self, parent, fname='paramsets_CT'):
         super().__init__(parent)
         self.main = parent
-        self.fname = 'paramsets_CT'
+        self.fname = fname
         self.modality_dict = {f'{self.main.current_modality}': self.main.paramsets}
         self.current_template = self.main.current_paramset
 

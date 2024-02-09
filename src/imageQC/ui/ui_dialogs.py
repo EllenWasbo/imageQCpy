@@ -297,6 +297,98 @@ class EditAnnotationsDialog(ImageQCDialog):
             )
 
 
+class WindowLevelEditDialog(ImageQCDialog):
+    """Dialog to set window level by numbers."""
+
+    def __init__(self, min_max=[0, 0], show_lock_wl=True):
+        super().__init__()
+
+        self.setWindowTitle('Edit window level')
+        self.setMinimumHeight(400)
+        self.setMinimumWidth(300)
+
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
+        fLO = QFormLayout()
+        vLO.addLayout(fLO)
+
+        self.spin_min = QSpinBox()
+        self.spin_min.setRange(-1000000, 1000000)
+        self.spin_min.setValue(min_max[0])
+        self.spin_min.editingFinished.connect(
+            lambda: self.recalculate_others(sender='min'))
+        fLO.addRow(QLabel('Minimum'), self.spin_min)
+
+        self.spin_max = QSpinBox()
+        self.spin_max.setRange(-1000000, 1000000)
+        self.spin_max.setValue(min_max[1])
+        self.spin_max.editingFinished.connect(
+            lambda: self.recalculate_others(sender='max'))
+        fLO.addRow(QLabel('Maximum'), self.spin_max)
+
+        self.spin_center = QSpinBox()
+        self.spin_center.setRange(-1000000, 1000000)
+        self.spin_center.setValue(0.5*(min_max[0] + min_max[1]))
+        self.spin_center.editingFinished.connect(
+            lambda: self.recalculate_others(sender='center'))
+        fLO.addRow(QLabel('Center'), self.spin_center)
+
+        self.spin_width = QSpinBox()
+        self.spin_width.setRange(0, 2000000)
+        self.spin_width.setValue(min_max[1] - min_max[0])
+        self.spin_width.editingFinished.connect(
+            lambda: self.recalculate_others(sender='width'))
+        fLO.addRow(QLabel('Width'), self.spin_width)
+
+        self.chk_lock = QCheckBox('')
+        self.chk_lock.setChecked(True)
+        if show_lock_wl:
+            fLO.addRow(QLabel('Lock WL for all images'), self.chk_lock)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.button_box = QDialogButtonBox(buttons)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        vLO.addWidget(self.button_box)
+
+    def accept(self):
+        """Aoid close on enter if not ok button focus."""
+        if self.button_box.button(QDialogButtonBox.Ok).hasFocus():
+            if self.spin_width.value() == 0:
+                QMessageBox.warning(
+                    self, 'Warning',
+                    'Window width should be larger than zero.')
+            elif self.spin_min.value() >= self.spin_max.value():
+                QMessageBox.warning(
+                    self, 'Warning',
+                    'Window max should be set larger than minimum.')
+            else:
+                super().accept()
+
+    def recalculate_others(self, sender='min'):
+        """Reset others based on input."""
+        self.blockSignals(True)
+        minval = self.spin_min.value()
+        maxval = self.spin_max.value()
+        width = self.spin_width.value()
+        center = self.spin_center.value()
+        if sender in ['min', 'max']:
+            self.spin_center.setValue(round(0.5*(minval + maxval)))
+            self.spin_width.setValue(maxval-minval)
+        else:  # sender in ['center', 'width']:
+            self.spin_min.setValue(center - round(0.5*width))
+            self.spin_max.setValue(center + round(0.5*width))
+        self.blockSignals(False)
+
+    def get_min_max_lock(self):
+        """Get min max values an lock setting as tuple."""
+        return (
+            self.spin_min.value(),
+            self.spin_max.value(),
+            self.chk_lock.isChecked()
+            )
+
+
 class QuickTestClipboardDialog(ImageQCDialog):
     """Dialog to set whether to include headers/transpose when QuickTest results."""
 

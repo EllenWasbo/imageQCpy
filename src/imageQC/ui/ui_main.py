@@ -32,6 +32,7 @@ from imageQC.ui import ui_main_test_tabs
 from imageQC.ui.ui_main_test_tabs_vendor import ParamsTabVendor
 from imageQC.ui import ui_main_result_tabs
 from imageQC.ui import rename_dicom
+from imageQC.ui import task_based_image_quality
 from imageQC.ui import automation_wizard
 from imageQC.ui import settings
 from imageQC.ui import open_multi
@@ -135,7 +136,7 @@ class MainWindow(QMainWindow):
         self.create_menu_toolBar()
         self.wid_image_display = ImageDisplayWidget(self)
         self.wid_dcm_header = ui_main_left_side.DicomHeaderWidget(self)
-        self.wid_window_level = ui_main_left_side.WindowLevelWidget(self)
+        self.wid_window_level = uir.WindowLevelWidget(self)
         self.wid_center = ui_main_left_side.CenterWidget(self)
         self.create_modality_selector()
         self.wid_quicktest = (
@@ -294,8 +295,8 @@ class MainWindow(QMainWindow):
         dlg = open_multi.OpenMultiDialog(self)
         res = dlg.exec()
         if res:
-            if len(dlg.open_imgs) > 0:
-                self.update_on_new_images(dlg.open_imgs)
+            if len(dlg.wid.open_imgs) > 0:
+                self.update_on_new_images(dlg.wid.open_imgs)
 
     def add_dummy(self, n_dummies=1):
         """Add place-holder / dummy image when missing images for QuickTest temp."""
@@ -322,8 +323,8 @@ class MainWindow(QMainWindow):
             if self.current_modality != self.imgs[0].modality:
                 self.current_modality = self.imgs[0].modality
                 self.update_mode()
-            if self.wid_window_level.chk_wl_update.isChecked() is False:
-                self.wid_window_level.set_window_level('dcm', set_tools=True)
+            if self.wid_window_level.tb_wl.chk_wl_update.isChecked() is False:
+                self.wid_window_level.tb_wl.set_window_level('dcm', set_tools=True)
 
         if self.wid_quicktest.gb_quicktest.isChecked():
             self.wid_quicktest.set_current_template_to_imgs()
@@ -382,6 +383,7 @@ class MainWindow(QMainWindow):
                 amax = round(np.amax(self.active_img))
                 self.wid_window_level.min_wl.setRange(amin, amax)
                 self.wid_window_level.max_wl.setRange(amin, amax)
+                print(f'set range {amin}, {amax}')
                 if len(np.shape(self.active_img)) == 2:
                     sz_acty, sz_actx = np.shape(self.active_img)
                 else:
@@ -440,6 +442,12 @@ class MainWindow(QMainWindow):
                 tag_infos=self.tag_infos)
         except IndexError:
             pass
+
+    def set_active_image_min_max(self, minval, maxval):
+        """Update window level."""
+        if self.active_img is not None:
+            self.wid_image_display.canvas.img.set_clim(vmin=minval, vmax=maxval)
+            self.wid_image_display.canvas.draw()
 
     def mode_changed(self):
         """Modality selection changed by user input, initiate update gui."""
@@ -858,6 +866,11 @@ class MainWindow(QMainWindow):
         dlg = rename_dicom.RenameDicomDialog(self)
         dlg.exec()
 
+    def run_task_based_auto(self):
+        """Start Task Based image quality analysis dialog."""
+        dlg = task_based_image_quality.TaskBasedImageQualityDialog(self)
+        dlg.exec()
+
     def run_settings(self, initial_view='', initial_template_label='',
                      paramset_output=False):
         """Display settings dialog."""
@@ -1151,12 +1164,14 @@ class MainWindow(QMainWindow):
             QIcon(f'{os.environ[ENV_ICON_PATH]}globe.png'),
             'Wiki ...', self)
         act_wiki.triggered.connect(self.wiki)
+        act_task_based_auto = QAction('CT task based image quality analysis...', self)
+        act_task_based_auto.triggered.connect(self.run_task_based_auto)
 
         # fill menus
         menu_file = QMenu('&File', self)
         menu_file.addActions([
             act_open, act_open_adv, act_read_header, act_open_auto, act_wizard_auto,
-            act_rename_dcm, act_close, act_close_all, act_quit])
+            act_rename_dcm, act_task_based_auto, act_close, act_close_all, act_quit])
         menu_bar.addMenu(menu_file)
         menu_settings = QMenu('&Settings', self)
         menu_settings.addAction(act_settings)

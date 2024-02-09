@@ -750,14 +750,9 @@ class OpenAutomationDialog(ImageQCDialog):
             warnings_all = []
             self.automation_active = True
             max_progress = 100*len(tempnos)  # 0-100 within each temp
-            if len(tempnos) > 1:
-                self.progress_modal = uir.ProgressModal(
-                    "Running templates...", "Stop after currently running template",
-                    0, max_progress, self, minimum_duration=0)
-            else:
-                self.progress_modal = uir.ProgressModal(
-                    "Running template.", "Stop",
-                    0, max_progress, self, minimum_duration=0, hide_cancel=True)
+            self.progress_modal = uir.ProgressModal(
+                "Running template.", "Cancel",
+                0, max_progress, self, minimum_duration=0)
 
             for i, tempno in enumerate(tempnos):
                 warnings = []

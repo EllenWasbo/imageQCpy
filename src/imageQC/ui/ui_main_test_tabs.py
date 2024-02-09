@@ -147,6 +147,11 @@ class ParamsTabCommon(QTabWidget):
             else:
                 if field.name == 'ctn_table':
                     self.ctn_table_widget.table.update_table()
+                elif field.name == 'ttf_table':
+                    self.ttf_table_widget.table.current_table = copy.deepcopy(
+                        paramset.ttf_table)
+                    self.ttf_table_widget.table.update_table()
+                    self.update_ttf_plot_options()
                 elif field.name == 'rec_table':
                     self.rec_table_widget.table.current_table = copy.deepcopy(
                         paramset.rec_table)
@@ -182,19 +187,20 @@ class ParamsTabCommon(QTabWidget):
     def update_enabled(self):
         """Update enabled/disabled features."""
         paramset = self.main.current_paramset
-        if paramset.roi_type == 0:
-            self.roi_radius.setEnabled(True)
-            self.roi_x.setEnabled(False)
-            self.roi_y.setEnabled(False)
-            self.roi_a.setEnabled(False)
-        else:
-            self.roi_radius.setEnabled(False)
-            self.roi_x.setEnabled(True)
-            self.roi_y.setEnabled(True)
-            if paramset.roi_type == 1:
+        if hasattr(paramset, 'roi_type'):
+            if paramset.roi_type == 0:
+                self.roi_radius.setEnabled(True)
+                self.roi_x.setEnabled(False)
+                self.roi_y.setEnabled(False)
                 self.roi_a.setEnabled(False)
             else:
-                self.roi_a.setEnabled(True)
+                self.roi_radius.setEnabled(False)
+                self.roi_x.setEnabled(True)
+                self.roi_y.setEnabled(True)
+                if paramset.roi_type == 1:
+                    self.roi_a.setEnabled(False)
+                else:
+                    self.roi_a.setEnabled(True)
         # continues in subclasses if needed
 
     def make_param_odd_number(self, attribute='', update_roi=True,
@@ -803,45 +809,79 @@ class ParamsTabCommon(QTabWidget):
 class ParamsTabCT(ParamsTabCommon):
     """Widget for CT tests."""
 
-    def __init__(self, parent):
+    def __init__(self, parent, task_based=False):
+        """Initiate tabs for CT tests.
+
+        Parameters
+        ----------
+        parent : MainWindow or InputMainAuto
+            InputMainAuto used for task_based
+        task_based : bool, optional
+            Used for task_based_image_quality.py. The default is False.
+        """
         super().__init__(parent)
 
-        self.create_tab_hom()
-        self.create_tab_noi()
-        self.create_tab_sli()
-        self.create_tab_mtf()
-        self.create_tab_ctn()
-        self.create_tab_huw()
-        self.create_tab_rin()
-        self.create_tab_dim()
-        self.create_tab_nps()
+        if task_based:
+            self.create_tab_ttf()
+            self.create_tab_nps()
 
-        self.addTab(self.tab_hom, "Homogeneity")
-        self.addTab(self.tab_noi, "Noise")
-        self.addTab(self.tab_sli, "Slice thickness")
-        self.addTab(self.tab_mtf, "MTF")
-        self.addTab(self.tab_ctn, "CT number")
-        self.addTab(self.tab_huw, "HU water")
-        self.addTab(self.tab_rin, "Ring artifacts")
-        self.addTab(self.tab_dim, "Dimensions")
-        self.addTab(self.tab_nps, "NPS")
+            self.addTab(self.tab_ttf, "TTF")
+            self.addTab(self.tab_nps, "NPS")
+        else:
+            self.create_tab_hom()
+            self.create_tab_noi()
+            self.create_tab_sli()
+            self.create_tab_mtf()
+            self.create_tab_ttf()
+            self.create_tab_ctn()
+            self.create_tab_huw()
+            self.create_tab_rin()
+            self.create_tab_dim()
+            self.create_tab_nps()
+
+            self.addTab(self.tab_hom, "Homogeneity")
+            self.addTab(self.tab_noi, "Noise")
+            self.addTab(self.tab_sli, "Slice thickness")
+            self.addTab(self.tab_mtf, "MTF")
+            self.addTab(self.tab_ttf, "TTF")
+            self.addTab(self.tab_ctn, "CT number")
+            self.addTab(self.tab_huw, "HU water")
+            self.addTab(self.tab_rin, "Ring artifacts")
+            self.addTab(self.tab_dim, "Dimensions")
+            self.addTab(self.tab_nps, "NPS")
 
     def update_enabled(self):
         """Update enabled/disabled features."""
         super().update_enabled()
         paramset = self.main.current_paramset
 
-        if paramset.mtf_cut_lsf:
-            self.mtf_cut_lsf_w.setEnabled(True)
-            self.mtf_cut_lsf_w_fade.setEnabled(True)
-        else:
-            self.mtf_cut_lsf_w.setEnabled(False)
-            self.mtf_cut_lsf_w_fade.setEnabled(False)
+        try:
+            if paramset.mtf_cut_lsf:
+                self.mtf_cut_lsf_w.setEnabled(True)
+                self.mtf_cut_lsf_w_fade.setEnabled(True)
+            else:
+                self.mtf_cut_lsf_w.setEnabled(False)
+                self.mtf_cut_lsf_w_fade.setEnabled(False)
+        except AttributeError:
+            pass
 
-        if paramset.sli_type == 1:
-            self.sli_ramp_distance.setEnabled(False)
-        else:
-            self.sli_ramp_distance.setEnabled(True)
+        try:
+            if paramset.ttf_cut_lsf:
+                self.ttf_cut_lsf_w.setEnabled(True)
+                self.ttf_cut_lsf_w_fade.setEnabled(True)
+            else:
+                self.ttf_cut_lsf_w.setEnabled(False)
+                self.ttf_cut_lsf_w_fade.setEnabled(False)
+        except AttributeError:
+            pass
+
+        try:
+            if paramset.sli_type == 1:
+                self.sli_ramp_distance.setEnabled(False)
+            else:
+                self.sli_ramp_distance.setEnabled(True)
+        except AttributeError:
+            pass
 
     def update_sli_plot_options(self):
         """Update plot options for slice thickness."""
@@ -856,6 +896,17 @@ class ParamsTabCT(ParamsTabCommon):
             items.extend(['V1 left', 'V2 right'])
         self.sli_plot.addItems(items)
         self.param_changed_from_gui(attribute='sli_type')
+
+    def update_ttf_plot_options(self):
+        """Update plot options for TTF on materials change."""
+        curr_select = self.ttf_plot_material.currentText()
+        self.ttf_plot_material.clear()
+        items = ['All'] + self.main.current_paramset.ttf_table.labels
+        self.ttf_plot_material.addItems(items)
+        if curr_select in items:
+            self.ttf_plot_material.setCurrentText(curr_select)
+        else:
+            self.ttf_plot_material.setCurrentIndex(0)
 
     def create_tab_hom(self):
         """GUI of tab Homogeneity."""
@@ -951,6 +1002,83 @@ class ParamsTabCT(ParamsTabCommon):
         self.tab_sli.hlo.addLayout(flo1)
         self.tab_sli.hlo.addWidget(uir.VLine())
         self.tab_sli.hlo.addLayout(flo2)
+
+    def create_tab_ttf(self):
+        """GUI of tab TTF."""
+        self.tab_ttf = ParamsWidget(self, run_txt='Calculate TTF')
+        self.tab_ttf.hlo_top.addWidget(uir.LabelItalic(
+            'Task based transfer function (TTF)'))
+        info_txt = '''
+        Calculate MTF for circular disk for different materials (cylindric inserts).<br>
+        Specify material names and approximate center of material inserts.<br>
+        Material inserts from standard phantoms can be imported.<br>
+        Calculations will be performed per seriesUIDs.
+        '''
+        self.tab_ttf.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
+        self.ttf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.ttf_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='ttf_roi_size'))
+        self.ttf_cut_lsf = QCheckBox('')
+        self.ttf_cut_lsf.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='ttf_cut_lsf'))
+        self.ttf_cut_lsf_w = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.ttf_cut_lsf_w.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='ttf_cut_lsf_w'))
+        self.ttf_cut_lsf_w_fade = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
+        self.ttf_cut_lsf_w_fade.valueChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='ttf_cut_lsf_w_fade'))
+        self.ttf_gaussian = BoolSelectTests(
+            self, attribute='ttf_gaussian',
+            text_true='Gaussian', text_false='Discrete',
+            update_roi=False, clear_results=False, update_plot=False)
+        self.ttf_sampling_frequency = QDoubleSpinBox(
+            decimals=3, minimum=0.001, singleStep=0.001)
+        self.ttf_sampling_frequency.valueChanged.connect(
+                    lambda: self.param_changed_from_gui(
+                        attribute='ttf_sampling_frequency', update_roi=False,
+                        clear_results=False, update_plot=False,
+                        update_results_table=False))
+
+        headers = ['Material', 'pos x [mm]', 'pos y [mm]']
+        self.ttf_table_widget = PositionWidget(
+            self, self.main, table_attribute_name='ttf_table', headers=headers)
+        self.ttf_plot_material = QComboBox()
+        self.ttf_plot_material.addItems(
+            ['All'] + self.main.current_paramset.ttf_table.labels)
+        self.ttf_plot_material.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
+        self.ttf_plot = QComboBox()
+        self.ttf_plot.addItems(['Centered xy profiles',
+                                'Sorted pixel values', 'LSF', 'MTF'])
+        self.ttf_plot.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
+
+        vlo1 = QVBoxLayout()
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('ROI radius (mm)'), self.ttf_roi_size)
+        flo1.addRow(QLabel('Cut LSF tails'), self.ttf_cut_lsf)
+        flo1.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.ttf_cut_lsf_w)
+        flo1.addRow(
+            QLabel('    Fade out within n*FWHM, n='), self.ttf_cut_lsf_w_fade)
+        flo1.addRow(QLabel('Table results from'), self.ttf_gaussian)
+        flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
+                    self.ttf_sampling_frequency)
+        vlo1.addLayout(flo1)
+
+        vlo2 = QVBoxLayout()
+        hlo_plot = QHBoxLayout()
+        hlo_plot.addWidget(QLabel('Plot'))
+        hlo_plot.addWidget(self.ttf_plot)
+        hlo_plot.addWidget(QLabel('for material'))
+        hlo_plot.addWidget(self.ttf_plot_material)
+        vlo2.addWidget(self.ttf_table_widget)
+        vlo2.addLayout(hlo_plot)
+
+        self.tab_ttf.hlo.addLayout(vlo1)
+        self.tab_ttf.hlo.addWidget(uir.VLine())
+        self.tab_ttf.hlo.addLayout(vlo2)
 
     def create_tab_ctn(self):
         """GUI of tab CT number."""
@@ -2743,9 +2871,13 @@ class PositionWidget(QWidget):
         self.zoomed_area = zoomed_area
         self.parent = parent
         self.main = main
+        if headers is None:
+            self.headers = ['ROI label', 'pos x [mm]', 'pos y [mm]']
+        else:
+            self.headers = headers
         self.table = PositionTableWidget(
             self.parent, self.main,
-            table_attribute_name, headers=headers)
+            table_attribute_name, headers=copy.deepcopy(self.headers))
         self.ncols = len(self.table.headers)
         self.test_name = table_attribute_name[:3]
 
@@ -2790,7 +2922,7 @@ class PositionWidget(QWidget):
             self.act_get_pos.setToolTip(self.get_position_tooltips[0])
             self.act_get_pos.disconnect()
             self.act_get_pos.triggered.connect(self.get_pos_mouse)
-            self.table.headers = ['ROI label', 'pos x [mm]', 'pos y [mm]']
+            self.table.headers = self.headers
         if self.table.current_table is not None and silent is False:
             if len(self.table.current_table.labels) > 0:
                 reply = QMessageBox.question(
@@ -2815,29 +2947,33 @@ class PositionWidget(QWidget):
             no_text='Predefined tables')
         res = dlg.exec()
         input_table = None
-        if res:
+        if res:  # clipboard
             try:
                 dataf = pd.read_clipboard()
                 _, ncols = dataf.shape
                 if ncols != self.ncols:
                     pass  # TODO ask for separator / decimal or guess?
-                    errmsg = [
-                        'Failed reading table from clipboard.',
-                        f'Expected {self.ncols} columns of data that are',
-                        'separated by tabs or as copied from Excel.'
-                        ]
-                    dlg = messageboxes.MessageBoxWithDetails(
-                        self, title='Failed reading table',
-                        msg='Failed reading table. See details.',
-                        details=errmsg, icon=QMessageBox.Warning)
-                    dlg.exec()
+                    if ncols > self.ncols:
+                        input_table = self.validate_input_dataframe(
+                            dataf.T[0:self.ncols].T)  # keep only first ncols of input
+                    else:
+                        errmsg = [
+                            'Failed reading table from clipboard.',
+                            f'Expected {self.ncols} columns of data that are',
+                            'separated by tabs or as copied from Excel.'
+                            ]
+                        dlg = messageboxes.MessageBoxWithDetails(
+                            self, title='Failed reading table',
+                            msg='Failed reading table. See details.',
+                            details=errmsg, icon=QMessageBox.Warning)
+                        dlg.exec()
                 else:
                     input_table = self.validate_input_dataframe(dataf)
             except pd.errors.ParserError as err:
                 QMessageBox.warning(
                     self, 'Validation failed',
                     f'Trouble validating input table: {err}')
-        else:
+        else:  # predefined tables
             if self.test_name == 'num' and self.main.current_modality == 'NM':
                 table_dict = cff.load_default_pos_tables(filename='Siemens_AutoQC')
                 if len(table_dict) > 0:
@@ -2847,6 +2983,18 @@ class PositionWidget(QWidget):
                         "Predefined tables:", labels, 0, False)
                     if ok and label:
                         input_table = table_dict[label]
+            elif self.test_name == 'ttf':
+                table_dict = cff.load_default_ct_number_tables()
+                if len(table_dict) > 0:
+                    labels = [*table_dict]
+                    label, ok = QInputDialog.getItem(
+                        self.main, "Select predefined table",
+                        "Predefined tables:                     ", labels, 0, False)
+                    if ok and label:
+                        hu_tab = table_dict[label]
+                        input_table = cfc.PositionTable(
+                            labels=hu_tab.labels,
+                            pos_x=hu_tab.pos_x, pos_y=hu_tab.pos_y)
             else:
                 QMessageBox.information(
                     self, 'Missing predefined table',
@@ -2865,6 +3013,7 @@ class PositionWidget(QWidget):
                 start_end = pos_string[1:-1].split(', ')
                 pos_tuple = (int(start_end[0]), int(start_end[1]))
             return pos_tuple
+
         nrows, ncols = input_df.shape
         if nrows > 0:
             table = cfc.PositionTable()
@@ -3016,11 +3165,11 @@ class PositionTableWidget(QTableWidget):
         self.table_attribute_name = table_attribute_name
         self.current_table = getattr(
             self.main.current_paramset, self.table_attribute_name, None)
-        if headers is not None:
-            self.headers = headers
-        else:
-            self.headers = ['Label', 'pos x [mm]', 'pos y [mm]']
+        self.headers = headers
         self.cellChanged.connect(self.edit_current_table)
+        if 'num' in table_attribute_name:
+            print('num cellClicked.connect')
+            self.cellClicked.connect(self.main.update_roi)
 
     def edit_current_table(self, row, col):
         """Update PositionTable when cell edited."""
@@ -3054,6 +3203,8 @@ class PositionTableWidget(QTableWidget):
         setattr(self.main.current_paramset, self.table_attribute_name,
                 self.current_table)
         self.parent.main.update_roi(clear_results_test=True)
+        if col == 0 and self.table_attribute_name == 'ttf_table':
+            self.parent.update_ttf_plot_options()
 
     def update_table(self):
         """Populate table with current table."""

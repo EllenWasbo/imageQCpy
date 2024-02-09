@@ -14,7 +14,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
 # imageQC block start
 from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
-from imageQC.scripts.mini_methods_format import get_color_list
+from imageQC.config.iQCconstants import COLORS
 # imageQC block end
 
 
@@ -73,7 +73,6 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         self.scatters = []
         self.linewidth = 2
         self.fontsize = 10
-        self.current_image = None
         self.cmap = 'gray'
         self.min_val = None
         self.max_val = None
@@ -182,7 +181,7 @@ class ImageCanvas(GenericImageCanvas):
         self.ax.cla()
         nparr = self.main.active_img
         if auto is False:
-            wl_min, wl_max = self.main.wid_window_level.get_min_max()
+            wl_min, wl_max = self.main.wid_window_level.tb_wl.get_min_max()
             annotate = self.main.gui.annotations
         else:
             annotate = False
@@ -375,7 +374,7 @@ class ImageCanvas(GenericImageCanvas):
     def Bar(self):
         """Draw Bar ROIs."""
         self.add_contours_to_all_rois(
-            colors=['red', 'blue', 'lime', 'cyan'],
+            colors=COLORS,#['red', 'blue', 'lime', 'cyan'],
             labels=[str(i+1) for i in range(4)]
             )
 
@@ -416,12 +415,12 @@ class ImageCanvas(GenericImageCanvas):
 
     def Gho(self):
         """Draw Ghosting ROIs."""
-        colors = ['red', 'blue', 'green', 'yellow', 'cyan']
+        #colors = ['red', 'blue', 'green', 'yellow', 'cyan']
         try:
             labels = self.main.current_paramset.gho_table.labels
         except AttributeError:
             labels = None
-        self.add_contours_to_all_rois(colors=colors, labels=labels)
+        self.add_contours_to_all_rois(colors=COLORS, labels=labels)
 
     def Hom(self):
         """Draw Hom ROI."""
@@ -432,8 +431,8 @@ class ImageCanvas(GenericImageCanvas):
                     colors=['red'], roi_indexes=[2],
                     filled=True, hatches=['////'], reset_contours=False)
         else:
-            colors = ['red', 'blue', 'green', 'yellow', 'cyan']
-            self.add_contours_to_all_rois(colors=colors)
+            #colors = ['red', 'blue', 'green', 'yellow', 'cyan']
+            self.add_contours_to_all_rois(colors=COLORS)
 
     def MTF(self):
         """Draw MTF ROI."""
@@ -452,7 +451,7 @@ class ImageCanvas(GenericImageCanvas):
                 roi_indexes = list(range(len(self.main.current_roi) - 1))
                 self.add_contours_to_all_rois(
                     roi_indexes=roi_indexes,
-                    colors=['red', 'blue', 'green', 'cyan'])
+                    colors=COLORS)#['red', 'blue', 'green', 'cyan'])
                 mask = np.where(self.main.current_roi[-1], 0, 1)
                 contour = self.ax.contour(
                     mask, levels=[0.9],
@@ -460,7 +459,7 @@ class ImageCanvas(GenericImageCanvas):
                     linestyles='dotted')
                 self.contours.append(contour)
             else:
-                self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
+                self.add_contours_to_all_rois(colors=COLORS)#['red', 'blue', 'green', 'cyan'])
 
             if 'MTF' in self.main.results and self.main.current_modality == 'CT':
                 try:
@@ -471,7 +470,7 @@ class ImageCanvas(GenericImageCanvas):
                             mask = np.where(roi_disc, 0, 1)
                             contour = self.ax.contour(
                                 mask, levels=[0.9],
-                                colors='blue', alpha=0.5, linewidths=self.linewidth,
+                                colors='red', alpha=0.5, linewidths=self.linewidth,
                                 linestyles='dotted')
                             self.contours.append(contour)
                 except (TypeError, KeyError, IndexError):
@@ -492,8 +491,17 @@ class ImageCanvas(GenericImageCanvas):
 
     def Num(self):
         """Draw  ROIs with labels."""
-        self.add_contours_to_all_rois(
-            labels=self.main.current_paramset.num_table.labels)
+        labels=self.main.current_paramset.num_table.labels
+        colors = ['r'] * len(labels)
+        print('draw num')
+        try:
+            widget = self.main.stack_test_tabs.currentWidget()
+            sel = widget.tab_num.num_table_widget.table.selectedIndexes()
+            idx = sel[0].row()
+            colors[idx] = 'b'
+        except (AttributeError, IndexError):
+            pass
+        self.add_contours_to_all_rois(colors=colors, labels=labels)
 
     def PIU(self):
         """Draw MR PIU ROI."""
@@ -567,7 +575,7 @@ class ImageCanvas(GenericImageCanvas):
         """Drow ROIs with labels if any."""
         if self.main.current_paramset.roi_use_table > 0:
             labels = self.main.current_paramset.roi_table.labels
-            colors = get_color_list(n_colors=len(labels))
+            colors = COLORS#get_color_list(n_colors=len(labels))
         else:
             labels = None
             colors = None
@@ -686,6 +694,25 @@ class ImageCanvas(GenericImageCanvas):
         else:
             self.add_contours_to_all_rois(colors=['red', 'lime'])
 
+    def TTF(self):
+        """Draw TTF ROIs."""
+        self.contours = []
+        ttf_table = self.main.current_paramset.ttf_table
+        self.add_contours_to_all_rois(labels=ttf_table.labels, colors=COLORS)
+        if 'TTF' in self.main.results:
+            try:
+                if 'details_dict' in self.main.results['TTF']:
+                    for details_this in self.main.results['TTF']['details_dict']:
+                        roi_disc = details_this['found_disc_roi']
+                        mask = np.where(roi_disc, 0, 1)
+                        contour = self.ax.contour(
+                            mask, levels=[0.9],
+                            colors='red', alpha=0.5, linewidths=self.linewidth,
+                            linestyles='dotted')
+                        self.contours.append(contour)
+            except (TypeError, KeyError, IndexError):
+                pass
+
     def Uni(self):
         """Draw NM uniformity ROI."""
         self.add_contours_to_all_rois(colors=['red', 'blue'])
@@ -728,6 +755,22 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.current_image,
                 cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
             self.parent.image_title.setText(self.title)
+            amin = round(np.amin(self.current_image))
+            amax = round(np.amax(self.current_image))
+            contrast = amax - amin
+            self.decimals = 0
+            if contrast < 5:
+                self.decimals = 2
+            elif contrast < 20:
+                self.decimals = 1
+            self.parent.wid_window_level.min_wl.setRange(
+                amin * 10 ** self.decimals, amax * 10 ** self.decimals)
+            self.parent.wid_window_level.max_wl.setRange(
+                amin * 10 ** self.decimals, amax * 10 ** self.decimals)
+            self.parent.wid_window_level.canvas.plot(self.current_image)
+            self.parent.wid_window_level.update_window_level(
+                self.min_val, self.max_val)
+
         else:
             self.img = self.ax.imshow(np.zeros((100, 100)))
             at = matplotlib.offsetbox.AnchoredText(
@@ -874,6 +917,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 details_dict = {}
         self.cmap = 'viridis'
         type_img = self.main.tab_nm.uni_result_image.currentIndex()
+        set_min_max_avoid_zero = False
         if type_img == 0:
             self.title = 'Differential uniformity map in UFOV (max in x/y direction)'
             if 'du_matrix' in details_dict:
@@ -882,18 +926,31 @@ class ResultImageCanvas(GenericImageCanvas):
             self.title = 'Processed image ~ 6.4 mm pr pix'
             if 'matrix' in details_dict:
                 self.current_image = details_dict['matrix']
+                set_min_max_avoid_zero = True
         elif type_img == 2:
             self.title = 'Processed image ~ 6.4 mm pr pix, UFOV part'
             if 'matrix_ufov' in details_dict:
                 self.current_image = details_dict['matrix_ufov']
+                set_min_max_avoid_zero = True
         elif type_img == 3:
             self.title = 'Curvature corrected image'
             if 'corrected_image' in details_dict:
                 self.current_image = details_dict['corrected_image']
+                mean = np.mean(self.current_image[self.current_image != 0])
+                stdev = np.std(self.current_image[self.current_image != 0])
+                self.min_val = mean - stdev
+                self.max_val = mean + stdev
         elif type_img == 4:
             self.title = 'Summed image'
             if 'sum_image' in details_dict:
                 self.current_image = details_dict['sum_image']
+                set_min_max_avoid_zero = True
+        if set_min_max_avoid_zero:
+            max_val = np.max(self.current_image)
+            if max_val > 0:
+                self.max_val = max_val
+                non_zero = self.current_image[self.current_image != 0]
+                self.min_val = np.min(non_zero)
 
     def Var(self):
         """Prepare variance image."""

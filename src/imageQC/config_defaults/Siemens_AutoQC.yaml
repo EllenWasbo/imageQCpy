@@ -1,6 +1,6 @@
 Siemens_uniformity:
   labels: [1_IU_UFOV, 1_DU_UFOV, 1_IU_CFOV, 1_DU_CFOV, 2_IU_UFOV, 2_DU_UFOV, 2_IU_CFOV, 2_DU_CFOV]
-  pos_x: [[960, 1055], [960, 1055], [865, 940], [865, 940], [960, 1055], [960, 1055], [865, 940], [865, 940]]
+  pos_x: [[960, 1055], [960, 1055], [880, 950], [880, 950], [960, 1055], [960, 1055], [880, 950], [880, 950]]
   pos_y: [[280, 340], [340, 400], [280, 340], [340, 400], [620, 685], [685, 740], [620, 685], [685, 740]]
 Siemens_head_alignment:
   labels: [1_CenterOfRotation, 1_AxialShift, 1_BackProjAngle, 1_Resolution@20cm, 2_CenterOfRotation, 2_AxialShift, 2_BackProjAngle, 2_Resolution@20cm] 
@@ -9,4 +9,4 @@ Siemens_head_alignment:
 Siemens_sensitivity_Quant:
   labels: [1_SensitivityNominal, 1_SensitivityMeasured, 1_Deviation, 2_SensitivityNominal, 2_SensitivityMeasured, 2_Deviation]
   pos_x: [[285, 355], [285, 355], [285, 355], [840, 905], [840, 905], [840, 905]]
-  pos_y: [[690, 730], [730, 762], [763, 800], [690, 730], [730, 762], [763, 800]]
+  pos_y: [[700, 730], [730, 762], [763, 800], [700, 730], [730, 762], [763, 800]]

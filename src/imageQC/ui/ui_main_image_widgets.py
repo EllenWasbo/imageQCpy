@@ -227,7 +227,7 @@ class ImageDisplayWidget(GenericImageWidget):
         self.tool_imgsize.setCheckable(True)
         act_projection_plot = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}projections.png'),
-            'Plot values with generated projection as background', self)
+            'Show 3d projection and optionally plot values from result table', self)
         act_projection_plot.triggered.connect(self.projection_plot)
         tbimg.addAction(act_redraw)
         tbimg.addWidget(self.tool_cmap)

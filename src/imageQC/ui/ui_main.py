@@ -1004,6 +1004,7 @@ class MainWindow(QMainWindow):
     def stop_wait_cursor(self):
         """Return to normal mouse cursor after wait cursor."""
         QApplication.restoreOverrideCursor()
+        qApp.processEvents()
 
     def finish_cleanup(self):
         """Cleanup/save before exit."""

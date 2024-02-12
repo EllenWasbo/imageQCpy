@@ -11,6 +11,7 @@ from time import sleep
 import matplotlib
 import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib import patches
 
 # imageQC block start
 from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
@@ -61,6 +62,7 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         self.ax = self.fig.add_subplot(111)
         self.last_clicked_pos = (-1, -1)
         self.profile_length = 20  # assume click drag > length in pix = draw profile
+        self.rectangle = patches.Rectangle((0, 0), 1, 1)
         self.current_image = None
 
         # default display
@@ -119,6 +121,49 @@ class GenericImageCanvas(FigureCanvasQTAgg):
                     self.draw_idle()
                     break
 
+    def rectangle_mark(self, x2, y2):
+        """Mark rectangle in image for e.g. setting window level, draw ROI.
+
+        Parameters
+        ----------
+        x2 : float
+            endpoint x coordinate
+        y2 : float
+            endpoint y coordinate
+
+        Returns
+        -------
+        status : bool
+            True if setting rectangle was possible
+        """
+        self.rectangle_remove()
+        status = False
+        if self.last_clicked_pos != (-1, -1):
+            x1 = self.last_clicked_pos[0]
+            y1 = self.last_clicked_pos[1]
+            width = x2 - x1
+            height = y2 - y1
+
+            if abs(width) > 5 and abs(height) > 5:
+                self.rectangle = patches.Rectangle(
+                    (x1, y1), width, height,
+                    edgecolor='red', fill=False, gid='rectangle',
+                    linewidth=self.main.gui.annotations_line_thick,
+                    linestyle='dotted')
+                self.ax.add_patch(self.rectangle)
+                self.draw_idle()
+                status = True
+        return status
+
+    def rectangle_remove(self):
+        """Clear marked rectangle."""
+        if len(self.ax.patches) > 0:
+            for i, p in enumerate(self.ax.patches):
+                if p.get_gid() == 'rectangle':
+                    self.ax.patches[i].remove()
+                    break
+        self.draw_idle()
+
     def draw(self):
         """Avoid super().draw when figure collapsed by sliders."""
         try:
@@ -175,13 +220,16 @@ class ImageCanvas(GenericImageCanvas):
             pass
         try:
             cmap = self.ax.get_images()[0].cmap.name
-        except:
+        except (AttributeError, IndexError):
             cmap = 'gray'
 
         self.ax.cla()
         nparr = self.main.active_img
         if auto is False:
             wl_min, wl_max = self.main.wid_window_level.tb_wl.get_min_max()
+            self.main.wid_window_level.colorbar.colorbar_draw(cmap=cmap)
+                #, range_min=np.min(self.main.active_img),
+                #range_max=np.max(self.main.active_img), set_min=wl_min, set_max=wl_max)
             annotate = self.main.gui.annotations
         else:
             annotate = False
@@ -493,10 +541,9 @@ class ImageCanvas(GenericImageCanvas):
         """Draw  ROIs with labels."""
         labels=self.main.current_paramset.num_table.labels
         colors = ['r'] * len(labels)
-        print('draw num')
         try:
             widget = self.main.stack_test_tabs.currentWidget()
-            sel = widget.tab_num.num_table_widget.table.selectedIndexes()
+            sel = widget.num_table_widget.table.selectedIndexes()
             idx = sel[0].row()
             colors[idx] = 'b'
         except (AttributeError, IndexError):
@@ -755,19 +802,23 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.current_image,
                 cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
             self.parent.image_title.setText(self.title)
-            amin = round(np.amin(self.current_image))
-            amax = round(np.amax(self.current_image))
+            amin = np.amin(self.current_image)
+            amax = np.amax(self.current_image)
             contrast = amax - amin
-            self.decimals = 0
+            self.parent.wid_window_level.decimals = 0
             if contrast < 5:
-                self.decimals = 2
+                self.parent.wid_window_level.decimals = 2
             elif contrast < 20:
-                self.decimals = 1
-            self.parent.wid_window_level.min_wl.setRange(
-                amin * 10 ** self.decimals, amax * 10 ** self.decimals)
-            self.parent.wid_window_level.max_wl.setRange(
-                amin * 10 ** self.decimals, amax * 10 ** self.decimals)
-            self.parent.wid_window_level.canvas.plot(self.current_image)
+                self.parent.wid_window_level.decimals = 1
+            rmin = round(amin * 10 ** self.parent.wid_window_level.decimals)
+            rmax = round(amax * 10 ** self.parent.wid_window_level.decimals)
+            self.parent.wid_window_level.min_wl.setRange(rmin, rmax)
+            self.parent.wid_window_level.max_wl.setRange(rmin, rmax)
+            self.parent.wid_window_level.canvas.plot(
+                self.current_image, decimals=self.parent.wid_window_level.decimals)
+            self.parent.wid_window_level.colorbar.colorbar_draw(cmap=self.cmap)
+                #, range_min=rmin, range_max=rmax,
+                #set_min=self.min_val, set_max=self.max_val)
             self.parent.wid_window_level.update_window_level(
                 self.min_val, self.max_val)
 

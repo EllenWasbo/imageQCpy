@@ -103,6 +103,8 @@ class MainWindow(QMainWindow):
         self.current_test = QUICKTEST_OPTIONS['CT'][0]
         self.update_settings()  # sets self.tag_infos (and a lot more)
         plt.rcParams.update({'font.size': self.user_prefs.font_size})
+        plt.rcParams['axes.xmargin'] = 0
+        plt.rcParams['axes.ymargin'] = 0
 
         self.current_paramset = copy.deepcopy(self.paramsets[0])
         self.current_quicktest = cfc.QuickTestTemplate()
@@ -383,7 +385,6 @@ class MainWindow(QMainWindow):
                 amax = round(np.amax(self.active_img))
                 self.wid_window_level.min_wl.setRange(amin, amax)
                 self.wid_window_level.max_wl.setRange(amin, amax)
-                print(f'set range {amin}, {amax}')
                 if len(np.shape(self.active_img)) == 2:
                     sz_acty, sz_actx = np.shape(self.active_img)
                 else:
@@ -511,6 +512,8 @@ class MainWindow(QMainWindow):
                 if self.active_img is not None and refresh_display:
                     self.update_roi()
                     self.refresh_results_display()
+                self.wid_image_display.tool_rectangle.setChecked(
+                    self.current_test == 'Num')
         self.stop_wait_cursor()
 
     def update_roi(self, clear_results_test=False):
@@ -767,6 +770,7 @@ class MainWindow(QMainWindow):
             [0, self.gui.panel_height])
         self.split_rgt_mid_btm.setSizes(
             [0, self.gui.panel_height])
+        self.wid_res_image.hide_window_level()
 
     def reset_maximize_results(self):
         """Set QSplitter to maximized results."""
@@ -776,6 +780,7 @@ class MainWindow(QMainWindow):
             [round(self.gui.panel_height*0.2), round(self.gui.panel_height*0.8)])
         self.split_rgt_mid_btm.setSizes(
             [round(self.gui.panel_height*0.4), round(self.gui.panel_height*0.4)])
+        self.wid_res_image.reset_split_sizes()
 
     def resize_main(self, new_resolution=False):
         """Reset geometry of MainWindow."""

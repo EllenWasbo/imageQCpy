@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = ".setRange"
+search_string = "profile_draw"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

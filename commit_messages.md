@@ -2,14 +2,18 @@
 _mon dd, 2024_
 
 New functionalities:
-- ----------under construction-------------Added CT test TTF (task based MTF)
-- ----------under construction-------------Added window level widget for result image
+- New buttons in image toolbar:
+	- Colormap select
+	- Show projection (maximum/minimum/average intensity projection) with additional option to plot values above from table (f.eks. mAs profile from extracted DCM values)
+	- Set active area (rectangle). For defining ROIs and used when setting window level based on active area (min/max or avg/stdev)
+- Added window level widget for result image.
+- Added CT test TTF (task based MTF) - working on TTF/NPS/d' solution
 
 Changes:
 - Cancel when running automation templates now stops during one template running, not just between templates.
 - Test Num:
 	- considerably more robust for Siemens gamma camera savescreens that differ in screen size from day to day
-	- default templates updated with larger ROIs to handle these day to day changes
+	- default templates updated with larger ROIs to handle these day to day changes, ignoring parts of text at border of ROI
 
 Bugfixes:
 - fixed error when using image names for QuickTest where more images than expected are loaded (IndexError on set_names[i], calculate_qc.py line 158)

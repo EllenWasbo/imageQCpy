@@ -14,12 +14,13 @@ from PyQt5.QtWidgets import (
     qApp, QWidget, QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayout, QFrame,
     QToolBar, QAction, QComboBox, QRadioButton, QButtonGroup, QToolButton,
     QLabel, QPushButton, QListWidget, QLineEdit, QCheckBox, QGroupBox, QSlider,
-    QProgressDialog, QProgressBar, QStatusBar
+    QProgressDialog, QProgressBar, QStatusBar, QFileDialog, QMessageBox
     )
 
 import matplotlib
 import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
 # imageQC block start
 from imageQC.config.iQCconstants import ENV_ICON_PATH
@@ -451,11 +452,11 @@ class ToolBarWindowLevel(QToolBar):
         self.tool_edit_wl.clicked.connect(self.set_window_level_by_numbers)
         self.addWidget(self.tool_min_max_wl)
         self.addWidget(self.tool_range_wl)
-        self.addWidget(self.tool_dcm_wl)
+        self.act_tool_dcm_wl = self.addWidget(self.tool_dcm_wl)
         self.addWidget(self.tool_edit_wl)
         self.chk_wl_update = QCheckBox('Lock WL')
         self.chk_wl_update.toggled.connect(self.update_window_level_mode)
-        self.addWidget(self.chk_wl_update)
+        self.act_chk_wl_update = self.addWidget(self.chk_wl_update)
 
     def update_window_level_mode(self):
         """Set and unset lock on window level when selecting a new image."""
@@ -481,11 +482,6 @@ class ToolBarWindowLevel(QToolBar):
         max_wl : TYPE
             upper window level
         """
-        print('get_min_max')
-        print(self.chk_wl_update.isChecked(),
-              self.tool_min_max_wl.isChecked(),
-              self.tool_range_wl.isChecked()
-              )
         if self.chk_wl_update.isChecked() is False:
             if self.tool_min_max_wl.isChecked():
                 self.set_window_level('min_max')
@@ -554,8 +550,6 @@ class ToolBarWindowLevel(QToolBar):
                 image = self.parent.parent.canvas.current_image
             except AttributeError:
                 image = None
-        print(f'set_window_level image {arg}')
-        print(image)
         if image is not None:
             minval = 0
             maxval = 0
@@ -568,14 +562,33 @@ class ToolBarWindowLevel(QToolBar):
                         maxval = img_info.window_center + 0.5*img_info.window_width
                 except (AttributeError, IndexError):
                     pass
-            elif arg == 'min_max':
-                minval = np.amin(image)
-                maxval = np.amax(image)
-            elif arg == 'mean_stdev':
-                meanval = np.mean(image)
-                stdval = np.std(image)
-                minval = meanval-stdval
-                maxval = meanval+stdval
+            else:
+                image_sub = image
+                patches = []
+                try:
+                    if self.parent.parent.wid_image_display.tool_rectangle.isChecked():
+                        patches = self.parent.parent.wid_image_display.canvas.ax.patches
+                except AttributeError:
+                    try:
+                        if self.parent.parent.tool_rectangle.isChecked():
+                            patches = self.parent.parent.canvas.ax.patches
+                    except AttributeError:
+                        pass
+                for patch in patches:
+                    if patch.get_gid() == 'rectangle':
+                        [x0, y0], [x1, y1] = patch.get_bbox().get_points()
+                        image_sub = image[
+                            int(y0) + 1:int(y1) + 1,
+                            int(x0) + 1:int(x1) + 1
+                            ]
+                if arg == 'min_max':
+                    minval = np.amin(image_sub)
+                    maxval = np.amax(image_sub)
+                elif arg == 'mean_stdev':
+                    meanval = np.mean(image_sub)
+                    stdval = np.std(image_sub)
+                    minval = meanval-stdval
+                    maxval = meanval+stdval
 
             if maxval == minval:
                 minval = np.amin(image)
@@ -605,13 +618,10 @@ class WindowLevelWidget(QGroupBox):
         super().__init__('Window Level')
         self.parent = parent
         self.setFont(FontItalic())
-
         self.tb_wl = ToolBarWindowLevel(self)
         self.tb_wl.setOrientation(Qt.Horizontal)
-        if show_dicom_wl is False:
-            self.tb_wl.tool_dcm_wl.setVisible(False)
-        if show_lock_wl is False:
-            self.tb_wl.chk_wl_update.setVisible(False)
+        self.tb_wl.act_tool_dcm_wl.setVisible(show_dicom_wl)
+        self.tb_wl.act_chk_wl_update.setVisible(show_lock_wl)
         self.min_wl = QSlider(Qt.Horizontal)
         self.max_wl = QSlider(Qt.Horizontal)
         self.lbl_min_wl = QLabel('-200')
@@ -627,6 +637,8 @@ class WindowLevelWidget(QGroupBox):
         self.decimals = 0  # 1 if difference < 10, 2 if difference < 1
         self.lbl_center = QLabel('0')
         self.lbl_width = QLabel('400')
+        self.colorbar = ColorBar(slider_min=self.min_wl, slider_max=self.max_wl)
+        self.colorbar.setMaximumHeight(30)
 
         vlo_wl = QVBoxLayout()
         hlo_slider = QHBoxLayout()
@@ -638,6 +650,7 @@ class WindowLevelWidget(QGroupBox):
         vlo_slider = QVBoxLayout()
         vlo_slider.addWidget(self.min_wl)
         vlo_slider.addWidget(self.max_wl)
+        vlo_slider.addWidget(self.colorbar)
         vlo_slider.addWidget(self.canvas)
         hlo_slider.addLayout(vlo_slider)
         vlo_max = QVBoxLayout()
@@ -662,9 +675,8 @@ class WindowLevelWidget(QGroupBox):
 
     def read_min_max(self):
         """Get current min max."""
-        print(f'read_min_max {self.min_wl.value()}, {self.max_wl.value()}')
-        return (self.min_wl.value() / (10 ^ self.decimals),
-                self.max_wl.value() / (10 ^ self.decimals))
+        return (self.min_wl.value() / (10 ** self.decimals),
+                self.max_wl.value() / (10 ** self.decimals))
 
     def update_window_level(self, minval, maxval):
         """Update GUI for window level sliders and labels + active image.
@@ -674,8 +686,6 @@ class WindowLevelWidget(QGroupBox):
         minval : float
         maxval : float
         """
-        print('update window level')
-        print(f'minval, maxval {minval}, {maxval}  n_decimals {self.decimals}')
         self.min_wl.setValue(round(minval * 10 ** self.decimals))
         self.max_wl.setValue(round(maxval * 10 ** self.decimals))
         formatstr = f'.{self.decimals}f'
@@ -685,6 +695,12 @@ class WindowLevelWidget(QGroupBox):
         self.lbl_width.setText(f'{(maxval-minval):{formatstr}}')
 
         self.parent.set_active_image_min_max(minval, maxval)
+        range_min = self.min_wl.minimum()
+        range_max = self.min_wl.maximum()
+        full = range_max - range_min
+        min_ratio = (minval - range_min) / full
+        max_ratio = (maxval - range_min) / full
+        self.colorbar.fig.subplots_adjust(min_ratio, 0., max_ratio, 1.)
 
     def correct_window_level_sliders(self):
         """Make sure min_wl < max_wl after user input."""
@@ -707,7 +723,7 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
         self.fig.subplots_adjust(0., 0., 1., 1.)
         FigureCanvasQTAgg.__init__(self, self.fig)
 
-    def plot(self, nparr):
+    def plot(self, nparr, decimals=0):
         """Refresh histogram."""
         self.fig.clear()
         self.ax = self.fig.add_subplot(111)
@@ -719,10 +735,10 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
             self.ax.plot(bins[:-1], hist)
             self.ax.axis('off')
             at_min = matplotlib.offsetbox.AnchoredText(
-                f'Min:\n {amin:.0f}',
+                f'Min:\n {amin:.{decimals}f}',
                 prop=dict(size=12), frameon=False, loc='upper left')
             at_max = matplotlib.offsetbox.AnchoredText(
-                f'Max:\n {amax:.0f}',
+                f'Max:\n {amax:.{decimals}f}',
                 prop=dict(size=12), frameon=False, loc='upper right')
             self.ax.add_artist(at_min)
             self.ax.add_artist(at_max)
@@ -730,6 +746,36 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
             self.draw()
         except ValueError:
             pass
+
+
+class ColorBar(FigureCanvasQTAgg):
+    """Canvas for colorbar."""
+
+    def __init__(self, slider_min=None, slider_max=None):
+        self.fig = matplotlib.figure.Figure(figsize=(2, 0.5))
+        self.fig.subplots_adjust(0., 0., 1., 1.)
+        FigureCanvasQTAgg.__init__(self, self.fig)
+        self.slider_min = slider_min
+        self.slider_max = slider_max
+
+    def colorbar_draw(self, cmap='gray'):
+        """Draw or update colorbar."""
+        self.fig.clf()
+        ax = self.fig.add_subplot(111)
+        if cmap:
+            _ = matplotlib.colorbar.ColorbarBase(
+                ax, cmap=cmap, orientation='horizontal')
+            if all([self.slider_min, self.slider_max]):
+                range_max = self.slider_max.maximum()
+                range_min = self.slider_min.minimum()
+                set_min = self.slider_min.value()
+                set_max = self.slider_max.value()
+                full = range_max - range_min
+                min_ratio = (set_min - range_min) / full
+                max_ratio = (set_max - range_min) / full
+                self.fig.subplots_adjust(min_ratio, 0., max_ratio, 1.)
+        ax.axis('off')
+        self.draw()
 
 
 class ListWidgetCheckable(QListWidget):
@@ -986,3 +1032,46 @@ class StatusLabel(QWidget):
             "QWidget{background-color:" + self.default_color + ";}")
         self.message.setText('')
         qApp.processEvents()
+
+
+class ImageNavigationToolbar(NavigationToolbar2QT):
+    """Matplotlib navigation toolbar with some modifications."""
+
+    def __init__(self, canvas, window):
+        super().__init__(canvas, window)
+        for x in self.actions():
+            if x.text() in ['Subplots']:#, 'Customize']:
+                self.removeAction(x)
+
+    def set_message(self, s):
+        """Hide cursor position and value text."""
+        pass
+
+    # from https://github.com/matplotlib/matplotlib/blob/main/lib/matplotlib/backends/backend_qt.py
+    #  dirty fix to avoid crash on self.canvas.parent() TypeError
+    def save_figure(self, *args):
+        filetypes = self.canvas.get_supported_filetypes_grouped()
+        sorted_filetypes = sorted(filetypes.items())
+        default_filetype = self.canvas.get_default_filetype()
+
+        # startpath = os.path.expanduser(mpl.rcParams['savefig.directory'])
+        # start = os.path.join(startpath, self.canvas.get_default_filename())
+        filters = []
+        selectedFilter = None
+        for name, exts in sorted_filetypes:
+            exts_list = " ".join(['*.%s' % ext for ext in exts])
+            filter = f'{name} ({exts_list})'
+            if default_filetype in exts:
+                selectedFilter = filter
+            filters.append(filter)
+        filters = ';;'.join(filters)
+
+        fname, filter = QFileDialog.getSaveFileName(
+            self, 'Choose a filename to save to', '',
+            filters, selectedFilter)
+        if fname:
+            try:
+                self.canvas.figure.savefig(fname)
+            except Exception as e:
+                QMessageBox.critical(
+                    self, "Error saving file", str(e))

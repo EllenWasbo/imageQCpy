@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QAction, QToolBar, QToolButton, QMenu,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QAbstractScrollArea,
-    QSplitter, QMessageBox, QLabel, QSizePolicy
+    QSplitter, QMessageBox, QLabel
     )
 import matplotlib
 import matplotlib.figure
@@ -2224,26 +2224,23 @@ class ResultImageWidget(GenericImageWidget):
         self.tool_resultsize = ToolMaximizeResults(self.main)
         tb_right_top.addWidget(self.tool_resultsize)
         tb_right_top.setOrientation(Qt.Vertical)
+        tb_right_top.addWidget(self.tool_cmap)
         tb_right_top.addWidget(self.tool_profile)
+        tb_right_top.addWidget(self.tool_rectangle)
         vlo_right = QVBoxLayout()
         vlo_right.addWidget(tb_right_top)
+        vlo_right.addWidget(toolb)
+        vlo_right.addStretch()
 
+        self.image_title = QLabel()
         tb_top = QToolBar()
         tb_top.addWidget(GenericImageToolbarPosVal(self.canvas, self))
-        self.image_title = QLabel()
-        tb_top.addWidget(self.image_title)
-        empty = QWidget()
-        empty.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        tb_top.addWidget(empty)
-        self.lbl_min_max_wl = QLabel('')
-        tb_top.addWidget(QLabel('Window level (min, max):'))
-        tb_top.addWidget(self.lbl_min_max_wl)
 
-        hlo.addWidget(toolb)
-        vlo_mid = QVBoxLayout()
-        vlo_mid.addWidget(tb_top)
-        vlo_mid.addWidget(self.canvas)
-        hlo.addLayout(vlo_mid)
+        vlo_left = QVBoxLayout()
+        vlo_left.addWidget(self.image_title)
+        vlo_left.addWidget(tb_top)
+        vlo_left.addWidget(self.canvas)
+        hlo.addLayout(vlo_left)
         hlo.addLayout(vlo_right)
 
         wid_image_toolbars = QWidget()
@@ -2271,7 +2268,7 @@ class ResultImageWidget(GenericImageWidget):
         """Set and reset QSplitter sizes."""
         default_rgt_panel = self.main.gui.panel_width*0.8
         self.splitter.setSizes(
-            [round(default_rgt_panel*0.8), round(default_rgt_panel*0.2)])
+            [round(default_rgt_panel*0.7), round(default_rgt_panel*0.3)])
 
     def hide_window_level(self):
         """Set window level widget to zero width."""
@@ -2284,6 +2281,6 @@ class ResultImageNavigationToolbar(ImageNavigationToolbar):
     def __init__(self, canvas, window):
         super().__init__(canvas, window)
         for act in self.actions():
-            if act.text() in ['Back', 'Forward', 'Pan']:  # already removed 'Subplots'
+            if act.text() in ['Back', 'Forward', 'Pan', 'Customize']:
                 self.removeAction(act)
         self.setOrientation(Qt.Vertical)

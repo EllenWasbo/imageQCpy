@@ -10,14 +10,15 @@ from skimage import draw
 
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QAction, QToolBar, QToolButton,
-    QFileDialog, QMessageBox
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QAction, QToolBar, QToolButton
     )
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
+#from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
 # imageQC block start
-from imageQC.ui.ui_dialogs import EditAnnotationsDialog
+from imageQC.ui.ui_dialogs import (
+    EditAnnotationsDialog, CmapSelectDialog, ProjectionPlotDialog)
 from imageQC.ui import ui_image_canvas
+from imageQC.ui.reusable_widgets import ImageNavigationToolbar
 from imageQC.ui.plot_widgets import PlotDialog
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 # imageQC block end
@@ -40,25 +41,44 @@ class GenericImageWidget(QWidget):
             f'{os.environ[ENV_ICON_PATH]}profile.png'))
         self.tool_profile.clicked.connect(self.clicked_profile)
         self.tool_profile.setCheckable(True)
+        self.tool_rectangle = QToolButton()
+        self.tool_rectangle.setToolTip(
+            'Toggle to activate option to mark active area when click/drag in image')
+        self.tool_rectangle.setIcon(QIcon(
+            f'{os.environ[ENV_ICON_PATH]}rectangle.png'))
+        self.tool_rectangle.clicked.connect(self.clicked_rectangle)
+        self.tool_rectangle.setCheckable(True)
+        self.tool_cmap = QToolButton()
+        self.tool_cmap.setToolTip(
+            'Select colormap for the image')
+        self.tool_cmap.setIcon(QIcon(
+            f'{os.environ[ENV_ICON_PATH]}colorbar.png'))
+        self.tool_cmap.clicked.connect(self.clicked_colormap)
 
         self.mouse_pressed = False
 
     def image_on_move(self, event):
         """Actions on mouse move event."""
-        if self.mouse_pressed and self.tool_profile.isChecked():
-            if event.inaxes and len(event.inaxes.get_images()) > 0:
-                if self.canvas.last_clicked_pos != (-1, -1):
-                    _ = self.canvas.profile_draw(
-                        round(event.xdata), round(event.ydata))
+        if self.mouse_pressed:
+            if self.tool_profile.isChecked() or self.tool_rectangle.isChecked():
+                if event.inaxes and len(event.inaxes.get_images()) > 0:
+                    if self.canvas.last_clicked_pos != (-1, -1):
+                        if self.tool_profile.isChecked():
+                            _ = self.canvas.profile_draw(
+                                round(event.xdata), round(event.ydata))
+                        else:
+                            _ = self.canvas.rectangle_mark(
+                                round(event.xdata), round(event.ydata))
 
     def image_on_release(self, event, pix=None):
         """Actions when image canvas release mouse button."""
         if event.inaxes and len(event.inaxes.get_images()) > 0:
+            self.mouse_pressed = False
             if self.tool_profile.isChecked():
                 if self.canvas.last_clicked_pos != (-1, -1):
                     plotstatus = self.canvas.profile_draw(
                         round(event.xdata), round(event.ydata))
-                    self.mouse_pressed = False
+                    #self.mouse_pressed = False
                     if plotstatus:
                         self.plot_profile(round(event.xdata), round(event.ydata))
 
@@ -68,6 +88,12 @@ class GenericImageWidget(QWidget):
             if self.tool_profile.isChecked():
                 self.canvas.profile_remove()
                 self.canvas.draw()
+                self.canvas.last_clicked_pos = (
+                    round(event.xdata), round(event.ydata))
+                self.mouse_pressed = True
+            elif self.tool_rectangle.isChecked():
+                self.canvas.rectangle_remove()
+                self.canvas.draw_idle()
                 self.canvas.last_clicked_pos = (
                     round(event.xdata), round(event.ydata))
                 self.mouse_pressed = True
@@ -97,6 +123,30 @@ class GenericImageWidget(QWidget):
                             xtitle=xtitle, ytitle='Pixel value',
                             title='', labels=['pixel_values'])
         dlg.exec()
+
+    def clicked_rectangle(self):
+        """Refresh image when deactivated profile."""
+        if self.tool_rectangle.isChecked() is False:
+            self.canvas.rectangle_remove()
+            self.canvas.draw_idle()
+
+    def clicked_colormap(self):
+        """Display colormap dialog and update colormaps."""
+        dlg = CmapSelectDialog(self)
+        res = dlg.exec()
+        if res:
+            cmap = dlg.get_cmap()
+            if 'Result' in str(type(self.canvas)):
+                self.canvas.ax.get_images()[0].set_cmap(cmap)
+                self.canvas.draw_idle()
+                self.canvas.parent.wid_window_level.colorbar.colorbar_draw(cmap=cmap)
+            else:
+                try:
+                    self.canvas.ax.get_images()[0].set_cmap(cmap)
+                    self.canvas.draw_idle()
+                except (AttributeError, IndexError):
+                    pass
+                self.parent.wid_window_level.colorbar.colorbar_draw(cmap=cmap)
 
 
 class GenericImageToolbarPosVal(QToolBar):
@@ -175,8 +225,15 @@ class ImageDisplayWidget(GenericImageWidget):
             f'{os.environ[ENV_ICON_PATH]}layout_maximg.png'))
         self.tool_imgsize.clicked.connect(self.clicked_imgsize)
         self.tool_imgsize.setCheckable(True)
+        act_projection_plot = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}projections.png'),
+            'Plot values with generated projection as background', self)
+        act_projection_plot.triggered.connect(self.projection_plot)
         tbimg.addAction(act_redraw)
+        tbimg.addWidget(self.tool_cmap)
+        tbimg.addAction(act_projection_plot)
         tbimg.addWidget(self.tool_profile)
+        tbimg.addWidget(self.tool_rectangle)
         tbimg.addWidget(self.tool_sum)
         tbimg.addAction(act_edit_annotations)
         tbimg.addWidget(self.tool_imgsize)
@@ -198,6 +255,10 @@ class ImageDisplayWidget(GenericImageWidget):
                     round(event.xdata), round(event.ydata))
             if event.dblclick:
                 self.main.wid_center.set_center_to_clickpos()
+
+    def projection_plot(self):
+        dlg = ProjectionPlotDialog(self.main)
+        dlg.exec()
 
     def edit_annotations(self):
         """Pop up dialog to edit annotations settings."""
@@ -246,14 +307,14 @@ class ImageDisplayWidget(GenericImageWidget):
         pix = self.main.imgs[self.main.gui.active_img_no].pix[0]
         super().plot_profile(x2, y2, pix=pix)
 
-
+'''
 class ImageNavigationToolbar(NavigationToolbar2QT):
     """Matplotlib navigation toolbar with some modifications."""
 
     def __init__(self, canvas, window):
         super().__init__(canvas, window)
         for x in self.actions():
-            if x.text() == 'Subplots':
+            if x.text() in ['Subplots']:#, 'Customize']:
                 self.removeAction(x)
 
     def set_message(self, s):
@@ -288,3 +349,4 @@ class ImageNavigationToolbar(NavigationToolbar2QT):
             except Exception as e:
                 QMessageBox.critical(
                     self, "Error saving file", str(e))
+'''

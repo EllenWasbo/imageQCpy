@@ -11,12 +11,16 @@ import numpy as np
 
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5 import QtCore
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
     QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QListWidget, QTextEdit,
-    QPushButton, QLabel, QRadioButton, QCheckBox, QFileDialog
+    QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox, QFileDialog
     )
+
+from skimage.transform import resize
+import matplotlib
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
 # imageQC block start
 from imageQC.config.iQCconstants import (
@@ -25,6 +29,7 @@ from imageQC.config.iQCconstants import (
 from imageQC.config.config_func import init_user_prefs
 from imageQC.ui import messageboxes
 from imageQC.ui import reusable_widgets as uir
+from imageQC.scripts.dcm import get_projection
 import imageQC.resources
 # imageQC block end
 
@@ -389,6 +394,55 @@ class WindowLevelEditDialog(ImageQCDialog):
             )
 
 
+class CmapSelectDialog(ImageQCDialog):
+    """Dialog to select matplotlib colormap."""
+
+    def __init__(self, current_cmap='gray'):
+        super().__init__()
+        self.setWindowTitle('Select colormap')
+        self.setMinimumHeight(300)
+        self.setMinimumWidth(300)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        #self.cmaps = [cmap for cmap in plt.colormaps() if '_r' not in cmap]
+        self.cmaps = ['gray', 'inferno', 'hot', 'rainbow', 'viridis', 'RdBu']
+        self.list_cmaps = QComboBox()
+        self.list_cmaps.addItems(self.cmaps)
+        self.list_cmaps.setCurrentIndex(0)
+        self.list_cmaps.currentIndexChanged.connect(self.update_preview)
+        self.chk_reverse = QCheckBox('Reverse')
+        self.chk_reverse.clicked.connect(self.update_preview)
+        self.colorbar = uir.ColorBar()
+
+        vlo.addWidget(QLabel('Select colormap:'))
+        vlo.addWidget(self.list_cmaps)
+        vlo.addWidget(self.chk_reverse)
+        vlo.addWidget(self.colorbar)
+        hlo_buttons = QHBoxLayout()
+        vlo.addLayout(hlo_buttons)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vlo.addWidget(self.buttonBox)
+
+        self.update_preview()
+
+    def update_preview(self):
+        """Sort elements by name or date."""
+        cmap = self.get_cmap()
+        self.colorbar.colorbar_draw(cmap=cmap)
+
+    def get_cmap(self):
+        """Return selected indexes in list."""
+        cmap = self.list_cmaps.currentText()
+        if self.chk_reverse.isChecked():
+            cmap = cmap + '_r'
+        return cmap
+
+
 class QuickTestClipboardDialog(ImageQCDialog):
     """Dialog to set whether to include headers/transpose when QuickTest results."""
 
@@ -556,3 +610,165 @@ class TextDisplay(ImageQCDialog):
         self.setWindowTitle(title)
         self.setMinimumWidth(min_width)
         self.setMinimumHeight(min_height)
+
+
+class ProjectionPlotDialog(ImageQCDialog):
+    """Dialog to generate MIP or similar with values plot above."""
+
+    def __init__(self, main):
+        super().__init__()
+        self.main = main
+        self.setWindowTitle('Plot values on projection image')
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        self.canvas = ProjectionPlotCanvas(self)
+        self.canvas.setMinimumHeight(round(0.5*self.main.gui.panel_height))
+        self.canvas.setMinimumWidth(round(0.8*self.main.gui.panel_width))
+        self.tb_canvas = uir.ImageNavigationToolbar(self.canvas, self)
+
+        self.projections = ['Maximum intensity projection',
+                            'Minimum intensity projection',
+                            'Average intensity projection']
+        self.list_projections = QComboBox()
+        self.list_projections.addItems(self.projections)
+        self.list_projections.setCurrentIndex(0)
+        self.list_projections.currentIndexChanged.connect(self.calculate_projection)
+        self.directions = ['front', 'side']
+        self.list_directions = QComboBox()
+        self.list_directions.addItems(self.directions)
+        self.list_directions.setCurrentIndex(0)
+        self.list_directions.currentIndexChanged.connect(self.calculate_projection)
+
+        self.headers = ['-- No results in table to plot --']
+        if self.main.results:
+            if self.main.current_test in self.main.results:
+                if self.main.results[self.main.current_test]['pr_image']:
+                    self.headers = self.main.results[self.main.current_test]['headers']
+                else:
+                    self.headers = ['-- Results pr image not available in table --']
+        self.list_headers = QComboBox()
+        self.list_headers.addItems(self.headers)
+        self.list_headers.setCurrentIndex(0)
+        self.list_headers.currentIndexChanged.connect(self.canvas.update_figure)
+
+        vlo_selections = QVBoxLayout()
+        vlo_image = QVBoxLayout()
+        vlo.addLayout(vlo_selections)
+        vlo.addLayout(vlo_image)
+        flo = QFormLayout()
+        vlo_selections.addLayout(flo)
+        flo.addRow(QLabel('Select projection type:'), self.list_projections)
+        flo.addRow(QLabel('Select projection direction:'), self.list_directions)
+        flo.addRow(QLabel('Column to plot:'), self.list_headers)
+
+        vlo_image.addWidget(self.tb_canvas)
+        vlo_image.addWidget(self.canvas)
+
+        hlo_buttons = QHBoxLayout()
+        vlo.addLayout(hlo_buttons)
+        buttons = QDialogButtonBox.Close
+        buttonBox = QDialogButtonBox(buttons)
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        hlo_buttons.addWidget(buttonBox)
+        self.status_label = uir.StatusLabel(self)
+        vlo.addWidget(self.status_label)
+
+        self.projection = None
+        self.z_values = None
+        self.z_label = ''
+
+        QTimer.singleShot(300, lambda: self.calculate_projection())
+        # allow time to show dialog before updating list
+
+    def calculate_projection(self):
+        """Calculate projection based on selections."""
+        self.main.start_wait_cursor()
+        self.status_label.showMessage('Generating projection...')
+        proj = self.list_projections.currentText()
+        projection_type = 'max'
+        if 'Minimum' in proj:
+            projection_type = 'min'
+        elif 'Average' in proj:
+            projection_type = 'mean'
+        marked_this = self.main.tree_file_list.get_marked_imgs_current_test()
+        '''
+        try:
+            self.z_values = [float(img_info.zpos) for i, img_info
+                             in enumerate(self.main.imgs) if i in marked_this]
+            self.z_label = 'z position (mm)'
+        except TypeError:
+        '''
+        self.z_values = [i for i in range(len(self.main.imgs)) if i in marked_this]
+        self.z_label = 'image number'
+        self.projection, errmsg = get_projection(
+            self.main.imgs, marked_this, self.main.tag_infos,
+            projection_type=projection_type,
+            direction=self.list_directions.currentText())
+        #self.projection = np.transpose(self.projection)
+        zpos_0 = self.main.imgs[marked_this[0]].zpos
+        pix_0 = self.main.imgs[marked_this[0]].pix[0]
+        if zpos_0:
+            orig_shape = self.projection.shape
+            zpos_1 = self.main.imgs[marked_this[1]].zpos
+            stretch = abs(zpos_1 - zpos_0)/pix_0
+            new_z_shape = round(orig_shape[1]*stretch)
+            self.projection = resize(
+                self.projection, (new_z_shape, orig_shape[1]))
+            self.z_values = np.array(self.z_values) / stretch
+        if errmsg:
+            QMessageBox.information(self, 'Failed generating projection', errmsg)
+            self.reject()
+        else:
+            self.canvas.update_figure()
+        self.main.stop_wait_cursor()
+        self.status_label.clearMessage()
+
+
+class ProjectionPlotCanvas(FigureCanvasQTAgg):
+    """Canvas for display of projection and plot."""
+
+    def __init__(self, parent):
+        self.fig = matplotlib.figure.Figure(figsize=(2, 2))
+        self.fig.subplots_adjust(0, 0, 1., 0.92)
+        FigureCanvasQTAgg.__init__(self, self.fig)
+        self.parent = parent
+
+    def update_figure(self):
+        """Refresh histogram."""
+        self.fig.clear()
+        self.ax = self.fig.add_subplot(111)
+
+        try:
+            cmap = self.ax.get_images()[0].cmap.name
+        except (AttributeError, IndexError):
+            cmap = 'gray'
+
+        plot_values = None
+        if self.parent.main.results:
+            results = self.parent.main.results
+            test = self.parent.main.current_test
+            if test in results:
+                if results[test]['pr_image']:
+                    col = self.parent.list_headers.currentIndex()
+                    plot_values = [row[col] for row in results[test]['values']]
+
+        self.img = self.ax.imshow(self.parent.projection, cmap=cmap)
+        self.plot = self.ax.plot(plot_values, self.parent.z_values, 'r')
+        self.ax.axis('off')
+
+        _, shape_x = self.parent.projection.shape
+        a = (np.max(plot_values)-np.min(plot_values)) / shape_x
+        b = - np.min(plot_values)
+
+        def pix2val(x):
+            return a*x + b
+
+        def val2pix(y):
+            return (y - b)/a
+
+        secax = self.ax.secondary_xaxis('top', functions=(pix2val, val2pix))
+        secax.set_xlabel(self.parent.list_headers.currentText())
+
+        self.draw()

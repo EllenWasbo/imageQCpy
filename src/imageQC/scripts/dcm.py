@@ -21,7 +21,6 @@ from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
 import imageQC.scripts.mini_methods_format as mmf
 from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.config.config_classes import TagPatternFormat
-from imageQC.ui.ui_dialogs import TextDisplay
 # imageQC block end
 
 pydicom.config.future_behavior(True)
@@ -1164,6 +1163,7 @@ def dump_dicom(parent_widget, filename=''):
     if filename != '':
         pyd, _, errmsg = read_dcm(filename)
         if pyd:
+            from imageQC.ui.ui_dialogs import TextDisplay
             dlg = TextDisplay(
                 parent_widget, str(pyd), title=filename,
                 min_width=1000, min_height=800)
@@ -1272,3 +1272,54 @@ def sum_marked_images(img_infos, included_ids, tag_infos):
         summed_img = None
 
     return (summed_img, errmsg)
+
+
+def get_projection(img_infos, included_ids, tag_infos,
+                   projection_type='max', direction='front'):
+    """Extract projection from tomographic images.
+
+    Parameters
+    ----------
+    img_infos :  list of DcmInfoGui
+    included_ids : list of int
+        image ids to include
+    tag_infos : list of TagInfos
+    projection_type : str, optional
+        'max', 'min' or 'mean'. The default is 'max'.
+    direction : str, optional
+        'front' or 'side'. The default is 'front'.
+
+    Returns
+    -------
+    projection : np.2darray
+        extracted projection from imgs
+    errmsg : str
+    """
+    projection = None
+    shape_first = None
+    shape_failed = []
+    errmsg = ''
+    np_method = getattr(np, projection_type, None)
+    axis = 0 if direction == 'front' else 1
+    for idx, img_info in enumerate(img_infos):
+        if idx in included_ids:
+            image, tags = get_img(
+                img_info.filepath,
+                frame_number=img_info.frame_number, tag_infos=tag_infos
+                )
+            if projection is None:
+                projection = [np_method(image, axis=axis)]
+                shape_first = image.shape
+            else:
+                if image.shape == shape_first:
+                    projection.append(np_method(image, axis=axis))
+                else:
+                    shape_failed.append(idx)
+    if len(shape_failed) > 0:
+        errmsg = ('Could not generate projection due to different sizes. ' +
+                  f'Image number {shape_failed} did not match the first marked image.')
+        projection = None
+    else:
+        projection = np.array(projection)
+
+    return (projection, errmsg)

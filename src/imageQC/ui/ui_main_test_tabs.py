@@ -169,10 +169,10 @@ class ParamsTabCommon(QTabWidget):
                         paramset.roi_table)
                     self.roi_table_widget.table.update_table()
                 elif field.name == 'roi_use_table':
-                    new_zoom = True if paramset.roi_use_table == 2 else False
-                    if new_zoom != self.roi_table_widget.zoomed_area:
-                        self.roi_table_widget.zoomed_area = new_zoom
-                        self.roi_table_widget.update_on_zoom_change()
+                    new_rect_pos = True if paramset.roi_use_table == 2 else False
+                    if new_rect_pos != self.roi_table_widget.use_rectangle:
+                        self.roi_table_widget.use_rectangle = new_rect_pos
+                        self.roi_table_widget.update_on_rectangle_change()
                     if paramset.roi_use_table == 0:
                         self.roi_table_widget.setEnabled(False)
                     else:
@@ -290,10 +290,10 @@ class ParamsTabCommon(QTabWidget):
                         self.update_values_rec()
                     self.main.refresh_results_display()
                 if attribute == 'roi_use_table':
-                    new_zoom = True if content == 2 else False
-                    if new_zoom != self.roi_table_widget.zoomed_area:
-                        self.roi_table_widget.zoomed_area = new_zoom
-                        self.roi_table_widget.update_on_zoom_change()
+                    new_rect_pos = True if content == 2 else False
+                    if new_rect_pos != self.roi_table_widget.use_rectangle:
+                        self.roi_table_widget.use_rectangle = new_rect_pos
+                        self.roi_table_widget.update_on_rectangle_change()
                     if content == 0:
                         self.roi_table_widget.setEnabled(False)
                     else:
@@ -518,21 +518,22 @@ class ParamsTabCommon(QTabWidget):
         self.tab_num = ParamsWidget(self, run_txt='Find numbers')
 
         self.tab_num.hlo_top.addWidget(uir.LabelItalic(
-            'Read numbers in image (e.g. savescreens). Zoom to number and add as ROI.'))
+            'Read numbers in image (e.g. savescreens). '
+            'Mark area with the number and add as ROI.'))
         info_txt = '''
         Make sure to have a Digit template fitting the font used in your image.<br>
         (A digit template can be defined and tested in Settings.)<br>
         <br>
-        Set ROI by zooming to the number and find the arrow-button to the left of <br>
-        the table. Then the coordinates of the zoomed area will be added to the ROI
-        list. Label the ROIs to define the headers of the result table.
+        Set ROI by marking the area with the number and find the arrow-button to the<br>
+        left of the table. Then the coordinates of the area will be added to <br>
+        the ROI list. Label the ROIs to define the headers of the result table.
         '''
         self.tab_num.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         self.num_table_widget = PositionWidget(
                 self, self.main, table_attribute_name='num_table',
                 headers=['ROI label', '(x1,x2)', '(y1,y2)'],
-                zoomed_area=True)
+                use_rectangle=True)
         self.num_digit_label = QComboBox()
         self.num_digit_label.setFixedWidth(250)
         self.num_digit_label.currentIndexChanged.connect(
@@ -2849,7 +2850,7 @@ class PositionWidget(QWidget):
     """Reusable table widget to hold user defined roi positions."""
 
     def __init__(self, parent, main, table_attribute_name='', headers=None,
-                 zoomed_area=False):
+                 use_rectangle=False):
         """Initialize PositionWidget.
 
         Parameters
@@ -2861,14 +2862,15 @@ class PositionWidget(QWidget):
             attribute name of PositionTable or variants of this
         headers : list of str
             if None ['Label', 'pos x [mm]', 'pos y [mm]']
-        zoomed_area : bool
+        use_rectangle : bool
             type of getting/using positions/coordinates
         """
         super().__init__()
         self.get_position_tooltips = [
             'Get position from last mouseclick in image',
-            'Set selected ROI = zoomed area']
-        self.zoomed_area = zoomed_area
+            'Set selected ROI = marked area']
+        self.get_position_icons = ['selectArrow', 'rectangle_select']
+        self.use_rectangle = use_rectangle
         self.parent = parent
         self.main = main
         if headers is None:
@@ -2909,19 +2911,25 @@ class PositionWidget(QWidget):
         toolb.setOrientation(Qt.Vertical)
         hlo.addWidget(toolb)
         hlo.addWidget(self.table)
-        self.update_on_zoom_change(silent=True)
+        self.update_on_rectangle_change(silent=True)
 
-    def update_on_zoom_change(self, silent=False):
-        """Make changes to table and widget when zoom selection changes."""
-        if self.zoomed_area:
+    def update_on_rectangle_change(self, silent=False):
+        """Make changes to table and widget when setting selection changes."""
+        if self.use_rectangle:
+            self.main.wid_image_display.tool_rectangle.setChecked(True)
             self.act_get_pos.setToolTip(self.get_position_tooltips[1])
             self.act_get_pos.disconnect()
-            self.act_get_pos.triggered.connect(self.get_zoomed_area)
+            self.act_get_pos.triggered.connect(self.get_active_rectangle)
+            self.act_get_pos.setIcon(QIcon(
+                f'{os.environ[ENV_ICON_PATH]}{self.get_position_icons[1]}.png'))
             self.table.headers = ['ROI label', '(x1,x2)', '(y1,y2)']
         else:
+            self.main.wid_image_display.tool_rectangle.setChecked(False)
             self.act_get_pos.setToolTip(self.get_position_tooltips[0])
             self.act_get_pos.disconnect()
             self.act_get_pos.triggered.connect(self.get_pos_mouse)
+            self.act_get_pos.setIcon(QIcon(
+                f'{os.environ[ENV_ICON_PATH]}{self.get_position_icons[0]}.png'))
             self.table.headers = self.headers
         if self.table.current_table is not None and silent is False:
             if len(self.table.current_table.labels) > 0:
@@ -3019,7 +3027,7 @@ class PositionWidget(QWidget):
             table = cfc.PositionTable()
             table.labels = [str(input_df.iat[row, 0]) for row in range(nrows)]
             try:
-                if self.zoomed_area:  # pos is tuple
+                if self.use_rectangle:  # pos is tuple
                     table.pos_x = [
                         str_2_tuple(input_df.iat[row, 1]) for row in range(nrows)]
                     table.pos_y = [
@@ -3057,9 +3065,9 @@ class PositionWidget(QWidget):
                 rowno = sel[0].row()
             else:
                 rowno = self.table.rowCount()
-        if self.zoomed_area:
+        if self.use_rectangle:
             if self.main.active_img is not None:
-                self.get_zoomed_area()
+                self.get_active_rectangle()
         else:
             if self.main.active_img is not None:
                 self.get_pos_mouse()
@@ -3107,8 +3115,8 @@ class PositionWidget(QWidget):
             self.parent.flag_edit(True)
             self.table.update_table()
 
-    def get_zoomed_area(self):
-        """Get coordinates af zoomed area in image."""
+    def get_active_rectangle(self):
+        """Get coordinates af active rectangle in image."""
         if self.main.gui.delta_x != 0 or self.main.gui.delta_y != 0:
             QMessageBox.information(
                 self, 'Offset is reset',
@@ -3124,17 +3132,27 @@ class PositionWidget(QWidget):
             rowno = sel[0].row()
         if self.main.active_img is not None:
             sz_y, sz_x = np.shape(self.main.active_img)
+            x_tuple = (0, sz_x)
+            y_tuple = (0, sz_y)
+            for patch in self.main.wid_image_display.canvas.ax.patches:
+                if patch.get_gid() == 'rectangle':
+                    [x0, y0], [x1, y1] = patch.get_bbox().get_points()
+                    x_tuple = (int(x0) + 1, int(x1) + 1)
+                    y_tuple = (int(y0) + 1, int(y1) + 1)
+            ''' when zoom
             xs = np.sort(self.main.wid_image_display.canvas.ax.get_xlim())
             ys = np.sort(self.main.wid_image_display.canvas.ax.get_ylim())
             x_tuple = (int(xs[0])+1, int(xs[1])+1)
             y_tuple = (int(ys[0])+1, int(ys[1])+1)
+            '''
             proceed = True
             if x_tuple == (0, sz_x) and y_tuple == (0, sz_y):
                 question = (
-                    'Did you zoom to the region of interest with numbers? '
+                    'Did you mark the region of interest? '
                     'Proceed setting full image as ROI?')
                 proceed = messageboxes.proceed_question(self, question)
             if proceed:
+                print(f'set x y {x_tuple} {y_tuple}')
                 if add_row is False:
                     self.table.current_table.pos_x[rowno] = x_tuple
                     self.table.current_table.pos_y[rowno] = y_tuple
@@ -3168,7 +3186,6 @@ class PositionTableWidget(QTableWidget):
         self.headers = headers
         self.cellChanged.connect(self.edit_current_table)
         if 'num' in table_attribute_name:
-            print('num cellClicked.connect')
             self.cellClicked.connect(self.main.update_roi)
 
     def edit_current_table(self, row, col):

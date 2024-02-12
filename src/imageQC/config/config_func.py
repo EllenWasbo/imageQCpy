@@ -58,6 +58,10 @@ def calculate_version_difference(version_string, reference_version=None):
                 version_number = 1e6*int(main_x) + 1e4*int(main_y) + 1e2*int(main_z)
                 if beta_str != '':
                     version_number = version_number + int(beta_str)
+                else:
+                    version_number += 100
+                    # assume max b99 and let beta versions have lower number than
+                    # final version without beta indicator
             except ValueError:
                 print(f'version string {vstring} not as expected. Failed converting '
                       '(config_func - calculate_version_number).')

@@ -376,7 +376,6 @@ def calculate_qc(input_main, wid_auto=None,
     ----------
     input_main : object
         of class MainWindow or MainAuto containing specific attributes
-        see try block below
         alter results of input_main
         if data pr image results[test]['pr_image'] = True
         results[test]['details_dict'] is always list of dict [{}] (or None)
@@ -395,8 +394,11 @@ def calculate_qc(input_main, wid_auto=None,
     modality = input_main.current_modality
     errmsgs = []
     if 'MainWindow' in str(type(input_main)):
+        '''
         input_main.start_wait_cursor()
         input_main.status_bar.showMessage('Calculating...')
+        '''
+        input_main.progress_modal.setValue(1)
     delta_xya = [
         input_main.gui.delta_x,
         input_main.gui.delta_y,
@@ -571,8 +573,13 @@ def calculate_qc(input_main, wid_auto=None,
                     wid_auto.progress_modal.sub_interval / n_analyse)
             for i in range(n_analyse):
                 if 'MainWindow' in str(type(input_main)):
+                    input_main.progress_modal.setLabelText(
+                        f'Reading/calculating image {i}/{n_img}')
+                    input_main.progress_modal.setValue(round(100 * i/n_img))
+                    '''
                     input_main.status_bar.showMessage(
                         f'Reading/calculating image {i}/{n_img}')
+                    '''
 
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
@@ -849,7 +856,8 @@ def calculate_qc(input_main, wid_auto=None,
                     'min_max', set_tools=True)
                 input_main.set_active_img(
                     input_main.results['Rec']['details_dict']['max_slice_idx'])
-            input_main.stop_wait_cursor()
+            input_main.progress_modal.setValue(input_main.progress_modal.maximum())
+            #input_main.stop_wait_cursor()
 
 
 def calculate_2d(image2d, roi_array, image_info, modality,
@@ -1816,7 +1824,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         for each image which 3d tests to perform
     input_main : object
         of class MainWindow or InputMain containing specific attributes
-        see try block below
         alter results of input_main
     extra_taglists : None or list of strings
         used for test PET Cross calibration

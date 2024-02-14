@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
 import matplotlib.pyplot as plt
 
 # imageQC block start
+from imageQC.ui import ui_main_methods
 from imageQC.ui import ui_main_left_side
 from imageQC.ui.ui_main_image_widgets import ImageDisplayWidget
 from imageQC.ui import ui_main_quicktest_paramset_select
@@ -121,6 +122,7 @@ class MainWindow(QMainWindow):
         self.gui.annotations_line_thick = self.user_prefs.annotations_line_thick
         self.gui.annotations_font_size = self.user_prefs.annotations_font_size
 
+        self.progress_modal = None
         self.status_bar = StatusBar(self)
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage('Starting up', 1000)
@@ -269,13 +271,15 @@ class MainWindow(QMainWindow):
                 filter="DICOM files (*.dcm *.IMA);;All files (*)")
             file_list = fnames[0]
         if len(file_list) > 0:
-            self.start_wait_cursor()
+            max_progress = 100  # %
+            progress_modal = uir.ProgressModal(
+                "Calculating...", "Cancel",
+                0, max_progress, self, minimum_duration=0)
             new_img_infos, ignored_files, warnings = dcm.read_dcm_info(
                 file_list, tag_infos=self.tag_infos,
                 tag_patterns_special=self.tag_patterns_special,
-                statusbar=self.status_bar)
-            self.stop_wait_cursor()
-            self.status_bar.showMessage('Finished reading image headers', 2000)
+                statusbar=self.status_bar, progress_modal=progress_modal)
+            progress_modal.setValue(max_progress)
             if ignored_files:
                 dlg = messageboxes.MessageBoxWithDetails(
                     self, title='Some files ignored',
@@ -517,7 +521,9 @@ class MainWindow(QMainWindow):
         self.stop_wait_cursor()
 
     def update_roi(self, clear_results_test=False):
+        ui_main_methods.update_roi(self, clear_results_test=clear_results_test)
         """Recalculate ROI."""
+        '''
         errmsg = None
         if self.active_img is not None:
             self.start_wait_cursor()
@@ -535,6 +541,7 @@ class MainWindow(QMainWindow):
             if self.current_test in [*self.results]:
                 self.results[self.current_test] = None
                 self.refresh_results_display()
+        '''
 
     def reset_results(self):
         """Clear results and update display."""
@@ -636,58 +643,10 @@ class MainWindow(QMainWindow):
         self.refresh_results_display()
 
     def refresh_results_display(self, update_table=True):
-        """Update GUI for test results when results or selections change."""
-        if self.current_test not in self.results:
-            # clear all
-            self.wid_res_tbl.result_table.clear()
-            self.wid_res_tbl_sup.result_table.clear()
-            self.wid_res_plot.plotcanvas.plot()
-            self.wid_res_image.canvas.result_image_draw()
-        else:
-            # update only active
-            wid = self.tab_results.currentWidget()
-            if isinstance(wid, ui_main_result_tabs.ResultTableWidget) and update_table:
-                if self.current_test == 'vendor':
-                    self.wid_res_tbl.result_table.fill_table(vendor=True)
-                else:
-                    try:
-                        self.wid_res_tbl.result_table.fill_table(
-                            col_labels=self.results[self.current_test]['headers'],
-                            values_rows=self.results[self.current_test]['values'],
-                            linked_image_list=self.results[
-                                self.current_test]['pr_image'],
-                            table_info=self.results[self.current_test]['values_info']
-                            )
-                    except (KeyError, TypeError, IndexError):
-                        self.wid_res_tbl.result_table.clear()
-                    try:
-                        self.wid_res_tbl_sup.result_table.fill_table(
-                            col_labels=self.results[self.current_test]['headers_sup'],
-                            values_rows=self.results[self.current_test]['values_sup'],
-                            linked_image_list=self.results[
-                                self.current_test]['pr_image'],
-                            table_info=self.results[
-                                self.current_test]['values_sup_info']
-                            )
-                    except (KeyError, TypeError, IndexError):
-                        self.wid_res_tbl_sup.result_table.clear()
-            elif isinstance(wid, ui_main_result_tabs.ResultPlotWidget):
-                self.wid_res_plot.plotcanvas.plot()
-            elif isinstance(wid, ui_main_result_tabs.ResultImageWidget):
-                self.wid_res_image.canvas.result_image_draw()
+        ui_main_methods.refresh_results_display(self, update_table=update_table)
 
     def refresh_img_display(self):
-        """Refresh image related gui."""
-        if self.active_img is not None:
-            self.current_roi = None
-            self.wid_image_display.canvas.img_draw()
-            self.wid_window_level.canvas.plot(self.active_img)
-            self.wid_dcm_header.refresh_img_info(
-                self.imgs[self.gui.active_img_no].info_list_general,
-                self.imgs[self.gui.active_img_no].info_list_modality)
-            self.update_roi()
-        else:
-            self.wid_image_display.canvas.img_is_missing()
+        ui_main_methods.refresh_img_display(self)
 
     def refresh_selected_table_row(self):
         """Set selected results table row to the same as image selected file."""

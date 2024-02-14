@@ -119,7 +119,7 @@ def read_dcm(file, stop_before_pixels=True):
 
 
 def read_dcm_info(filenames, GUI=True, tag_infos=[],
-                  tag_patterns_special={}, statusbar=None,
+                  tag_patterns_special={}, statusbar=None, progress_modal=None,
                   series_pattern=None):
     """Read Dicom header into DcmInfo(Gui) objects when opening files.
 
@@ -139,6 +139,8 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         for text display or annotation
     statusbar : StatusBar, optional
         for messages to screen
+    progress_modal : uir.ProgressModal, optional
+        for mesaages to screen and blocking actions, cancel option
     series_pattern : TagPatternFormat, optional
         used for ui/open_multi.py. Default is None.
 
@@ -154,10 +156,20 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
     list_of_DcmInfo = []
     ignored_files = []
     warnings = []
-
+    n_files = len(filenames)
     for fileno, file in enumerate(filenames):
         if statusbar is not None:
-            statusbar.showMessage(f'Reading file {fileno+1}/{len(filenames)}')
+            statusbar.showMessage(f'Reading file {fileno+1}/{n_files}')
+        if progress_modal is not None:
+            progress_modal.setValue(round(100*fileno/n_files))
+            progress_modal.setLabelText(f'Reading file {fileno+1}/{n_files}')
+            if progress_modal.wasCanceled():
+                list_of_DcmInfo = []
+                ignored_files = []
+                warnings = []
+                progress_modal.setValue(100)
+                break
+
         file_verified = True
         pyd, file_verified, errmsg = read_dcm(file)
         if file_verified:
@@ -1275,7 +1287,7 @@ def sum_marked_images(img_infos, included_ids, tag_infos):
 
 
 def get_projection(img_infos, included_ids, tag_infos,
-                   projection_type='max', direction='front'):
+                   projection_type='max', direction='front', progress_modal=None):
     """Extract projection from tomographic images.
 
     Parameters
@@ -1288,6 +1300,7 @@ def get_projection(img_infos, included_ids, tag_infos,
         'max', 'min' or 'mean'. The default is 'max'.
     direction : str, optional
         'front' or 'side'. The default is 'front'.
+    progress_modal : uir.ProgressModal
 
     Returns
     -------
@@ -1301,8 +1314,17 @@ def get_projection(img_infos, included_ids, tag_infos,
     errmsg = ''
     np_method = getattr(np, projection_type, None)
     axis = 0 if direction == 'front' else 1
+    n_img = len(img_infos)
     for idx, img_info in enumerate(img_infos):
         if idx in included_ids:
+            if progress_modal:
+                progress_modal.setValue(round(100*idx/n_img))
+                progress_modal.setLabelText(
+                    f'Getting data from image {idx}/{n_img}')
+                if progress_modal.wasCanceled():
+                    projection = None
+                    progress_modal.setValue(100)
+                    break
             image, tags = get_img(
                 img_info.filepath,
                 frame_number=img_info.frame_number, tag_infos=tag_infos

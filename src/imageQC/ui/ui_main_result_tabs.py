@@ -2034,7 +2034,7 @@ class ResultPlotCanvas(PlotCanvas):
                         'xvals': dd['sorted_pixels_x'],
                         'yvals': dd['ESF'],
                         'style': '-',
-                        'color': COLORS[m_idx  % len(COLORS)]
+                        'color': COLORS[m_idx % len(COLORS)]
                          })
 
         def prepare_plot_centered_profiles(idxs):
@@ -2224,8 +2224,8 @@ class ResultImageWidget(GenericImageWidget):
         self.tool_resultsize = ToolMaximizeResults(self.main)
         tb_right_top.addWidget(self.tool_resultsize)
         tb_right_top.setOrientation(Qt.Vertical)
-        tb_right_top.addWidget(self.tool_cmap)
         tb_right_top.addWidget(self.tool_profile)
+        tb_right_top.addWidget(self.tool_cmap)
         tb_right_top.addWidget(self.tool_rectangle)
         vlo_right = QVBoxLayout()
         vlo_right.addWidget(tb_right_top)

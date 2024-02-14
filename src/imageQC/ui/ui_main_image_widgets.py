@@ -12,7 +12,6 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QAction, QToolBar, QToolButton
     )
-#from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
 # imageQC block start
 from imageQC.ui.ui_dialogs import (
@@ -78,7 +77,6 @@ class GenericImageWidget(QWidget):
                 if self.canvas.last_clicked_pos != (-1, -1):
                     plotstatus = self.canvas.profile_draw(
                         round(event.xdata), round(event.ydata))
-                    #self.mouse_pressed = False
                     if plotstatus:
                         self.plot_profile(round(event.xdata), round(event.ydata))
 
@@ -231,9 +229,9 @@ class ImageDisplayWidget(GenericImageWidget):
         act_projection_plot.triggered.connect(self.projection_plot)
         tbimg.addAction(act_redraw)
         tbimg.addWidget(self.tool_cmap)
+        tbimg.addWidget(self.tool_rectangle)
         tbimg.addAction(act_projection_plot)
         tbimg.addWidget(self.tool_profile)
-        tbimg.addWidget(self.tool_rectangle)
         tbimg.addWidget(self.tool_sum)
         tbimg.addAction(act_edit_annotations)
         tbimg.addWidget(self.tool_imgsize)
@@ -257,8 +255,13 @@ class ImageDisplayWidget(GenericImageWidget):
                 self.main.wid_center.set_center_to_clickpos()
 
     def projection_plot(self):
-        dlg = ProjectionPlotDialog(self.main)
-        dlg.exec()
+        """Show 3d projection and plot."""
+        if len(self.main.imgs) > 1:
+            dlg = ProjectionPlotDialog(self.main)
+            dlg.exec()
+        else:
+            self.main.status_bar.showMessage(
+                'Not enough images loaded to extract a projection', 2000)
 
     def edit_annotations(self):
         """Pop up dialog to edit annotations settings."""
@@ -306,47 +309,3 @@ class ImageDisplayWidget(GenericImageWidget):
         """Pop up dialog window with plot of profile."""
         pix = self.main.imgs[self.main.gui.active_img_no].pix[0]
         super().plot_profile(x2, y2, pix=pix)
-
-'''
-class ImageNavigationToolbar(NavigationToolbar2QT):
-    """Matplotlib navigation toolbar with some modifications."""
-
-    def __init__(self, canvas, window):
-        super().__init__(canvas, window)
-        for x in self.actions():
-            if x.text() in ['Subplots']:#, 'Customize']:
-                self.removeAction(x)
-
-    def set_message(self, s):
-        """Hide cursor position and value text."""
-        pass
-
-    # from https://github.com/matplotlib/matplotlib/blob/main/lib/matplotlib/backends/backend_qt.py
-    #  dirty fix to avoid crash on self.canvas.parent() TypeError
-    def save_figure(self, *args):
-        filetypes = self.canvas.get_supported_filetypes_grouped()
-        sorted_filetypes = sorted(filetypes.items())
-        default_filetype = self.canvas.get_default_filetype()
-
-        # startpath = os.path.expanduser(mpl.rcParams['savefig.directory'])
-        # start = os.path.join(startpath, self.canvas.get_default_filename())
-        filters = []
-        selectedFilter = None
-        for name, exts in sorted_filetypes:
-            exts_list = " ".join(['*.%s' % ext for ext in exts])
-            filter = f'{name} ({exts_list})'
-            if default_filetype in exts:
-                selectedFilter = filter
-            filters.append(filter)
-        filters = ';;'.join(filters)
-
-        fname, filter = QFileDialog.getSaveFileName(
-            self, 'Choose a filename to save to', '',
-            filters, selectedFilter)
-        if fname:
-            try:
-                self.canvas.figure.savefig(fname)
-            except Exception as e:
-                QMessageBox.critical(
-                    self, "Error saving file", str(e))
-'''

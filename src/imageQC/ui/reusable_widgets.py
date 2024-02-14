@@ -1037,10 +1037,13 @@ class StatusLabel(QWidget):
 class ImageNavigationToolbar(NavigationToolbar2QT):
     """Matplotlib navigation toolbar with some modifications."""
 
-    def __init__(self, canvas, window):
+    def __init__(self, canvas, window, remove_customize=False):
         super().__init__(canvas, window)
+        remove_list = ['Subplots']
+        if remove_customize:
+            remove_list.append('Customize')
         for x in self.actions():
-            if x.text() in ['Subplots']:#, 'Customize']:
+            if x.text() in remove_list:
                 self.removeAction(x)
 
     def set_message(self, s):

@@ -24,7 +24,7 @@ from imageQC.config import config_func as cff
 from imageQC.ui.ui_dialogs import ImageQCDialog, ResetAutoTemplateDialog, TextDisplay
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
-from imageQC.scripts.input_main_auto import InputMain
+from imageQC.scripts.input_main import InputMain
 from imageQC.ui import ui_image_canvas
 from imageQC.config.iQCconstants import ENV_ICON_PATH, QUICKTEST_OPTIONS
 from imageQC.ui import settings
@@ -417,11 +417,6 @@ class OpenAutomationDialog(ImageQCDialog):
 
     def get_template_list(self):
         """Get list of templates (modality - (vendor file) - label).
-
-        Parameters
-        ----------
-        progress_modal : uir.ProgressModal
-            for update to screen on progress
 
         Returns
         -------

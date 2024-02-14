@@ -12,14 +12,13 @@ import numpy as np
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAbstractItemView,
-    QTabWidget, QStackedWidget,
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QToolBar, QAbstractItemView,
+    QTabWidget, QStackedWidget, QDoubleSpinBox,
     QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox, QListWidget,
     QComboBox, QFileDialog, QMessageBox
     )
 
 # imageQC block start
-from imageQC.scripts.input_main_auto import InputMain
 from imageQC.ui.ui_dialogs import ImageQCDialog
 from imageQC.ui.ui_main_image_widgets import ImageDisplayWidget
 from imageQC.ui import open_multi
@@ -27,9 +26,9 @@ from imageQC.ui import reusable_widgets as uir
 from imageQC.config import config_classes as cfc
 from imageQC.config import config_func as cff
 from imageQC.ui import messageboxes
-from imageQC.scripts import input_main_auto
+from imageQC.scripts import input_main
 from imageQC.ui import ui_main_quicktest_paramset_select
-from imageQC.ui.ui_main_test_tabs import ParamsTabCT
+from imageQC.ui.ui_main_test_tabs import ParamsTabCT, ParamsWidget
 from imageQC.ui import ui_main_result_tabs
 from imageQC.ui import ui_image_canvas
 from imageQC.scripts.calculate_roi import get_rois
@@ -73,15 +72,20 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         vlo.addWidget(uir.UnderConstruction())
         vlo.addWidget(uir.LabelItalic(infotxt))
         vlo.addWidget(uir.HLine())
+        vlo_right = QVBoxLayout()
+        vlo_left = QVBoxLayout()
+        hlo = QHBoxLayout()
+        vlo.addLayout(hlo)
+        hlo.addLayout(vlo_left)
+        hlo.addLayout(vlo_right)
 
-        # widget need parameters from input_main_auto.py/InputMain and MainWindow
+        # widget need parameters from input_main.py/InputMain and MainWindow
         self.lastload = time()
         self.fname = 'paramsets_CT_task_based'
         _, _, self.paramsets = cff.load_settings(fname=self.fname)
         self.current_modality = 'CT'
         self.current_test = 'TTF'
         self.current_paramset = cfc.ParamSetCT_TaskBased()
-        self.current_quicktest = cfc.QuickTestTemplate()
         self.current_quicktest = cfc.QuickTestTemplate()
         self.imgs = []
         self.results = {}
@@ -103,44 +107,64 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             self, fname=self.fname)
         self.create_result_tabs()
 
+        min_height = 200
+        min_width = 400
+        self.list_series = QListWidget()
+        self.list_series.setMinimumHeight(min_height)
+        self.list_series.setMinimumWidth(min_width)
+        self.list_series.currentRowChanged.connect(self.update_list_images)
+        self.list_images = QListWidget()
+        self.list_images.setMinimumHeight(min_height)
+        self.list_images.setMinimumWidth(min_width)
+        self.list_images.currentRowChanged.connect(self.refresh_img_display)
+
         self.btn_locate_images = QPushButton('Locate images...')
         self.btn_locate_images.clicked.connect(self.open_multi)
-        vlo.addWidget(self.btn_locate_images)
-        vlo.addWidget(QLabel('Loaded series / images: '))
         self.lbl_n_loaded = QLabel('0 / 0')
+
+        hlo_load = QHBoxLayout()
+        vlo_left.addLayout(hlo_load)
+        hlo_load.addWidget(self.btn_locate_images)
+        hlo_load.addWidget(QLabel('Loaded series / images: '))
+        hlo_load.addWidget(self.lbl_n_loaded)
 
         # How to locate the images - which is connected, which is MTF/NPS
         # identify MTF and NPS images based on
+        # - Assume Mercury phantom (both in same series)
+        # - z value range
         # - MTF / NPS in seriesdescription
         # - manually select series
-        # - z value range
         # - image content
-        # - Assume Mercury phantom (both in same series)
+
         # - autoselect which MTF images to include/exclude based on variation in CT number for material with highest density
         # if delta_z between images larger than increment - regard as separate (e.g. Mercury)
         #Settings + Update button / list of series used for MTF / list of series used for NPS / show images for selected series
-        vlo.addWidget(uir.LabelHeader('Locate MTF and NPS images', 3))
-        hlo_detect = QHBoxLayout()
-        vlo.addLayout(hlo_detect)
+        hlo_lists = QHBoxLayout()
+        vlo_left.addLayout(hlo_lists)
 
-        vlo.addWidget(uir.HLine())
+        vlo_series = QVBoxLayout()
+        hlo_lists.addLayout(vlo_series)
+        vlo_series.addWidget(uir.LabelHeader('Groups', 4))
+        vlo_series.addWidget(self.list_series)
+
+        vlo_images = QVBoxLayout()
+        hlo_lists.addLayout(vlo_images)
+        vlo_images.addWidget(uir.LabelHeader('Images in selected series', 4))
+        vlo_images.addWidget(self.list_images)
+
+        vlo_left.addWidget(self.wid_image_display)
 
         # How to analyse
-        vlo.addWidget(uir.LabelHeader('Analysis', 3))
         hlo_analyse = QHBoxLayout()
-        vlo.addLayout(hlo_analyse)
+        vlo_right.addLayout(hlo_analyse)
         self.stack_test_tabs = QStackedWidget()
         self.tab_ct = ParamsTabCT(self, task_based=True)
         self.stack_test_tabs.addWidget(self.tab_ct)
-        vlo.addWidget(self.stack_test_tabs)
-
-        vlo.addWidget(uir.HLine())
+        self.tab_ct.create_tab_dpr()
+        vlo_right.addWidget(self.stack_test_tabs)
 
         # Results / output
-        vlo.addWidget(uir.LabelHeader('Results', 3))
-        hlo_results = QHBoxLayout()
-        vlo.addLayout(hlo_results)
-        vlo.addWidget(self.tab_results)
+        vlo_right.addWidget(self.tab_results)
 
     def create_result_tabs(self):
         """Initiate GUI for the stacked result tabs."""
@@ -176,21 +200,21 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                     self.imgs[serno].append(img)
                 self.lbl_n_loaded.setText(f'{len(self.imgs)} / {len(img_infos)}')
 
-    def refresh_lists(self):
-        """Refresh lists when tag pattern changed."""
-        if self.path_input.text() != '':
-            self.find_all_dcm()
-        else:
-            QMessageBox.warning(self, 'No folder selected',
-                                'No folder selected so there is nothing to refresh.')
-
-    def run_TTF(self):
-        pass  # TODO
+    def update_list_images(self, serno=-1):
+        """Fill list_images with all images in selected groups."""
+        if serno >= 0:
+            img_strings = [
+                ' '.join(img.file_list_strings) for img in self.imgs[serno]]
+            self.list_images.clear()
+            self.list_images.addItems(img_strings)
 
     def update_current_test(self, reset_index=False, refresh_display=True):
         if self.active_img is not None and refresh_display:
             self.update_roi()
             self.refresh_results_display()
+
+    def refresh_img_display(self):
+        pass#TODO
 
     def update_roi(self, clear_results_test=False):
         """Recalculate ROI."""

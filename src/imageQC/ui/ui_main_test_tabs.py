@@ -72,18 +72,28 @@ class ParamsWidget(QWidget):
 class ParamsTabCommon(QTabWidget):
     """Superclass for modality specific tests."""
 
-    def __init__(self, parent):
+    def __init__(self, parent, task_based=False):
+        """Initiate tabs for tests available to all modalities.
+
+        Parameters
+        ----------
+        parent : MainWindow or InputMainAuto
+            InputMainAuto used for task_based
+        task_based : bool, optional
+            Used for task_based_image_quality.py. The default is False.
+        """
         super().__init__()
         self.main = parent
         self.flag_ignore_signals = False
         self.currentChanged.connect(self.main.update_current_test)
 
         self.create_tab_dcm()
-        self.create_tab_roi()
-        self.create_tab_num()
         self.addTab(self.tab_dcm, "DCM")
-        self.addTab(self.tab_roi, "ROI")
-        self.addTab(self.tab_num, "Num")
+        if task_based is False:
+            self.create_tab_roi()
+            self.create_tab_num()
+            self.addTab(self.tab_roi, "ROI")
+            self.addTab(self.tab_num, "Num")
 
     def flag_edit(self, indicate_change=True):
         """Add star after cbox_paramsets to indicate any change from saved."""
@@ -800,6 +810,10 @@ class ParamsTabCommon(QTabWidget):
                 else:
                     tests.append([])
         self.main.current_quicktest.tests = tests
+        max_progress = 100  # %
+        self.main.progress_modal = uir.ProgressModal(
+            "Calculating...", "Cancel",
+            0, max_progress, self, minimum_duration=0)
         calculate_qc(self.main)
 
         if len(marked_this) > 0:
@@ -820,7 +834,7 @@ class ParamsTabCT(ParamsTabCommon):
         task_based : bool, optional
             Used for task_based_image_quality.py. The default is False.
         """
-        super().__init__(parent)
+        super().__init__(parent, task_based=task_based)
 
         if task_based:
             self.create_tab_ttf()
@@ -1225,6 +1239,66 @@ class ParamsTabCT(ParamsTabCommon):
         self.tab_nps.hlo.addLayout(flo)
         self.tab_nps.hlo.addWidget(uir.VLine())
         self.tab_nps.hlo.addLayout(self.flo_nps_plot)
+
+    def create_tab_dpr(self):
+        """GUI of tab d-prime used in task based window."""
+        self.tab_dpr = ParamsWidget(self, run_txt='Calculate detectability')
+        self.tab_dpr.hlo_top.addWidget(uir.LabelItalic('Detectability'))
+        info_txt = '''
+        Details on methods used can be found in AAPM TG-233<br>
+        '''
+        self.tab_dpr.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
+        self.dpr_contrast = QDoubleSpinBox(decimals=0, minimum=1, singleStep=1)
+        self.dpr_contrast.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='dpr_contrast'))
+        self.dpr_size = QDoubleSpinBox(decimals=0, minimum=1, singleStep=1)
+        self.dpr_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='dpr_size'))
+        self.dpr_designer = QCheckBox()
+        self.dpr_designer.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='dpr_designer'))
+        self.dpr_power = QDoubleSpinBox(decimals=2, minimum=0.25, maximum=2.,
+                                        singleStep=0.05)
+        self.dpr_power.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='dpr_power'))
+
+        self.dpr_plot = QComboBox()
+        self.dpr_plot.addItems(['..',
+                                '...'])
+        self.dpr_plot.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
+
+        self.dpr_result_image = QComboBox()
+        self.dpr_result_image.addItems(
+            [
+                '--',
+                '---',
+             ])
+        self.dpr_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+
+        flo = QFormLayout()
+        flo.addRow(QLabel('Task contrst (HU)'), self.dpr_contrast)
+        flo.addRow(QLabel('Task radius (mm)'), self.dpr_size)
+        flo.addRow(QLabel('Designer contrast profile'), self.dpr_designer)
+        flo.addRow(QLabel('     sharpness constant'), self.dpr_power)
+
+        flo2 = QFormLayout()
+        flo2.addRow(QLabel('Plot'), self.dpr_plot)
+        flo2.addRow(QLabel('Result image'), self.dpr_result_image)
+
+        vlo1 = QVBoxLayout()
+        vlo2 = QVBoxLayout()
+        self.tab_dpr.hlo.addLayout(vlo1)
+        self.tab_dpr.hlo.addWidget(uir.VLine())
+        self.tab_dpr.hlo.addLayout(vlo2)
+        vlo1.addWidget(QLabel('Task function (ideal image of signal):'))
+        vlo1.addLayout(flo)
+        vlo2.addLayout(flo2)
+        self.tab_dpr.hlo.addStretch()
+
+        self.addTab(self.tab_dpr, 'd-prime')
 
 
 class ParamsTabXray(ParamsTabCommon):

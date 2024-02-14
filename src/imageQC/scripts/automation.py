@@ -19,7 +19,7 @@ import webbrowser
 # imageQC block start
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
-from imageQC.scripts.input_main_auto import InputMain
+from imageQC.scripts.input_main import InputMain
 from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm

@@ -662,11 +662,10 @@ class ParamSetCT_TaskBased:
     # nps_sampling_frequency: float = 0.01  # 1/mm, should match ttf_sampling_frequency
     nps_normalize: int = 0  # normalize curve by 0 = None, 1 = AUC, 2 = large area sign
     nps_plot: int = 0  # default plot 0=pr image, 1=avg, 2=pr image+avg, 3=all img+avg
-    # d-prime task features
-    dpr_size: int = 10
-    dpr_contrast: int = 10
-    dpr_profile: bool = True  # False = rect func, True = designer contrast profile func
-    dpr_profile_n: int = 1
+    dpr_size: float = 10
+    dpr_contrast: float = 10
+    dpr_designer: bool = True  # False = rect func, True = designer contrast profile
+    dpr_power: float = 1.
 
 
 @dataclass

@@ -5,7 +5,7 @@ Constants accessible for several modules within imageQC.
 
 @author: Ellen Wasbø
 """
-
+import sys
 import os
 
 # imageQC block start
@@ -18,14 +18,14 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.8-b3'
+VERSION = '3.0.8-b4'
 
-#if sys.platform.startswith("win"):
-APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
-TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
-#else:  # assume Linux for now
-#    APPDATA = os.path.expanduser('~/.config/imageQC')
-#    TEMPDIR = r'/etc/opt/imageQC'
+if sys.platform.startswith("win"):
+    APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
+    TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
+else:  # assume Linux for now
+    APPDATA = os.path.expanduser('~/.config/imageQC')
+    TEMPDIR = r'/etc/opt/imageQC'
 
 # os.environ variable keys to save global settings in session
 ENV_USER_PREFS_PATH = 'IMAGEQC_USER_PREFS_PATH'

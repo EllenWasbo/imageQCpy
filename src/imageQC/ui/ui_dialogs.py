@@ -18,8 +18,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox, QFileDialog
     )
 
-from skimage.transform import resize
 import matplotlib
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
 # imageQC block start
@@ -405,7 +405,6 @@ class CmapSelectDialog(ImageQCDialog):
         vlo = QVBoxLayout()
         self.setLayout(vlo)
 
-        #self.cmaps = [cmap for cmap in plt.colormaps() if '_r' not in cmap]
         self.cmaps = ['gray', 'inferno', 'hot', 'rainbow', 'viridis', 'RdBu']
         self.list_cmaps = QComboBox()
         self.list_cmaps.addItems(self.cmaps)
@@ -624,11 +623,11 @@ class ProjectionPlotDialog(ImageQCDialog):
 
         self.canvas = ProjectionPlotCanvas(self)
         self.canvas.setMinimumHeight(round(0.5*self.main.gui.panel_height))
-        self.canvas.setMinimumWidth(round(0.8*self.main.gui.panel_width))
-        self.tb_canvas = uir.ImageNavigationToolbar(self.canvas, self)
+        self.canvas.setMinimumWidth(round(1.5*self.main.gui.panel_width))
+        self.tb_canvas = uir.ImageNavigationToolbar(self.canvas, self,
+                                                    remove_customize=True)
 
         self.projections = ['Maximum intensity projection',
-                            'Minimum intensity projection',
                             'Average intensity projection']
         self.list_projections = QComboBox()
         self.list_projections.addItems(self.projections)
@@ -652,15 +651,31 @@ class ProjectionPlotDialog(ImageQCDialog):
         self.list_headers.setCurrentIndex(0)
         self.list_headers.currentIndexChanged.connect(self.canvas.update_figure)
 
-        vlo_selections = QVBoxLayout()
+        self.list_display_options = QComboBox()
+        self.list_display_options.addItems([
+            'projection + plot', 'projection only', 'plot only'])
+        self.list_display_options.setCurrentIndex(0)
+        self.list_display_options.currentIndexChanged.connect(self.canvas.update_figure)
+        self.spin_font_size = QSpinBox()
+        self.spin_font_size.setRange(5, 100)
+        self.spin_font_size.setValue(self.main.gui.annotations_font_size)
+        self.spin_font_size.valueChanged.connect(self.canvas.update_figure)
+
+        hlo_selections = QHBoxLayout()
         vlo_image = QVBoxLayout()
-        vlo.addLayout(vlo_selections)
+        vlo.addLayout(hlo_selections)
         vlo.addLayout(vlo_image)
         flo = QFormLayout()
-        vlo_selections.addLayout(flo)
+        hlo_selections.addLayout(flo)
         flo.addRow(QLabel('Select projection type:'), self.list_projections)
         flo.addRow(QLabel('Select projection direction:'), self.list_directions)
         flo.addRow(QLabel('Column to plot:'), self.list_headers)
+
+        flo2 = QFormLayout()
+        hlo_selections.addLayout(flo2)
+        flo2.addRow(QLabel('Display options:'), self.list_display_options)
+        flo2.addRow(QLabel('Font size:'), self.spin_font_size)
+        hlo_selections.addStretch()
 
         vlo_image.addWidget(self.tb_canvas)
         vlo_image.addWidget(self.canvas)
@@ -672,8 +687,6 @@ class ProjectionPlotDialog(ImageQCDialog):
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
         hlo_buttons.addWidget(buttonBox)
-        self.status_label = uir.StatusLabel(self)
-        vlo.addWidget(self.status_label)
 
         self.projection = None
         self.z_values = None
@@ -682,93 +695,100 @@ class ProjectionPlotDialog(ImageQCDialog):
         QTimer.singleShot(300, lambda: self.calculate_projection())
         # allow time to show dialog before updating list
 
+    def reject(self):
+        plt.rcParams.update({'font.size': self.main.gui.annotations_font_size})
+        super(ProjectionPlotDialog, self).reject()
+
     def calculate_projection(self):
         """Calculate projection based on selections."""
-        self.main.start_wait_cursor()
-        self.status_label.showMessage('Generating projection...')
+        max_progress = 100  # %
+        progress_modal = uir.ProgressModal(
+            "Calculating...", "Cancel",
+            0, max_progress, self, minimum_duration=0)
         proj = self.list_projections.currentText()
         projection_type = 'max'
-        if 'Minimum' in proj:
-            projection_type = 'min'
-        elif 'Average' in proj:
+        if 'Average' in proj:
             projection_type = 'mean'
         marked_this = self.main.tree_file_list.get_marked_imgs_current_test()
-        '''
-        try:
-            self.z_values = [float(img_info.zpos) for i, img_info
-                             in enumerate(self.main.imgs) if i in marked_this]
-            self.z_label = 'z position (mm)'
-        except TypeError:
-        '''
+
         self.z_values = [i for i in range(len(self.main.imgs)) if i in marked_this]
         self.z_label = 'image number'
         self.projection, errmsg = get_projection(
             self.main.imgs, marked_this, self.main.tag_infos,
             projection_type=projection_type,
-            direction=self.list_directions.currentText())
-        #self.projection = np.transpose(self.projection)
+            direction=self.list_directions.currentText(), progress_modal=progress_modal)
+        progress_modal.setValue(max_progress)
+
         zpos_0 = self.main.imgs[marked_this[0]].zpos
         pix_0 = self.main.imgs[marked_this[0]].pix[0]
+        sy, sx = self.projection.shape
+        self.projection_width = sx
+        self.projection_height = sy
         if zpos_0:
-            orig_shape = self.projection.shape
             zpos_1 = self.main.imgs[marked_this[1]].zpos
-            stretch = abs(zpos_1 - zpos_0)/pix_0
-            new_z_shape = round(orig_shape[1]*stretch)
-            self.projection = resize(
-                self.projection, (new_z_shape, orig_shape[1]))
-            self.z_values = np.array(self.z_values) / stretch
+            slice_increment = abs(zpos_1 - zpos_0)
+            self.projection_width = sx * pix_0
+            self.projection_height = sy * slice_increment
         if errmsg:
             QMessageBox.information(self, 'Failed generating projection', errmsg)
             self.reject()
         else:
             self.canvas.update_figure()
         self.main.stop_wait_cursor()
-        self.status_label.clearMessage()
 
 
 class ProjectionPlotCanvas(FigureCanvasQTAgg):
     """Canvas for display of projection and plot."""
 
     def __init__(self, parent):
-        self.fig = matplotlib.figure.Figure(figsize=(2, 2))
-        self.fig.subplots_adjust(0, 0, 1., 0.92)
+        self.fig = matplotlib.figure.Figure(figsize=(8, 2), constrained_layout=True)
         FigureCanvasQTAgg.__init__(self, self.fig)
         self.parent = parent
 
     def update_figure(self):
         """Refresh histogram."""
         self.fig.clear()
-        self.ax = self.fig.add_subplot(111)
+        ratio = self.parent.projection_height / self.parent.projection_width
+        display = self.parent.list_display_options.currentText()
+        if display == 'projection + plot':
+            gs = self.fig.add_gridspec(nrows=1, ncols=2)
+            self.ax_img = self.fig.add_subplot(gs[0, 0])
+            self.ax_plot = self.fig.add_subplot(gs[0, 1], sharey=self.ax_img)
+        elif 'projection' in display:
+            self.ax_img = self.fig.add_subplot(111)
+        elif 'plot' in display:
+            self.ax_plot = self.fig.add_subplot(111)
 
-        try:
-            cmap = self.ax.get_images()[0].cmap.name
-        except (AttributeError, IndexError):
-            cmap = 'gray'
+        if 'projection' in display:
+            try:
+                cmap = self.ax_img.get_images()[0].cmap.name
+            except (AttributeError, IndexError):
+                cmap = 'gray'
+            self.ax_img.imshow(self.parent.projection, cmap=cmap)
+
+            x0, x1 = self.ax_img.get_xlim()
+            y0, y1 = self.ax_img.get_ylim()
+            self.ax_img.set_aspect(float(ratio * abs((x1-x0)/(y1-y0))))
+            self.ax_img.axis('off')
 
         plot_values = None
-        if self.parent.main.results:
+        if 'plot' in display and self.parent.main.results:
+            plt.rcParams.update({'font.size': self.parent.spin_font_size.value()})
             results = self.parent.main.results
             test = self.parent.main.current_test
             if test in results:
-                if results[test]['pr_image']:
-                    col = self.parent.list_headers.currentIndex()
-                    plot_values = [row[col] for row in results[test]['values']]
+                try:
+                    if results[test]['pr_image']:
+                        col = self.parent.list_headers.currentIndex()
+                        plot_values = [row[col] for row in results[test]['values']]
+                except TypeError:
+                    pass
 
-        self.img = self.ax.imshow(self.parent.projection, cmap=cmap)
-        self.plot = self.ax.plot(plot_values, self.parent.z_values, 'r')
-        self.ax.axis('off')
-
-        _, shape_x = self.parent.projection.shape
-        a = (np.max(plot_values)-np.min(plot_values)) / shape_x
-        b = - np.min(plot_values)
-
-        def pix2val(x):
-            return a*x + b
-
-        def val2pix(y):
-            return (y - b)/a
-
-        secax = self.ax.secondary_xaxis('top', functions=(pix2val, val2pix))
-        secax.set_xlabel(self.parent.list_headers.currentText())
+            if plot_values:
+                self.ax_plot.plot(plot_values, self.parent.z_values, 'r')
+                self.ax_plot.set_xlabel(self.parent.list_headers.currentText())
+                x0, x1 = self.ax_plot.get_xlim()
+                y0, y1 = self.ax_plot.get_ylim()
+                self.ax_plot.set_aspect(ratio * abs((x1-x0)/(y1-y0)))
 
         self.draw()

@@ -1106,6 +1106,7 @@ def run_template_vendor(auto_template, modality,
                         x for x in p_input.glob(auto_template.file_prefix + '*')
                         if x.suffix == auto_template.file_suffix
                         ]
+                else:
                     files = [x for x in p_input.glob(auto_template.file_prefix + '*')]
                 files.sort(key=lambda t: t.stat().st_mtime)
         if len(files) > 0:

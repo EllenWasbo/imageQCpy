@@ -18,7 +18,7 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.8-b4'
+VERSION = '3.0.8-b5'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -356,7 +356,7 @@ HEADERS_SUP = {
 VENDOR_FILE_OPTIONS = {
     'CT': ['Siemens CT Constancy/Daily Reports (.pdf)'],
     'Xray': ['GE QAP (.txt)'],
-    'Mammo': [],
+    'Mammo': ['GE Mammo QAP (txt)'],
     'NM': ['Siemens exported energy spectrum (.txt)'],
     'SPECT': [],
     'PET': ['Siemens PET-CT DailyQC Reports (.pdf)',

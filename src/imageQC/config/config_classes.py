@@ -494,6 +494,7 @@ class ParamSetNM(ParamSetCommon):
 
     uni_ufov_ratio: float = 0.95
     uni_cfov_ratio: float = 0.75
+    uni_cfov_ratio75: bool = False
     uni_correct: bool = False
     uni_correct_pos_x: bool = False
     uni_correct_pos_y: bool = False
@@ -786,7 +787,8 @@ class AutoVendorTemplate:
     limits_and_plot_label: str = ''
     archive: bool = False
     file_type: str = ''
-    file_suffix: str = ''  # starting with . e.g. '.pdf'
+    file_prefix: str = ''  # filter on start of filename (e.g. Mammo QAP)
+    file_suffix: str = ''  # starting with .(dot) e.g. '.pdf'
     active: bool = True
 
 

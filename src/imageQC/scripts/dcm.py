@@ -1315,6 +1315,7 @@ def get_projection(img_infos, included_ids, tag_infos,
     np_method = getattr(np, projection_type, None)
     axis = 0 if direction == 'front' else 1
     n_img = len(img_infos)
+    patient_position = None
     for idx, img_info in enumerate(img_infos):
         if idx in included_ids:
             if progress_modal:
@@ -1325,10 +1326,20 @@ def get_projection(img_infos, included_ids, tag_infos,
                     projection = None
                     progress_modal.setValue(100)
                     break
-            image, tags = get_img(
+            if not patient_position:
+                tag_patterns = [TagPatternFormat(list_tags=['PatientPosition'])]
+            else:
+                tag_patterns = []
+            image, tags_ = get_img(
                 img_info.filepath,
-                frame_number=img_info.frame_number, tag_infos=tag_infos
+                frame_number=img_info.frame_number, tag_infos=tag_infos,
+                tag_patterns=tag_patterns
                 )
+            if not patient_position:
+                try:
+                    patient_position = tags_[0][0]
+                except IndexError:
+                    pass
             if projection is None:
                 projection = [np_method(image, axis=axis)]
                 shape_first = image.shape
@@ -1337,6 +1348,7 @@ def get_projection(img_infos, included_ids, tag_infos,
                     projection.append(np_method(image, axis=axis))
                 else:
                     shape_failed.append(idx)
+
     if len(shape_failed) > 0:
         errmsg = ('Could not generate projection due to different sizes. ' +
                   f'Image number {shape_failed} did not match the first marked image.')
@@ -1344,4 +1356,4 @@ def get_projection(img_infos, included_ids, tag_infos,
     else:
         projection = np.array(projection)
 
-    return (projection, errmsg)
+    return (projection, patient_position, errmsg)

@@ -225,7 +225,7 @@ class ImageCanvas(GenericImageCanvas):
 
         self.ax.cla()
         nparr = self.main.active_img
-        if auto is False:
+        if auto is False and hasattr(self.main, 'wid_window_level'):
             wl_min, wl_max = self.main.wid_window_level.tb_wl.get_min_max()
             self.main.wid_window_level.colorbar.colorbar_draw(cmap=cmap)
                 #, range_min=np.min(self.main.active_img),

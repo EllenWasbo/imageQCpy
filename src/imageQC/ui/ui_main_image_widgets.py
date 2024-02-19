@@ -192,7 +192,7 @@ class GenericImageToolbarPosVal(QToolBar):
 class ImageDisplayWidget(GenericImageWidget):
     """Image display widget."""
 
-    def __init__(self, parent):
+    def __init__(self, parent, toolbar_right=True):
         super().__init__(parent, ui_image_canvas.ImageCanvas(self, parent))
         self.main = parent
 
@@ -202,39 +202,40 @@ class ImageDisplayWidget(GenericImageWidget):
         vlo_tb = QVBoxLayout()
         hlo.addLayout(vlo_tb)
 
-        act_redraw = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}refresh.png'),
-            'Force refresh on image if hiccups', self)
-        act_redraw.triggered.connect(self.main.refresh_img_display)
-        self.tool_sum = QToolButton()
-        self.tool_sum.setToolTip(
-            'Toggle to display sum of marked images, press again to display average.')
-        self.tool_sum.setIcon(QIcon(
-            f'{os.environ[ENV_ICON_PATH]}sigma.png'))
-        self.tool_sum.clicked.connect(self.clicked_sum)
-        self.tool_sum.setCheckable(True)
-        act_edit_annotations = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
-            'Edit annotations', self)
-        act_edit_annotations.triggered.connect(self.edit_annotations)
-        self.tool_imgsize = QToolButton()
-        self.tool_imgsize.setToolTip('Maximize image')
-        self.tool_imgsize.setIcon(QIcon(
-            f'{os.environ[ENV_ICON_PATH]}layout_maximg.png'))
-        self.tool_imgsize.clicked.connect(self.clicked_imgsize)
-        self.tool_imgsize.setCheckable(True)
-        act_projection_plot = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}projections.png'),
-            'Show 3d projection and optionally plot values from result table', self)
-        act_projection_plot.triggered.connect(self.projection_plot)
-        tbimg.addAction(act_redraw)
-        tbimg.addWidget(self.tool_cmap)
-        tbimg.addWidget(self.tool_rectangle)
-        tbimg.addAction(act_projection_plot)
-        tbimg.addWidget(self.tool_profile)
-        tbimg.addWidget(self.tool_sum)
-        tbimg.addAction(act_edit_annotations)
-        tbimg.addWidget(self.tool_imgsize)
+        if toolbar_right:
+            act_redraw = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}refresh.png'),
+                'Force refresh on image if hiccups', self)
+            act_redraw.triggered.connect(self.main.refresh_img_display)
+            self.tool_sum = QToolButton()
+            self.tool_sum.setToolTip(
+                'Toggle to display sum of marked images, press again to display average.')
+            self.tool_sum.setIcon(QIcon(
+                f'{os.environ[ENV_ICON_PATH]}sigma.png'))
+            self.tool_sum.clicked.connect(self.clicked_sum)
+            self.tool_sum.setCheckable(True)
+            act_edit_annotations = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
+                'Edit annotations', self)
+            act_edit_annotations.triggered.connect(self.edit_annotations)
+            self.tool_imgsize = QToolButton()
+            self.tool_imgsize.setToolTip('Maximize image')
+            self.tool_imgsize.setIcon(QIcon(
+                f'{os.environ[ENV_ICON_PATH]}layout_maximg.png'))
+            self.tool_imgsize.clicked.connect(self.clicked_imgsize)
+            self.tool_imgsize.setCheckable(True)
+            act_projection_plot = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}projections.png'),
+                'Show 3d projection and optionally plot values from result table', self)
+            act_projection_plot.triggered.connect(self.projection_plot)
+            tbimg.addAction(act_redraw)
+            tbimg.addWidget(self.tool_cmap)
+            tbimg.addWidget(self.tool_rectangle)
+            tbimg.addAction(act_projection_plot)
+            tbimg.addWidget(self.tool_profile)
+            tbimg.addWidget(self.tool_sum)
+            tbimg.addAction(act_edit_annotations)
+            tbimg.addWidget(self.tool_imgsize)
 
         vlo_img = QVBoxLayout()
         vlo_img.addWidget(tbimg)

@@ -17,15 +17,24 @@ def update_roi(main, clear_results_test=False):
     errmsg = None
     if main.active_img is not None:
         main.start_wait_cursor()
-        main.status_bar.showMessage('Updating ROI...')
+        try:
+            main.status_bar.showMessage('Updating ROI...')
+        except AttributeError:
+            pass
         main.current_roi, errmsg = get_rois(
             main.active_img,
             main.gui.active_img_no, main)
-        main.status_bar.clearMessage()
+        try:
+            main.status_bar.clearMessage()
+        except AttributeError:
+            pass
         main.stop_wait_cursor()
     else:
         main.current_roi = None
-    main.wid_image_display.canvas.roi_draw()
+    try:
+        main.wid_image_display.canvas.roi_draw()
+    except AttributeError:
+        pass
     main.display_errmsg(errmsg)
     if clear_results_test:
         if main.current_test in [*main.results]:
@@ -81,10 +90,13 @@ def refresh_img_display(main):
     if main.active_img is not None:
         main.current_roi = None
         main.wid_image_display.canvas.img_draw()
-        main.wid_window_level.canvas.plot(main.active_img)
-        main.wid_dcm_header.refresh_img_info(
-            main.imgs[main.gui.active_img_no].info_list_general,
-            main.imgs[main.gui.active_img_no].info_list_modality)
+        try:
+            main.wid_window_level.canvas.plot(main.active_img)
+            main.wid_dcm_header.refresh_img_info(
+                main.imgs[main.gui.active_img_no].info_list_general,
+                main.imgs[main.gui.active_img_no].info_list_modality)
+        except AttributeError:
+            pass
         main.update_roi()
     else:
         main.wid_image_display.canvas.img_is_missing()

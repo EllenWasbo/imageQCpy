@@ -630,6 +630,7 @@ class OpenAutomationDialog(ImageQCDialog):
                 )
         except IndexError:
             dlg = settings.SettingsDialog(self.main, initial_view=view)
+
         res = dlg.exec()
         if res == 0:  # when closing
             self.update_settings()

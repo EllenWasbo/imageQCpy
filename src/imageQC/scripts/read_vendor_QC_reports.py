@@ -53,6 +53,8 @@ def read_vendor_template(template, filepath):
         results = read_Philips_MR_ACR_report(txt)
     elif template.file_type == 'GE QAP (.txt)':
         results = read_GE_QAP(filepath)
+    elif template.file_type == 'GE Mammo QAP (txt)':
+        results = read_GE_Mammo_QAP(filepath)
     else:
         results = None
 
@@ -1902,6 +1904,94 @@ def read_GE_QAP(filepath):
 
     data = {'status': status, 'errmsg': errmsg,
             'values': values, 'headers': headers}
+
+    return data
+
+
+def read_GE_Mammo_QAP(filepath):
+    """Read GE Mammo QAP report from txt-file.
+
+    Parameters
+    ----------
+    filepath : str
+        .txt file
+
+    Returns
+    -------
+    data : dict
+        'status': bool
+        'errmsg': list of str
+        'values': list of str,
+        'headers': list of str}
+    """
+    values = []
+    headers = []
+    limits = []
+    errmsg = []
+    testname = ''
+    date = ''
+    status = False
+
+    filepath = Path(filepath)
+    splitname = filepath.name.split('_')
+    if len(splitname) >= 3:
+        testname = splitname[0]
+        datestr = splitname[-2]
+        if len(datestr) == 8:
+            dd = datestr.split('.')
+            if len(dd) == 3:
+                date = f'{dd[0]}.{dd[1]}.20{dd[2]}'
+                # assume GE or this software outdated in year 2100 :)
+
+    txt = []
+    with open(filepath, 'r') as file:
+        txt = file.readlines()
+
+    if len(txt) > 4:
+        overall_result = 'PASSED'
+        for line in txt[4:]:
+            line_split = line.split()
+            if len(line_split) >= 5:
+                header_this = '?'
+                value_this = None
+                lower_limit_this = None
+                upper_limit_this = None
+                shift = len(line_split) - 5
+                if shift >= 0:
+                    if shift > 0:
+                        header_this = ' '.join(line_split[0:shift+1])
+                    else:
+                        header_this = line_split[0]
+                    value_this = line_split[shift + 1]
+                    lower_limit_this = line_split[shift + 2]
+                    upper_limit_this = line_split[shift + 3]
+                try:
+                    value_this = float(value_this)
+                except (ValueError, TypeError):
+                    pass
+                try:
+                    lower_limit_this = float(lower_limit_this)
+                except (ValueError, TypeError):
+                    lower_limit_this = None
+                try:
+                    upper_limit_this = float(upper_limit_this)
+                except (ValueError, TypeError):
+                    upper_limit_this = None
+    
+                if line_split[-1] != 'PASSED':
+                    overall_result = line_split[-1]
+                headers.append(header_this)
+                values.append(value_this)
+                limits.append([lower_limit_this, upper_limit_this])
+
+        values = [date, testname, overall_result] + values
+        headers = ['Date', 'Testname', 'Overall_result'] + headers
+        limits = [[None, None]] * 3 + limits
+        status = True
+
+    data = {'status': status, 'errmsg': errmsg,
+            'values': values, 'headers': headers,
+            'limits': limits}
 
     return data
 

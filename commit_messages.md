@@ -5,20 +5,25 @@ New functionalities:
 - New buttons in image toolbar:
 	- Colormap select
 	- Show projection (maximum/average intensity projection) with additional option to plot values from table (f.eks. mAs profile from extracted DCM values)
-	- Set active area (rectangle). For defining ROIs or use when setting window level based on active area (min/max or avg/stdev)
+	- Set active area (rectangle) for defining rectangular ROIs (previously defined by zoom functionality). The active area will also be used when setting window level based on active area (min/max or avg/stdev)
 - Added window level widget for result image.
 - Added colorbar to window level widget.
 - Added CT test TTF (task based MTF) - working on automated TTF/NPS/d' solution
+- Added option to read GE QAP Mammo result files and option to bulk-generate automation templates for reading the different file types.
 
 Changes:
+- Added option to lock NM uniformity CFOV to 75% of UFOV. Set to default. 
 - Cancel when running automation templates now stops during one template running, not just between templates.
 - More modal progress bars with option to Cancel.
 - Test Num:
 	- considerably more robust for Siemens gamma camera savescreens that differ in screen size from day to day
 	- default templates updated with larger ROIs to handle these day to day changes, ignoring parts of text at left/right border of ROI
+- Reduced startup time
 
 Bugfixes:
 - fixed error when using image names for QuickTest where more images than expected are loaded (IndexError on set_names[i], calculate_qc.py line 158)
+- default spinbox maximum is 100. Increased this value for different test-parameters that were not yet specified with max > 100.
+- avoiding crash when scrolling through images using arrow keys
 
 Code structure:
 - moved some methods from ui_main to ui_main_methods for better reuse of methods for task_based_image_quality dialog

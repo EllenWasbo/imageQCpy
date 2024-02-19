@@ -34,8 +34,8 @@ from imageQC.ui.ui_main_test_tabs_vendor import ParamsTabVendor
 from imageQC.ui import ui_main_result_tabs
 from imageQC.ui import rename_dicom
 from imageQC.ui import task_based_image_quality
+from imageQC.ui.settings import SettingsDialog
 from imageQC.ui import automation_wizard
-from imageQC.ui import settings
 from imageQC.ui import open_multi
 from imageQC.ui import open_automation
 from imageQC.ui.ui_dialogs import TextDisplay, AboutDialog
@@ -125,7 +125,6 @@ class MainWindow(QMainWindow):
         self.progress_modal = None
         self.status_bar = StatusBar(self)
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage('Starting up', 1000)
 
         self.setWindowTitle('Image QC v ' + VERSION)
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
@@ -147,7 +146,7 @@ class MainWindow(QMainWindow):
             ui_main_quicktest_paramset_select.SelectQuickTestWidget(self))
         self.wid_paramset = ui_main_quicktest_paramset_select.SelectParamsetWidget(self)
         self.create_result_tabs()
-        self.create_test_tabs()
+        self.create_test_tab_CT()
         # set main layout (left/right)
         bbox = QHBoxLayout()
         self.split_lft_rgt = QSplitter(Qt.Horizontal)
@@ -215,8 +214,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(scroll)
         self.reset_split_sizes()
 
+        QTimer.singleShot(1000, lambda: self.create_test_tabs_rest())
+        # allow time to show dialog before creating test stacks not to be visualized yet
         self.update_mode()
-
         if len(warnings) > 0:
             QTimer.singleShot(300, lambda: self.show_warnings(warnings))
 
@@ -368,6 +368,7 @@ class MainWindow(QMainWindow):
     def update_active_img(self, current):
         """Overwrite pixmap in memory with new active image, refresh GUI."""
         if len(self.imgs) > 0:
+            self.tree_file_list.blockSignals(True)
             if current is not None:
                 self.gui.active_img_no = self.tree_file_list.indexOfTopLevelItem(
                     current)
@@ -402,6 +403,7 @@ class MainWindow(QMainWindow):
             self.refresh_img_display()
             self.refresh_results_display(update_table=False)
             self.refresh_selected_table_row()
+            self.tree_file_list.blockSignals(False)
 
     def update_summed_img(self, recalculate_sum=True):
         """Overwrite pixmap in memory with new summed image, refresh GUI."""
@@ -492,6 +494,7 @@ class MainWindow(QMainWindow):
             if self.wid_quicktest.gb_quicktest.isChecked():
                 self.current_quicktest = cfc.QuickTestTemplate()
                 self.refresh_img_display()
+            self.wid_paramset.flag_edit(False)
         self.gui.current_auto_template = ''
         self.wid_center.reset_delta()
         self.reset_results()
@@ -793,9 +796,6 @@ class MainWindow(QMainWindow):
                 configuration folder for these settings.\n
                 Start the wizard again when the configuration folder is set.
                 ''')
-            dlg = settings.SettingsDialog(
-                self, initial_view='Config folder')
-            dlg.exec()
         else:
             self.wizard = automation_wizard.AutomationWizard(self)
             self.wizard.open()
@@ -854,10 +854,11 @@ class MainWindow(QMainWindow):
                 proceed = False
         if proceed:
             if initial_view == '':
-                dlg = settings.SettingsDialog(self)
+                dlg = SettingsDialog(self)
             else:
-                dlg = settings.SettingsDialog(
+                dlg = SettingsDialog(
                     self, initial_view=initial_view,
+                    initial_modality=self.curren_modality,
                     paramset_output=paramset_output,
                     initial_template_label=initial_template_label)
             dlg.exec()
@@ -889,7 +890,6 @@ class MainWindow(QMainWindow):
             self.wid_paramset.modality_dict = {
                 f'{self.current_modality}': self.paramsets}
             self.wid_paramset.fill_template_list(set_label=prev_label)
-
         except AttributeError:
             pass
 
@@ -925,7 +925,7 @@ class MainWindow(QMainWindow):
             pass  # just to wait for user to close message
 
     def display_errmsg(self, errmsg):
-        """Display error ees in statusbar or as popup if long."""
+        """Display error in statusbar or as popup if long."""
         if errmsg is not None:
             if isinstance(errmsg, str):
                 self.status_bar.showMessage(errmsg, 2000, warning=True)
@@ -962,7 +962,8 @@ class MainWindow(QMainWindow):
 
     def stop_wait_cursor(self):
         """Return to normal mouse cursor after wait cursor."""
-        QApplication.restoreOverrideCursor()
+        while QApplication.overrideCursor() is not None:
+            QApplication.restoreOverrideCursor()
         qApp.processEvents()
 
     def finish_cleanup(self):
@@ -1136,7 +1137,8 @@ class MainWindow(QMainWindow):
         menu_file = QMenu('&File', self)
         menu_file.addActions([
             act_open, act_open_adv, act_read_header, act_open_auto, act_wizard_auto,
-            act_rename_dcm, act_task_based_auto, act_close, act_close_all, act_quit])
+            act_rename_dcm, #act_task_based_auto,
+            act_close, act_close_all, act_quit])
         menu_bar.addMenu(menu_file)
         menu_settings = QMenu('&Settings', self)
         menu_settings.addAction(act_settings)
@@ -1187,10 +1189,15 @@ class MainWindow(QMainWindow):
         self.btns_mode.button(idx).setChecked(True)
         self.gb_modality.setLayout(hlo)
 
-    def create_test_tabs(self):
-        """Initiate GUI for the stacked test tabs."""
+    def create_test_tab_CT(self):
+        """Initiate GUI for the stacked test tab CT."""
         self.stack_test_tabs = QStackedWidget()
         self.tab_ct = ui_main_test_tabs.ParamsTabCT(self)
+        self.stack_test_tabs.addWidget(self.tab_ct)
+
+    def create_test_tabs_rest(self):
+        """Initiate GUI for the stacked test tabs - not CT."""
+        self.start_wait_cursor()
         self.tab_xray = ui_main_test_tabs.ParamsTabXray(self)
         self.tab_mammo = ui_main_test_tabs.ParamsTabMammo(self)
         self.tab_nm = ui_main_test_tabs.ParamsTabNM(self)
@@ -1198,8 +1205,6 @@ class MainWindow(QMainWindow):
         self.tab_pet = ui_main_test_tabs.ParamsTabPET(self)
         self.tab_mr = ui_main_test_tabs.ParamsTabMR(self)
         self.tab_vendor = ParamsTabVendor(self)
-
-        self.stack_test_tabs.addWidget(self.tab_ct)
         self.stack_test_tabs.addWidget(self.tab_xray)
         self.stack_test_tabs.addWidget(self.tab_mammo)
         self.stack_test_tabs.addWidget(self.tab_nm)
@@ -1207,6 +1212,7 @@ class MainWindow(QMainWindow):
         self.stack_test_tabs.addWidget(self.tab_pet)
         self.stack_test_tabs.addWidget(self.tab_mr)
         self.stack_test_tabs.addWidget(self.tab_vendor)
+        self.stop_wait_cursor()
 
     def create_result_tabs(self):
         """Initiate GUI for the stacked result tabs."""

@@ -1101,10 +1101,12 @@ def run_template_vendor(auto_template, modality,
         if proceed:
             p_input = Path(auto_template.path_input)
             if p_input.is_dir():
-                files = [
-                    x for x in p_input.glob('*')
-                    if x.suffix == auto_template.file_suffix
-                    ]
+                if auto_template.file_suffix:
+                    files = [
+                        x for x in p_input.glob(auto_template.file_prefix + '*')
+                        if x.suffix == auto_template.file_suffix
+                        ]
+                    files = [x for x in p_input.glob(auto_template.file_prefix + '*')]
                 files.sort(key=lambda t: t.stat().st_mtime)
         if len(files) > 0:
             write_ok = os.access(auto_template.path_output, os.W_OK)

@@ -12,6 +12,7 @@ import numpy as np
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
+    QApplication, qApp,
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QToolBar, QAbstractItemView,
     QTabWidget, QStackedWidget, QDoubleSpinBox,
     QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox, QListWidget,
@@ -19,12 +20,14 @@ from PyQt5.QtWidgets import (
     )
 
 # imageQC block start
+from imageQC.ui import ui_main_methods
 from imageQC.ui.ui_dialogs import ImageQCDialog
 from imageQC.ui.ui_main_image_widgets import ImageDisplayWidget
 from imageQC.ui import open_multi
 from imageQC.ui import reusable_widgets as uir
 from imageQC.config import config_classes as cfc
 from imageQC.config import config_func as cff
+from imageQC.scripts import dcm
 from imageQC.ui import messageboxes
 from imageQC.scripts import input_main
 from imageQC.ui import ui_main_quicktest_paramset_select
@@ -33,6 +36,7 @@ from imageQC.ui import ui_main_result_tabs
 from imageQC.ui import ui_image_canvas
 from imageQC.scripts.calculate_roi import get_rois
 from imageQC.config.iQCconstants import ENV_ICON_PATH
+from imageQC.scripts.mini_methods import get_uniq_ordered
 # imageQC block end
 
 
@@ -57,7 +61,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
 
     def __init__(self, main):
         super().__init__()
-
+        self.main = main
         self.setWindowTitle('CT task based image quality automated analysis')
 
         vlo = QVBoxLayout()
@@ -84,7 +88,8 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         self.fname = 'paramsets_CT_task_based'
         _, _, self.paramsets = cff.load_settings(fname=self.fname)
         self.current_modality = 'CT'
-        self.current_test = 'TTF'
+        self.current_test = 'DCM'
+        self.tests = ['DCM', 'TTF', 'NPS', 'DPR']
         self.current_paramset = cfc.ParamSetCT_TaskBased()
         self.current_quicktest = cfc.QuickTestTemplate()
         self.imgs = []
@@ -98,11 +103,14 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         self.summed_img = None
         self.gui = copy.deepcopy(main.gui)
         self.gui.active_img_no = -1
+        self.imgs_series_numbers = []
+        self.current_series = ''
+        self.series_strings = []
         self.user_prefs = main.user_prefs
         self.tag_infos = main.tag_infos
         self.tag_patterns_special = main.tag_patterns_special
         self.save_blocked = main.save_blocked
-        self.wid_image_display = ImageDisplayWidget(self)
+        self.wid_image_display = ImageDisplayWidget(self, toolbar_right=False)
         self.wid_paramset = ui_main_quicktest_paramset_select.SelectParamsetWidget(
             self, fname=self.fname)
         self.create_result_tabs()
@@ -116,9 +124,9 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         self.list_images = QListWidget()
         self.list_images.setMinimumHeight(min_height)
         self.list_images.setMinimumWidth(min_width)
-        self.list_images.currentRowChanged.connect(self.refresh_img_display)
+        self.list_images.currentRowChanged.connect(self.update_active_img)
 
-        self.btn_locate_images = QPushButton('Locate images...')
+        self.btn_locate_images = QPushButton('Open images...')
         self.btn_locate_images.clicked.connect(self.open_multi)
         self.lbl_n_loaded = QLabel('0 / 0')
 
@@ -149,7 +157,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
 
         vlo_images = QVBoxLayout()
         hlo_lists.addLayout(vlo_images)
-        vlo_images.addWidget(uir.LabelHeader('Images in selected series', 4))
+        vlo_images.addWidget(uir.LabelHeader('Images in selected group', 4))
         vlo_images.addWidget(self.list_images)
 
         vlo_left.addWidget(self.wid_image_display)
@@ -188,49 +196,137 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         res = dlg.exec()
         if res:
             if len(dlg.wid.open_imgs) > 0:
-                img_infos = dlg.wid.open_imgs
+                self.imgs = dlg.wid.open_imgs
                 series_strings = [' '.join(img.series_list_strings)
-                                  for img in img_infos]
-                series_strings = list(set(series_strings))
-                series_strings.sort()
-                self.imgs = [[] for i in range(len(series_strings))]
-                for img in img_infos:
+                                  for img in self.imgs]
+                self.series_strings = get_uniq_ordered(series_strings)
+                self.current_series = series_strings[0]
+                self.imgs_series_numbers = []
+                for imgno, img in enumerate(self.imgs):
                     ser = ' '.join(img.series_list_strings)
-                    serno = series_strings.index(ser)
-                    self.imgs[serno].append(img)
-                self.lbl_n_loaded.setText(f'{len(self.imgs)} / {len(img_infos)}')
+                    serno = self.series_strings.index(ser)
+                    self.imgs_series_numbers.append(serno)
+                self.lbl_n_loaded.setText(
+                    f'{len(self.series_strings)} / {len(self.imgs)}')
+                self.blockSignals(True)
+                self.list_series.clear()
+                self.list_series.addItems(self.series_strings)
+                self.list_series.setCurrentRow(0)
+                self.blockSignals(False)
+                self.update_list_images(serno=0)
+        self.stop_wait_cursor()
 
     def update_list_images(self, serno=-1):
         """Fill list_images with all images in selected groups."""
         if serno >= 0:
+            self.blockSignals(True)
             img_strings = [
-                ' '.join(img.file_list_strings) for img in self.imgs[serno]]
+                ' '.join(img.file_list_strings) for i, img in enumerate(self.imgs)
+                if self.imgs_series_numbers[i] == serno]
             self.list_images.clear()
             self.list_images.addItems(img_strings)
+            self.list_images.setCurrentRow(0)
+            self.blockSignals(False)
+            self.update_active_img()
+
+    def get_active_img_idxs(self):
+        """Return indexes in self.imgs for images in selected series."""
+        serno = self.list_series.currentRow()
+        idxs = [i for i, img in enumerate(self.imgs)
+            if self.imgs_series_numbers[i] == serno]
+        return idxs
+
+    def update_active_img(self):
+        """Overwrite pixmap in memory with new active image, refresh GUI."""
+        imgno = self.list_images.currentRow()
+        serno = self.list_series.currentRow()
+        if imgno > -1 and serno > -1:
+            first_in_series = self.imgs_series_numbers.index(serno)
+            self.gui.active_img_no = first_in_series + imgno
+            self.active_img, _ = dcm.get_img(
+                self.imgs[self.gui.active_img_no].filepath,
+                frame_number=self.imgs[self.gui.active_img_no].frame_number,
+                tag_infos=self.tag_infos)
+            '''
+            if self.active_img is not None:
+                amin = round(np.amin(self.active_img))
+                amax = round(np.amax(self.active_img))
+                self.wid_window_level.min_wl.setRange(amin, amax)
+                self.wid_window_level.max_wl.setRange(amin, amax)
+                if len(np.shape(self.active_img)) == 2:
+                    sz_acty, sz_actx = np.shape(self.active_img)
+                else:
+                    sz_acty, sz_actx, sz_actz = np.shape(self.active_img)
+            self.wid_dcm_header.refresh_img_info(
+                self.imgs[self.gui.active_img_no].info_list_general,
+                self.imgs[self.gui.active_img_no].info_list_modality)
+            '''
+
+            self.refresh_img_display()
+            self.refresh_results_display(update_table=False)
+            self.refresh_selected_table_row()
 
     def update_current_test(self, reset_index=False, refresh_display=True):
-        if self.active_img is not None and refresh_display:
-            self.update_roi()
-            self.refresh_results_display()
+        """Update when selected test change.
+
+        Parameters
+        ----------
+        reset_index : bool
+            Reset test index if mode change. Used in ui_main. Default is False
+        """
+        self.start_wait_cursor()
+        widget = self.stack_test_tabs.currentWidget()
+        if widget is not None:
+            if hasattr(widget, 'currentIndex'):
+                test_idx = widget.currentIndex()
+                self.current_test = self.tests[test_idx]
+                if self.active_img is not None and refresh_display:
+                    self.update_roi()
+                    self.refresh_results_display()
+        self.stop_wait_cursor()
 
     def refresh_img_display(self):
-        pass#TODO
+        ui_main_methods.refresh_img_display(self)
+
+    def refresh_selected_table_row(self):
+        """Set selected results table row to the same as image selected file."""
+        if self.current_test in self.results:
+            if self.results[self.current_test] is not None:
+                wid = self.tab_results.currentWidget()
+                if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
+                    pass
+                    '''
+                    marked_imgs = self.tree_file_list.get_marked_imgs_current_test()
+                    if self.gui.active_img_no in marked_imgs:
+                        idx = marked_imgs.index(self.gui.active_img_no)
+                        self.wid_res_tbl.result_table.blockSignals(True)
+                        self.wid_res_tbl_sup.result_table.blockSignals(True)
+                        self.wid_res_tbl.result_table.selectRow(idx)
+                        self.wid_res_tbl_sup.result_table.selectRow(idx)
+                        self.wid_res_tbl.result_table.blockSignals(False)
+                        self.wid_res_tbl_sup.result_table.blockSignals(False)
+                    '''
+
 
     def update_roi(self, clear_results_test=False):
-        """Recalculate ROI."""
-        errmsg = None
-        if self.active_img is not None:
-            self.current_roi, errmsg = get_rois(
-                self.active_img,
-                self.gui.active_img_no, self)
-        else:
-            self.current_roi = None
-        self.wid_image_display.canvas.roi_draw()
-        self.display_errmsg(errmsg)
-        if clear_results_test:
-            if self.current_test in [*self.results]:
-                self.results[self.current_test] = None
-                self.refresh_results_display()
+        ui_main_methods.update_roi(self, clear_results_test=clear_results_test)
+
+    def display_errmsg(self, errmsg):
+        """Display error in statusbar or as popup if long."""
+        if errmsg is not None:
+            msg = ''
+            if isinstance(errmsg, str):
+                msg = errmsg
+                details = []
+            elif isinstance(errmsg, list):
+                msg = 'Finished with issues. See details.'
+                details = errmsg
+
+            dlg = messageboxes.MessageBoxWithDetails(
+                self, title='Finished with issues',
+                msg=msg,
+                details=details, icon=QMessageBox.Warning)
+            dlg.exec()
 
     def refresh_results_display(self, update_table=True):
         """Update GUI for test results when results or selections change."""
@@ -269,3 +365,14 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                 self.wid_res_plot.plotcanvas.plot()
             elif isinstance(wid, ui_main_result_tabs.ResultImageWidget):
                 self.wid_res_image.canvas.result_image_draw()
+
+    def start_wait_cursor(self):
+        """Block mouse events by wait cursor."""
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        qApp.processEvents()
+
+    def stop_wait_cursor(self):
+        """Return to normal mouse cursor after wait cursor."""
+        while QApplication.overrideCursor() is not None:
+            QApplication.restoreOverrideCursor()
+        qApp.processEvents()

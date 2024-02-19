@@ -84,7 +84,7 @@ class ParamsTabCommon(QTabWidget):
         """
         super().__init__()
         self.main = parent
-        self.flag_ignore_signals = False
+        self.flag_ignore_signals = True
         self.currentChanged.connect(self.main.update_current_test)
 
         self.create_tab_dcm()
@@ -97,12 +97,16 @@ class ParamsTabCommon(QTabWidget):
 
     def flag_edit(self, indicate_change=True):
         """Add star after cbox_paramsets to indicate any change from saved."""
+        self.main.wid_paramset.flag_edit(indicate_change)
+        
+        '''
         if indicate_change:
             self.main.wid_paramset.lbl_edit.setText('*')
             self.main.wid_paramset.edited = True
         else:
             self.main.wid_paramset.lbl_edit.setText('')
             self.main.wid_paramset.edited = False
+        '''
 
     def update_displayed_params(self):
         """Display parameters according to current_paramset of main."""
@@ -769,17 +773,15 @@ class ParamsTabCommon(QTabWidget):
             lambda: self.param_changed_from_gui(attribute='nps_smooth_width'))
 
         self.nps_normalize = QComboBox()
-        self.nps_normalize.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='nps_normalize',
-                                                update_roi=False,
-                                                clear_results=False))
         self.nps_normalize.addItems(['', 'Area under curve (AUC)',
                                      'Large area signal ^2 (LAS)'])
+        self.nps_normalize.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='nps_normalize', update_roi=False, clear_results=False))
         self.nps_plot = QComboBox()
         self.nps_plot.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='nps_plot',
-                                                update_roi=False,
-                                                clear_results=False))
+            lambda: self.param_changed_from_gui(
+                attribute='nps_plot', update_roi=False, clear_results=False))
 
         self.flo_nps_plot = QFormLayout()
         self.flo_nps_plot.addRow(QLabel('NPS sampling frequency (1/mm)'),
@@ -792,7 +794,10 @@ class ParamsTabCommon(QTabWidget):
     def run_current(self):
         """Run selected test."""
         tests = []
-        marked_this = self.main.tree_file_list.get_marked_imgs_current_test()
+        if hasattr(self.main, 'tree_file_list'):
+            marked_this = self.main.tree_file_list.get_marked_imgs_current_test()
+        else:  # task based
+            marked_this = self.main.get_active_img_idxs()
         if len(marked_this) == 0:
             if self.main.wid_quicktest.gb_quicktest.isChecked():
                 dlg = messageboxes.MessageBoxWithDetails(
@@ -816,7 +821,7 @@ class ParamsTabCommon(QTabWidget):
             0, max_progress, self, minimum_duration=0)
         calculate_qc(self.main)
 
-        if len(marked_this) > 0:
+        if len(marked_this) > 0 and hasattr(self.main, 'tree_file_list'):
             if self.main.gui.active_img_no not in marked_this:
                 self.main.set_active_img(marked_this[0])
 
@@ -864,6 +869,8 @@ class ParamsTabCT(ParamsTabCommon):
             self.addTab(self.tab_rin, "Ring artifacts")
             self.addTab(self.tab_dim, "Dimensions")
             self.addTab(self.tab_nps, "NPS")
+
+            self.flag_ignore_signals = False
 
     def update_enabled(self):
         """Update enabled/disabled features."""
@@ -931,7 +938,8 @@ class ParamsTabCT(ParamsTabCommon):
         self.hom_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
-        self.hom_roi_distance = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.hom_roi_distance = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.hom_roi_distance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_distance'))
         self.hom_roi_rotation = QDoubleSpinBox(
@@ -950,7 +958,8 @@ class ParamsTabCT(ParamsTabCommon):
         """GUI of tab Noise."""
         self.tab_noi = ParamsWidget(self, run_txt='Calculate noise')
 
-        self.noi_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.noi_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.noi_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='noi_roi_size'))
 
@@ -1136,7 +1145,8 @@ class ParamsTabCT(ParamsTabCommon):
         """GUI of tab HU water."""
         self.tab_huw = ParamsWidget(self, run_txt='Calculate HU in water')
 
-        self.huw_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.huw_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.huw_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='huw_roi_size'))
 
@@ -1150,11 +1160,12 @@ class ParamsTabCT(ParamsTabCommon):
         """GUI of tab MTF."""
         super().create_tab_mtf()
 
-        self.mtf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.mtf_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.mtf_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
         self.mtf_background_width = QDoubleSpinBox(
-            decimals=1, minimum=0.1, singleStep=0.1)
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.mtf_background_width.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_background_width'))
         self.mtf_auto_center = QCheckBox('')
@@ -1221,10 +1232,12 @@ class ParamsTabCT(ParamsTabCommon):
                                            minimum=10, maximum=500, singleStep=1)
         self.nps_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='nps_roi_size'))
-        self.nps_roi_distance = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
+        self.nps_roi_distance = QDoubleSpinBox(
+            decimals=1, minimum=0, maximum=1000, singleStep=0.1)
         self.nps_roi_distance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='nps_roi_distance'))
-        self.nps_n_sub = QDoubleSpinBox(decimals=0, minimum=1, singleStep=1)
+        self.nps_n_sub = QDoubleSpinBox(
+            decimals=0, minimum=1, maximum=1000, singleStep=1)
         self.nps_n_sub.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='nps_n_sub'))
 
@@ -1234,8 +1247,9 @@ class ParamsTabCT(ParamsTabCommon):
         flo.addRow(QLabel('Number of ROIs'), self.nps_n_sub)
 
         self.add_NPS_plot_settings()
-        self.nps_plot.addItems(['NPS pr image', 'NPS average all images',
-                                'NPS pr image + average', 'NPS all images + average'])
+        self.nps_plot.addItems(
+            ['NPS pr image', 'NPS average all images',
+             'NPS pr image + average', 'NPS all images + average'])
         self.tab_nps.hlo.addLayout(flo)
         self.tab_nps.hlo.addWidget(uir.VLine())
         self.tab_nps.hlo.addLayout(self.flo_nps_plot)
@@ -1321,18 +1335,22 @@ class ParamsTabXray(ParamsTabCommon):
         self.addTab(self.tab_stp, "STP")
         self.addTab(self.tab_var, "Variance")
 
+        self.flag_ignore_signals = False
+
     def create_tab_hom(self):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate homogeneity')
 
-        self.hom_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.hom_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
         self.hom_roi_rotation = QDoubleSpinBox(
             decimals=1, minimum=-359.9, maximum=359.9, singleStep=0.1)
         self.hom_roi_rotation.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_rotation'))
-        self.hom_roi_distance = QDoubleSpinBox(decimals=1, minimum=0, singleStep=0.1)
+        self.hom_roi_distance = QDoubleSpinBox(
+            decimals=1, minimum=0, maximum=1000, singleStep=0.1)
         self.hom_roi_distance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_distance'))
 
@@ -1393,7 +1411,8 @@ class ParamsTabXray(ParamsTabCommon):
         """GUI of tab STP."""
         self.tab_stp = ParamsWidget(self, run_txt='Get mean in ROI')
 
-        self.stp_roi_size = QDoubleSpinBox(decimals=1, minimum=1., singleStep=0.1)
+        self.stp_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=1., maximum=1000, singleStep=0.1)
         self.stp_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='stp_roi_size'))
 
@@ -1409,7 +1428,8 @@ class ParamsTabXray(ParamsTabCommon):
         """GUI of tab Variance."""
         self.tab_var = ParamsWidget(self, run_txt='Calculate variance image(s)')
 
-        self.var_roi_size = QDoubleSpinBox(decimals=1, minimum=1., singleStep=0.1)
+        self.var_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=1., maximum=1000, singleStep=0.1)
         self.var_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='var_roi_size'))
         self.var_percent = QDoubleSpinBox(decimals=1,
@@ -1459,6 +1479,8 @@ class ParamsTabMammo(ParamsTabCommon):
         self.addTab(self.tab_mtf, "MTF")
         self.addTab(self.tab_nps, "NPS")
 
+        self.flag_ignore_signals = False
+
     def create_tab_sdn(self):
         """GUI of tab SDNR."""
         self.tab_sdn = ParamsWidget(self, run_txt='Calculate SDNR')
@@ -1479,12 +1501,12 @@ class ParamsTabMammo(ParamsTabCommon):
         self.tab_sdn.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         self.sdn_roi_size = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=100., singleStep=0.1)
+            decimals=1, minimum=0.1, maximum=1000., singleStep=0.1)
         self.sdn_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sdn_roi_size'))
 
         self.sdn_roi_dist = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=100., singleStep=0.1)
+            decimals=1, minimum=0.1, maximum=1000., singleStep=0.1)
         self.sdn_roi_dist.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sdn_roi_dist'))
 
@@ -1814,6 +1836,8 @@ class ParamsTabNM(ParamsTabCommon):
         self.addTab(self.tab_spe, "Scan speed")
         self.addTab(self.tab_bar, "Bar phantom")
 
+        self.flag_ignore_signals = False
+
     def update_enabled(self):
         """Update enabled/disabled features."""
         super().update_enabled()
@@ -1823,6 +1847,8 @@ class ParamsTabNM(ParamsTabCommon):
                 self.sni_roi_ratio.setEnabled(False)
             else:
                 self.sni_roi_ratio.setEnabled(True)
+            if paramset.uni_cfov_ratio75:
+                self.uni_cfov_ratio.setValue(0.75*self.uni_ufov_ratio.value())
 
     def update_sni_display_options(self, attribute=''):
         """Update plot and result image options for SNI."""
@@ -1871,6 +1897,9 @@ class ParamsTabNM(ParamsTabCommon):
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.uni_cfov_ratio.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='uni_cfov_ratio'))
+        self.uni_cfov_ratio75 = QCheckBox('')
+        self.uni_cfov_ratio75.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='uni_cfov_ratio75'))
 
         self.uni_correct_pos_x = QCheckBox('x')
         self.uni_correct_pos_y = QCheckBox('y')
@@ -1921,9 +1950,11 @@ class ParamsTabNM(ParamsTabCommon):
         flo = QFormLayout()
         flo.addRow(QLabel('UFOV ratio'), self.uni_ufov_ratio)
         flo.addRow(QLabel('CFOV ratio'), self.uni_cfov_ratio)
+        flo.addRow(QLabel('     Lock CFOV ratio to 75% of UFOV'), self.uni_cfov_ratio75)
         hlo_fov.addLayout(flo)
         hlo_fov.addSpacing(100)
         vlo_left.addLayout(hlo_fov)
+        vlo_left.addSpacing(100)
         vlo_left.addWidget(self.uni_sum_first)
         hlo_scale = QHBoxLayout()
         vlo_left.addLayout(hlo_scale)
@@ -2202,6 +2233,8 @@ class ParamsTabSPECT(ParamsTabCommon):
         self.addTab(self.tab_mtf, "Spatial resolution")
         self.addTab(self.tab_rin, "Ring artifacts")
 
+        self.flag_ignore_signals = False
+
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
@@ -2272,6 +2305,8 @@ class ParamsTabPET(ParamsTabCommon):
         self.addTab(self.tab_cro, "Cross Calibration")
         self.addTab(self.tab_rec, "Recovery Curve")
 
+        self.flag_ignore_signals = False
+
     def create_tab_hom(self):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate homogeneity')
@@ -2281,7 +2316,8 @@ class ParamsTabPET(ParamsTabCommon):
         self.hom_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
-        self.hom_roi_distance = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.hom_roi_distance = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.hom_roi_distance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_distance'))
 
@@ -2306,7 +2342,8 @@ class ParamsTabPET(ParamsTabCommon):
         self.tab_cro.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         # configurable settings
-        self.cro_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.cro_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.cro_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='cro_roi_size'))
         self.cro_volume = QDoubleSpinBox(
@@ -2337,7 +2374,7 @@ class ParamsTabPET(ParamsTabCommon):
         self.cro_override_activity.setChecked(False)
         self.cro_override_activity.setFont(uir.FontItalic())
         self.cro_override_activity.toggled.connect(self.clear_results_current_test)
-        self.activity = QDoubleSpinBox(decimals=2, minimum=0.)
+        self.activity = QDoubleSpinBox(decimals=2, minimum=0., maximum=1000)
         self.activity.editingFinished.connect(self.clear_results_current_test)
         self.activity_resid = QDoubleSpinBox(decimals=2, minimum=0.)
         self.activity_resid.editingFinished.connect(self.clear_results_current_test)
@@ -2604,6 +2641,8 @@ class ParamsTabMR(ParamsTabCommon):
         self.addTab(self.tab_sli, "Slice thickness")
         self.addTab(self.tab_mtf, "MTF")
 
+        self.flag_ignore_signals = False
+
     def create_tab_snr(self):
         """GUI of tab SNR."""
         self.tab_snr = ParamsWidget(self, run_txt='Calculate SNR')
@@ -2710,18 +2749,20 @@ class ParamsTabMR(ParamsTabCommon):
         '''
         self.tab_gho.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
-        self.gho_roi_central = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.gho_roi_central = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.gho_roi_central.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='gho_roi_central'))
         self.gho_optimize_center = QCheckBox('')
         self.gho_optimize_center.toggled.connect(
             lambda: self.param_changed_from_gui(
                 attribute='gho_optimize_center'))
-        self.gho_roi_w = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
+        self.gho_roi_w = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.gho_roi_w.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='gho_roi_w'))
         self.gho_roi_h = QDoubleSpinBox(
-            decimals=1, minimum=0.1, singleStep=0.1)
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
         self.gho_roi_h.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='gho_roi_h'))
         self.gho_roi_dist = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
@@ -3226,7 +3267,6 @@ class PositionWidget(QWidget):
                     'Proceed setting full image as ROI?')
                 proceed = messageboxes.proceed_question(self, question)
             if proceed:
-                print(f'set x y {x_tuple} {y_tuple}')
                 if add_row is False:
                     self.table.current_table.pos_x[rowno] = x_tuple
                     self.table.current_table.pos_y[rowno] = y_tuple

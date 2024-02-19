@@ -887,12 +887,13 @@ def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
     errmsg = None
 
     if roi_size_in_pix > 0:
-        if paramset.ctn_auto_center and test == 'ctn':
-            res = mmcalc.optimize_center(image, 0)
-            if res is not None:
-                center_x, center_y, _, _ = res
-                delta_xya[0] = center_x - 0.5*image_info.shape[1]
-                delta_xya[1] = center_y - 0.5*image_info.shape[0]
+        if test == 'ctn':
+            if paramset.ctn_auto_center:
+                res = mmcalc.optimize_center(image, 0)
+                if res is not None:
+                    center_x, center_y, _, _ = res
+                    delta_xya[0] = center_x - 0.5*image_info.shape[1]
+                    delta_xya[1] = center_y - 0.5*image_info.shape[0]
         filt_image = ndimage.gaussian_filter(image, sigma=5)
         pos_table = getattr(paramset, f'{test}_table')
         n_rois = len(pos_table.pos_x)
@@ -912,48 +913,49 @@ def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
             off_centers.append([x, y])
 
         roi_search_array = []
-        if test == 'ctn' and paramset.ctn_search:  # optimize off_centers
-            search_size_in_pix = round(
-                paramset.ctn_search_size / image_info.pix[0])
-            for r in range(n_rois):
-                roi_search_array.append(get_roi_circle(
-                    image_info.shape, tuple(off_centers[r]),
-                    search_size_in_pix))
+        if test == 'ctn':
+            if paramset.ctn_search:  # optimize off_centers
+                search_size_in_pix = round(
+                    paramset.ctn_search_size / image_info.pix[0])
+                for r in range(n_rois):
+                    roi_search_array.append(get_roi_circle(
+                        image_info.shape, tuple(off_centers[r]),
+                        search_size_in_pix))
 
-            # adjust off_center by finding center of object within
-            radius = search_size_in_pix
-            cy = 0.5 * image_info.shape[0]
-            cx = 0.5 * image_info.shape[1]
-            outer_val_ring_mask = get_outer_ring(radius)
-            n_err = 0
-            for r in range(n_rois):
-                y = round(off_centers[r][1] + cy)
-                x = round(off_centers[r][0] + cx)
-                subarr = filt_image[y-radius:y+radius, x-radius:x+radius]
-                roi_mask = roi_search_array[r][y-radius:y+radius, x-radius:x+radius]
-                try:
-                    background_arr = np.ma.masked_array(
-                        subarr, mask=outer_val_ring_mask)
-                    subarr[roi_mask == False] = np.mean(background_arr)
-                except np.ma.core.MaskError:
-                    pass
-                size_y, size_x = subarr.shape
-                if size_y > 0 and size_x > 0:
-                    prof_y = np.sum(subarr, axis=1)
-                    prof_x = np.sum(subarr, axis=0)
-                    # get width at halfmax and center for profiles
-                    width_x, center_x = mmcalc.get_width_center_at_threshold(
-                        prof_x, 0.5 * (max(prof_x) + min(prof_x)))
-                    width_y, center_y = mmcalc.get_width_center_at_threshold(
-                        prof_y, 0.5 * (max(prof_y) + min(prof_y)))
-                    if center_y is not None:
-                        off_centers[r][1] += center_y - radius
-                    if center_x is not None:
-                        off_centers[r][0] += center_x - radius
-                    if center_y is None or center_x is None:
-                        n_err += 1
-                        txt = 'all' if n_err == n_rois else 'some'
-                        errmsg = f'Failed finding center of object for {txt} ROIs.'
+                # adjust off_center by finding center of object within
+                radius = search_size_in_pix
+                cy = 0.5 * image_info.shape[0]
+                cx = 0.5 * image_info.shape[1]
+                outer_val_ring_mask = get_outer_ring(radius)
+                n_err = 0
+                for r in range(n_rois):
+                    y = round(off_centers[r][1] + cy)
+                    x = round(off_centers[r][0] + cx)
+                    subarr = filt_image[y-radius:y+radius, x-radius:x+radius]
+                    roi_mask = roi_search_array[r][y-radius:y+radius, x-radius:x+radius]
+                    try:
+                        background_arr = np.ma.masked_array(
+                            subarr, mask=outer_val_ring_mask)
+                        subarr[roi_mask == False] = np.mean(background_arr)
+                    except np.ma.core.MaskError:
+                        pass
+                    size_y, size_x = subarr.shape
+                    if size_y > 0 and size_x > 0:
+                        prof_y = np.sum(subarr, axis=1)
+                        prof_x = np.sum(subarr, axis=0)
+                        # get width at halfmax and center for profiles
+                        width_x, center_x = mmcalc.get_width_center_at_threshold(
+                            prof_x, 0.5 * (max(prof_x) + min(prof_x)))
+                        width_y, center_y = mmcalc.get_width_center_at_threshold(
+                            prof_y, 0.5 * (max(prof_y) + min(prof_y)))
+                        if center_y is not None:
+                            off_centers[r][1] += center_y - radius
+                        if center_x is not None:
+                            off_centers[r][0] += center_x - radius
+                        if center_y is None or center_x is None:
+                            n_err += 1
+                            txt = 'all' if n_err == n_rois else 'some'
+                            errmsg = f'Failed finding center of object for {txt} ROIs.'
 
         roi_array = []
         for r in range(n_rois):

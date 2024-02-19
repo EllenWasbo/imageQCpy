@@ -10,7 +10,7 @@ from pathlib import Path
 
 import imageQC.scripts.dcm as dcm
 import imageQC.config.config_classes as cfc
-from imageQC.scripts.input_main_auto import InputMain
+from imageQC.scripts.input_main import InputMain
 import imageQC.scripts.calculate_qc as calculate_qc
 import imageQC.resources
 

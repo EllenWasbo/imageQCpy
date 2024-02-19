@@ -1,4 +1,4 @@
-dash>=2.10.2
+dash>=2.15.0
 dash_bootstrap_components>=1.4.2
 itsdangerous>=2.0.1
 matplotlib>=3.5.2

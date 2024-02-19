@@ -28,7 +28,7 @@ from imageQC.ui.settings_reusables import (
     StackWidget, ToolBarImportIgnore, DicomCritWidget)
 from imageQC.ui.tag_patterns import TagPatternWidget, TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
-from imageQC.ui.ui_dialogs import ImageQCDialog, TextDisplay
+from imageQC.ui.ui_dialogs import ImageQCDialog, TextDisplay, SelectTextsDialog
 from imageQC.ui import messageboxes
 from imageQC.scripts.mini_methods import (
     create_empty_file, create_empty_folder, find_value_in_sublists,
@@ -36,6 +36,7 @@ from imageQC.scripts.mini_methods import (
 from imageQC.scripts.mini_methods_format import valid_template_name
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm
+from imageQC.scripts.read_vendor_QC_reports import read_vendor_template
 from imageQC.dash_app import dash_app
 # imageQC block end
 
@@ -767,85 +768,87 @@ class LimitsAndPlotContent(QWidget):
             set_sample_headers = set(self.headers)
         missing_in_template = list(set_template_headers.difference(set_sample_headers))
         missing_in_sample = list(set_sample_headers.difference(set_template_headers))
-        if len(missing_in_template) > 0 and len(missing_in_sample) == 0:
-            # Add to template or ignore?
-            res = messageboxes.QuestionBox(
-                parent=self, title='Add or ignore missing headers?',
-                msg=('The LimitsAndPlot template are missing headers that are found '
-                     'in the connected automation output file(s).'),
-                info='See details for the missing headers.',
-                details=missing_in_template,
-                yes_text='Add missing headers to LimitsAndPlot template',
-                no_text='Ignore missing headers')
-            if res.exec():  # overwrite
-                for header in missing_in_template:
-                    self.parent.current_template.add_group([header])
-                self.parent.flag_edit(True)
-        elif len(missing_in_template) == 0 and len(missing_in_sample) > 0:
-            res = messageboxes.MessageBoxWithDetails(
-                parent=self, title='Mismatching headers',
-                msg=('Some headers found in the LimitsAndPlot template cannot be '
-                     'found in any of the connected automation output files. '
-                     'Consider deleting these '
-                     'headers from the LimitsAndPlot template.'),
-                info='See these headers in details.',
-                details=missing_in_sample)
-            if res.exec():
-                pass
-        elif len(missing_in_template) > 0 and len(missing_in_sample) > 0:
-            proceed = True
-            if hasattr(self.parent, 'output_headers'):
-                # same headers all files?
-                if len(self.parent.output_headers) > 1:
-                    first_headers = self.parent.output_headers[0]
-                    for headers in self.parent.output_headers:
-                        if headers != first_headers:
-                            proceed = False
-                if proceed is False:
-                    details = ['Headers in output files']
-                    for i, path in enumerate(self.parent.output_paths):
-                        details.append(f'{path}:')
-                        details.extend(self.parent.output_headers[i])
-                    details.extend(['', 'Missing in template:'])
-                    details.extend(missing_in_template)
-                    details.extend(['', 'Missing in output file(s):'])
-                    details.extend(missing_in_sample)
-                    res = messageboxes.MessageBoxWithDetails(
-                        parent=self, title='Mismatching headers',
-                        msg=('Found mismatch between headers found in the Limits and '
-                             'plot template and headers found in at least one of the '
-                             'connected automation output files. The headers of '
-                             'connected output files differ. '
-                             'Consider connecting these to separate '
-                             'Limits and plot templates.'),
-                        info='See mismatch headers in details.',
-                        details=details)
-                    if res.exec():
-                        pass
-            if proceed:
-                if hasattr(self.parent, 'output_headers'):
-                    output_paths = self.parent.output_paths
-                else:
-                    output_paths = [self.txt_sample_file_path.text()]
-                dlg = LimitsAndPlotFixHeadersDialog(
-                    self,
-                    limits_template=copy.deepcopy(self.parent.current_template),
-                    output_paths=output_paths,
-                    headers_in_output=self.headers,
-                    headers_in_template=flatten_groups
-                    )
-                res = dlg.exec()
-                if res:
-                    self.parent.current_template = dlg.get_template()
-                    self.headers = dlg.get_headers()
+
+        if len(set_sample_headers) > 0:
+            if len(missing_in_template) > 0 and len(missing_in_sample) == 0:
+                # Add to template or ignore?
+                res = messageboxes.QuestionBox(
+                    parent=self, title='Add or ignore missing headers?',
+                    msg=('The LimitsAndPlot template are missing headers that are '
+                         'found in the connected automation output file(s).'),
+                    info='See details for the missing headers.',
+                    details=missing_in_template,
+                    yes_text='Add missing headers to LimitsAndPlot template',
+                    no_text='Ignore missing headers')
+                if res.exec():  # overwrite
+                    for header in missing_in_template:
+                        self.parent.current_template.add_group([header])
                     self.parent.flag_edit(True)
-                else:
-                    QMessageBox.warning(
-                        self, 'Mismatch persist',
-                        'The mismatch still persist. To trigger the dailog to fix '
-                        'this template again (the one you just canceled), select '
-                        'another template and then select the current template once '
-                        'again.')
+            elif len(missing_in_template) == 0 and len(missing_in_sample) > 0:
+                res = messageboxes.MessageBoxWithDetails(
+                    parent=self, title='Mismatching headers',
+                    msg=('Some headers found in the LimitsAndPlot template cannot be '
+                         'found in any of the connected automation output files. '
+                         'Consider deleting these '
+                         'headers from the LimitsAndPlot template.'),
+                    info='See these headers in details.',
+                    details=missing_in_sample)
+                if res.exec():
+                    pass
+            elif len(missing_in_template) > 0 and len(missing_in_sample) > 0:
+                proceed = True
+                if hasattr(self.parent, 'output_headers'):
+                    # same headers all files?
+                    if len(self.parent.output_headers) > 1:
+                        first_headers = self.parent.output_headers[0]
+                        for headers in self.parent.output_headers:
+                            if headers != first_headers:
+                                proceed = False
+                    if proceed is False:
+                        details = ['Headers in output files']
+                        for i, path in enumerate(self.parent.output_paths):
+                            details.append(f'{path}:')
+                            details.extend(self.parent.output_headers[i])
+                        details.extend(['', 'Missing in template:'])
+                        details.extend(missing_in_template)
+                        details.extend(['', 'Missing in output file(s):'])
+                        details.extend(missing_in_sample)
+                        res = messageboxes.MessageBoxWithDetails(
+                            parent=self, title='Mismatching headers',
+                            msg=('Found mismatch between headers found in the Limits '
+                                 'and plot template and headers found in at least one '
+                                 'of the connected automation output files. The '
+                                 'headers of connected output files differ. '
+                                 'Consider connecting these to separate '
+                                 'Limits and plot templates.'),
+                            info='See mismatch headers in details.',
+                            details=details)
+                        if res.exec():
+                            pass
+                if proceed:
+                    if hasattr(self.parent, 'output_headers'):
+                        output_paths = self.parent.output_paths
+                    else:
+                        output_paths = [self.txt_sample_file_path.text()]
+                    dlg = LimitsAndPlotFixHeadersDialog(
+                        self,
+                        limits_template=copy.deepcopy(self.parent.current_template),
+                        output_paths=output_paths,
+                        headers_in_output=self.headers,
+                        headers_in_template=flatten_groups
+                        )
+                    res = dlg.exec()
+                    if res:
+                        self.parent.current_template = dlg.get_template()
+                        self.headers = dlg.get_headers()
+                        self.parent.flag_edit(True)
+                    else:
+                        QMessageBox.warning(
+                            self, 'Mismatch persist',
+                            'The mismatch still persist. To trigger the dailog to fix '
+                            'this template again (the one you just canceled), select '
+                            'another template and then select the current template '
+                            'once again.')
         self.group_numbers = []
         for idx, group in enumerate(self.parent.current_template.groups):
             self.group_numbers.extend([idx] * len(group))
@@ -862,14 +865,20 @@ class LimitsAndPlotContent(QWidget):
         """Find headers and sample data from sample file or startup if None."""
         self.headers = []
         self.first_values = None
+        headers_as_groups = False
         if os.path.exists(self.txt_sample_file_path.text()):
             self.headers, self.first_values = get_headers_first_values_in_path(
                 self.txt_sample_file_path.text())
+            if len(self.headers) == 0:
+                headers_as_groups = True
         elif self.txt_sample_file_path.text() == '':
             if self.parent.current_template is not None:
-                self.headers = [
-                    elem for sublist in self.parent.current_template.groups
-                    for elem in sublist]
+                headers_as_groups = True
+        if headers_as_groups:
+            self.headers = [
+                elem for sublist in self.parent.current_template.groups
+                for elem in sublist]
+
         if self.first_values is None:
             if silent is False:
                 QMessageBox.information(
@@ -947,7 +956,10 @@ class LimitsAndPlotContent(QWidget):
                     self.list_headers.item(row).setBackground(brush_default)
 
             # show current values
-            sample_val = self.first_values[sel_rows[0]]
+            try:
+                sample_val = self.first_values[sel_rows[0]]
+            except (IndexError, ValueError):
+                sample_val = ''
             self.lbl_sample_value.setText(f'Sample value: {sample_val}')
             decimals = 0
             max_val = 100
@@ -1905,6 +1917,27 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         hlo_options.addWidget(self.cbox_file_type)
         hlo_options.addStretch()
         self.vlo_temp.addLayout(hlo_options)
+        hlo_mammo_options = QHBoxLayout()
+        self.vlo_temp.addLayout(hlo_mammo_options)
+        self.info_Mammo_QAP = uir.LabelItalic(
+            '''
+            If GE Mammo QAP type:<br>
+            Autogenerate templates based on files in your input folder.<br>
+            This folder may contain files from different tests indicated
+            by the input file name prefix.<br>
+            You will also be prompted to auto generate Limits and Plots settings<br>
+            based on the found lower/upper limits specified in the first found file.
+            '''
+            )
+        self.info_Mammo_QAP.setVisible(False)
+        self.btn_auto_generate_Mammo_QAP_templates = QPushButton(
+            'Auto generate Mammo QAP templates...')
+        self.btn_auto_generate_Mammo_QAP_templates.setVisible(False)
+        self.btn_auto_generate_Mammo_QAP_templates.clicked.connect(
+            self.auto_generate_Mammo_QAP_templates)
+        hlo_options.addWidget(self.info_Mammo_QAP)
+        hlo_options.addWidget(self.btn_auto_generate_Mammo_QAP_templates)
+
         self.vlo_temp.addStretch()
         hlo_lim_plot = QHBoxLayout()
         self.vlo_temp.addLayout(hlo_lim_plot)
@@ -1929,6 +1962,10 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         if self.current_template.file_type != '':
             self.cbox_file_type.setCurrentText(
                 self.current_template.file_type)
+        self.info_Mammo_QAP.setVisible(
+            self.current_modality == 'Mammo')
+        self.btn_auto_generate_Mammo_QAP_templates.setVisible(
+            self.current_modality == 'Mammo')
         self.flag_edit(False)
 
     def get_current_template(self):
@@ -1936,7 +1973,13 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         super().get_current_template()
         file_type = self.cbox_file_type.currentText()
         self.current_template.file_type = file_type
-        self.current_template.file_suffix = file_type.split('(')[1][:-1]
+        if file_type == 'GE Mammo QAP (txt)':
+            self.current_template.file_suffix = ''
+        else:
+            try:
+                self.current_template.file_suffix = file_type.split('(')[1][:-1]
+            except IndexError:
+                pass
 
     def get_station_name(self):
         """Get station name from sample file.
@@ -1997,6 +2040,144 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         self.cbox_file_type.clear()
         self.cbox_file_type.addItems(
             VENDOR_FILE_OPTIONS[self.current_modality])
+
+    def auto_generate_Mammo_QAP_templates(self):
+        """Generate templates reading GE Mammo QAP files based on files in input."""
+        def pop_already(new_templates, existing_templates):
+            labels_exist = [x.label for x in existing_templates]
+            already_labels = [x.label for x in new_templates if x.label in labels_exist]
+            if len(already_labels) > 0:
+                tempname = new_templates[0].__class__.__name__
+                res = messageboxes.QuestionBox(
+                    parent=self, title='Labels already used',
+                    msg=(f'Some {tempname} labels already exist. See details.'),
+                    info='', details=['Already exists:'] + already_labels,
+                    yes_text='Overwrite existing templates',
+                    no_text='Add only new templates')
+                if not res.exec():  # add only new
+                    ids_to_delete = [i for i, temp in enumerate(new_templates)
+                                     if temp.label in already_labels]
+                    ids_to_delete.reverse()
+                    for idx in ids_to_delete:
+                        new_templates.pop(idx)
+            return new_templates
+
+        errmsg = ''
+        test_names = []
+        filenames = []
+        if self.txt_input_path.text() == '':
+            errmsg = 'Please specify an input path for locating the sample files.'
+        else:
+            filenames = [x.name for x in Path(self.txt_input_path.text()).glob('*')
+                         if '_' in x.name]
+            if len(filenames) > 0:
+                test_names = [x.split('_')[0] for x in filenames]
+                test_names = list(set(test_names))
+                dlg = SelectTextsDialog(
+                    test_names, title='Found tests',
+                    select_info='Select tests to generate templates for')
+                if dlg.exec():
+                    test_names = dlg.get_checked_texts()
+                else:
+                    test_names = []
+            else:
+                errmsg = ('Filenames expected to be <testname>_....date_time. '
+                          'Found no filename as expected.')
+
+        if errmsg:
+            QMessageBox.information(
+                self, 'Failed reading input files', errmsg)
+
+        if len(test_names) > 0:
+            station_name, proceed = QInputDialog.getText(
+                self, 'Station name', 'Template names should start with:      ')
+            output_folder = None
+            if proceed:
+                QMessageBox.information(
+                    self, 'Locate output folder',
+                    'You will now be asked to set the folder for the output files...')
+                dlg = QFileDialog()
+                dlg.setFileMode(QFileDialog.Directory)
+                if dlg.exec():
+                    fname = dlg.selectedFiles()
+                    output_folder = fname[0]
+            templates = []
+            if output_folder:
+                general_template = cfc.AutoVendorTemplate(
+                    path_input=self.txt_input_path.text(),
+                    file_type='GE Mammo QAP (txt)',
+                    archive=True)
+                for test_name in test_names:
+                    path_output = os.path.join(output_folder, test_name + '.txt')
+                    create_empty_file(
+                        path_output, self, proceed_info_txt='', proceed=True)
+                    if os.path.exists(path_output):
+                        template_this = copy.deepcopy(general_template)
+                        template_this.label = station_name + '_' + test_name
+                        template_this.path_output = path_output
+                        template_this.file_prefix = test_name
+                        templates.append(template_this)
+
+            if len(templates) > 0:
+                templates = pop_already(templates, self.templates['Mammo'])
+
+            # auto generate limits_and_plot_templates?
+            if len(templates) > 0:
+                res = messageboxes.QuestionBox(
+                    parent=self, title='Generate Limits and Plot templates',
+                    msg=('Read limits from files and set templates for plotting '
+                         'using Dash-board?'),
+                    yes_text='Yes, proceed',
+                    no_text='No')
+                templates_lim = []
+                if res.exec():
+                    for template in templates:
+                        act_files = [x for x in filenames
+                                     if template.file_prefix + '_' in x]
+                        res = read_vendor_template(
+                            template=template,
+                            filepath=os.path.join(template.path_input, act_files[0])
+                            )
+                        if res['status']:
+                            template = cfc.LimitsAndPlotTemplate(
+                                label=template.file_prefix,
+                                type_vendor=True,
+                                groups=[[header] for header in res['headers']],
+                                groups_limits=res['limits'],
+                                groups_ranges=res['limits']
+                                )
+                            templates_lim.append(template)
+                    # TODO specify path for warnings? litt forklaring...
+
+                    templates_lim = pop_already(
+                        templates_lim, self.limits_and_plot_templates['Mammo'])
+
+                    # include link to limits_and_plot_template in auto_vendor_templates
+                    labels_lim_new = [x.label for x in templates_lim]
+                    if len(labels_lim_new) > 0:
+                        for template in templates:
+                            if template.file_prefix in labels_lim_new:
+                                template.limits_and_plot_label = template.file_prefix
+
+                # save all new
+                if self.templates['Mammo'][0].label == '':
+                    self.templates['Mammo'] = templates
+                else:
+                    self.templates['Mammo'].extend(templates)
+                if len(templates_lim) > 0:
+                    if self.limits_and_plot_templates['Mammo'][0].label == '':
+                        self.limits_and_plot_templates['Mammo'] = templates_lim
+                    else:
+                        self.limits_and_plot_templates['Mammo'].extend(templates_lim)
+                    save_more = True
+                    more = [self.limits_and_plot_templates]
+                    more_fnames = ['limits_and_plot_templates']
+                else:
+                    save_more = False
+                    more = None
+                    more_fnames = None
+                self.save(save_more=save_more, more=more, more_fnames=more_fnames)
+                self.update_from_yaml()
 
 
 class DashWorker(QThread):

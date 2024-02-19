@@ -393,11 +393,8 @@ def calculate_qc(input_main, wid_auto=None,
     current_test_before = input_main.current_test
     modality = input_main.current_modality
     errmsgs = []
-    if 'MainWindow' in str(type(input_main)):
-        '''
-        input_main.start_wait_cursor()
-        input_main.status_bar.showMessage('Calculating...')
-        '''
+    main_type = input_main.__class__.__name__
+    if hasattr(input_main, 'progress_modal'):
         input_main.progress_modal.setValue(1)
     delta_xya = [
         input_main.gui.delta_x,
@@ -481,82 +478,83 @@ def calculate_qc(input_main, wid_auto=None,
             force_new_roi = []  # tests where a new roi should be set pr image
             for i in range(n_analyse):
                 marked_3d.append([])
-                if modality == 'CT':
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_type > 0:
-                            marked_3d[i].append('MTF')
+                if len(marked[i]) > 0:
+                    if modality == 'CT':
+                        if 'MTF' in marked[i]:
+                            if paramset.mtf_type > 0:
+                                marked_3d[i].append('MTF')
+                                extra_tag_pattern = cfc.TagPatternFormat(
+                                    list_tags=['ConvolutionKernel'])
+                                extra_tag_list = []
+                                read_tags[i] = True
+                            else:
+                                if paramset.mtf_auto_center:
+                                    force_new_roi.append('MTF')
+                        if 'TTF' in marked[i]:
+                            marked_3d[i].append('TTF')
                             extra_tag_pattern = cfc.TagPatternFormat(
-                                list_tags=['ConvolutionKernel'])
+                                list_tags=['SeriesUID'])
                             extra_tag_list = []
                             read_tags[i] = True
-                        else:
+                        if 'Sli' in marked[i]:
+                            if paramset.sli_auto_center:
+                                force_new_roi.append('Sli')
+                        if 'CTn' in marked[i]:
+                            if paramset.ctn_auto_center:
+                                force_new_roi.append('CTn')
+                    elif modality == 'Xray':
+                        if 'Noi' in marked[i]:
+                            force_new_roi.append('Noi')
+                        if 'MTF' in marked[i]:
                             if paramset.mtf_auto_center:
                                 force_new_roi.append('MTF')
-                    if 'TTF' in marked[i]:
-                        marked_3d[i].append('TTF')
-                        extra_tag_pattern = cfc.TagPatternFormat(
-                            list_tags=['SeriesUID'])
-                        extra_tag_list = []
-                        read_tags[i] = True
-                    if 'Sli' in marked[i]:
-                        if paramset.sli_auto_center:
-                            force_new_roi.append('Sli')
-                    if 'CTn' in marked[i]:
-                        if paramset.ctn_auto_center:
-                            force_new_roi.append('CTn')
-                elif modality == 'Xray':
-                    if 'Noi' in marked[i]:
-                        force_new_roi.append('Noi')
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_auto_center:
-                            force_new_roi.append('MTF')
-                elif modality == 'Mammo':
-                    if 'SDN' in marked[i]:
-                        if paramset.sdn_auto_center:
-                            force_new_roi.append('SDN')
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_auto_center:
-                            force_new_roi.append('MTF')
-                elif modality == 'NM':
-                    if 'Uni' in marked[i]:
-                        if paramset.uni_sum_first:
-                            marked_3d[i].append('Uni')
-                        else:
-                            force_new_roi.append('Uni')
-                    if 'SNI' in marked[i]:
-                        if paramset.sni_sum_first:
-                            marked_3d[i].append('SNI')
-                        else:
-                            force_new_roi.append('SNI')
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_auto_center:
-                            force_new_roi.append('MTF')
-                elif modality == 'SPECT':
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_type > 0:
-                            marked_3d[i].append('MTF')
-                elif modality == 'PET':
-                    if 'Cro' in marked[i]:
-                        marked_3d[i].append('Cro')
-                        extra_tag_pattern = cfc.TagPatternFormat(
-                            list_tags=['AcquisitionTime', 'RadionuclideTotalDose',
-                                       'RadiopharmaceuticalStartTime', 'Units'])
-                        extra_tag_list = []
-                        extra_tag_list_compare = [False, True, True, True]
-                        read_tags[i] = True
-                    if 'Rec' in marked[i]:
-                        marked_3d[i].append('Rec')
-                        extra_tag_pattern = cfc.TagPatternFormat(
-                            list_tags=['AcquisitionTime', 'Units'])
-                        extra_tag_list = []
-                        extra_tag_list_keep = True
-                        extra_tag_list_compare = [False, True]
-                        read_tags[i] = True
-                elif modality == 'MR':
-                    if 'SNR' in marked[i]:
-                        if paramset.snr_type == 0:
-                            marked_3d[i].append('SNR')
-                    # TODO? force_new_roi.append all with optimize center?
+                    elif modality == 'Mammo':
+                        if 'SDN' in marked[i]:
+                            if paramset.sdn_auto_center:
+                                force_new_roi.append('SDN')
+                        if 'MTF' in marked[i]:
+                            if paramset.mtf_auto_center:
+                                force_new_roi.append('MTF')
+                    elif modality == 'NM':
+                        if 'Uni' in marked[i]:
+                            if paramset.uni_sum_first:
+                                marked_3d[i].append('Uni')
+                            else:
+                                force_new_roi.append('Uni')
+                        if 'SNI' in marked[i]:
+                            if paramset.sni_sum_first:
+                                marked_3d[i].append('SNI')
+                            else:
+                                force_new_roi.append('SNI')
+                        if 'MTF' in marked[i]:
+                            if paramset.mtf_auto_center:
+                                force_new_roi.append('MTF')
+                    elif modality == 'SPECT':
+                        if 'MTF' in marked[i]:
+                            if paramset.mtf_type > 0:
+                                marked_3d[i].append('MTF')
+                    elif modality == 'PET':
+                        if 'Cro' in marked[i]:
+                            marked_3d[i].append('Cro')
+                            extra_tag_pattern = cfc.TagPatternFormat(
+                                list_tags=['AcquisitionTime', 'RadionuclideTotalDose',
+                                           'RadiopharmaceuticalStartTime', 'Units'])
+                            extra_tag_list = []
+                            extra_tag_list_compare = [False, True, True, True]
+                            read_tags[i] = True
+                        if 'Rec' in marked[i]:
+                            marked_3d[i].append('Rec')
+                            extra_tag_pattern = cfc.TagPatternFormat(
+                                list_tags=['AcquisitionTime', 'Units'])
+                            extra_tag_list = []
+                            extra_tag_list_keep = True
+                            extra_tag_list_compare = [False, True]
+                            read_tags[i] = True
+                    elif modality == 'MR':
+                        if 'SNR' in marked[i]:
+                            if paramset.snr_type == 0:
+                                marked_3d[i].append('SNR')
+                        # TODO? force_new_roi.append all with optimize center?
 
             # list of shape + pix for testing if new roi need to be calculated
             xypix = []
@@ -571,15 +569,12 @@ def calculate_qc(input_main, wid_auto=None,
                 curr_progress_val = wid_auto.progress_modal.value()
                 progress_increment = round(
                     wid_auto.progress_modal.sub_interval / n_analyse)
+
             for i in range(n_analyse):
-                if 'MainWindow' in str(type(input_main)):
+                if main_type in ['MainWindow', 'TaskBasedImageQualityDialog']:
                     input_main.progress_modal.setLabelText(
                         f'Reading/calculating image {i}/{n_img}')
                     input_main.progress_modal.setValue(round(100 * i/n_img))
-                    '''
-                    input_main.status_bar.showMessage(
-                        f'Reading/calculating image {i}/{n_img}')
-                    '''
 
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
@@ -822,7 +817,7 @@ def calculate_qc(input_main, wid_auto=None,
         if len(msgs) > 0 and input_main.automation_active:
             input_main.errmsgs = msgs
 
-    if 'MainWindow' in str(type(input_main)):
+    if main_type == 'MainWindow':
         if input_main.automation_active is False:
             if len(msgs) > 0:
                 input_main.display_errmsg(msgs)
@@ -858,6 +853,20 @@ def calculate_qc(input_main, wid_auto=None,
                     input_main.results['Rec']['details_dict']['max_slice_idx'])
             input_main.progress_modal.setValue(input_main.progress_modal.maximum())
             #input_main.stop_wait_cursor()
+    elif main_type == 'TaskBasedImageQualityDialog':
+        input_main.display_errmsg(msgs)
+        if current_test_before in flattened_marked or len(flattened_marked) == 0:
+            set_current_test = current_test_before
+        else:
+            set_current_test = flattened_marked[0]
+        idx_set_test = input_main.tests.index(set_current_test)
+        widget = input_main.tab_ct
+        widget.setCurrentIndex(idx_set_test)
+        input_main.current_test = set_current_test
+        input_main.refresh_results_display()
+        if 'TTF' in input_main.results:
+            input_main.refresh_img_display()
+        input_main.progress_modal.setValue(input_main.progress_modal.maximum())
 
 
 def calculate_2d(image2d, roi_array, image_info, modality,

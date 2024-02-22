@@ -164,7 +164,7 @@ class ResultTable(QTableWidget):
     def cell_selected(self):
         """Set new active image when current cell changed."""
         if self.linked_image_list:
-            marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+            marked_imgs = self.main.get_marked_imgs_current_test()
             self.main.set_active_img(marked_imgs[self.currentRow()])
 
     def copy_selection(self):
@@ -242,7 +242,7 @@ class ResultTable(QTableWidget):
                 pass
         else:
             if linked_image_list:
-                marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+                marked_imgs = self.main.get_marked_imgs_current_test()
                 values_rows_copy = [
                     row for i, row in enumerate(values_rows_copy) if i in marked_imgs]
             if self.main.current_test == 'MTF' and self.main.current_modality == 'CT':
@@ -356,12 +356,13 @@ class ResultPlotCanvas(PlotCanvas):
                 pass
         else:
             self.zpos_all = [img.zpos for img in self.main.imgs]
-            try:
-                self.marked_this = self.main.tree_file_list.get_marked_imgs_current_test()
+            self.marked_this = self.main.get_marked_imgs_current_test()
+            '''
             except AttributeError:  # task_based_image_quality.py
                 self.marked_this = [
                     i for i, im in enumerate(self.main.imgs)
                     if self.main.current_test in im.marked_quicktest]
+            '''
 
             if self.main.gui.active_img_no in self.marked_this:
                 if self.main.current_test in self.main.results:
@@ -1108,7 +1109,7 @@ class ResultPlotCanvas(PlotCanvas):
                     center_xy = details_dicts[0]['center_xy']
                     submatrix = details_dicts[0]['matrix']
 
-                marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+                marked_imgs = self.main.get_marked_imgs_current_test()
                 pix = self.main.imgs[marked_imgs[0]].pix[0]
 
                 for no, sli in enumerate(submatrix):
@@ -2045,7 +2046,7 @@ class ResultPlotCanvas(PlotCanvas):
             self.xtitle = 'pos (mm)'
             self.ytitle = 'Pixel value'
 
-            marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+            marked_imgs = self.main.get_marked_imgs_current_test()
             pix = self.main.imgs[marked_imgs[0]].pix[0]
 
             for no, sli in enumerate(submatrix):

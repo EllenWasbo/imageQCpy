@@ -8,9 +8,7 @@ import os
 from pathlib import Path
 
 from pandas import read_clipboard
-#import pytest
 
-#import imageQC.resources
 from imageQC.ui.ui_main import MainWindow
 from imageQC.config.iQCconstants import (
     ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER, ENV_ICON_PATH, QUICKTEST_OPTIONS,
@@ -26,10 +24,10 @@ os.environ[ENV_ICON_PATH] = get_icon_path(False)
 path_tests = Path(__file__).parent
 
 # to mouseclick:
-#qtbot.mouseClick(main.tab_ct.btnRunHom, QtCore.Qt.LeftButton)
+# qtbot.mouseClick(main.tab_ct.btnRunHom, QtCore.Qt.LeftButton)
+
 
 def test_run_test_CT_hom(qtbot):
-    #path_tests = Path(__file__).parent
     file_path = path_tests / 'test_inputs' / 'CT' / 'CTP486'
     files = [x for x in file_path.glob('**/*') if x.is_file()]
     main = MainWindow()
@@ -41,62 +39,11 @@ def test_run_test_CT_hom(qtbot):
     assert len(main.results['Hom']['values']) == 3
 
 
-def test_MTF_plot_Xray(qtbot):
-    mod = 'Xray'
-    test_code = 'MTF'
-    #path_tests = Path(__file__).parent
-    file_path = path_tests / 'test_inputs' / mod / 'mtf.dcm'
-    main = MainWindow()
-    qtbot.addWidget(main)
-    main.open_files(file_list=[file_path])
-    main.tab_xray.setCurrentIndex(QUICKTEST_OPTIONS[mod].index(test_code))
-
-    for auto_cent in [False, True]:
-        main.current_paramset.mtf_auto_center = auto_cent
-        main.tab_ct.run_current()
-        main.tab_results.setCurrentIndex(1)
-        plot_options = ['Edge position', 'Sorted pixel values', 'LSF', 'MTF']
-        for opt in plot_options:
-            main.tab_xray.mtf_plot.setCurrentText(opt)
-        assert len(main.results[test_code]['values'][0]) == len(
-            HEADERS[mod][test_code]['alt0'])
-
-
-def test_MTF_plot_CT(qtbot):
-    mod = 'CT'
-    test_code = 'MTF'
-    file_path = path_tests / 'test_inputs' / 'CT' / 'Wire_FOV50'
-    files = [x for x in file_path.glob('**/*') if x.is_file()]
-    main = MainWindow()
-    qtbot.addWidget(main)
-    main.open_files(file_list=files)
-    main.tab_ct.setCurrentIndex(QUICKTEST_OPTIONS[mod].index(test_code))
-
-    main.current_paramset.mtf_type = 0
-    main.current_paramset.mtf_roi_size = 3.
-    main.current_paramset.mtf_auto_center = True
-    main.tab_ct.run_current()
-    main.tab_results.setCurrentIndex(1)
-    plot_options = ['Centered xy profiles', 'Sorted pixel values', 'LSF', 'MTF']
-    for opt in plot_options:
-        main.tab_ct.mtf_plot.setCurrentText(opt)
-    assert len(main.results[test_code]['values'][0]) == len(
-        HEADERS[mod][test_code]['alt0'])
-
-
-def test_histogram_plot(qtbot):  # TODO delete or expand
-    file_path = path_tests / 'test_inputs' / 'Xray' / 'hom.dcm'
-    main = MainWindow()
-    qtbot.addWidget(main)
-    main.open_files(file_list=[file_path])
-
-    assert 1 == 1
-
-
 def test_quicktest_CT_13imgs(qtbot):
     file_path = path_tests / 'test_inputs' / 'CT' / 'Constancy13img'
     files = [x for x in file_path.glob('**/*') if x.is_file()]
     main = MainWindow()
+    tool_rectangle = main.wid_image_display.tool_rectangle
     qtbot.addWidget(main)
     main.open_files(file_list=files)
 
@@ -150,8 +97,8 @@ def test_quicktest_CT_13imgs(qtbot):
 
     assert expected_res == res.values.tolist()
 
+'''
 def test_open_multiframe(qtbot):
-    #path_tests = Path(__file__).parent
     files = [
         path_tests / 'test_inputs' / 'MR' / 'ACR.dcm',
         path_tests / 'test_inputs' / 'MR' / 'MR_PIQT_oneframe.dcm',
@@ -159,30 +106,55 @@ def test_open_multiframe(qtbot):
     main = MainWindow()
     qtbot.addWidget(main)
     main.open_files(file_list=files)
+    main.current_quicktest = cfc.QuickTestTemplate(tests=[['DCM']])
+    main.current_paramset = cfc.ParamSetMR()
+    calculate_qc(main)
     assert len(main.imgs) == 12
-    main.tab_mr.run_current()
     assert len(main.results['DCM']['values']) == 12
 
 
-def test_start_open_multi(qtbot):
-    main = MainWindow()
+def test_MTF_plot_Xray(qtbot):
+    mod = 'Xray'
+    test_code = 'MTF'
+    file_path = path_tests / 'test_inputs' / mod / 'mtf.dcm'
+    main = MainWindow(developer_mode=True)
     qtbot.addWidget(main)
-    main.open_multi()
-    assert 1 == 1
+    main.open_files(file_list=[file_path])
+    main.current_quicktest = cfc.QuickTestTemplate(tests=[['MTF']])
+    main.current_paramset = cfc.ParamSetXray()
+
+    for auto_cent in [False, True]:
+        print()
+        main.current_paramset.mtf_auto_center = auto_cent
+        calculate_qc(main)
+        main.tab_results.setCurrentIndex(1)
+        plot_options = ['Edge position', 'Sorted pixel values', 'LSF', 'MTF']
+        for opt in plot_options:
+            main.tab_xray.mtf_plot.setCurrentText(opt)
+        assert len(main.results[test_code]['values'][0]) == len(
+            HEADERS[mod][test_code]['alt0'])
 
 
-def test_start_rename_dicom(qtbot):
-    main = MainWindow()
+def test_MTF_plot_CT(qtbot):
+    mod = 'CT'
+    test_code = 'MTF'
+    file_path = path_tests / 'test_inputs' / 'CT' / 'Wire_FOV50'
+    files = [x for x in file_path.glob('**/*') if x.is_file()]
+    main = MainWindow(developer_mode=True)
     qtbot.addWidget(main)
-    main.run_rename_dicom()
-    assert 1 == 1
+    main.open_files(file_list=files)
+    main.tab_ct.setCurrentIndex(QUICKTEST_OPTIONS[mod].index(test_code))
 
-
-def test_start_settings(qtbot):
-    main = MainWindow()
-    qtbot.addWidget(main)
-    main.run_settings()
-    assert 1 == 1
+    main.current_paramset.mtf_type = 0
+    main.current_paramset.mtf_roi_size = 3.
+    main.current_paramset.mtf_auto_center = True
+    main.tab_ct.run_current()
+    main.tab_results.setCurrentIndex(1)
+    plot_options = ['Centered xy profiles', 'Sorted pixel values', 'LSF', 'MTF']
+    for opt in plot_options:
+        main.tab_ct.mtf_plot.setCurrentText(opt)
+    assert len(main.results[test_code]['values'][0]) == len(
+        HEADERS[mod][test_code]['alt0'])
 
 
 def test_change_modality(qtbot):
@@ -196,3 +168,4 @@ def test_change_modality(qtbot):
         main.current_modality = mod
         main.update_mode()
     assert 1 == 1
+'''

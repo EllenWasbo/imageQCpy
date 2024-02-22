@@ -653,7 +653,7 @@ def load_paramsets(fnames, path):
                                 doc['rec_table'] = cfc.RecTable(**upd)
 
                         if 'task_based' in fname_this:
-                            class_ = cfc.ParamsetCT_TaskBased()
+                            class_ = cfc.ParamSetCT_TaskBased()
                         else:
                             class_ = getattr(cfc, f'ParamSet{modality}')
                         upd = verify_input_dict(doc, class_())
@@ -681,11 +681,11 @@ def load_paramsets(fnames, path):
                         dcm_tagpattern=default_tags_dcm[mod])]
         else:
             if 'task_based' in fnames[0]:
-                settings = cfc.ParamsetCT_TaskBased(
+                settings = [cfc.ParamSetCT_TaskBased(
                     dcm_tagpattern=cfc.TagPatternFormat(
                         list_tags=['ConvolutionKernel', 'mAs'],
                         list_format=['', '']
-                        ))
+                        ))]
             else:
                 mod = fnames[0].split('_')[1]
                 class_ = getattr(cfc, f'ParamSet{mod}')
@@ -859,9 +859,7 @@ def load_settings(fname='', temp_config_folder=''):
             return_default = True
 
         if return_default:
-            if 'task_based' in fname:
-                settings = []
-            elif 'paramsets' in fname:
+            if 'paramsets' in fname:
                 settings = load_paramsets([fname], '--')
             else:
                 settings = CONFIG_FNAMES[fname]['default']

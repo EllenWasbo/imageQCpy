@@ -394,8 +394,10 @@ def calculate_qc(input_main, wid_auto=None,
     modality = input_main.current_modality
     errmsgs = []
     main_type = input_main.__class__.__name__
-    if hasattr(input_main, 'progress_modal'):
+    try:
         input_main.progress_modal.setValue(1)
+    except AttributeError:
+        pass
     delta_xya = [
         input_main.gui.delta_x,
         input_main.gui.delta_y,
@@ -572,9 +574,12 @@ def calculate_qc(input_main, wid_auto=None,
 
             for i in range(n_analyse):
                 if main_type in ['MainWindow', 'TaskBasedImageQualityDialog']:
-                    input_main.progress_modal.setLabelText(
-                        f'Reading/calculating image {i}/{n_img}')
-                    input_main.progress_modal.setValue(round(100 * i/n_img))
+                    try:
+                        input_main.progress_modal.setLabelText(
+                            f'Reading/calculating image {i}/{n_img}')
+                        input_main.progress_modal.setValue(round(100 * i/n_img))
+                    except AttributeError:
+                        pass
 
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
@@ -851,7 +856,10 @@ def calculate_qc(input_main, wid_auto=None,
                     'min_max', set_tools=True)
                 input_main.set_active_img(
                     input_main.results['Rec']['details_dict']['max_slice_idx'])
-            input_main.progress_modal.setValue(input_main.progress_modal.maximum())
+            try:
+                input_main.progress_modal.setValue(input_main.progress_modal.maximum())
+            except AttributeError:
+                pass
             #input_main.stop_wait_cursor()
     elif main_type == 'TaskBasedImageQualityDialog':
         input_main.display_errmsg(msgs)
@@ -3273,8 +3281,13 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
         u_profile: power spectrum x-dir
         v_profile: power spectrum y-dir
     """
+    try:
+        nps_sampling_frequency = paramset.nps_sampling_frequency
+    except AttributeError:  # task based
+        nps_sampling_frequency = paramset.ttf_sampling_frequency
+
     def smooth_profile(profile):
-        kernel_size = round(paramset.nps_smooth_width / paramset.nps_sampling_frequency)
+        kernel_size = round(paramset.nps_smooth_width / nps_sampling_frequency)
         kernel = np.ones(kernel_size) / kernel_size
         return np.convolve(profile, kernel, mode='same')
 
@@ -3301,10 +3314,10 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
         NPS = (1 / len(roi_array)) * NPS_total
 
         freq, radial_profile = mmcalc.get_radial_profile(
-            NPS, pix=unit, step_size=paramset.nps_sampling_frequency)
+            NPS, pix=unit, step_size=nps_sampling_frequency)
         if paramset.nps_smooth_width > 0:
             radial_profile = smooth_profile(radial_profile)
-        AUC = np.sum(radial_profile) * paramset.nps_sampling_frequency
+        AUC = np.sum(radial_profile) * nps_sampling_frequency
         median_frequency, median_val = mmcalc.find_median_spectrum(
             freq, radial_profile)
         values = [median_frequency, AUC, np.sum(NPS)*unit ** 2,
@@ -3345,11 +3358,11 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
 
         freq_uv, u_profile, v_profile = mmcalc.get_NPSuv_profile(
             NPS,  nlines=7, exclude_axis=True, pix=img_info.pix[0],
-            step_size=paramset.nps_sampling_frequency)
+            step_size=nps_sampling_frequency)
         freq, radial_profile = mmcalc.get_radial_profile(
-            NPS, pix=unit, step_size=paramset.nps_sampling_frequency,
+            NPS, pix=unit, step_size=nps_sampling_frequency,
             start_dist=3*unit)
-        AUC = np.sum(radial_profile) * paramset.nps_sampling_frequency
+        AUC = np.sum(radial_profile) * nps_sampling_frequency
         if paramset.nps_smooth_width > 0:
             u_profile = smooth_profile(u_profile)
             v_profile = smooth_profile(v_profile)

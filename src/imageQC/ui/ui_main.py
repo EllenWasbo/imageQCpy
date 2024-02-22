@@ -376,7 +376,7 @@ class MainWindow(QMainWindow):
                 self.gui.active_img_no = -1 if len(self.imgs) == 0 else 0
             read_img = True
             if self.wid_image_display.tool_sum.isChecked():
-                marked_idxs = self.tree_file_list.get_marked_imgs_current_test()
+                marked_idxs = self.get_marked_imgs_current_test()
                 if self.gui.active_img_no in marked_idxs:
                     self.active_img = self.summed_img
                     read_img = False
@@ -413,7 +413,7 @@ class MainWindow(QMainWindow):
                 self.status_bar.showMessage('Calculating sum of marked images...')
 
                 self.summed_img, errmsg = dcm.sum_marked_images(
-                    self.imgs, self.tree_file_list.get_marked_imgs_current_test(),
+                    self.imgs, self.get_marked_imgs_current_test(),
                     tag_infos=self.tag_infos)
                 self.stop_wait_cursor()
                 self.status_bar.showMessage('Finished summing marked images', 2000)
@@ -471,9 +471,9 @@ class MainWindow(QMainWindow):
             self.btns_mode.button(curr_mod_idx).setChecked(True)
 
         if self.btn_read_vendor_file.isChecked():
-            self.stack_test_tabs.setCurrentIndex(len(QUICKTEST_OPTIONS))
-            self.tab_vendor.update_table()
             self.current_test = 'vendor'
+            self.stack_test_tabs.setCurrentIndex(len(QUICKTEST_OPTIONS))  # last stack
+            self.tab_vendor.update_table()
         else:
             self.stack_test_tabs.setCurrentIndex(curr_mod_idx)
 
@@ -522,6 +522,10 @@ class MainWindow(QMainWindow):
                 self.wid_image_display.tool_rectangle.setChecked(
                     self.current_test == 'Num')
         self.stop_wait_cursor()
+
+    def get_marked_imgs_current_test(self):
+        """Link here due to shared functionality with task_based."""
+        return self.tree_file_list.get_marked_imgs_current_test()
 
     def update_roi(self, clear_results_test=False):
         ui_main_methods.update_roi(self, clear_results_test=clear_results_test)
@@ -658,7 +662,7 @@ class MainWindow(QMainWindow):
                 if self.results[self.current_test]['pr_image']:
                     wid = self.tab_results.currentWidget()
                     if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
-                        marked_imgs = self.tree_file_list.get_marked_imgs_current_test()
+                        marked_imgs = self.get_marked_imgs_current_test()
                         if self.gui.active_img_no in marked_imgs:
                             idx = marked_imgs.index(self.gui.active_img_no)
                             self.wid_res_tbl.result_table.blockSignals(True)
@@ -858,7 +862,7 @@ class MainWindow(QMainWindow):
             else:
                 dlg = SettingsDialog(
                     self, initial_view=initial_view,
-                    initial_modality=self.curren_modality,
+                    initial_modality=self.current_modality,
                     paramset_output=paramset_output,
                     initial_template_label=initial_template_label)
             dlg.exec()
@@ -969,7 +973,7 @@ class MainWindow(QMainWindow):
     def finish_cleanup(self):
         """Cleanup/save before exit."""
         proceed_to_close = True
-        if self.wid_paramset.lbl_edit.text() == '*':
+        if self.wid_paramset.lbl_edit.text() == '*' and self.developer_mode == False:
             proceed_to_close = messageboxes.proceed_question(
                 self,
                 f'Unsaved changes to {self.wid_paramset.fname}. Exit without saving?')
@@ -1137,7 +1141,7 @@ class MainWindow(QMainWindow):
         menu_file = QMenu('&File', self)
         menu_file.addActions([
             act_open, act_open_adv, act_read_header, act_open_auto, act_wizard_auto,
-            act_rename_dcm, #act_task_based_auto,
+            act_rename_dcm, act_task_based_auto,
             act_close, act_close_all, act_quit])
         menu_bar.addMenu(menu_file)
         menu_settings = QMenu('&Settings', self)

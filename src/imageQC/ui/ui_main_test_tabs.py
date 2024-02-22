@@ -115,11 +115,12 @@ class ParamsTabCommon(QTabWidget):
         self.wid_dcm_pattern.current_template = paramset.dcm_tagpattern
         self.wid_dcm_pattern.update_data()
 
-        self.num_digit_label.clear()
-        avail_digit_labels = [''] + [
-            temp.label for temp in
-            self.main.digit_templates[self.main.current_modality]]
-        self.num_digit_label.addItems(avail_digit_labels)
+        if hasattr(self, 'num_digit_label'):
+            self.num_digit_label.clear()
+            avail_digit_labels = [''] + [
+                temp.label for temp in
+                self.main.digit_templates[self.main.current_modality]]
+            self.num_digit_label.addItems(avail_digit_labels)
 
         # where attribute name of widget == dataclass attribute name of ParamSetXX
         attributes = fields(paramset)
@@ -794,10 +795,7 @@ class ParamsTabCommon(QTabWidget):
     def run_current(self):
         """Run selected test."""
         tests = []
-        if hasattr(self.main, 'tree_file_list'):
-            marked_this = self.main.tree_file_list.get_marked_imgs_current_test()
-        else:  # task based
-            marked_this = self.main.get_active_img_idxs()
+        marked_this = self.main.get_marked_imgs_current_test()
         if len(marked_this) == 0:
             if self.main.wid_quicktest.gb_quicktest.isChecked():
                 dlg = messageboxes.MessageBoxWithDetails(
@@ -3372,6 +3370,9 @@ class PositionTableWidget(QTableWidget):
             self.resizeRowsToContents()
 
         self.blockSignals(False)
+        if self.table_attribute_name == 'ttf_table':
+            self.parent.update_ttf_plot_options()
+
         self.parent.main.update_roi(clear_results_test=True)
 
     def get_prepared_fill_values(self):

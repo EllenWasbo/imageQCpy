@@ -84,13 +84,13 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         hlo.addLayout(vlo_right)
 
         # widget need parameters from input_main.py/InputMain and MainWindow
-        self.lastload = time()
-        self.fname = 'paramsets_CT_task_based'
-        _, _, self.paramsets = cff.load_settings(fname=self.fname)
         self.current_modality = 'CT'
         self.current_test = 'DCM'
         self.tests = ['DCM', 'TTF', 'NPS', 'DPR']
-        self.current_paramset = cfc.ParamSetCT_TaskBased()
+        self.lastload = time()
+        self.fname = 'paramsets_CT_task_based'
+        _, _, self.paramsets = cff.load_settings(fname=self.fname)
+        self.current_paramset = copy.deepcopy(self.paramsets[0])
         self.current_quicktest = cfc.QuickTestTemplate()
         self.imgs = []
         self.results = {}
@@ -173,6 +173,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
 
         # Results / output
         vlo_right.addWidget(self.tab_results)
+        self.update_paramset()
 
     def create_result_tabs(self):
         """Initiate GUI for the stacked result tabs."""
@@ -189,6 +190,17 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         self.tab_results.addTab(self.wid_res_plot, 'Results plot')
         self.tab_results.addTab(self.wid_res_image, 'Results image')
         self.tab_results.addTab(self.wid_res_tbl_sup, 'Supplement table')
+
+    def update_paramset(self):
+        """Fill gui with params from selected paramset."""
+        self.current_paramset = copy.deepcopy(self.paramsets[0])
+        if self.results:
+            self.reset_results()
+        self.tab_ct.update_displayed_params()
+        self.wid_res_tbl.tb_copy.parameters_output = self.current_paramset.output
+        self.wid_res_tbl.tb_copy.update_checked()
+        self.update_roi()
+        #self.wid_paramset.flag_edit(False)
 
     def open_multi(self):
         """Start open advanced dialog."""
@@ -229,11 +241,13 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             self.blockSignals(False)
             self.update_active_img()
 
-    def get_active_img_idxs(self):
+    def get_marked_imgs_current_test(self):
         """Return indexes in self.imgs for images in selected series."""
-        serno = self.list_series.currentRow()
-        idxs = [i for i, img in enumerate(self.imgs)
-            if self.imgs_series_numbers[i] == serno]
+        idxs = []
+        if self.imgs:
+            serno = self.list_series.currentRow()
+            idxs = [i for i, img in enumerate(self.imgs)
+                if self.imgs_series_numbers[i] == serno]
         return idxs
 
     def update_active_img(self):
@@ -296,7 +310,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                 if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
                     pass
                     '''
-                    marked_imgs = self.tree_file_list.get_marked_imgs_current_test()
+                    marked_imgs = self.get_marked_imgs_current_test()
                     if self.gui.active_img_no in marked_imgs:
                         idx = marked_imgs.index(self.gui.active_img_no)
                         self.wid_res_tbl.result_table.blockSignals(True)

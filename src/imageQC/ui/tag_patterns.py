@@ -802,6 +802,7 @@ class TagPatternTreeTestDCM(TagPatternTree):
             self.update_data()
             self.main.current_paramset.dcm_tagpattern = self.current_template
             self.parent.flag_edit(True)
+            self.parent.clear_results_current_test()
             self.current_select = 0
 
     def save_as(self):
@@ -841,6 +842,7 @@ class TagPatternTreeTestDCM(TagPatternTree):
                 templates[self.main.current_modality][idx])
             self.main.current_paramset.dcm_tagpattern = new_template
             self.parent.flag_edit(True)
+            self.parent.clear_results_current_test()
             self.current_template = new_template
             self.current_select = 0
             self.update_data()

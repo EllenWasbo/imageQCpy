@@ -338,6 +338,10 @@ class SelectQuickTestWidget(SelectTemplateWidget):
         self.get_current_template()
         if any(self.current_template.tests):
             self.main.current_quicktest = self.current_template
+            max_progress = 100  # %
+            self.main.progress_modal = uir.ProgressModal(
+                "Calculating...", "Cancel",
+                0, max_progress, self, minimum_duration=0)
             calculate_qc(self.main)
         else:
             QMessageBox.information(

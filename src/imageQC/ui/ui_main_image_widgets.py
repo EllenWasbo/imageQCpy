@@ -19,6 +19,7 @@ from imageQC.ui.ui_dialogs import (
 from imageQC.ui import ui_image_canvas
 from imageQC.ui.reusable_widgets import ImageNavigationToolbar
 from imageQC.ui.plot_widgets import PlotDialog
+from imageQC.ui import messageboxes
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 # imageQC block end
 
@@ -258,6 +259,26 @@ class ImageDisplayWidget(GenericImageWidget):
     def projection_plot(self):
         """Show 3d projection and plot."""
         if len(self.main.imgs) > 1:
+            try:
+                zpos = np.array([float(img_info.zpos) for img_info in self.main.imgs])
+                zpos_sorted = np.sort(zpos)
+                sort = False if all(zpos_sorted == zpos) else True
+            except TypeError:
+                sort = False
+
+            if sort:
+                proceed = messageboxes.proceed_question(
+                    self,
+                    'Images not sorted by z-position. '
+                    'Proceed to sort images by z-positions?')
+                if proceed:
+                    order = np.argsort(zpos)
+                    new_imgs = [self.main.imgs[idx] for idx in order]
+                    self.main.imgs = new_imgs
+                    self.main.tree_file_list.update_file_list()
+                    if self.main.results:
+                        self.main.update_results(sort_idxs=order)
+                        self.main.refresh_selected_table_row()
             dlg = ProjectionPlotDialog(self.main)
             dlg.exec()
         else:

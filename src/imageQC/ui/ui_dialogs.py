@@ -360,28 +360,28 @@ class WindowLevelEditDialog(ImageQCDialog):
 
         self.spin_min = QSpinBox()
         self.spin_min.setRange(-1000000, 1000000)
-        self.spin_min.setValue(min_max[0])
+        self.spin_min.setValue(round(min_max[0]))
         self.spin_min.editingFinished.connect(
             lambda: self.recalculate_others(sender='min'))
         fLO.addRow(QLabel('Minimum'), self.spin_min)
 
         self.spin_max = QSpinBox()
         self.spin_max.setRange(-1000000, 1000000)
-        self.spin_max.setValue(min_max[1])
+        self.spin_max.setValue(round(min_max[1]))
         self.spin_max.editingFinished.connect(
             lambda: self.recalculate_others(sender='max'))
         fLO.addRow(QLabel('Maximum'), self.spin_max)
 
         self.spin_center = QSpinBox()
         self.spin_center.setRange(-1000000, 1000000)
-        self.spin_center.setValue(0.5*(min_max[0] + min_max[1]))
+        self.spin_center.setValue(round(0.5*(min_max[0] + min_max[1])))
         self.spin_center.editingFinished.connect(
             lambda: self.recalculate_others(sender='center'))
         fLO.addRow(QLabel('Center'), self.spin_center)
 
         self.spin_width = QSpinBox()
         self.spin_width.setRange(0, 2000000)
-        self.spin_width.setValue(min_max[1] - min_max[0])
+        self.spin_width.setValue(round(min_max[1] - min_max[0]))
         self.spin_width.editingFinished.connect(
             lambda: self.recalculate_others(sender='width'))
         fLO.addRow(QLabel('Width'), self.spin_width)
@@ -658,6 +658,7 @@ class ProjectionPlotDialog(ImageQCDialog):
     def __init__(self, main):
         super().__init__()
         self.main = main
+        self.cmap = main.wid_image_display.canvas.ax.get_images()[0].cmap.name
         self.setWindowTitle('Plot values on projection image')
         vlo = QVBoxLayout()
         self.setLayout(vlo)
@@ -778,18 +779,18 @@ class ProjectionPlotDialog(ImageQCDialog):
         projection_type = 'max'
         if 'Average' in proj:
             projection_type = 'mean'
-        marked_this = self.main.tree_file_list.get_marked_imgs_current_test()
+        marked_this = self.main.get_marked_imgs_current_test()
 
         self.z_values = [i for i in range(len(self.main.imgs)) if i in marked_this]
         self.z_label = 'image number'
-        self.projection, self.patient_position, errmsg = get_projection(
+        self.projection, patient_position, errmsg = get_projection(
             self.main.imgs, marked_this, self.main.tag_infos,
             projection_type=projection_type,
             direction=self.list_directions.currentText(), progress_modal=progress_modal)
-        if self.patient_position:
-            if self.patient_position[0:2] == 'HF':
-                self.chk_flip_ud.setChecked(True)
         progress_modal.setValue(max_progress)
+        if patient_position:
+            if patient_position[0:2] == 'HF':
+                self.chk_flip_ud.setChecked(True)
 
         zpos_0 = self.main.imgs[marked_this[0]].zpos
         pix_0 = self.main.imgs[marked_this[0]].pix[0]
@@ -814,8 +815,8 @@ class ProjectionPlotCanvas(FigureCanvasQTAgg):
 
     def __init__(self, parent):
         self.fig = matplotlib.figure.Figure(figsize=(8, 2), constrained_layout=True)
-        FigureCanvasQTAgg.__init__(self, self.fig)
         self.parent = parent
+        FigureCanvasQTAgg.__init__(self, self.fig)
 
     def update_figure(self):
         """Refresh histogram."""
@@ -839,22 +840,19 @@ class ProjectionPlotCanvas(FigureCanvasQTAgg):
 
         img_h, img_w = self.parent.projection.shape
         if 'projection' in display:
-            try:
-                cmap = self.ax_img.get_images()[0].cmap.name
-            except (AttributeError, IndexError):
-                cmap = 'gray'
             image = self.parent.projection
             if self.parent.chk_flip_lr.isChecked():
                 image = np.fliplr(image)
             if 'overlay' in self.parent.list_layout.currentText():
                 image = image.transpose()
-            self.ax_img.imshow(image, cmap=cmap)
-
+            self.ax_img.imshow(image, cmap=self.parent.cmap)
+            x0, x1 = self.ax_img.get_xlim()
+            y0, y1 = self.ax_img.get_ylim()
             if self.parent.list_layout.currentText() == 'horizontal':
-                x0, x1 = self.ax_img.get_xlim()
-                y0, y1 = self.ax_img.get_ylim()
                 self.ax_img.set_aspect(float(ratio * abs((x1-x0)/(y1-y0))))
                 self.ax_img.axis('off')
+            else:
+                self.ax_img.set_aspect(float(1./ratio * abs((x1-x0)/(y1-y0))))
 
         plot_values = None
         if 'plot' in display and self.parent.main.results:
@@ -872,10 +870,6 @@ class ProjectionPlotCanvas(FigureCanvasQTAgg):
             if plot_values:
                 if 'overlay' in self.parent.list_layout.currentText():
                     self.ax_plot.plot(self.parent.z_values, plot_values, 'r')
-                    x0, x1 = self.ax_img.get_xlim()
-                    y0, y1 = self.ax_img.get_ylim()
-                    self.ax_img.set_aspect(float(ratio * abs((y1-y0)/(x1-x0))))
-                    self.ax_img.set_ylim(0, img_w)
                     self.ax_plot.set_ylabel(self.parent.list_headers.currentText())
                 else:
                     self.ax_plot.plot(plot_values, self.parent.z_values, 'r')
@@ -888,5 +882,11 @@ class ProjectionPlotCanvas(FigureCanvasQTAgg):
                         self.ax_plot.invert_xaxis()
                     else:
                         self.ax_plot.invert_yaxis()
+        else:
+            if self.parent.chk_flip_ud.isChecked():
+                if 'overlay' in self.parent.list_layout.currentText():
+                    self.ax_img.invert_xaxis()
+                else:
+                    self.ax_img.invert_yaxis()
 
         self.draw()

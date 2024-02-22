@@ -1316,6 +1316,7 @@ def get_projection(img_infos, included_ids, tag_infos,
     axis = 0 if direction == 'front' else 1
     n_img = len(img_infos)
     patient_position = None
+    tag_patterns = [TagPatternFormat(list_tags=['PatientPosition'])]
     for idx, img_info in enumerate(img_infos):
         if idx in included_ids:
             if progress_modal:
@@ -1326,10 +1327,6 @@ def get_projection(img_infos, included_ids, tag_infos,
                     projection = None
                     progress_modal.setValue(100)
                     break
-            if not patient_position:
-                tag_patterns = [TagPatternFormat(list_tags=['PatientPosition'])]
-            else:
-                tag_patterns = []
             image, tags_ = get_img(
                 img_info.filepath,
                 frame_number=img_info.frame_number, tag_infos=tag_infos,
@@ -1340,12 +1337,13 @@ def get_projection(img_infos, included_ids, tag_infos,
                     patient_position = tags_[0][0]
                 except IndexError:
                     pass
+            profile = np_method(image, axis=axis)
             if projection is None:
-                projection = [np_method(image, axis=axis)]
                 shape_first = image.shape
+                projection = [profile]
             else:
                 if image.shape == shape_first:
-                    projection.append(np_method(image, axis=axis))
+                    projection.append(profile)
                 else:
                     shape_failed.append(idx)
 

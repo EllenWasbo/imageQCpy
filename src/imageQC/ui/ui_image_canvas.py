@@ -279,10 +279,14 @@ class ImageCanvas(GenericImageCanvas):
                     color='red', linewidth=linewidth, linestyle='--',
                     gid='axis2'))
             # DICOM annotations
-            marked_idxs = self.main.tree_file_list.get_marked_imgs_current_test()
-            if (
-                    self.parent.tool_sum.isChecked()
-                    and self.main.gui.active_img_no in marked_idxs):
+            try:
+                tool_sum = self.parent.tool_sum.isChecked()
+                if tool_sum:
+                    marked_idxs = self.main.get_marked_imgs_current_test()
+                    tool_sum = self.main.gui.active_img_no in marked_idxs
+            except AttributeError:
+                tool_sum = False
+            if tool_sum:
                 annot_text = (
                     ['Average image', ''] if self.main.average_img
                     else ['Summed image', '']

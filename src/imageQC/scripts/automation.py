@@ -24,7 +24,8 @@ from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm
 from imageQC.scripts.mini_methods import (
-    get_all_matches, string_to_float, get_headers_first_values_in_path)
+    get_all_matches, string_to_float, get_headers_first_values_in_path,
+    find_files_prefix_suffix)
 from imageQC.scripts.mini_methods_format import valid_path, val_2_str
 import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
@@ -1101,6 +1102,9 @@ def run_template_vendor(auto_template, modality,
         if proceed:
             p_input = Path(auto_template.path_input)
             if p_input.is_dir():
+                files, _ = find_files_prefix_suffix(
+                    p_input, auto_template.file_prefix, auto_template.file_suffix)
+                '''
                 if auto_template.file_suffix:
                     files = [
                         x for x in p_input.glob(auto_template.file_prefix + '*')
@@ -1108,7 +1112,9 @@ def run_template_vendor(auto_template, modality,
                         ]
                 else:
                     files = [x for x in p_input.glob(auto_template.file_prefix + '*')]
-                files.sort(key=lambda t: t.stat().st_mtime)
+                '''
+                if len(files) > 0:
+                    files.sort(key=lambda t: t.stat().st_mtime)
         if len(files) > 0:
             write_ok = os.access(auto_template.path_output, os.W_OK)
             if write_ok is False:

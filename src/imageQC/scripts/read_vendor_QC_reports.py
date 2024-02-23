@@ -1977,7 +1977,7 @@ def read_GE_Mammo_QAP(filepath):
                     upper_limit_this = float(upper_limit_this)
                 except (ValueError, TypeError):
                     upper_limit_this = None
-    
+
                 if line_split[-1] != 'PASSED':
                     overall_result = line_split[-1]
                 headers.append(header_this)

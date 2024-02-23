@@ -29,7 +29,7 @@ from imageQC.ui import ui_image_canvas
 from imageQC.config.iQCconstants import ENV_ICON_PATH, QUICKTEST_OPTIONS
 from imageQC.ui import settings
 from imageQC.scripts import automation
-from imageQC.scripts.mini_methods import get_all_matches
+from imageQC.scripts.mini_methods import get_all_matches, find_files_prefix_suffix
 from imageQC.scripts.dcm import sort_imgs
 # imageQC block end
 
@@ -60,7 +60,12 @@ def reset_auto_template(auto_template=None, parent_widget=None):
                         files = [x for x in folder.glob('*') if x.is_file()]
                         move_files.extend(files)
         else:
-            files = [x for x in archive_path.glob('*') if x.is_file()]
+            try:
+                files, _ = find_files_prefix_suffix(
+                    archive_path, auto_template.file_prefix, auto_template.file_suffix)
+            except AttributeError:
+                files = [x for x in archive_path.glob('*') if x.is_file()]
+
             if len(files) > 0:
                 dlg = ResetAutoTemplateDialog(parent_widget, files=files,
                                               template_name=auto_template.label)
@@ -379,14 +384,20 @@ class OpenAutomationDialog(ImageQCDialog):
         """
         n_files = 0
         error_ex = None
-
-        try:
-            for path in os.listdir(auto_template.path_input):
-                if os.path.isfile(os.path.join(auto_template.path_input, path)):
-                    n_files += 1
-        except (FileNotFoundError, OSError) as ex:
-            n_files = -1
-            error_ex = f'{ex}'
+        p_input = Path(auto_template.path_input)
+        if p_input.is_dir():
+            try:
+                files, error_ex = find_files_prefix_suffix(
+                    p_input, auto_template.file_prefix, auto_template.file_suffix)
+                n_files = len(files)
+            except AttributeError:
+                try:
+                    files = [x for x in p_input.glob('*')
+                             if x.is_file() and x.name != 'Thumbs.db']
+                    n_files = len(files)
+                except (FileNotFoundError, OSError) as ex:
+                    n_files = -1
+                    error_ex = f'{ex}'
 
         return (n_files, error_ex)
 

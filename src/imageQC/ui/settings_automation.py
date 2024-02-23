@@ -1533,6 +1533,7 @@ class AutoTempWidgetBasic(StackWidget):
             if (
                     self.cbox_limits_and_plot.currentText()
                     != self.current_template.limits_and_plot_label):
+                breakpoint()
                 QMessageBox.warning(
                     self, 'Warning',
                     ('Limits and plot template '
@@ -2071,8 +2072,9 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
             filenames = [x.name for x in Path(self.txt_input_path.text()).glob('*')
                          if '_' in x.name]
             if len(filenames) > 0:
-                test_names = [x.split('_')[0] for x in filenames]
+                test_names = [x.split('_BasicResults_')[0] for x in filenames]
                 test_names = list(set(test_names))
+                test_names.sort()
                 dlg = SelectTextsDialog(
                     test_names, title='Found tests',
                     select_info='Select tests to generate templates for')
@@ -2115,7 +2117,7 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                         template_this = copy.deepcopy(general_template)
                         template_this.label = station_name + '_' + test_name
                         template_this.path_output = path_output
-                        template_this.file_prefix = test_name
+                        template_this.file_prefix = test_name + '_'
                         templates.append(template_this)
 
             if len(templates) > 0:
@@ -2133,7 +2135,7 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                 if res.exec():
                     for template in templates:
                         act_files = [x for x in filenames
-                                     if template.file_prefix + '_' in x]
+                                     if x.startswith(template.file_prefix)]
                         res = read_vendor_template(
                             template=template,
                             filepath=os.path.join(template.path_input, act_files[0])
@@ -2142,9 +2144,9 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                             template = cfc.LimitsAndPlotTemplate(
                                 label=template.file_prefix,
                                 type_vendor=True,
-                                groups=[[header] for header in res['headers']],
-                                groups_limits=res['limits'],
-                                groups_ranges=res['limits']
+                                groups=[[header] for header in res['headers'][1:]],
+                                groups_limits=res['limits'][1:],
+                                groups_ranges=res['limits'][1:]
                                 )
                             templates_lim.append(template)
                     # TODO specify path for warnings? litt forklaring...
@@ -2177,7 +2179,6 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                     more = None
                     more_fnames = None
                 self.save(save_more=save_more, more=more, more_fnames=more_fnames)
-                self.update_from_yaml()
 
 
 class DashWorker(QThread):

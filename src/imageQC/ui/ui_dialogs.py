@@ -14,7 +14,7 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
-    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QListWidget, QTextEdit,
+    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox, QListWidget, QTextEdit,
     QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox, QFileDialog
     )
 
@@ -691,7 +691,8 @@ class ProjectionPlotDialog(ImageQCDialog):
         self.list_headers = QComboBox()
         self.list_headers.addItems(self.headers)
         self.list_headers.setCurrentIndex(0)
-        self.list_headers.currentIndexChanged.connect(self.canvas.update_figure)
+        self.list_headers.currentIndexChanged.connect(
+            lambda: self.update_plot_values(update_figure=True))
 
         self.list_display_options = QComboBox()
         self.list_display_options.addItems([
@@ -714,16 +715,28 @@ class ProjectionPlotDialog(ImageQCDialog):
         self.spin_margin.setRange(0, 40)
         self.spin_margin.setValue(20)
         self.spin_margin.valueChanged.connect(self.canvas.update_figure)
+        self.spin_min = QDoubleSpinBox()
+        self.spin_min.valueChanged.connect(self.canvas.update_figure)
+        self.spin_max = QDoubleSpinBox()
+        self.spin_max.valueChanged.connect(self.canvas.update_figure)
 
         hlo_selections = QHBoxLayout()
         vlo_image = QVBoxLayout()
         vlo.addLayout(hlo_selections)
         vlo.addLayout(vlo_image)
         flo = QFormLayout()
-        hlo_selections.addLayout(flo)
+        vlo_first_col = QVBoxLayout()
+        vlo_first_col.addLayout(flo)
+        hlo_selections.addLayout(vlo_first_col)
         flo.addRow(QLabel('Select projection type:'), self.list_projections)
         flo.addRow(QLabel('Select projection direction:'), self.list_directions)
         flo.addRow(QLabel('Column to plot:'), self.list_headers)
+        hlo_min_max = QHBoxLayout()
+        vlo_first_col.addLayout(hlo_min_max)
+        hlo_min_max.addWidget(QLabel('Plot min/max:'))
+        hlo_min_max.addWidget(self.spin_min)
+        hlo_min_max.addWidget(QLabel('/'))
+        hlo_min_max.addWidget(self.spin_max)
 
         flo2 = QFormLayout()
         hlo_selections.addLayout(flo2)
@@ -750,17 +763,27 @@ class ProjectionPlotDialog(ImageQCDialog):
         self.projection = None
         self.z_values = None
         self.z_label = ''
+        self.plot_values = None
         self.projection_height = 1
         self.projection_width = 1
 
         QTimer.singleShot(300, lambda: self.calculate_projection())
         # allow time to show dialog before updating list
 
+    def keyPressEvent(self, event):
+        """Avoid close dialog on enter in widgets."""
+        if event.key() == Qt.Key_Return:
+            pass
+        else:
+            super().keyPressEvent(event)
+
     def reject(self):
+        """Reset font size when closing."""
         plt.rcParams.update({'font.size': self.main.gui.annotations_font_size})
         super(ProjectionPlotDialog, self).reject()
 
     def layout_changed(self):
+        """Switch layout."""
         self.blockSignals(True)
         if 'overlay' in self.list_layout.currentText():
             self.spin_margin.setValue(20)
@@ -768,6 +791,41 @@ class ProjectionPlotDialog(ImageQCDialog):
             self.spin_margin.setValue(1)
         self.blockSignals(False)
         self.canvas.update_figure()
+
+    def update_plot_values(self, update_figure=False):
+        """Read selected result column from main results."""
+        results = self.main.results
+        test = self.main.current_test
+        self.plot_values = None
+        if test in results:
+            try:
+                if results[test]['pr_image']:
+                    col = self.list_headers.currentIndex()
+                    self.plot_values = [row[col] for row in results[test]['values']]
+            except TypeError:
+                pass
+
+        if self.plot_values:
+            minval = np.min(self.plot_values)
+            maxval = np.max(self.plot_values)
+            if maxval == minval:
+                maxval = minval + 1
+            diff = maxval - minval
+            self.blockSignals(True)
+            self.spin_min.setRange(minval - diff, maxval + diff)
+            self.spin_max.setRange(minval - diff, maxval + diff)
+            self.spin_min.setValue(minval - diff/10)
+            self.spin_max.setValue(maxval + diff/10)
+            if diff < 5:
+                self.spin_min.setDecimals(2)
+                self.spin_max.setDecimals(2)
+            else:
+                self.spin_min.setDecimals(0)
+                self.spin_max.setDecimals(0)
+            self.blockSignals(False)
+        if update_figure:
+            print('update_figure from update plot values')
+            self.canvas.update_figure()
 
     def calculate_projection(self):
         """Calculate projection based on selections."""
@@ -850,33 +908,30 @@ class ProjectionPlotCanvas(FigureCanvasQTAgg):
             y0, y1 = self.ax_img.get_ylim()
             if self.parent.list_layout.currentText() == 'horizontal':
                 self.ax_img.set_aspect(float(ratio * abs((x1-x0)/(y1-y0))))
-                self.ax_img.axis('off')
             else:
                 self.ax_img.set_aspect(float(1./ratio * abs((x1-x0)/(y1-y0))))
 
-        plot_values = None
         if 'plot' in display and self.parent.main.results:
             plt.rcParams.update({'font.size': self.parent.spin_font_size.value()})
-            results = self.parent.main.results
-            test = self.parent.main.current_test
-            if test in results:
-                try:
-                    if results[test]['pr_image']:
-                        col = self.parent.list_headers.currentIndex()
-                        plot_values = [row[col] for row in results[test]['values']]
-                except TypeError:
-                    pass
+            if self.parent.plot_values is None:
+                self.parent.update_plot_values()
 
-            if plot_values:
+            if self.parent.plot_values:
                 if 'overlay' in self.parent.list_layout.currentText():
-                    self.ax_plot.plot(self.parent.z_values, plot_values, 'r')
+                    self.ax_plot.plot(
+                        self.parent.z_values, self.parent.plot_values, 'r')
                     self.ax_plot.set_ylabel(self.parent.list_headers.currentText())
+                    self.ax_plot.set_ylim(
+                        self.parent.spin_min.value(), self.parent.spin_max.value())
                 else:
-                    self.ax_plot.plot(plot_values, self.parent.z_values, 'r')
+                    self.ax_plot.plot(
+                        self.parent.plot_values, self.parent.z_values, 'r')
                     x0, x1 = self.ax_plot.get_xlim()
                     y0, y1 = self.ax_plot.get_ylim()
                     self.ax_plot.set_aspect(ratio * abs((x1-x0)/(y1-y0)))
                     self.ax_plot.set_xlabel(self.parent.list_headers.currentText())
+                    self.ax_plot.set_xlim(
+                        self.parent.spin_min.value(), self.parent.spin_max.value())
                 if self.parent.chk_flip_ud.isChecked():
                     if 'overlay' in self.parent.list_layout.currentText():
                         self.ax_plot.invert_xaxis()
@@ -888,5 +943,6 @@ class ProjectionPlotCanvas(FigureCanvasQTAgg):
                     self.ax_img.invert_xaxis()
                 else:
                     self.ax_img.invert_yaxis()
-
+        if hasattr(self, 'ax_img'):
+            self.ax_img.axis('off')
         self.draw()

@@ -267,11 +267,11 @@ class ImageDisplayWidget(GenericImageWidget):
                 sort = False
 
             if sort:
-                proceed = messageboxes.proceed_question(
+                dlg = messageboxes.QuestionBox(
                     self,
-                    'Images not sorted by z-position. '
-                    'Proceed to sort images by z-positions?')
-                if proceed:
+                    'Images not sorted by z-position.',
+                    'Proceed to sort images by z-positions?', default_yes=True)
+                if dlg.exec():
                     order = np.argsort(zpos)
                     new_imgs = [self.main.imgs[idx] for idx in order]
                     self.main.imgs = new_imgs

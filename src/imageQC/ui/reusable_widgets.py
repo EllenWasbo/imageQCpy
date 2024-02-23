@@ -596,6 +596,8 @@ class ToolBarWindowLevel(QToolBar):
 
             minval = np.round(minval)
             maxval = np.round(maxval)
+            if maxval == minval:
+                maxval = minval + 1
 
             self.parent.update_window_level(minval, maxval)
 
@@ -773,6 +775,8 @@ class ColorBar(FigureCanvasQTAgg):
                 full = range_max - range_min
                 min_ratio = (set_min - range_min) / full
                 max_ratio = (set_max - range_min) / full
+                if max_ratio == min_ratio:
+                    max_ratio = min_ratio + 0.01
                 self.fig.subplots_adjust(min_ratio, 0., max_ratio, 1.)
         ax.axis('off')
         self.draw()

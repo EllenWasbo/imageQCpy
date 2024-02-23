@@ -35,7 +35,7 @@ def extract_char_blocks(nparr, space_limit=5):
         else:
             quad_arr = arr  # assumed never used as digits are higher than wide
         return quad_arr
-    
+
     def trim(start_pos, end_pos, idx_space_after):
         """Keep only largest part trimming before after spaces."""
         n_pr_group = (
@@ -55,7 +55,7 @@ def extract_char_blocks(nparr, space_limit=5):
                 last = len(start_pos)
 
         return (start_pos[first:last], end_pos[first:last])
-        
+
     list_of_nparr = []
     chopping_idxs = []
     if len(nparr.shape) == 2 and np.min(nparr.shape) > 2:
@@ -83,19 +83,19 @@ def extract_char_blocks(nparr, space_limit=5):
                 start_char_pos = start_char_pos[:-1]
         except IndexError:
             pass
-        
-            
+
         if all([
                 len(start_char_pos) > 0,
                 len(end_char_pos) == len(start_char_pos)]):
             spaces = [
                 start_char_pos[i+1] - end_char_pos[i]
                 for i in range(len(start_char_pos)-1)]
-            if np.max(spaces) > space_limit:
-                idxs = np.where(np.array(spaces) > space_limit)
-                start_char_pos, end_char_pos = trim(
-                    start_char_pos, end_char_pos, idxs[0])
-                
+            if len(spaces) > 0:
+                if np.max(spaces) > space_limit:
+                    idxs = np.where(np.array(spaces) > space_limit)
+                    start_char_pos, end_char_pos = trim(
+                        start_char_pos, end_char_pos, idxs[0])
+
             chopping_idxs = [
                 (start_char_pos[i], end_char_pos[i])
                 for i in range(len(start_char_pos))]

@@ -357,13 +357,6 @@ class ResultPlotCanvas(PlotCanvas):
         else:
             self.zpos_all = [img.zpos for img in self.main.imgs]
             self.marked_this = self.main.get_marked_imgs_current_test()
-            '''
-            except AttributeError:  # task_based_image_quality.py
-                self.marked_this = [
-                    i for i, im in enumerate(self.main.imgs)
-                    if self.main.current_test in im.marked_quicktest]
-            '''
-
             if self.main.gui.active_img_no in self.marked_this:
                 if self.main.current_test in self.main.results:
                     if self.main.results[self.main.current_test] is not None:

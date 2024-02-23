@@ -327,7 +327,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
 
     def display_errmsg(self, errmsg):
         """Display error in statusbar or as popup if long."""
-        if errmsg is not None:
+        if errmsg:
             msg = ''
             if isinstance(errmsg, str):
                 msg = errmsg

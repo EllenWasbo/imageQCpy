@@ -179,6 +179,33 @@ def get_modality_index(modality_string):
     return mods.index(modality_string)
 
 
+def find_files_prefix_suffix(path, prefix, suffix):
+    """Find files in path with name starting with prefix, having given suffix.
+
+    Parameters
+    ----------
+    path : Path
+    prefix : str
+    suffix : str
+
+    Returns
+    -------
+    files : list of Paths
+    error_msg : str
+    """
+    files = []
+    error_msg = ''
+    try:
+        if suffix:
+            files = [x for x in path.glob(prefix + '*') if x.suffix == suffix]
+        else:
+            files = [x for x in path.glob(prefix + '*')]
+    except (FileNotFoundError, OSError) as ex:
+        error_msg = f'{ex}'
+
+    return files, error_msg
+
+
 def get_headers_first_values_in_path(path):
     """Get headers and first row values from output path."""
     headers = []

@@ -115,6 +115,7 @@ class SelectTemplateWidget(QWidget):
                 if not before_select_new:
                     template_id -= 1  # first is empty
                 self.get_current_template()
+                self.main.current_quicktest = copy.deepcopy(self.current_template)
             elif 'paramsets' in self.fname:
                 self.current_template = self.main.current_paramset
 
@@ -352,18 +353,27 @@ class SelectQuickTestWidget(SelectTemplateWidget):
     def extract_results(self, skip_questions=False, silent=False):
         """Extract result values according to paramset.output to clipboard."""
         proceed = True
-        if skip_questions or silent:  # skip_questions for testing
-            include_headers = self.main.current_paramset.output.include_header
-            transpose_table = self.main.current_paramset.output.transpose_table
-        else:
-            dlg = QuickTestClipboardDialog(
-                include_headers=self.main.current_paramset.output.include_header,
-                transpose_table=self.main.current_paramset.output.transpose_table)
-            res = dlg.exec()
-            if res:
-                include_headers, transpose_table = dlg.get_data()
-            else:
+        if self.edited:
+            msg = ('There are unsaved changes to QuickTest template. '
+                   'Ignore and continue?')
+            reply = QMessageBox.question(
+                self, 'Save changes first?', msg, QMessageBox.Yes, QMessageBox.No)
+            if reply == QMessageBox.No:
                 proceed = False
+
+        if proceed:
+            if skip_questions or silent:  # skip_questions for testing
+                include_headers = self.main.current_paramset.output.include_header
+                transpose_table = self.main.current_paramset.output.transpose_table
+            else:
+                dlg = QuickTestClipboardDialog(
+                    include_headers=self.main.current_paramset.output.include_header,
+                    transpose_table=self.main.current_paramset.output.transpose_table)
+                res = dlg.exec()
+                if res:
+                    include_headers, transpose_table = dlg.get_data()
+                else:
+                    proceed = False
 
         if proceed:
             value_list, header_list = quicktest_output(self.main)

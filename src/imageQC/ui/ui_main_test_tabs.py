@@ -812,6 +812,12 @@ class ParamsTabCommon(QTabWidget):
                     tests.append([self.main.current_test])
                 else:
                     tests.append([])
+        try:
+            self.main.wid_quicktest.get_current_template()
+            self.main.current_quicktest = copy.deepcopy(
+                self.main.wid_quicktest.current_template)
+        except AttributeError:
+            pass  # task based
         self.main.current_quicktest.tests = tests
         max_progress = 100  # %
         self.main.progress_modal = uir.ProgressModal(

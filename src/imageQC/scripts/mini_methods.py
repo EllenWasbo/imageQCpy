@@ -194,7 +194,7 @@ def find_files_prefix_suffix(path, prefix, suffix):
     error_msg : str
     """
     files = []
-    error_msg = ''
+    error_msg = None
     try:
         if suffix:
             files = [x for x in path.glob(prefix + '*') if x.suffix == suffix]

@@ -30,6 +30,7 @@ from imageQC.config.config_func import init_user_prefs
 from imageQC.ui import messageboxes
 from imageQC.ui import reusable_widgets as uir
 from imageQC.scripts.dcm import get_projection
+from imageQC.scripts.read_vendor_QC_reports import read_GE_Mammo_date
 import imageQC.resources
 # imageQC block end
 
@@ -556,7 +557,8 @@ class QuickTestClipboardDialog(ImageQCDialog):
 class ResetAutoTemplateDialog(ImageQCDialog):
     """Dialog to move directories/files in input_path/Archive to input_path."""
 
-    def __init__(self, parent_widget, files=[], directories=[], template_name=''):
+    def __init__(self, parent_widget, files=[], directories=[], template_name='',
+                 QAP_Mammo=False):
         super().__init__()
         self.setWindowTitle(f'Reset Automation template {template_name}')
         self.setMinimumHeight(300)
@@ -565,7 +567,14 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         self.sort_mtime = None
         if len(files) > 0:
             self.list_elements = [file.name for file in files]
-            self.sort_mtime = np.argsort([file.stat().st_mtime for file in files])
+            if QAP_Mammo:
+                dates = []
+                for file in files:
+                    dd, mm, yyyy = read_GE_Mammo_date(file)
+                    dates.append(f'{yyyy}{mm}{dd}')
+                self.sort_mtime = np.argsort(dates)
+            else:
+                self.sort_mtime = np.argsort([file.stat().st_ctime for file in files])
         else:
             self.list_elements = [folder.name for folder in directories]
             files_or_folders = 'folders'
@@ -574,7 +583,7 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         self.setLayout(vlo)
 
         self.sort_by_name = True
-        self.txt_by_name_or_date = ['Sort by last modified date', 'Sort by name']
+        self.txt_by_name_or_date = ['Sort by file creation date time', 'Sort by name']
         self.btn_by_name_or_date = QPushButton(self.txt_by_name_or_date[0])
         self.btn_by_name_or_date.clicked.connect(self.update_sort)
         self.list_file_or_dirs = QListWidget()

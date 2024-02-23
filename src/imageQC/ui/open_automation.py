@@ -49,8 +49,15 @@ def reset_auto_template(auto_template=None, parent_widget=None):
         move_dirs = []
         dirs = [x for x in archive_path.glob('*') if x.is_dir()]
         if len(dirs) > 0:
+            QAP_Mammo = False
+            try:
+                if auto_template.file_type == 'GE Mammo QAP (txt)':
+                    QAP_Mammo = True
+            except AttributeError:
+                pass
             dlg = ResetAutoTemplateDialog(parent_widget, directories=dirs,
-                                          template_name=auto_template.label)
+                                          template_name=auto_template.label,
+                                          QAP_Mammo=QAP_Mammo)
             res = dlg.exec()
             if res:
                 idxs = dlg.get_idxs()
@@ -578,7 +585,7 @@ class OpenAutomationDialog(ImageQCDialog):
             else:
                 temp = self.templates[mods[0]][ids[0]]
 
-            path = temp.path_output
+            path = Path(temp.path_output).resolve()
             if os.path.exists(path):
                 os.startfile(path)
             else:
@@ -598,7 +605,7 @@ class OpenAutomationDialog(ImageQCDialog):
             else:
                 temp = self.templates[mods[0]][ids[0]]
 
-            path = temp.path_input
+            path = Path(temp.path_input).resolve()
             if os.path.exists(path):
                 os.startfile(path)
             else:

@@ -1104,23 +1104,21 @@ def run_template_vendor(auto_template, modality,
             if p_input.is_dir():
                 files, _ = find_files_prefix_suffix(
                     p_input, auto_template.file_prefix, auto_template.file_suffix)
-                '''
-                if auto_template.file_suffix:
-                    files = [
-                        x for x in p_input.glob(auto_template.file_prefix + '*')
-                        if x.suffix == auto_template.file_suffix
-                        ]
-                else:
-                    files = [x for x in p_input.glob(auto_template.file_prefix + '*')]
-                '''
                 if len(files) > 0:
-                    files.sort(key=lambda t: t.stat().st_mtime)
+                    if auto_template.file_type == 'GE Mammo QAP (txt)':
+                        dates = []
+                        for file in files:
+                            dd, mm, yyyy = read_vendor_QC_reports.read_GE_Mammo_date(
+                                file)
+                            dates.append(f'{yyyy}{mm}{dd}')
+                        files = [file for _, file in sorted(zip(dates, files))]
+                    else:
+                        files.sort(key=lambda t: t.stat().st_ctime)
         if len(files) > 0:
             write_ok = os.access(auto_template.path_output, os.W_OK)
             if write_ok is False:
                 log.append(
-                    f'''\t Failed to write to output path
-                    {auto_template.path_output}''')
+                    f'\t Failed to write to output path {auto_template.path_output}')
             output_headers = []
             if os.path.exists(auto_template.path_output):
                 output_headers, _ = get_headers_first_values_in_path(

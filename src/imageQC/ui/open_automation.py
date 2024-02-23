@@ -49,15 +49,8 @@ def reset_auto_template(auto_template=None, parent_widget=None):
         move_dirs = []
         dirs = [x for x in archive_path.glob('*') if x.is_dir()]
         if len(dirs) > 0:
-            QAP_Mammo = False
-            try:
-                if auto_template.file_type == 'GE Mammo QAP (txt)':
-                    QAP_Mammo = True
-            except AttributeError:
-                pass
             dlg = ResetAutoTemplateDialog(parent_widget, directories=dirs,
-                                          template_name=auto_template.label,
-                                          QAP_Mammo=QAP_Mammo)
+                                          template_name=auto_template.label)
             res = dlg.exec()
             if res:
                 idxs = dlg.get_idxs()
@@ -74,8 +67,15 @@ def reset_auto_template(auto_template=None, parent_widget=None):
                 files = [x for x in archive_path.glob('*') if x.is_file()]
 
             if len(files) > 0:
+                QAP_Mammo = False
+                try:
+                    if auto_template.file_type == 'GE Mammo QAP (txt)':
+                        QAP_Mammo = True
+                except AttributeError:
+                    pass
                 dlg = ResetAutoTemplateDialog(parent_widget, files=files,
-                                              template_name=auto_template.label)
+                                              template_name=auto_template.label,
+                                              QAP_Mammo=QAP_Mammo)
                 res = dlg.exec()
                 if res:
                     idxs = dlg.get_idxs()

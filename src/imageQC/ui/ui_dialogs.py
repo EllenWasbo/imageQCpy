@@ -582,9 +582,10 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         vlo = QVBoxLayout()
         self.setLayout(vlo)
 
-        self.sort_by_name = True
+        self.sort_by_name = False if QAP_Mammo else True
         self.txt_by_name_or_date = ['Sort by file creation date time', 'Sort by name']
-        self.btn_by_name_or_date = QPushButton(self.txt_by_name_or_date[0])
+        self.btn_by_name_or_date = QPushButton(
+            self.txt_by_name_or_date[int(self.sort_by_name)])
         self.btn_by_name_or_date.clicked.connect(self.update_sort)
         self.list_file_or_dirs = QListWidget()
         self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)

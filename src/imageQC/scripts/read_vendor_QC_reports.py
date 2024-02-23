@@ -1908,6 +1908,30 @@ def read_GE_QAP(filepath):
     return data
 
 
+def read_GE_Mammo_date(filepath):
+    """Read GE Mammo QAP date from txt-file path string.
+
+    Parameters
+    ----------
+    filepath : Path
+        .txt file
+
+    Returns
+    -------
+    dd, mm, yyyy : tuple of str
+    """
+    ddmmyyyy = ('', '', '')
+    splitname = filepath.name.split('_')
+    if len(splitname) >= 3:
+        datestr = splitname[-2]
+        if len(datestr) == 8:
+            dd = datestr.split('.')
+            if len(dd) == 3:
+                ddmmyyyy = (dd[0], dd[1], f'20{dd[2]}')
+                # assume GE or this software outdated in year 2100 :)
+    return ddmmyyyy
+
+
 def read_GE_Mammo_QAP(filepath):
     """Read GE Mammo QAP report from txt-file.
 
@@ -1933,15 +1957,11 @@ def read_GE_Mammo_QAP(filepath):
     status = False
 
     filepath = Path(filepath)
-    splitname = filepath.name.split('_')
+    splitname = filepath.name.split('_BasicResults')
     if len(splitname) >= 3:
         testname = splitname[0]
-        datestr = splitname[-2]
-        if len(datestr) == 8:
-            dd = datestr.split('.')
-            if len(dd) == 3:
-                date = f'{dd[0]}.{dd[1]}.20{dd[2]}'
-                # assume GE or this software outdated in year 2100 :)
+        dd, mm, yyyy = read_GE_Mammo_date(filepath)
+        date = f'{dd}.{mm}.{yyyy}'
 
     txt = []
     with open(filepath, 'r') as file:

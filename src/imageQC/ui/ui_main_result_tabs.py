@@ -377,15 +377,27 @@ class ResultPlotCanvas(PlotCanvas):
                     alpha = 1.
                 else:
                     alpha = curve['alpha']
-                if 'color' in curve:
-                    self.ax.plot(curve['xvals'], curve['yvals'],
-                                 curve['style'], label=curve['label'],
-                                 markersize=markersize, alpha=alpha,
-                                 color=curve['color'])
-                else:
-                    self.ax.plot(curve['xvals'], curve['yvals'],
-                                 curve['style'], label=curve['label'],
-                                 markersize=markersize, alpha=alpha)
+                proceed = True
+                try:
+                    if curve['xvals'].size != curve['yvals'].size:
+                        proceed = False
+                except AttributeError:
+                    try:
+                        if len(curve['xvals']) != len(curve['yvals']):
+                            proceed = False
+                    except TypeError:
+                        pass
+                if proceed:
+                    if 'color' in curve:
+                        self.ax.plot(curve['xvals'], curve['yvals'],
+                                     curve['style'], label=curve['label'],
+                                     markersize=markersize, alpha=alpha,
+                                     color=curve['color'])
+                    else:
+                        self.ax.plot(curve['xvals'], curve['yvals'],
+                                     curve['style'], label=curve['label'],
+                                     markersize=markersize, alpha=alpha)
+
                 if x_only_int:
                     xx = list(curve['xvals'])
                     if not isinstance(xx[0], int):
@@ -1527,7 +1539,6 @@ class ResultPlotCanvas(PlotCanvas):
             self.ytitle = 'Average pixel value'
         else:
             headers = self.main.results['ROI']['headers']
-            #colors = mmf.get_color_list(n_colors=len(headers))
             for i in range(len(yvals[0])):
                 curve = {'label': headers[i],
                          'xvals': xvals,
@@ -1990,6 +2001,7 @@ class ResultPlotCanvas(PlotCanvas):
             self.xtitle = 'pos (mm)'
             self.ytitle = 'Pixel value'
 
+            dot_colors = COLORS if len(idxs) > 0 else ['mediumseagreen']
             for m_idx in idxs:
                 dd = details_dicts[m_idx]
                 for slino, yvals in enumerate(dd['sorted_pixels']):
@@ -2000,7 +2012,7 @@ class ResultPlotCanvas(PlotCanvas):
                         'xvals': dd['sorted_pixels_x'],
                         'yvals': yvals,
                         'style': '.',
-                        'color': COLORS[m_idx % len(COLORS)],
+                        'color': dot_colors[m_idx % len(dot_colors)],
                         'markersize': 2.,
                         'alpha': 0.5
                          })
@@ -2017,18 +2029,9 @@ class ResultPlotCanvas(PlotCanvas):
                 if 'presmoothed' in dd and len(idxs) == 1:
                     self.curves.append({
                         'label': 'Presmoothed',
-                        'xvals': dd['sorted_pixels_x'],
+                        'xvals': dd['interpolated_x'],
                         'yvals': dd['presmoothed'],
                         'style': '-b'
-                         })
-
-                if 'ESF' in dd and len(idxs) == 1:
-                    self.curves.append({
-                        'label': 'ESF',
-                        'xvals': dd['sorted_pixels_x'],
-                        'yvals': dd['ESF'],
-                        'style': '-',
-                        'color': COLORS[m_idx % len(COLORS)]
                          })
 
         def prepare_plot_centered_profiles(idxs):

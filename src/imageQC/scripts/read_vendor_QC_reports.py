@@ -1958,7 +1958,7 @@ def read_GE_Mammo_QAP(filepath):
 
     filepath = Path(filepath)
     splitname = filepath.name.split('_BasicResults')
-    if len(splitname) >= 3:
+    if len(splitname) >= 2:
         testname = splitname[0]
         dd, mm, yyyy = read_GE_Mammo_date(filepath)
         date = f'{dd}.{mm}.{yyyy}'

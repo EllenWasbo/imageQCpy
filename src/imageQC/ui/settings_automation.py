@@ -1533,7 +1533,6 @@ class AutoTempWidgetBasic(StackWidget):
             if (
                     self.cbox_limits_and_plot.currentText()
                     != self.current_template.limits_and_plot_label):
-                breakpoint()
                 QMessageBox.warning(
                     self, 'Warning',
                     ('Limits and plot template '

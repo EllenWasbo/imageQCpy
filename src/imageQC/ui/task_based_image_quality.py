@@ -7,16 +7,13 @@ Run TTF and NPS, d-prime on dataset.
 import os
 import copy
 from time import time
-import numpy as np
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication, qApp,
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QToolBar, QAbstractItemView,
-    QTabWidget, QStackedWidget, QDoubleSpinBox,
-    QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox, QListWidget,
-    QComboBox, QFileDialog, QMessageBox
+    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QTableWidget, QTableWidgetItem,
+    QTabWidget, QStackedWidget, QLabel, QPushButton, QAction, QListWidget, QMessageBox
     )
 
 # imageQC block start
@@ -29,12 +26,9 @@ from imageQC.config import config_classes as cfc
 from imageQC.config import config_func as cff
 from imageQC.scripts import dcm
 from imageQC.ui import messageboxes
-from imageQC.scripts import input_main
 from imageQC.ui import ui_main_quicktest_paramset_select
-from imageQC.ui.ui_main_test_tabs import ParamsTabCT, ParamsWidget
+from imageQC.ui.ui_main_test_tabs import ParamsTabCT, PositionWidget
 from imageQC.ui import ui_main_result_tabs
-from imageQC.ui import ui_image_canvas
-from imageQC.scripts.calculate_roi import get_rois
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.scripts.mini_methods import get_uniq_ordered
 # imageQC block end
@@ -56,6 +50,121 @@ class ReadFilesDialog(ImageQCDialog):
         vlo.addWidget(self.wid)
 
 
+class ZRangeWidget(QWidget):
+    """Widget to z ranges."""
+
+    def __init__(self, main):
+        """Initialize PositionWidget."""
+        super().__init__()
+        self.main = main
+        self.table = ZRangeTableWidget(self)
+        hlo = QHBoxLayout()
+        self.setLayout(hlo)
+
+        self.act_add = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+            'Add row', self)
+        self.act_add.triggered.connect(self.add_row)
+        self.act_delete = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+            'Delete row', self)
+        self.act_delete.triggered.connect(self.delete_row)
+        self.act_get_z = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
+            'Get z from selected image', self)
+        #self.act_get_z.triggered.connect(self.get_z)
+        toolb = QToolBar()
+        toolb.addActions([self.act_add, self.act_delete, self.act_get_z])
+        toolb.setOrientation(Qt.Vertical)
+        hlo.addWidget(toolb)
+        hlo.addWidget(self.table)
+
+    def add_row(self):
+        """Add row to table."""
+        rowno = 0
+        if self.table.current_table is None:
+            self.table.current_table = [[0, 0, 0, 0]]
+        else:
+            sel = self.table.selectedIndexes()
+            if len(sel) > 0:
+                rowno = sel[0].row()
+            else:
+                rowno = self.table.rowCount()
+            self.table.current_table.insert(rowno, [0, 0, 0, 0])
+            self.parent.flag_edit(True)
+            self.table.update_table()
+
+    def delete_row(self):
+        """Delete row from table."""
+        sel = self.table.selectedIndexes()
+        if len(sel) > 0:
+            rowno = sel[0].row()
+            self.table.current_table.pop(rowno)
+            self.parent.flag_edit(True)
+            self.table.update_table()
+
+
+class ZRangeTableWidget(QTableWidget):
+    """Table widget displaying z ranges."""
+
+    def __init__(self, parent):
+        """Initiate PositionTableWidget."""
+        super().__init__()
+        self.parent = parent
+        self.current_table = None
+        self.cellChanged.connect(self.edit_current_table)
+        self.update_table()
+
+    def edit_current_table(self, row, col):
+        """Update PositionTable when cell edited."""
+        val = self.item(row, col).text()
+        try:
+            val = float(val)
+        except ValueError:
+            val = 0
+        self.current_table[row][col] = val
+        self.parent.flag_edit(True)
+        #setattr(self.main.current_paramset, self.table_attribute_name,
+        #        self.current_table)
+
+    def update_table(self):
+        """Populate table with current table."""
+        if self.current_table is None:  # not initiated yet
+            pass
+            '''
+            ttf_zranges = self.parent.main.current_paramset.ttf_zrange_table
+            nps_zranges = self.parent.main.current_paramset.ttf_zrange_table
+            if len(ttf_zranges) > 0:
+                ttf_mins = [ttf_zranges[i] for i in range(0, len(ttf_zranges), 2)]
+                ttf_maxs = [ttf_zranges[i] for i in range(1, len(ttf_zranges), 2)]
+            if len(nps_zranges) > 0:
+                nps_mins = [nps_zranges[i] for i in range(0, len(nps_zranges), 2)]
+                nps_maxs = [nps_zranges[i] for i in range(1, len(nps_zranges), 2)]
+        else:
+            self.parent.main.current_paramset.ttf_nps
+                    self.current_table)
+            '''
+        self.blockSignals(True)
+        self.clear()
+        self.setColumnCount(4)
+        self.setHorizontalHeaderLabels(
+            ['TTF min z', 'TTF max z', 'NPS min z', 'NPS max z'])
+        #self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        if self.current_table:
+            self.setRowCount(len(self.current_table))
+            for rowno, row in enumerate(self.current_table):
+                for colno, val in enumerate(row):
+                    twi = QTableWidgetItem(str(val))
+                    twi.setTextAlignment(4)
+                    self.setItem(rowno, colno, twi)
+
+            self.verticalHeader().setVisible(False)
+            self.resizeRowsToContents()
+
+        self.blockSignals(False)
+
+
 class TaskBasedImageQualityDialog(ImageQCDialog):
     """GUI setup for the dialog window."""
 
@@ -67,15 +176,6 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         vlo = QVBoxLayout()
         self.setLayout(vlo)
 
-        infotxt = (
-            'This tool will facilitate effective calculation of MTF, NPS and '
-            'detectability index for CT images acquired and reconstructed under '
-            'different conditions.'
-            )
-
-        vlo.addWidget(uir.UnderConstruction())
-        vlo.addWidget(uir.LabelItalic(infotxt))
-        vlo.addWidget(uir.HLine())
         vlo_right = QVBoxLayout()
         vlo_left = QVBoxLayout()
         hlo = QHBoxLayout()
@@ -110,6 +210,12 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         self.tag_infos = main.tag_infos
         self.tag_patterns_special = main.tag_patterns_special
         self.save_blocked = main.save_blocked
+        self.wid_z_range = ZRangeWidget(self)
+        
+        self.wid_z_range = PositionWidget(
+                self, self.main, table_attribute_name='num_table',
+                headers=['Range label', '(z min, z max) TTF', '(z min, z max) NPS'],
+                use_rectangle=True)
         self.wid_image_display = ImageDisplayWidget(self, toolbar_right=False)
         self.wid_paramset = ui_main_quicktest_paramset_select.SelectParamsetWidget(
             self, fname=self.fname)
@@ -163,6 +269,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         vlo_left.addWidget(self.wid_image_display)
 
         # How to analyse
+        vlo_right.addWidget(self.wid_z_range)
         hlo_analyse = QHBoxLayout()
         vlo_right.addLayout(hlo_analyse)
         self.stack_test_tabs = QStackedWidget()
@@ -174,6 +281,13 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         # Results / output
         vlo_right.addWidget(self.tab_results)
         self.update_paramset()
+
+    def keyPressEvent(self, event):
+        """Avoid Return actions."""
+        if event.key() == Qt.Key_Return:
+            pass
+        else:
+            super().keyPressEvent(event)
 
     def create_result_tabs(self):
         """Initiate GUI for the stacked result tabs."""
@@ -379,6 +493,9 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                 self.wid_res_plot.plotcanvas.plot()
             elif isinstance(wid, ui_main_result_tabs.ResultImageWidget):
                 self.wid_res_image.canvas.result_image_draw()
+
+    def save_parameters(self):
+        pass #TODO
 
     def start_wait_cursor(self):
         """Block mouse events by wait cursor."""

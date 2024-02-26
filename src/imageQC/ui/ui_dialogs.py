@@ -589,11 +589,17 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         self.btn_by_name_or_date.clicked.connect(self.update_sort)
         self.list_file_or_dirs = QListWidget()
         self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)
-        self.list_file_or_dirs.addItems(self.list_elements)
+        if self.sort_by_name:
+            list_elements = copy.deepcopy(self.list_elements)
+        else:
+            list_elements = list(np.array(self.list_elements)[self.sort_mtime])
+        self.list_file_or_dirs.addItems(list_elements)
         self.list_file_or_dirs.setCurrentRow(len(self.list_elements) - 1)
 
         vlo.addWidget(QLabel(
-            'Move files out of Archive to regard these files as incoming.'))
+            'Select files to move out of Archive '))
+        vlo.addWidget(QLabel(
+            'to regard these files as incoming.'))
         vlo.addStretch()
         vlo.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
         vlo.addWidget(self.list_file_or_dirs)
@@ -674,8 +680,8 @@ class ProjectionPlotDialog(ImageQCDialog):
         self.setLayout(vlo)
 
         self.canvas = ProjectionPlotCanvas(self)
-        self.canvas.setMinimumHeight(round(0.8*self.main.gui.panel_height))
-        self.canvas.setMinimumWidth(round(0.8*self.main.gui.panel_width))
+        self.canvas.setMinimumHeight(round(0.6*self.main.gui.panel_height))
+        self.canvas.setMinimumWidth(round(0.6*self.main.gui.panel_height))
         self.tb_canvas = uir.ImageNavigationToolbar(self.canvas, self,
                                                     remove_customize=True)
 
@@ -834,7 +840,6 @@ class ProjectionPlotDialog(ImageQCDialog):
                 self.spin_max.setDecimals(0)
             self.blockSignals(False)
         if update_figure:
-            print('update_figure from update plot values')
             self.canvas.update_figure()
 
     def calculate_projection(self):
@@ -882,7 +887,7 @@ class ProjectionPlotCanvas(FigureCanvasQTAgg):
     """Canvas for display of projection and plot."""
 
     def __init__(self, parent):
-        self.fig = matplotlib.figure.Figure(figsize=(8, 2), constrained_layout=True)
+        self.fig = matplotlib.figure.Figure(figsize=(8, 2))  #, constrained_layout=True)
         self.parent = parent
         FigureCanvasQTAgg.__init__(self, self.fig)
 
@@ -936,9 +941,10 @@ class ProjectionPlotCanvas(FigureCanvasQTAgg):
                 else:
                     self.ax_plot.plot(
                         self.parent.plot_values, self.parent.z_values, 'r')
-                    x0, x1 = self.ax_plot.get_xlim()
-                    y0, y1 = self.ax_plot.get_ylim()
-                    self.ax_plot.set_aspect(ratio * abs((x1-x0)/(y1-y0)))
+                    if 'projection' in display:
+                        _, btm, _, height = self.ax_img.get_position().bounds
+                        left, _, width, _ = self.ax_plot.get_position().bounds
+                        self.ax_plot.set_position([left, btm, width, height])
                     self.ax_plot.set_xlabel(self.parent.list_headers.currentText())
                     self.ax_plot.set_xlim(
                         self.parent.spin_min.value(), self.parent.spin_max.value())

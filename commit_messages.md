@@ -4,7 +4,7 @@ _mon dd, 2024_
 New functionalities:
 - New buttons in image toolbar:
 	- Colormap select
-	- Show projection (maximum/average intensity projection) with additional option to plot values from table (f.eks. mAs profile from extracted DCM values)
+	- Show projection (maximum/average intensity projection) with additional option to plot values from results table (e.g. mAs profile from extracted DCM values)
 	- Set active area (rectangle) for defining rectangular ROIs (previously defined by zoom functionality). The active area will also be used when setting window level based on active area (min/max or avg/stdev)
 - Added window level widget for result image.
 - Added colorbar to window level widget.
@@ -12,18 +12,18 @@ New functionalities:
 - Added option to read GE QAP Mammo result files and option to bulk-generate automation templates for reading the different file types.
 
 Changes:
-- Added option to lock NM uniformity CFOV to 75% of UFOV. Set to default. 
+- Added option to lock NM uniformity CFOV to 75% of UFOV.
 - Cancel when running automation templates now stops during one template running, not just between templates.
 - More modal progress bars with option to Cancel.
 - Test Num:
 	- considerably more robust for Siemens gamma camera savescreens that differ in screen size from day to day
 	- default templates updated with larger ROIs to handle these day to day changes, ignoring parts of text at left/right border of ROI
-- Reduced startup time
+- Changed startup time (saved some update after gui presented)
 
 Bugfixes:
 - fixed error when using image names for QuickTest where more images than expected are loaded (IndexError on set_names[i], calculate_qc.py line 158)
 - default spinbox maximum is 100. Increased this value for different test-parameters that were not yet specified with max > 100.
-- avoiding crash when scrolling through images using arrow keys
+- avoiding crash when scrolling through images using arrow keys (therefore skips showing some images as signal is blocked while processing). 
 
 Code structure:
 - moved some methods from ui_main to ui_main_methods for better reuse of methods for task_based_image_quality dialog

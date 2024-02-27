@@ -1848,9 +1848,22 @@ class ParamsTabNM(ParamsTabCommon):
         if self.main.current_modality == 'NM':
             paramset = self.main.current_paramset
             if paramset.sni_type == 0:
-                self.sni_roi_ratio.setEnabled(False)
+                self.sni_roi_label.setVisible(False)
+                self.sni_roi_size.setVisible(False)
+                self.sni_roi_ratio.setVisible(False)
             else:
-                self.sni_roi_ratio.setEnabled(True)
+                self.sni_roi_label.setVisible(True)
+                if paramset.sni_type == 1:
+                    self.sni_roi_label.setText('ROI size ratio')
+                    self.sni_roi_ratio.setVisible(True)
+                    self.sni_roi_ratio.setEnabled(True)
+                    self.sni_roi_size.setVisible(False)
+                elif paramset.sni_type >= 2:
+                    self.sni_roi_label.setText('ROI size')
+                    self.sni_roi_size.setVisible(True)
+                    self.sni_roi_size.setEnabled(True)
+                    self.sni_roi_ratio.setVisible(False)
+
             if paramset.uni_cfov_ratio75:
                 self.uni_cfov_ratio.setValue(0.75*self.uni_ufov_ratio.value())
 
@@ -1871,10 +1884,10 @@ class ParamsTabNM(ParamsTabCommon):
             pre_txt = '2d NPS for ROI'
             img_txts = [f'{pre_txt} {name}' for name in roi_names]
             items_res_image.extend(img_txts)
-        elif self.sni_type.currentIndex() == 1:
+        else:
             items_plot = [
                 'SNI values',
-                'NPS all ROIs + human visual filter',
+                'NPS all ROIs + human visual filter',  # consider delete or only hum vis
                 'Filtered NPS and NPS structure max+avg']
             items_res_image.append('SNI values map')
         if self.sni_correct.isChecked() is True:
@@ -2016,6 +2029,17 @@ class ParamsTabNM(ParamsTabCommon):
             decimals=2, minimum=0.05, maximum=1., singleStep=0.01)
         self.sni_roi_ratio.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sni_roi_ratio'))
+        self.sni_roi_size = QDoubleSpinBox(
+            decimals=0, minimum=16, maximum=1000, singleStep=1)
+        self.sni_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sni_roi_size'))
+
+        self.sni_sampling_frequency = QDoubleSpinBox(
+            decimals=3, minimum=0.001, singleStep=0.005)
+        self.sni_sampling_frequency.valueChanged.connect(
+                    lambda: self.param_changed_from_gui(
+                        attribute='sni_sampling_frequency', update_roi=False,
+                        clear_results=True))
 
         self.sni_correct_pos_x = QCheckBox('x')
         self.sni_correct_pos_y = QCheckBox('y')
@@ -2056,14 +2080,18 @@ class ParamsTabNM(ParamsTabCommon):
         flo = QFormLayout()
         flo.addRow(QLabel('Ratio of nonzero part of image to be analysed'),
                    self.sni_area_ratio)
+        flo.addRow(QLabel('NPS sampling frequency (mm-1)'),
+                   self.sni_sampling_frequency)
         vlo_left.addLayout(flo)
 
         hlo_type = QHBoxLayout()
         vlo_left.addLayout(hlo_type)
         hlo_type.addWidget(QLabel('ROI setup'))
         hlo_type.addWidget(self.sni_type)
-        hlo_type.addWidget(QLabel('ROI size ratio'))
+        self.sni_roi_label = QLabel('ROI size ratio')
+        hlo_type.addWidget(self.sni_roi_label)
         hlo_type.addWidget(self.sni_roi_ratio)
+        hlo_type.addWidget(self.sni_roi_size)
 
         vlo_eye = QVBoxLayout()
         vlo_eye.addWidget(QLabel('V(r) = r<sup>1.3</sup> exp[-Cr<sup>2</sup> ]'))

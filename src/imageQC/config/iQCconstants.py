@@ -18,7 +18,7 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.8-b8'
+VERSION = '3.0.8-b9'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -74,7 +74,9 @@ ALTERNATIVES = {
         },
     'NM': {
         'ROI': ALTERNATIVES_ROI,
-        'SNI': ['ROIs 2 large, 6 small', 'ROI grid, same size'],
+        'SNI': ['ROIs 2 large, 6 small', 'ROI grid, size by full ratio',
+                'ROI grid, size by number of pixels',
+                'ROIs matched Siemens gamma camera'],
         'MTF': ['Point', 'One line source', 'Two perpendicular line sources', 'Edge']
         },
     'SPECT': {
@@ -200,7 +202,9 @@ HEADERS = {
         'SNI': {
             'alt0': ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', 'SNI S2',
                      'SNI S3', 'SNI S4', 'SNI S5', 'SNI S6'],
-            'alt1': ['SNI max', 'SNI avg', 'SNI median']
+            'alt1': ['SNI max', 'SNI avg', 'SNI median'],
+            'alt2': ['SNI max', 'SNI avg', 'SNI median'],
+            'alt3': ['SNI max', 'SNI avg', 'SNI median'],
             },
         'Bar': {
             'alt0': ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',

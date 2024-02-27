@@ -3988,7 +3988,10 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
             np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c)
         details_dict['eye_filter'] = eye_filter['curve']
 
-        SNI_map = np.zeros((len(roi_array)-1, len(roi_array[1])))
+        if paramset.sni_type in [1, 2]:
+            SNI_map = np.zeros((len(roi_array)-1, len(roi_array[1])))
+        else:  # 3 Siemens
+            SNI_map = []
         SNI_vals = []
         rNPS_filt_sum = None
         rNPS_struct_filt_sum = None
@@ -3999,7 +4002,10 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                     eye_filter['filter_2d'], unit=eye_filter['unit'],
                     pix=image_info.pix[0], fit_dict=fit_dict)
                 details_dict['pr_roi'].append(details_dict_roi)
-                SNI_map[rowno, colno] = SNI
+                if paramset.sni_type in [1, 2]:
+                    SNI_map[rowno, colno] = SNI
+                else:  # 3 Siemens
+                    SNI_map.append(SNI)
                 SNI_vals.append(SNI)
                 if rNPS_filt_sum is None:
                     rNPS_filt_sum = details_dict_roi['rNPS_filt']

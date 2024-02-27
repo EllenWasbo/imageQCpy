@@ -1141,7 +1141,7 @@ class MainWindow(QMainWindow):
         menu_file = QMenu('&File', self)
         menu_file.addActions([
             act_open, act_open_adv, act_read_header, act_open_auto, act_wizard_auto,
-            act_rename_dcm, act_task_based_auto,
+            act_rename_dcm, #act_task_based_auto,
             act_close, act_close_all, act_quit])
         menu_bar.addMenu(menu_file)
         menu_settings = QMenu('&Settings', self)

@@ -503,8 +503,10 @@ class ParamSetNM(ParamSetCommon):
     uni_sum_first: bool = False
     uni_scale_factor: int = 0  # 0 = Auto, 1= no scale, 2... = scale factor
     sni_area_ratio: float = 0.9
-    sni_type: int = 0  # 0 as Nelson 2013, 1= all same roi_size defined by sni_roi_ratio
+    sni_type: int = 0  # 0 as Nelson 2014, 1= grid roi_ratio, 2 grid roi_size, 3 Siemens
     sni_roi_ratio: float = 0.2  # relative to sni_area defined by sni_area_ratio
+    sni_roi_size: int = 128  # number of pixels
+    sni_sampling_frequency: float = 0.01
     sni_correct: bool = False
     sni_correct_pos_x: bool = False
     sni_correct_pos_y: bool = False

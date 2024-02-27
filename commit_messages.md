@@ -10,10 +10,12 @@ New functionalities:
 - Added colorbar to window level widget.
 - Added CT test TTF (task based MTF) - working on automated TTF/NPS/d' solution
 - Added option to read GE QAP Mammo result files and option to bulk-generate automation templates for reading the different file types.
+- Under construction: Added option to calculate SNI based on ROIs positioned in grid matching PMT positions for Siemens gamma camera
 
 Changes:
 - Added option to lock NM uniformity CFOV to 75% of UFOV.
-- Cancel when running automation templates now stops during one template running, not just between templates.
+- Added option to set NPS sampling frequency for test SNI.
+- Cancel when running automation templates now stops during sessions of one template running, not just between templates.
 - More modal progress bars with option to Cancel.
 - Test Num:
 	- considerably more robust for Siemens gamma camera savescreens that differ in screen size from day to day

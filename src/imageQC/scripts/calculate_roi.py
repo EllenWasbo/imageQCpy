@@ -1016,6 +1016,31 @@ def get_ratio_NM(image, image_info, ufov_ratio=0.95, cfov_ratio=0.75):
     return roi_array
 
 
+def generate_SNI_Siemens_image(SNI_values):
+    """Generate image with SNI values displayed as circles corresponding to PMTs."""
+    dist = 100
+    image_shape = (dist * 6, dist * 8)
+    dy = round(dist * np.sin(np.pi/3))  # hexagonal pattern
+    radius = dist // 4
+    dx7 = dist * (np.arange(7) - 3)
+    dx6 = dist * (np.arange(6) - 2.5)
+    roi_array = [
+        [get_roi_circle(image_shape, (dx, dy*2), radius) for dx in dx7],
+        [get_roi_circle(image_shape, (dx, dy), radius) for dx in dx6],
+        [get_roi_circle(image_shape, (dx, 0), radius) for dx in dx7],
+        [get_roi_circle(image_shape, (dx, -dy), radius) for dx in dx6],
+        [get_roi_circle(image_shape, (dx, -dy*2), radius) for dx in dx7]
+        ]
+    image = np.zeros(image_shape)
+    i = 0
+    for roi_row in roi_array:
+        for roi in roi_row:
+            image[np.where(roi)] = SNI_values[i]
+            i += 1
+
+    return image
+
+
 def get_roi_SNI(image, image_info, paramset):
     """Generate roi_array for NM SNI test.
 
@@ -1102,20 +1127,39 @@ def get_roi_SNI(image, image_info, paramset):
             roi_array.append(np.fliplr(mid_left))
             roi_array.append(np.flipud(np.fliplr(upper_left)))
     else:  # grid
-        roi_size = int(paramset.sni_roi_ratio * large_dim)
-        n_rois_x = width_x // (0.5 * roi_size) - 1
-        n_rois_y = width_y // (0.5 * roi_size) - 1
-        pos_x = width_x // (n_rois_x + 1) * np.arange(n_rois_x) + first_col
-        pos_y = width_y // (n_rois_y + 1) * np.arange(n_rois_y) + first_row
-        for j in pos_y:
-            roi_row = []
-            for i in pos_x:
-                roi_this = get_roi_rectangle(
-                    image.shape,
-                    coords_x=(int(i), int(i)+roi_size),
-                    coords_y=(int(j), int(j)+roi_size))
-                roi_row.append(roi_this)
-            roi_array.append(roi_row)
+        if paramset.sni_type == 1:
+            roi_size = int(paramset.sni_roi_ratio * large_dim)
+        else:
+            roi_size = paramset.sni_roi_size
+        if paramset.sni_type in [1, 2]:
+            n_rois_x = width_x // (0.5 * roi_size) - 1
+            n_rois_y = width_y // (0.5 * roi_size) - 1
+            pos_x = width_x // (n_rois_x + 1) * np.arange(n_rois_x) + first_col
+            pos_y = width_y // (n_rois_y + 1) * np.arange(n_rois_y) + first_row
+            for j in pos_y:
+                roi_row = []
+                for i in pos_x:
+                    roi_this = get_roi_rectangle(
+                        image.shape,
+                        coords_x=(int(i), int(i)+roi_size),
+                        coords_y=(int(j), int(j)+roi_size))
+                    roi_row.append(roi_this)
+                roi_array.append(roi_row)
+        else:  # sni_type 3 Siemens
+            dist = 76  # mm diameter PMTs = distance between centers
+            dist_pix = round(dist / image_info.pix[0])
+            dy = round(dist_pix * np.sin(np.pi/3))  # hexagonal pattern
+            radius = roi_size // 2
+            dx7 = dist_pix * (np.arange(7) - 3)
+            dx6 = np.round(dist_pix * (np.arange(6) - 2.5))
+            roi_array = [
+                roi_full,
+                [get_roi_circle(image.shape, (dx, dy*2), radius) for dx in dx7],
+                [get_roi_circle(image.shape, (dx, dy), radius) for dx in dx6],
+                [get_roi_circle(image.shape, (dx, 0), radius) for dx in dx7],
+                [get_roi_circle(image.shape, (dx, -dy), radius) for dx in dx6],
+                [get_roi_circle(image.shape, (dx, -dy*2), radius) for dx in dx7]
+                ]
 
     return (roi_array, errmsg)
 

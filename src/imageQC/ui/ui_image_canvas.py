@@ -15,6 +15,7 @@ from matplotlib import patches
 
 # imageQC block start
 from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
+from imageQC.scripts.calculate_roi import generate_SNI_Siemens_image
 from imageQC.config.iQCconstants import COLORS
 # imageQC block end
 
@@ -728,7 +729,7 @@ class ImageCanvas(GenericImageCanvas):
                     self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
                                  f'S{i+1}',
                                  fontsize=self.fontsize, color=colors[i])
-        else:
+        elif self.main.current_paramset.sni_type in [1, 2]:
             self.add_contours_to_all_rois(
                 colors=['red'], roi_indexes=[0])  # full
             self.contours = []
@@ -737,6 +738,15 @@ class ImageCanvas(GenericImageCanvas):
                     self.ax.contourf(
                         np.where(self.main.current_roi[row][col], 0, 1),
                         levels=[0, 0.5], colors='red', alpha=0.3))
+        else:  # 3 Siemens
+            self.contours = []
+            for rois_row in self.main.current_roi[1:]:
+                for roi in rois_row:
+                    self.contours.append(
+                        self.ax.contour(
+                            np.where(roi, 0, 1),
+                            levels=[0.9], colors='red',
+                            alpha=0.5, linewidths=self.linewidth))
 
     def SNR(self):
         """Draw MR SNR ROI(s)."""
@@ -949,7 +959,11 @@ class ResultImageCanvas(GenericImageCanvas):
             elif 'SNI values map' in sel_txt:
                 self.title = 'SNI values map'
                 if 'SNI_map' in details_dict:
-                    self.current_image = details_dict['SNI_map']
+                    if self.main.current_paramset.sni_type == 3:  # Siemens
+                        self.current_image = generate_SNI_Siemens_image(
+                            details_dict['SNI_map'])
+                    else:
+                        self.current_image = details_dict['SNI_map']
                     self.min_val = 0
                     max_in_res = np.max([
                         row for row in self.main.results['SNI']['values']

@@ -662,9 +662,9 @@ class CenterWidget(QGroupBox):
         if self.main.active_img is not None:
             sz_acty, sz_actx = np.shape(self.main.active_img)
             self.val_delta_x.setValue(
-                self.main.gui.last_clicked_pos[0] - 0.5 * sz_actx)
+                round(self.main.gui.last_clicked_pos[0] - 0.5 * sz_actx))
             self.val_delta_y.setValue(
-                - (self.main.gui.last_clicked_pos[1] - 0.5 * sz_acty))
+                - round(self.main.gui.last_clicked_pos[1] - 0.5 * sz_acty))
             self.update_delta()
 
     def set_center_threshold(self):

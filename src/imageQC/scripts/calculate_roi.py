@@ -1025,11 +1025,11 @@ def generate_SNI_Siemens_image(SNI_values):
     dx7 = dist * (np.arange(7) - 3)
     dx6 = dist * (np.arange(6) - 2.5)
     roi_array = [
-        [get_roi_circle(image_shape, (dx, dy*2), radius) for dx in dx7],
-        [get_roi_circle(image_shape, (dx, dy), radius) for dx in dx6],
-        [get_roi_circle(image_shape, (dx, 0), radius) for dx in dx7],
+        [get_roi_circle(image_shape, (dx, -dy*2), radius) for dx in dx7],
         [get_roi_circle(image_shape, (dx, -dy), radius) for dx in dx6],
-        [get_roi_circle(image_shape, (dx, -dy*2), radius) for dx in dx7]
+        [get_roi_circle(image_shape, (dx, 0), radius) for dx in dx7],
+        [get_roi_circle(image_shape, (dx, dy), radius) for dx in dx6],
+        [get_roi_circle(image_shape, (dx, dy*2), radius) for dx in dx7]
         ]
     image = np.zeros(image_shape)
     i = 0
@@ -1154,11 +1154,11 @@ def get_roi_SNI(image, image_info, paramset):
             dx6 = np.round(dist_pix * (np.arange(6) - 2.5))
             roi_array = [
                 roi_full,
-                [get_roi_circle(image.shape, (dx, dy*2), radius) for dx in dx7],
-                [get_roi_circle(image.shape, (dx, dy), radius) for dx in dx6],
-                [get_roi_circle(image.shape, (dx, 0), radius) for dx in dx7],
+                [get_roi_circle(image.shape, (dx, -dy*2), radius) for dx in dx7],
                 [get_roi_circle(image.shape, (dx, -dy), radius) for dx in dx6],
-                [get_roi_circle(image.shape, (dx, -dy*2), radius) for dx in dx7]
+                [get_roi_circle(image.shape, (dx, 0), radius) for dx in dx7],
+                [get_roi_circle(image.shape, (dx, dy), radius) for dx in dx6],
+                [get_roi_circle(image.shape, (dx, dy*2), radius) for dx in dx7]
                 ]
 
     return (roi_array, errmsg)

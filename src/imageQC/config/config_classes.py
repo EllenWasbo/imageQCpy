@@ -515,6 +515,7 @@ class ParamSetNM(ParamSetCommon):
     sni_sum_first: bool = False
     sni_eye_filter_c: float = 28.
     sni_ref_image: str = ''  # file name (without path and extension)
+    sni_index_type: int = 0  # 0 = ratio 2d NPS, 1 = sqrt(ratio 2d NPS - similar to ratio AUC)
     mtf_type: int = 1  # [Point, line (default), Two lines, edge]
     mtf_roi_size_x: float = 50.
     mtf_roi_size_y: float = 50.

@@ -1875,21 +1875,19 @@ class ParamsTabNM(ParamsTabCommon):
         items_res_image = []
         if self.sni_type.currentIndex() == 0:
             items_plot = ['SNI values',
-                          'NPS all ROIs + human visual filter']
-            roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
-            pre_txt = 'Filtered NPS and NPS structure ROI'
-            plot_txts = [f'{pre_txt} {name}' for name in roi_names]
-            items_plot.extend(plot_txts)
-
-            pre_txt = '2d NPS for ROI'
-            img_txts = [f'{pre_txt} {name}' for name in roi_names]
-            items_res_image.extend(img_txts)
+                          'NPS all ROIs + human visual filter',
+                          'Filtered NPS and NPS structure selected ROI']
+            items_res_image = ['2d NPS for selected ROI']
+            self.sni_selected_roi.setVisible(True)
+            self.sni_selected_roi_idx.setVisible(False)
         else:
             items_plot = [
                 'SNI values',
-                'NPS all ROIs + human visual filter',  # consider delete or only hum vis
-                'Filtered NPS and NPS structure max+avg']
-            items_res_image.append('SNI values map')
+                'Filtered NPS and NPS structure max+avg',
+                'Filtered NPS and NPS structure selected ROI']
+            items_res_image = ['SNI values map', '2d NPS for selected ROI']
+            self.sni_selected_roi_idx.setVisible(True)
+            self.sni_selected_roi.setVisible(False)
         if self.sni_correct.isChecked() is True:
             items_res_image.append('Curvature corrected image')
             items_plot.append('Curvature correction check')
@@ -2025,6 +2023,11 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_type.addItems(ALTERNATIVES['NM']['SNI'])
         self.sni_type.currentIndexChanged.connect(
             lambda: self.update_sni_display_options(attribute='sni_type'))
+        self.sni_index_type = QComboBox()
+        self.sni_index_type.addItems(['ratio sum of 2d NPS',
+                                      'sqrt(ratio sum of 2d NPS)'])
+        self.sni_index_type.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sni_index_type'))
         self.sni_roi_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.05, maximum=1., singleStep=0.01)
         self.sni_roi_ratio.valueChanged.connect(
@@ -2065,11 +2068,19 @@ class ParamsTabNM(ParamsTabCommon):
 
         self.sni_plot = QComboBox()
         self.sni_result_image = QComboBox()
+        self.sni_selected_roi = QComboBox()
+        self.sni_selected_roi.addItems(['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])
+        self.sni_selected_roi_idx = QDoubleSpinBox(
+            decimals=0, minimum=0, maximum=1000, step=1)
         self.update_sni_display_options()
         self.sni_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
         self.sni_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
+        self.sni_selected_roi.currentIndexChanged.connect(
+            self.main.refresh_results_display)
+        self.sni_selected_roi_idx.valueChanged.connect(
+            self.main.refresh_results_display)
 
         vlo_left = QVBoxLayout()
         self.tab_sni.hlo.addLayout(vlo_left)
@@ -2080,6 +2091,7 @@ class ParamsTabNM(ParamsTabCommon):
         flo = QFormLayout()
         flo.addRow(QLabel('Ratio of nonzero part of image to be analysed'),
                    self.sni_area_ratio)
+        flo.addRow(QLabel('SNI index type'), self.sni_index_type)
         flo.addRow(QLabel('NPS sampling frequency (mm-1)'),
                    self.sni_sampling_frequency)
         vlo_left.addLayout(flo)
@@ -2093,13 +2105,12 @@ class ParamsTabNM(ParamsTabCommon):
         hlo_type.addWidget(self.sni_roi_ratio)
         hlo_type.addWidget(self.sni_roi_size)
 
-        vlo_eye = QVBoxLayout()
-        vlo_eye.addWidget(QLabel('V(r) = r<sup>1.3</sup> exp[-Cr<sup>2</sup> ]'))
         hlo_eye = QHBoxLayout()
-        vlo_eye.addLayout(hlo_eye)
+        hlo_eye.addWidget(QLabel('V(r) = r<sup>1.3</sup> exp[-Cr<sup>2</sup> ]'))
+        hlo_eye.addStretch()
         hlo_eye.addWidget(QLabel('C'))
         hlo_eye.addWidget(self.sni_eye_filter_c)
-        gb_eye_filter.setLayout(vlo_eye)
+        gb_eye_filter.setLayout(hlo_eye)
         vlo_left.addWidget(gb_eye_filter)
         vlo_left.addWidget(self.sni_sum_first)
 
@@ -2109,6 +2120,11 @@ class ParamsTabNM(ParamsTabCommon):
         vlo_right.addLayout(f_btm)
         f_btm.addRow(QLabel('Plot'), self.sni_plot)
         f_btm.addRow(QLabel('Result image'), self.sni_result_image)
+        hlo_selected_roi = QHBoxLayout()
+        vlo_right.addLayout(hlo_selected_roi)
+        hlo_selected_roi.addWidget(QLabel('Selected ROI for plot/image'))
+        hlo_selected_roi.addWidget(self.sni_selected_roi)
+        hlo_selected_roi.addWidget(self.sni_selected_roi_idx)
 
     def create_tab_mtf(self):
         """GUI of tab MTF."""

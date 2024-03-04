@@ -856,6 +856,14 @@ def calculate_qc(input_main, wid_auto=None,
                     'min_max', set_tools=True)
                 input_main.set_active_img(
                     input_main.results['Rec']['details_dict']['max_slice_idx'])
+            elif 'SNI' in input_main.results:
+                if input_main.current_paramset.sni_type > 0:
+                    try:
+                        n_roi = input_main.results['SNI'][
+                            'details_dict'][0]['SNI_map'].size
+                    except:
+                        n_roi = 100
+                    input_main.tab_nm.sni_selected_roi_idx.setMaximum(n_roi)
             try:
                 input_main.progress_modal.setValue(input_main.progress_modal.maximum())
             except AttributeError:
@@ -3966,6 +3974,8 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                 eye_filter=eye_filter['filter_2d'], unit=eye_filter['unit'],
                 pix=image_info.pix[0], fit_dict=fit_dict)
             details_dict['pr_roi'].append(details_dict_roi)
+            if paramset.sni_index_type == 1:
+                SNI = np.sqrt(SNI)
             SNI_values.append(SNI)
 
         # small ROIs
@@ -3979,6 +3989,8 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                 eye_filter['filter_2d'], unit=eye_filter['unit'],
                 pix=image_info.pix[0], fit_dict=fit_dict)
             details_dict['pr_roi'].append(details_dict_roi)
+            if paramset.sni_index_type == 1:
+                SNI = np.sqrt(SNI)
             SNI_values.append(SNI)
 
         values = [np.max(SNI_values)] + SNI_values
@@ -4002,6 +4014,8 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                     eye_filter['filter_2d'], unit=eye_filter['unit'],
                     pix=image_info.pix[0], fit_dict=fit_dict)
                 details_dict['pr_roi'].append(details_dict_roi)
+                if paramset.sni_index_type == 1:
+                    SNI = np.sqrt(SNI)
                 if paramset.sni_type in [1, 2]:
                     SNI_map[rowno, colno] = SNI
                 else:  # 3 Siemens

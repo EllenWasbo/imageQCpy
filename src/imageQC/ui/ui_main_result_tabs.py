@@ -1666,38 +1666,47 @@ class ResultPlotCanvas(PlotCanvas):
         def plot_filtered_NPS(roi_name='L1'):
             """Plot filtered NPS + NPS structure for selected ROI +quantum noise txt."""
             self.default_range_x = [0, nyquist_freq]
-            roi_no = roi_names.index(roi_name)
-            details_dict_roi = details_dict['pr_roi'][roi_no]
-            yvals = details_dict_roi['rNPS_filt']
-            xvals = details_dict_roi['freq']
-            self.curves.append(
-                {'label': 'NPS with eye filter',
-                 'xvals': xvals, 'yvals': yvals, 'style': '-b'})
-            self.default_range_y = [0, 1.1 * np.max(yvals[10:])]
-
-            self.curves.append(
-                {'label': 'NPS',
-                 'xvals': xvals, 'yvals': details_dict_roi['rNPS'],
-                 'style': ':b'})
-            self.curves.append(
-                {'label': 'NPS structured noise with eye filter',
-                 'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct_filt'],
-                 'style': '-r'})
-            self.curves.append(
-                {'label': 'NPS structured noise',
-                 'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct'],
-                 'style': ':r'})
-
-            if isinstance(details_dict_roi['quantum_noise'], float):
-                yvals = [details_dict_roi['quantum_noise']] * len(xvals)
-                self.curves.append(
-                    {'label': 'NPS estimated quantum noise',
-                     'xvals': xvals, 'yvals': yvals, 'style': ':k'})
+            if self.main.current_paramset.sni_type == 0:
+                roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
             else:
-                yvals = details_dict_roi['rNPS_quantum_noise']
+                roi_idx = int(self.main.tab_nm.sni_selected_roi_idx.value())
+                self.main.wid_image_display.canvas.roi_draw()
+            proceed = True
+            try:
+                details_dict_roi = details_dict['pr_roi'][roi_idx]
+            except IndexError:
+                proceed = False
+            if proceed:
+                yvals = details_dict_roi['rNPS_filt']
+                xvals = details_dict_roi['freq']
                 self.curves.append(
-                    {'label': 'NPS estimated quantum noise',
-                     'xvals': xvals, 'yvals': yvals, 'style': ':k'})
+                    {'label': 'NPS with eye filter',
+                     'xvals': xvals, 'yvals': yvals, 'style': '-b'})
+                self.default_range_y = [0, 1.1 * np.max(yvals[10:])]
+
+                self.curves.append(
+                    {'label': 'NPS',
+                     'xvals': xvals, 'yvals': details_dict_roi['rNPS'],
+                     'style': ':b'})
+                self.curves.append(
+                    {'label': 'NPS structured noise with eye filter',
+                     'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct_filt'],
+                     'style': '-r'})
+                self.curves.append(
+                    {'label': 'NPS structured noise',
+                     'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct'],
+                     'style': ':r'})
+
+                if isinstance(details_dict_roi['quantum_noise'], float):
+                    yvals = [details_dict_roi['quantum_noise']] * len(xvals)
+                    self.curves.append(
+                        {'label': 'NPS estimated quantum noise',
+                         'xvals': xvals, 'yvals': yvals, 'style': ':k'})
+                else:
+                    yvals = details_dict_roi['rNPS_quantum_noise']
+                    self.curves.append(
+                        {'label': 'NPS estimated quantum noise',
+                         'xvals': xvals, 'yvals': yvals, 'style': ':k'})
 
         def plot_all_NPS():
             """Plot NPS for all ROIs + hum vis filter (normalized to NPS in max)."""

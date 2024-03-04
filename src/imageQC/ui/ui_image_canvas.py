@@ -710,6 +710,7 @@ class ImageCanvas(GenericImageCanvas):
 
     def SNI(self):
         """Draw NM uniformity ROI."""
+        roi_idx = -1
         if self.main.current_paramset.sni_type == 0:
             self.add_contours_to_all_rois(
                 colors=['red', 'blue'], roi_indexes=[1, 2],
@@ -738,7 +739,10 @@ class ImageCanvas(GenericImageCanvas):
                     self.ax.contourf(
                         np.where(self.main.current_roi[row][col], 0, 1),
                         levels=[0, 0.5], colors='red', alpha=0.3))
+            roi_idx = int(self.main.tab_nm.sni_selected_roi_idx.value())
         else:  # 3 Siemens
+            self.add_contours_to_all_rois(
+                colors=['red'], roi_indexes=[0])  # full
             self.contours = []
             for rois_row in self.main.current_roi[1:]:
                 for roi in rois_row:
@@ -747,6 +751,21 @@ class ImageCanvas(GenericImageCanvas):
                             np.where(roi, 0, 1),
                             levels=[0.9], colors='red',
                             alpha=0.5, linewidths=self.linewidth))
+            roi_idx = int(self.main.tab_nm.sni_selected_roi_idx.value())
+        if roi_idx > 0 and self.main.results:
+            plot_txt = self.main.tab_nm.sni_plot.currentText()
+            img_txt = self.main.tab_nm.sni_result_image.currentText()
+            if 'selected' in plot_txt or 'selected' in img_txt:
+                flat_list = [item for row in self.main.current_roi[1:] for item in row]
+                try:
+                    selected_roi = flat_list[roi_idx]
+                    self.contours.append(
+                        self.ax.contour(
+                            np.where(selected_roi, 0, 1),
+                            levels=[0.9], colors='b', linestyles='dotted',
+                            alpha=0.5, linewidths=self.linewidth))
+                except IndexError:
+                    pass
 
     def SNR(self):
         """Draw MR SNR ROI(s)."""
@@ -949,13 +968,19 @@ class ResultImageCanvas(GenericImageCanvas):
                 if 'sum_image' in details_dict:
                     self.current_image = details_dict['sum_image']
             elif '2d NPS' in sel_txt:
-                sel_text = self.main.tab_nm.sni_result_image.currentText()
-                roi_txt = sel_text[-2:]
-                self.title = f'2d NPS for {roi_txt}'
-                roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
-                roi_no = roi_names.index(roi_txt)
-                details_this = details_dict['pr_roi'][roi_no]
-                self.current_image = details_this['NPS']
+                image_text = self.main.tab_nm.sni_result_image.currentText()
+                roi_txt = self.main.tab_nm.sni_selected_roi.currentText()
+                self.title = f'{image_text} for ROI {roi_txt}'
+                if self.main.current_paramset.sni_type == 0:
+                    roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
+                else:
+                    roi_idx = int(self.main.tab_nm.sni_selected_roi_idx.value())
+                    self.main.wid_image_display.canvas.roi_draw()
+                try:
+                    details_this = details_dict['pr_roi'][roi_idx]
+                    self.current_image = details_this['NPS']
+                except (IndexError, KeyError):
+                    self.current_image = None
             elif 'SNI values map' in sel_txt:
                 self.title = 'SNI values map'
                 if 'SNI_map' in details_dict:

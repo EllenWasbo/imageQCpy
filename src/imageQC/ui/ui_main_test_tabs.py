@@ -1874,7 +1874,8 @@ class ParamsTabNM(ParamsTabCommon):
 
         items_res_image = []
         if self.sni_type.currentIndex() == 0:
-            items_plot = ['SNI values',
+            items_plot = ['SNI values each ROI',
+                          'SNI values all images',
                           'NPS all ROIs + human visual filter',
                           'Filtered NPS and NPS structure selected ROI']
             items_res_image = ['2d NPS for selected ROI']
@@ -1882,7 +1883,8 @@ class ParamsTabNM(ParamsTabCommon):
             self.sni_selected_roi_idx.setVisible(False)
         else:
             items_plot = [
-                'SNI values',
+                'SNI values each ROI',
+                'SNI values all images',
                 'Filtered NPS and NPS structure max+avg',
                 'Filtered NPS and NPS structure selected ROI']
             items_res_image = ['SNI values map', '2d NPS for selected ROI']
@@ -2023,11 +2025,6 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_type.addItems(ALTERNATIVES['NM']['SNI'])
         self.sni_type.currentIndexChanged.connect(
             lambda: self.update_sni_display_options(attribute='sni_type'))
-        self.sni_index_type = QComboBox()
-        self.sni_index_type.addItems(['ratio sum of 2d NPS',
-                                      'sqrt(ratio sum of 2d NPS)'])
-        self.sni_index_type.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='sni_index_type'))
         self.sni_roi_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.05, maximum=1., singleStep=0.01)
         self.sni_roi_ratio.valueChanged.connect(
@@ -2058,7 +2055,7 @@ class ParamsTabNM(ParamsTabCommon):
 
         gb_eye_filter = QGroupBox('Human visual respose filter')
         self.sni_eye_filter_c = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=100, singleStep=1)
+            decimals=0, minimum=0, maximum=1000, singleStep=1)
         self.sni_eye_filter_c.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sni_eye_filter_c'))
 
@@ -2071,7 +2068,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_selected_roi = QComboBox()
         self.sni_selected_roi.addItems(['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])
         self.sni_selected_roi_idx = QDoubleSpinBox(
-            decimals=0, minimum=0, maximum=1000, step=1)
+            decimals=0, minimum=0, maximum=1000, singleStep=1)
         self.update_sni_display_options()
         self.sni_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
@@ -2091,7 +2088,6 @@ class ParamsTabNM(ParamsTabCommon):
         flo = QFormLayout()
         flo.addRow(QLabel('Ratio of nonzero part of image to be analysed'),
                    self.sni_area_ratio)
-        flo.addRow(QLabel('SNI index type'), self.sni_index_type)
         flo.addRow(QLabel('NPS sampling frequency (mm-1)'),
                    self.sni_sampling_frequency)
         vlo_left.addLayout(flo)

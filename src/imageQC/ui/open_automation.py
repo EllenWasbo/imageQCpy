@@ -392,7 +392,12 @@ class OpenAutomationDialog(ImageQCDialog):
         n_files = 0
         error_ex = None
         p_input = Path(auto_template.path_input)
-        if p_input.is_dir():
+        try:
+            proceed = p_input.is_dir()
+        except OSError as ex:
+            proceed = False
+            error_ex = f'{ex}'
+        if proceed:
             try:
                 files, error_ex = find_files_prefix_suffix(
                     p_input, auto_template.file_prefix, auto_template.file_suffix)

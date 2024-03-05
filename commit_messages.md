@@ -26,6 +26,7 @@ Bugfixes:
 - fixed error when using image names for QuickTest where more images than expected are loaded (IndexError on set_names[i], calculate_qc.py line 158)
 - default spinbox maximum is 100. Increased this value for different test-parameters that were not yet specified with max > 100.
 - avoiding crash when scrolling through images using arrow keys (therefore skips showing some images as signal is blocked while processing). 
+- black and dark gray plot lines in dark-mode changed to white and light gray
 
 Code structure:
 - moved some methods from ui_main to ui_main_methods for better reuse of methods for task_based_image_quality dialog

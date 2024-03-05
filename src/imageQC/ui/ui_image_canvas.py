@@ -763,7 +763,7 @@ class ImageCanvas(GenericImageCanvas):
                         self.ax.contour(
                             np.where(selected_roi, 0, 1),
                             levels=[0.9], colors='b', linestyles='dotted',
-                            alpha=0.5, linewidths=self.linewidth))
+                            alpha=0.5, linewidths=1.5 * self.linewidth))
                 except IndexError:
                     pass
 

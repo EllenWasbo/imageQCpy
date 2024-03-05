@@ -3974,8 +3974,6 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                 eye_filter=eye_filter['filter_2d'], unit=eye_filter['unit'],
                 pix=image_info.pix[0], fit_dict=fit_dict)
             details_dict['pr_roi'].append(details_dict_roi)
-            if paramset.sni_index_type == 1:
-                SNI = np.sqrt(SNI)
             SNI_values.append(SNI)
 
         # small ROIs
@@ -3989,8 +3987,6 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                 eye_filter['filter_2d'], unit=eye_filter['unit'],
                 pix=image_info.pix[0], fit_dict=fit_dict)
             details_dict['pr_roi'].append(details_dict_roi)
-            if paramset.sni_index_type == 1:
-                SNI = np.sqrt(SNI)
             SNI_values.append(SNI)
 
         values = [np.max(SNI_values)] + SNI_values
@@ -4014,8 +4010,6 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                     eye_filter['filter_2d'], unit=eye_filter['unit'],
                     pix=image_info.pix[0], fit_dict=fit_dict)
                 details_dict['pr_roi'].append(details_dict_roi)
-                if paramset.sni_index_type == 1:
-                    SNI = np.sqrt(SNI)
                 if paramset.sni_type in [1, 2]:
                     SNI_map[rowno, colno] = SNI
                 else:  # 3 Siemens

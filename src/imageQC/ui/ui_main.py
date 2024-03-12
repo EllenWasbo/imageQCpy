@@ -106,6 +106,7 @@ class MainWindow(QMainWindow):
         plt.rcParams.update({'font.size': self.user_prefs.font_size})
         plt.rcParams['axes.xmargin'] = 0
         plt.rcParams['axes.ymargin'] = 0
+        plt.set_loglevel('WARNING')
 
         self.current_paramset = copy.deepcopy(self.paramsets[0])
         self.current_quicktest = cfc.QuickTestTemplate()

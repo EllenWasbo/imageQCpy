@@ -721,11 +721,12 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
             if pixarr is not None:
                 npout = pixarr * slope + intercept
 
-        if len(npout.shape) == 3:
-            # rgb to grayscale NTSC formula
-            npout = (0.299 * npout[:, :, 0]
-                     + 0.587 * npout[:, :, 1]
-                     + 0.114 * npout[:, :, 2])
+        if npout is not None:
+            if len(npout.shape) == 3:
+                # rgb to grayscale NTSC formula
+                npout = (0.299 * npout[:, :, 0]
+                         + 0.587 * npout[:, :, 1]
+                         + 0.114 * npout[:, :, 2])
 
         if overlay is not None:
             if pixarr is not None:

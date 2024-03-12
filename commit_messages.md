@@ -21,6 +21,7 @@ Changes:
 	- considerably more robust for Siemens gamma camera savescreens that differ in screen size from day to day
 	- default templates updated with larger ROIs to handle these day to day changes, ignoring parts of text at left/right border of ROI
 - Changed startup time (saved some update after gui presented)
+- Mammo test Homogeneity: Added option to not calculate variance-map (time consuming)
 
 Bugfixes:
 - fixed error when using image names for QuickTest where more images than expected are loaded (IndexError on set_names[i], calculate_qc.py line 158)

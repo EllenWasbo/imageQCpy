@@ -340,7 +340,7 @@ class ResultPlotCanvas(PlotCanvas):
         self.color_gray = 'gray'
         self.color_darkgray = 'darkgray'
         if main.user_prefs.dark_mode:
-            self.color_k = 'white'
+            self.color_k = 'w'
             self.color_gray = 'whitesmoke'
             self.color_darkgray = 'lightgray'
 

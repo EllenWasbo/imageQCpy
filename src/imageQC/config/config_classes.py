@@ -455,6 +455,7 @@ class ParamSetMammo(ParamSetCommon):
     sdn_auto_center: bool = True
     sdn_auto_center_mask_outer: int = 30  # mask outer mm
     hom_roi_size: float = 10.
+    hom_variance: bool = True
     hom_roi_size_variance: float = 2.
     hom_mask_max: bool = False
     hom_deviating_pixels: float = 20.
@@ -492,6 +493,7 @@ class ParamSetMammo(ParamSetCommon):
 class ParamSetNM(ParamSetCommon):
     """Set of parameters regarding NM tests."""
 
+    uni_threshold: float = 0.0  # search image where signal > threshold (rel. to max)
     uni_ufov_ratio: float = 0.95
     uni_cfov_ratio: float = 0.75
     uni_cfov_ratio75: bool = False
@@ -502,10 +504,12 @@ class ParamSetNM(ParamSetCommon):
     uni_radius: float = 330.
     uni_sum_first: bool = False
     uni_scale_factor: int = 0  # 0 = Auto, 1= no scale, 2... = scale factor
+    sni_threshold: float = 0.0  # search image where signal > threshold (rel. to max)
     sni_area_ratio: float = 0.9
     sni_type: int = 0  # 0 as Nelson 2014, 1= grid roi_ratio, 2 grid roi_size, 3 Siemens
     sni_roi_ratio: float = 0.2  # relative to sni_area defined by sni_area_ratio
     sni_roi_size: int = 128  # number of pixels
+    sni_roi_outside: int = 0  # alternatives ignore/move
     sni_sampling_frequency: float = 0.01
     sni_correct: bool = False
     sni_correct_pos_x: bool = False

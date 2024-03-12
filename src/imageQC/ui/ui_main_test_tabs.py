@@ -1557,6 +1557,9 @@ class ParamsTabMammo(ParamsTabCommon):
             decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
         self.hom_roi_size_variance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size_variance'))
+        self.hom_variance = QCheckBox()
+        self.hom_variance.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_variance'))
         self.hom_mask_max = QCheckBox()
         self.hom_mask_max.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='hom_mask_max'))
@@ -1572,12 +1575,12 @@ class ParamsTabMammo(ParamsTabCommon):
         self.hom_result_image = QComboBox()
         self.hom_result_image.addItems(
             [
-                'Variance pr ROI map',
                 'Average pr ROI map',
                 'SNR pr ROI map',
-                'Average pr ROI - % difference from global average',
-                'SNR pr ROI - % difference from global SNR',
-                'Pixel values - % difference from global average',
+                'Variance pr ROI map',
+                'Average pr ROI (% difference from global average)',
+                'SNR pr ROI (% difference from global SNR)',
+                'Pixel values (% difference from global average)',
                 'Deviating ROIs',
                 'Deviating pixels'
              ])
@@ -1586,7 +1589,8 @@ class ParamsTabMammo(ParamsTabCommon):
 
         flo = QFormLayout()
         flo.addRow(QLabel('ROI size (mm)'), self.hom_roi_size)
-        flo.addRow(QLabel('ROI size variance (mm)'), self.hom_roi_size_variance)
+        flo.addRow(QLabel('Calculate variance within each ROI'), self.hom_variance)
+        flo.addRow(QLabel('     ROI size variance (mm)'), self.hom_roi_size_variance)
         flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
         flo.addRow(QLabel('Deviating pixels (% from average)'),
                    self.hom_deviating_pixels)
@@ -1890,6 +1894,12 @@ class ParamsTabNM(ParamsTabCommon):
             items_res_image = ['SNI values map', '2d NPS for selected ROI']
             self.sni_selected_roi_idx.setVisible(True)
             self.sni_selected_roi.setVisible(False)
+        if self.sni_type.currentIndex() == 3:
+            self.sni_roi_outside.setVisible(True)
+            self.sni_roi_outside_label.setVisible(True)
+        else:
+            self.sni_roi_outside.setVisible(False)
+            self.sni_roi_outside_label.setVisible(False)
         if self.sni_correct.isChecked() is True:
             items_res_image.append('Curvature corrected image')
             items_plot.append('Curvature correction check')
@@ -1906,6 +1916,10 @@ class ParamsTabNM(ParamsTabCommon):
         """GUI of tab Uniformity."""
         self.tab_uni = ParamsWidget(self, run_txt='Calculate uniformity')
 
+        self.uni_threshold = QDoubleSpinBox(
+            decimals=2, minimum=0.0, maximum=1., singleStep=0.01)
+        self.uni_threshold.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='uni_threshold'))
         self.uni_ufov_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.uni_ufov_ratio.valueChanged.connect(
@@ -1948,8 +1962,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.uni_result_image.addItems(
             [
                 'Differential uniformity map',
-                'Processed image (6.4mm pix, smoothed, corrected)',
-                'Processed image (as above) within UFOV',
+                'Processed image (6.4mm pix, smoothed) within UFOV',
                 'Curvature corrected image',
                 'Summed image (if sum marked)'
              ])
@@ -1965,13 +1978,15 @@ class ParamsTabNM(ParamsTabCommon):
 
         hlo_fov = QHBoxLayout()
         flo = QFormLayout()
+        flo.addRow(QLabel('Image where signal above (relative to max)'),
+                   self.uni_threshold)
         flo.addRow(QLabel('UFOV ratio'), self.uni_ufov_ratio)
         flo.addRow(QLabel('CFOV ratio'), self.uni_cfov_ratio)
         flo.addRow(QLabel('     Lock CFOV ratio to 75% of UFOV'), self.uni_cfov_ratio75)
         hlo_fov.addLayout(flo)
         hlo_fov.addSpacing(100)
         vlo_left.addLayout(hlo_fov)
-        vlo_left.addSpacing(100)
+        vlo_left.addStretch()
         vlo_left.addWidget(self.uni_sum_first)
         hlo_scale = QHBoxLayout()
         vlo_left.addLayout(hlo_scale)
@@ -2003,7 +2018,15 @@ class ParamsTabNM(ParamsTabCommon):
         """GUI of tab SNI."""
         self.tab_sni = ParamsWidget(self, run_txt='Calculate SNI')
 
-        self.tab_sni.hlo_top.addWidget(QLabel('SNI = Structured Noise Index'))
+        vlo_left = QVBoxLayout()
+        self.tab_sni.hlo.addLayout(vlo_left)
+        self.tab_sni.hlo.addWidget(uir.VLine())
+        vlo_right = QVBoxLayout()
+        self.tab_sni.hlo.addLayout(vlo_right)
+
+        hlo_info = QHBoxLayout()
+        vlo_left.addLayout(hlo_info)
+        hlo_info.addWidget(QLabel('SNI = Structured Noise Index'))
         info_txt = '''
         Based on Nelson et al, J Nucl Med 2014; 55:169-174<br>
         SNI is a measure attempting to quantify the amount of structured noise in <br>
@@ -2016,7 +2039,8 @@ class ParamsTabNM(ParamsTabCommon):
         estimate the expected noise. The reference image should be aquired under <br>
         the exact same conditions as the image to be analysed.
         '''
-        self.tab_sni.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+        hlo_info.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
         self.sni_area_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.sni_area_ratio.valueChanged.connect(
@@ -2033,6 +2057,11 @@ class ParamsTabNM(ParamsTabCommon):
             decimals=0, minimum=16, maximum=1000, singleStep=1)
         self.sni_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sni_roi_size'))
+        self.sni_roi_outside = QComboBox()
+        self.sni_roi_outside.addItems(['ignore', 'move inside'])
+        self.sni_roi_outside.currentIndexChanged.connect(
+            lambda: self.update_sni_display_options(attribute='sni_roi_outside'))
+        self.sni_roi_outside_label = QLabel('For ROIs partly outside large ROI')
 
         self.sni_sampling_frequency = QDoubleSpinBox(
             decimals=3, minimum=0.001, singleStep=0.005)
@@ -2078,12 +2107,10 @@ class ParamsTabNM(ParamsTabCommon):
             self.main.refresh_results_display)
         self.sni_selected_roi_idx.valueChanged.connect(
             self.main.refresh_results_display)
-
-        vlo_left = QVBoxLayout()
-        self.tab_sni.hlo.addLayout(vlo_left)
-        self.tab_sni.hlo.addWidget(uir.VLine())
-        vlo_right = QVBoxLayout()
-        self.tab_sni.hlo.addLayout(vlo_right)
+        self.sni_show_labels = QCheckBox('Show ROI labels in image')
+        self.sni_show_labels.setChecked(True)
+        self.sni_show_labels.toggled.connect(
+            self.main.wid_image_display.canvas.roi_draw)
 
         flo = QFormLayout()
         flo.addRow(QLabel('Ratio of nonzero part of image to be analysed'),
@@ -2100,6 +2127,11 @@ class ParamsTabNM(ParamsTabCommon):
         hlo_type.addWidget(self.sni_roi_label)
         hlo_type.addWidget(self.sni_roi_ratio)
         hlo_type.addWidget(self.sni_roi_size)
+        hlo_outside = QHBoxLayout()
+        vlo_left.addLayout(hlo_outside)
+        hlo_outside.addSpacing(100)
+        hlo_outside.addWidget(self.sni_roi_outside_label)
+        hlo_outside.addWidget(self.sni_roi_outside)
 
         hlo_eye = QHBoxLayout()
         hlo_eye.addWidget(QLabel('V(r) = r<sup>1.3</sup> exp[-Cr<sup>2</sup> ]'))
@@ -2114,6 +2146,7 @@ class ParamsTabNM(ParamsTabCommon):
 
         f_btm = QFormLayout()
         vlo_right.addLayout(f_btm)
+        f_btm.addRow(self.sni_show_labels, QLabel(''))
         f_btm.addRow(QLabel('Plot'), self.sni_plot)
         f_btm.addRow(QLabel('Result image'), self.sni_result_image)
         hlo_selected_roi = QHBoxLayout()

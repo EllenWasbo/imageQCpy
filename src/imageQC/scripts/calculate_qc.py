@@ -1799,6 +1799,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             details_dict['matrix'] = res['matrix']
             details_dict['matrix_ufov'] = res['matrix_ufov']
             details_dict['du_matrix'] = res['du_matrix']
+            details_dict['pix_size'] = res['pix_size']
             values = res['values']
 
             res = Results(
@@ -3418,6 +3419,7 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     """
     details = {}
 
+    # set result matrix
     roi_size_in_pix = round(paramset.hom_roi_size / image_info.pix[0])
     if roi_size_in_pix % 2 == 1:
         roi_size_in_pix += 1  # ensure even number roi size to move roi by half
@@ -3462,14 +3464,18 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
                 if std_sub != 0 and roi_var_in_pix < roi_size_in_pix:
                     if np.ma.count_masked(sub) == 0:
                         snrs[j, i] = avg_sub / np.std(sub)
-                        mu = sp.signal.fftconvolve(sub, kernel, mode='same')
-                        ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='same')
-                        variance_sub = ii - mu**2
-                        variances[j, i] = np.mean(variance_sub)
+                        if paramset.hom_variance:
+                            mu = sp.signal.fftconvolve(sub, kernel, mode='same')
+                            ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='same')
+                            variance_sub = ii - mu**2
+                            variances[j, i] = np.mean(variance_sub)
                 else:
                     variances[j, i] = np.inf
             else:
                 masked_roi_matrix[j, i] = True
+
+    if paramset.hom_variance is False:
+        variances = None
 
     n_masked_rois = np.count_nonzero(masked_roi_matrix)
     n_rois = avgs.size - n_masked_rois
@@ -3497,7 +3503,8 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     n_dev_avgs = np.count_nonzero(deviating_avgs)
     n_dev_snrs = np.count_nonzero(deviating_snrs)
 
-    variances = np.ma.masked_array(variances, mask=masked_roi_matrix)
+    if variances is not None:
+        variances = np.ma.masked_array(variances, mask=masked_roi_matrix)
     diff_avgs = np.ma.masked_array(diff_avgs, mask=masked_roi_matrix)
     diff_snrs = np.ma.masked_array(diff_snrs, mask=masked_roi_matrix)
     deviating_rois = np.ma.masked_array(deviating_rois, mask=masked_roi_matrix)
@@ -3690,6 +3697,13 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
         du_matrix = np.maximum(du_cols, du_rows)
         return {'du_matrix': du_matrix, 'du': np.max(du_matrix)}
 
+    # continue with image within ufov only
+    rows = np.max(roi_array[0], axis=1)
+    cols = np.max(roi_array[0], axis=0)
+    image2d = image2d[rows][:, cols]
+    roi_array[0] = roi_array[0][rows][:, cols]
+    roi_array[1] = roi_array[1][rows][:, cols]
+
     if scale_factor == 1:
         image = image2d
         cfov = roi_array[1]
@@ -3716,19 +3730,20 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
         cfov_mean = np.mean(arr)  # TODO test against minimum 10000 (NEMA)
         reduced_roi = skimage.measure.block_reduce(
             roi_array[0], (scale_factor, scale_factor), np.mean)
-        ufov = np.where(reduced_roi > 0.5, True, False)
+        ufov = np.where(reduced_roi >= 1, True, False)
 
         # ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
         rows = np.max(ufov, axis=1)
         cols = np.max(ufov, axis=0)
         sub = image[rows][:, cols]
-        sub_above_75 = np.where(sub > 0.75*cfov_mean, True, False)
-        sub_above_75[1:-1][:, 1:-1] = True  # only outer rows/cols
-        if False in sub_above_75:
-            ufov[rows][:, cols] = sub_above_75
-        # TODO also ignore pixels with zero counts as nearest neighbour (NEMA)?
+        if np.min(sub) < 0.75*cfov_mean:
+            sub_above_75 = np.where(sub > 0.75*cfov_mean, True, False)
+            sub_above_75[1:-1][:, 1:-1] = True  # only outer rows/cols
+            if False in sub_above_75:
+                ufov[rows][:, cols] = sub_above_75
+            # TODO also ignore pixels with zero counts as nearest neighbour (NEMA)?
 
-    # smooth (after subarr to avoid edge effects)
+    # smooth masked array
     kernel = np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]])
     kernel = kernel / np.sum(kernel)
     arr = np.ma.masked_array(image, mask=np.invert(ufov))
@@ -3759,7 +3774,7 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
     smooth64ufov = smooth64ufov.data
 
     return {'matrix': smooth64, 'matrix_ufov': smooth64ufov,
-            'du_matrix': du_ufov_dict['du_matrix'],
+            'du_matrix': du_ufov_dict['du_matrix'], 'pix_size': pix * scale_factor,
             'values': [iu_ufov, du_ufov, iu_cfov, du_cfov]}
 
 
@@ -4201,34 +4216,6 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
                              xstart:xstart + pix_kernel] = peak_kernel_bool[i]
                     this_roi_peak[peak_idx - n_slice_kernel // 2 + i] = roi_this
 
-                '''
-                # find peak - old
-                slice_where_max_this = np.where(max_all == max_this)
-                peak_idx = slice_where_max_this[0][0]
-                arr = np.ma.masked_array(
-                    matrix[peak_idx],
-                    mask=np.invert(this_roi[peak_idx]))
-                max_pos = np.where(arr == max_this)
-                peak_xy = (max_pos[1][0] - size_x//2,
-                           max_pos[0][0] - size_y//2)
-                zpos_diff_peak = np.abs(zpos - zpos[peak_idx])
-                for i, image in enumerate(matrix):
-                    if zpos_diff_peak[i] <= radius_1cc:
-                        radius_this = np.sqrt(
-                            radius_1cc ** 2 - zpos_diff_peak[i] ** 2)
-                        this_roi_peak.append(get_roi_circle(
-                            image.shape, peak_xy, radius_this / img_info.pix[0]))
-                        mask = np.where(this_roi_peak[-1], 0, 1)
-                        mask_pos = np.where(mask == 0)
-                        if values_peak is None:
-                            values_peak = image[mask_pos].flatten()
-                        else:
-                            values_peak = np.append(
-                                values_peak, image[mask_pos].flatten())
-                    else:
-                        this_roi_peak.append(None)
-                peak_values.append(np.mean(values_peak))
-                '''
             else:
                 avg_values.append(None)
                 peak_values.append(None)

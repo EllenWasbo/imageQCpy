@@ -551,6 +551,7 @@ def get_rois(image, image_number, input_main):
     def Uni():  # Uniformity NM
         return get_ratio_NM(
             image, image_info,
+            threshold=paramset.uni_threshold,
             ufov_ratio=paramset.uni_ufov_ratio,
             cfov_ratio=paramset.uni_cfov_ratio
             )
@@ -968,7 +969,7 @@ def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
     return (roi_array, errmsg)
 
 
-def get_ratio_NM(image, image_info, ufov_ratio=0.95, cfov_ratio=0.75):
+def get_ratio_NM(image, image_info, threshold=0.00, ufov_ratio=0.95, cfov_ratio=0.75):
     """Calculate rectangular roi array for given ratio of UFOV, CFOV.
 
     First find non-zero part of image (ignoring padded part of image).
@@ -979,8 +980,9 @@ def get_ratio_NM(image, image_info, ufov_ratio=0.95, cfov_ratio=0.75):
         pixeldata
     image_info : DcmInfo
         as defined in scripts/dcm.py
-    paramset : ParamSetNM
-        ParamSetNM as defined in config/config_classes.py
+    threshold : float
+    ufove_ratio: float
+    cfov_ratio: float
 
     Returns
     -------
@@ -992,7 +994,7 @@ def get_ratio_NM(image, image_info, ufov_ratio=0.95, cfov_ratio=0.75):
 
     # image might be padded, avoid padding
     image_binary = np.zeros(image.shape)
-    image_binary[image > 0] = 1
+    image_binary[image > threshold*np.max(image)] = 1
     prof_y = np.max(image_binary, axis=1)
     width_y = np.count_nonzero(prof_y)
     prof_x = np.max(image_binary, axis=0)
@@ -1064,7 +1066,8 @@ def get_roi_SNI(image, image_info, paramset):
     """
     errmsg = None
     roi_full, not_used = get_ratio_NM(
-        image, image_info, ufov_ratio=paramset.sni_area_ratio)
+        image, image_info, threshold=paramset.sni_threshold,
+        ufov_ratio=paramset.sni_area_ratio)
     roi_array = [roi_full]
 
     rows = np.max(roi_full, axis=1)
@@ -1160,6 +1163,38 @@ def get_roi_SNI(image, image_info, paramset):
                 [get_roi_circle(image.shape, (dx, dy), radius) for dx in dx6],
                 [get_roi_circle(image.shape, (dx, dy*2), radius) for dx in dx7]
                 ]
+
+            dys = [-dy*2, -dy, 0, dy, dy*2]
+            for rowno, roi_row in enumerate(roi_array[1:]):
+                dxs = dx7 if rowno % 2 == 0 else dx6
+                for colno, roi in enumerate(roi_row):
+                    roi_outside = np.copy(roi)
+                    roi_outside[roi_full == True] = False
+                    n_rows = np.sum(
+                        roi_outside[:, int(dxs[colno] + image.shape[1] // 2)])
+                    n_cols = np.sum(
+                        roi_outside[int(dys[rowno] + image.shape[0] // 2)])
+                    if n_rows + n_cols > 0:
+                        if paramset.sni_roi_outside == 0:  # ignore
+                            roi_array[rowno + 1][colno] = None
+                        elif paramset.sni_roi_outside == 1:  # move
+                            xshift = n_cols
+                            yshift = n_rows
+                            if colno > len(roi_row) // 2:
+                                xshift = - xshift
+                            if rowno < len(roi_array[1:]) // 2:
+                                yshift = - yshift
+                            roi_array[rowno + 1][colno] = get_roi_circle(
+                                image.shape,
+                                (dxs[colno] + xshift, dys[rowno] + yshift),
+                                radius)
+                        '''TODO DELETE or include option?
+                        elif paramset.sni_roi_outside == 2:  # shrink
+                            overlap = max([n_rows, n_cols])
+                            roi_array[rowno + 1][colno] = get_roi_circle(
+                                image.shape, (dxs[colno], dys[rowno]),
+                                radius - overlap)
+                        '''
 
     return (roi_array, errmsg)
 

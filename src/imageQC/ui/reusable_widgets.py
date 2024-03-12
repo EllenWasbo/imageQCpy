@@ -725,7 +725,7 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
         self.fig.subplots_adjust(0., 0., 1., 1.)
         FigureCanvasQTAgg.__init__(self, self.fig)
 
-    def plot(self, nparr, decimals=0):
+    def plot(self, nparr, decimals=0, minimum=None, maximum=None):
         """Refresh histogram."""
         self.fig.clear()
         self.ax = self.fig.add_subplot(111)
@@ -744,6 +744,15 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
                 prop=dict(size=12), frameon=False, loc='upper right')
             self.ax.add_artist(at_min)
             self.ax.add_artist(at_max)
+
+            if minimum is not None and maximum is not None:
+                full = maximum - minimum
+                if full > 0:
+                    min_ratio = (amin - minimum) / full
+                    max_ratio = (amax - minimum) / full
+                    print('plot histo')
+                    print(f'amin max {amin} {amax} range {minimum} {maximum} ratio {min_ratio} {max_ratio}')
+                    self.fig.subplots_adjust(min_ratio, 0., max_ratio, 1.)
 
             self.draw()
         except ValueError:
@@ -773,11 +782,12 @@ class ColorBar(FigureCanvasQTAgg):
                 set_min = self.slider_min.value()
                 set_max = self.slider_max.value()
                 full = range_max - range_min
-                min_ratio = (set_min - range_min) / full
-                max_ratio = (set_max - range_min) / full
-                if max_ratio == min_ratio:
-                    max_ratio = min_ratio + 0.01
-                self.fig.subplots_adjust(min_ratio, 0., max_ratio, 1.)
+                if full > 0:
+                    min_ratio = (set_min - range_min) / full
+                    max_ratio = (set_max - range_min) / full
+                    if max_ratio == min_ratio:
+                        max_ratio = min_ratio + 0.01
+                    self.fig.subplots_adjust(min_ratio, 0., max_ratio, 1.)
         ax.axis('off')
         self.draw()
 

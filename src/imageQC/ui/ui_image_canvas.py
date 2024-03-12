@@ -229,8 +229,6 @@ class ImageCanvas(GenericImageCanvas):
         if auto is False and hasattr(self.main, 'wid_window_level'):
             wl_min, wl_max = self.main.wid_window_level.tb_wl.get_min_max()
             self.main.wid_window_level.colorbar.colorbar_draw(cmap=cmap)
-                #, range_min=np.min(self.main.active_img),
-                #range_max=np.max(self.main.active_img), set_min=wl_min, set_max=wl_max)
             annotate = self.main.gui.annotations
         else:
             annotate = False
@@ -744,13 +742,23 @@ class ImageCanvas(GenericImageCanvas):
             self.add_contours_to_all_rois(
                 colors=['red'], roi_indexes=[0])  # full
             self.contours = []
-            for rois_row in self.main.current_roi[1:]:
-                for roi in rois_row:
-                    self.contours.append(
-                        self.ax.contour(
-                            np.where(roi, 0, 1),
-                            levels=[0.9], colors='red',
-                            alpha=0.5, linewidths=self.linewidth))
+            for rowno, rois_row in enumerate(self.main.current_roi[1:]):
+                for colno, roi in enumerate(rois_row):
+                    if roi is not None:  # None if ignored
+                        mask = np.where(roi, 0, 1)
+                        self.contours.append(
+                            self.ax.contour(
+                                mask, levels=[0.9], colors='red',
+                                alpha=0.5, linewidths=self.linewidth))
+                        if self.main.tab_nm.sni_show_labels.isChecked():
+                            mask_pos = np.where(mask == 0)
+                            xmin = np.min(mask_pos[1])
+                            xmean = np.mean(mask_pos[1])
+                            xpos = int(0.75*xmin + 0.25*xmean)
+                            ypos = np.mean(mask_pos[0]) + 2
+                            if np.isfinite(xpos) and np.isfinite(ypos):
+                                self.ax.text(xpos, ypos, f'r{rowno}_c{colno}',
+                                             fontsize=self.fontsize, color='red')
             roi_idx = int(self.main.tab_nm.sni_selected_roi_idx.value())
         if roi_idx > 0 and self.main.results:
             plot_txt = self.main.tab_nm.sni_plot.currentText()
@@ -837,24 +845,33 @@ class ResultImageCanvas(GenericImageCanvas):
             self.parent.image_title.setText(self.title)
             amin = np.amin(self.current_image)
             amax = np.amax(self.current_image)
-            contrast = amax - amin
-            self.parent.wid_window_level.decimals = 0
-            if contrast < 5:
-                self.parent.wid_window_level.decimals = 2
-            elif contrast < 20:
-                self.parent.wid_window_level.decimals = 1
-            rmin = round(amin * 10 ** self.parent.wid_window_level.decimals)
-            rmax = round(amax * 10 ** self.parent.wid_window_level.decimals)
-            self.parent.wid_window_level.min_wl.setRange(rmin, rmax)
-            self.parent.wid_window_level.max_wl.setRange(rmin, rmax)
-            self.parent.wid_window_level.canvas.plot(
-                self.current_image, decimals=self.parent.wid_window_level.decimals)
-            self.parent.wid_window_level.colorbar.colorbar_draw(cmap=self.cmap)
-                #, range_min=rmin, range_max=rmax,
-                #set_min=self.min_val, set_max=self.max_val)
-            self.parent.wid_window_level.update_window_level(
-                self.min_val, self.max_val)
-
+            proceed = True
+            try:
+                contrast = amax - amin
+            except TypeError:
+                proceed = False
+            if proceed:
+                self.parent.wid_window_level.decimals = 0
+                if contrast < 5:
+                    self.parent.wid_window_level.decimals = 2
+                elif contrast < 20:
+                    self.parent.wid_window_level.decimals = 1
+                rmin = round(amin * 10 ** self.parent.wid_window_level.decimals)
+                rmax = round(amax * 10 ** self.parent.wid_window_level.decimals)
+                self.parent.wid_window_level.min_wl.setRange(rmin, rmax)
+                self.parent.wid_window_level.max_wl.setRange(rmin, rmax)
+                if self.positive_negative:
+                    self.parent.wid_window_level.canvas.plot(
+                        self.current_image,
+                        decimals=self.parent.wid_window_level.decimals,
+                        minimum=self.min_val, maximum=self.max_val)
+                else:
+                    self.parent.wid_window_level.canvas.plot(
+                        self.current_image,
+                        decimals=self.parent.wid_window_level.decimals)
+                self.parent.wid_window_level.update_window_level(
+                    self.min_val, self.max_val)
+                self.parent.wid_window_level.colorbar.colorbar_draw(cmap=self.cmap)
         else:
             self.img = self.ax.imshow(np.zeros((100, 100)))
             at = matplotlib.offsetbox.AnchoredText(
@@ -879,19 +896,19 @@ class ResultImageCanvas(GenericImageCanvas):
                 sel_txt = self.main.tab_mammo.hom_result_image.currentText()
                 self.title = sel_txt
                 try:
-                    if sel_txt == 'Variance pr ROI map':
-                        self.current_image = details_dict['variances']
-                    elif sel_txt == 'Average pr ROI map':
+                    if sel_txt == 'Average pr ROI map':
                         self.current_image = details_dict['averages']
                     elif sel_txt == 'SNR pr ROI map':
                         self.current_image = details_dict['snrs']
-                    elif sel_txt == 'Average pr ROI - % difference from global average':
+                    elif sel_txt == 'Variance pr ROI map':
+                        self.current_image = details_dict['variances']
+                    elif sel_txt == 'Average pr ROI (% difference from global average)':
                         self.current_image = details_dict['diff_averages']
                         self.positive_negative = True
-                    elif sel_txt == 'SNR pr ROI - % difference from global SNR':
+                    elif sel_txt == 'SNR pr ROI (% difference from global SNR)':
                         self.current_image = details_dict['diff_snrs']
                         self.positive_negative = True
-                    elif sel_txt == 'Pixel values - % difference from global average':
+                    elif sel_txt == 'Pixel values (% difference from global average)':
                         self.current_image = details_dict['diff_pixels']
                         self.positive_negative = True
                     elif sel_txt == 'Deviating ROIs':
@@ -1017,16 +1034,15 @@ class ResultImageCanvas(GenericImageCanvas):
             if 'du_matrix' in details_dict:
                 self.current_image = details_dict['du_matrix']
         elif type_img == 1:
-            self.title = 'Processed image ~ 6.4 mm pr pix'
-            if 'matrix' in details_dict:
-                self.current_image = details_dict['matrix']
-                set_min_max_avoid_zero = True
-        elif type_img == 2:
-            self.title = 'Processed image ~ 6.4 mm pr pix, UFOV part'
+            if 'pix_size' in details_dict:
+                pix_sz = details_dict['pix_size']
+                self.title = f'Processed image {pix_sz:0.2f} mm pr pix, UFOV part'
+            else:
+                self.title = 'Processed image, ~6.4 mm pr pix, UFOV part'
             if 'matrix_ufov' in details_dict:
                 self.current_image = details_dict['matrix_ufov']
                 set_min_max_avoid_zero = True
-        elif type_img == 3:
+        elif type_img == 2:
             self.title = 'Curvature corrected image'
             if 'corrected_image' in details_dict:
                 self.current_image = details_dict['corrected_image']
@@ -1034,7 +1050,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 stdev = np.std(self.current_image[self.current_image != 0])
                 self.min_val = mean - stdev
                 self.max_val = mean + stdev
-        elif type_img == 4:
+        elif type_img == 3:
             self.title = 'Summed image'
             if 'sum_image' in details_dict:
                 self.current_image = details_dict['sum_image']

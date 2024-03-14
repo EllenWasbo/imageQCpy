@@ -295,6 +295,8 @@ class ParamsTabCommon(QTabWidget):
                     self.flag_edit(True)
                 if update_roi:
                     self.main.update_roi()
+                    if attribute.startswith('sni_'):
+                        self.update_sni_roi_names()
                 if clear_results:
                     self.clear_results_current_test()
                 if ((update_plot or update_results_table)
@@ -1883,8 +1885,8 @@ class ParamsTabNM(ParamsTabCommon):
                           'NPS all ROIs + human visual filter',
                           'Filtered NPS and NPS structure selected ROI']
             items_res_image = ['2d NPS for selected ROI']
-            self.sni_selected_roi.setVisible(True)
-            self.sni_selected_roi_idx.setVisible(False)
+            #self.sni_selected_roi.setVisible(True)
+            #self.sni_selected_roi_idx.setVisible(False)
         else:
             items_plot = [
                 'SNI values each ROI',
@@ -1892,8 +1894,8 @@ class ParamsTabNM(ParamsTabCommon):
                 'Filtered NPS and NPS structure max+avg',
                 'Filtered NPS and NPS structure selected ROI']
             items_res_image = ['SNI values map', '2d NPS for selected ROI']
-            self.sni_selected_roi_idx.setVisible(True)
-            self.sni_selected_roi.setVisible(False)
+            #self.sni_selected_roi_idx.setVisible(True)
+            #self.sni_selected_roi.setVisible(False)
         if self.sni_type.currentIndex() == 3:
             self.sni_roi_outside.setVisible(True)
             self.sni_roi_outside_label.setVisible(True)
@@ -1912,14 +1914,29 @@ class ParamsTabNM(ParamsTabCommon):
         if attribute != '':
             self.param_changed_from_gui(attribute=attribute)
 
+    def update_sni_roi_names(self):
+        """Update ROI names to select based on existing ROIs."""
+        self.sni_selected_roi.clear()
+        if self.sni_type.currentIndex() == 0:
+            items = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+        else:
+            items = []
+            for rowno, rois_row in enumerate(self.main.current_roi[1:]):
+                for colno, roi in enumerate(rois_row):
+                    name = f'r{rowno}_c{colno}'
+                    if roi is None:  # None if ignored
+                        name = name + ' (ignored)'
+                    items.append(name)
+        self.sni_selected_roi.addItems(items)
+
     def create_tab_uni(self):
         """GUI of tab Uniformity."""
         self.tab_uni = ParamsWidget(self, run_txt='Calculate uniformity')
 
-        self.uni_threshold = QDoubleSpinBox(
-            decimals=2, minimum=0.0, maximum=1., singleStep=0.01)
-        self.uni_threshold.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='uni_threshold'))
+        #self.uni_threshold = QDoubleSpinBox(
+        #    decimals=2, minimum=0.0, maximum=1., singleStep=0.01)
+        #self.uni_threshold.valueChanged.connect(
+        #    lambda: self.param_changed_from_gui(attribute='uni_threshold'))
         self.uni_ufov_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.uni_ufov_ratio.valueChanged.connect(
@@ -1978,8 +1995,8 @@ class ParamsTabNM(ParamsTabCommon):
 
         hlo_fov = QHBoxLayout()
         flo = QFormLayout()
-        flo.addRow(QLabel('Image where signal above (relative to max)'),
-                   self.uni_threshold)
+        #flo.addRow(QLabel('Image where signal above (relative to max)'),
+        #           self.uni_threshold)
         flo.addRow(QLabel('UFOV ratio'), self.uni_ufov_ratio)
         flo.addRow(QLabel('CFOV ratio'), self.uni_cfov_ratio)
         flo.addRow(QLabel('     Lock CFOV ratio to 75% of UFOV'), self.uni_cfov_ratio75)
@@ -2095,9 +2112,9 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_plot = QComboBox()
         self.sni_result_image = QComboBox()
         self.sni_selected_roi = QComboBox()
-        self.sni_selected_roi.addItems(['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])
-        self.sni_selected_roi_idx = QDoubleSpinBox(
-            decimals=0, minimum=0, maximum=1000, singleStep=1)
+        #self.sni_selected_roi.addItems(['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])
+        #self.sni_selected_roi_idx = QDoubleSpinBox(
+        #    decimals=0, minimum=0, maximum=1000, singleStep=1)
         self.update_sni_display_options()
         self.sni_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
@@ -2105,8 +2122,10 @@ class ParamsTabNM(ParamsTabCommon):
             self.main.wid_res_image.canvas.result_image_draw)
         self.sni_selected_roi.currentIndexChanged.connect(
             self.main.refresh_results_display)
-        self.sni_selected_roi_idx.valueChanged.connect(
-            self.main.refresh_results_display)
+        self.sni_selected_roi.addItems(
+            ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])
+        #self.sni_selected_roi_idx.valueChanged.connect(
+        #    self.main.refresh_results_display)
         self.sni_show_labels = QCheckBox('Show ROI labels in image')
         self.sni_show_labels.setChecked(True)
         self.sni_show_labels.toggled.connect(
@@ -2153,7 +2172,7 @@ class ParamsTabNM(ParamsTabCommon):
         vlo_right.addLayout(hlo_selected_roi)
         hlo_selected_roi.addWidget(QLabel('Selected ROI for plot/image'))
         hlo_selected_roi.addWidget(self.sni_selected_roi)
-        hlo_selected_roi.addWidget(self.sni_selected_roi_idx)
+        #hlo_selected_roi.addWidget(self.sni_selected_roi_idx)
 
     def create_tab_mtf(self):
         """GUI of tab MTF."""

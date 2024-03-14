@@ -425,7 +425,7 @@ class ImageCanvas(GenericImageCanvas):
     def Bar(self):
         """Draw Bar ROIs."""
         self.add_contours_to_all_rois(
-            colors=COLORS,#['red', 'blue', 'lime', 'cyan'],
+            colors=COLORS,
             labels=[str(i+1) for i in range(4)]
             )
 
@@ -466,7 +466,6 @@ class ImageCanvas(GenericImageCanvas):
 
     def Gho(self):
         """Draw Ghosting ROIs."""
-        #colors = ['red', 'blue', 'green', 'yellow', 'cyan']
         try:
             labels = self.main.current_paramset.gho_table.labels
         except AttributeError:
@@ -482,7 +481,6 @@ class ImageCanvas(GenericImageCanvas):
                     colors=['red'], roi_indexes=[2],
                     filled=True, hatches=['////'], reset_contours=False)
         else:
-            #colors = ['red', 'blue', 'green', 'yellow', 'cyan']
             self.add_contours_to_all_rois(colors=COLORS)
 
     def MTF(self):
@@ -502,7 +500,7 @@ class ImageCanvas(GenericImageCanvas):
                 roi_indexes = list(range(len(self.main.current_roi) - 1))
                 self.add_contours_to_all_rois(
                     roi_indexes=roi_indexes,
-                    colors=COLORS)#['red', 'blue', 'green', 'cyan'])
+                    colors=COLORS)
                 mask = np.where(self.main.current_roi[-1], 0, 1)
                 contour = self.ax.contour(
                     mask, levels=[0.9],
@@ -510,7 +508,7 @@ class ImageCanvas(GenericImageCanvas):
                     linestyles='dotted')
                 self.contours.append(contour)
             else:
-                self.add_contours_to_all_rois(colors=COLORS)#['red', 'blue', 'green', 'cyan'])
+                self.add_contours_to_all_rois(colors=COLORS)
 
             if 'MTF' in self.main.results and self.main.current_modality == 'CT':
                 try:
@@ -542,7 +540,7 @@ class ImageCanvas(GenericImageCanvas):
 
     def Num(self):
         """Draw  ROIs with labels."""
-        labels=self.main.current_paramset.num_table.labels
+        labels = self.main.current_paramset.num_table.labels
         colors = ['r'] * len(labels)
         try:
             widget = self.main.stack_test_tabs.currentWidget()
@@ -625,7 +623,7 @@ class ImageCanvas(GenericImageCanvas):
         """Drow ROIs with labels if any."""
         if self.main.current_paramset.roi_use_table > 0:
             labels = self.main.current_paramset.roi_table.labels
-            colors = COLORS#get_color_list(n_colors=len(labels))
+            colors = COLORS
         else:
             labels = None
             colors = None
@@ -718,26 +716,41 @@ class ImageCanvas(GenericImageCanvas):
                 roi_indexes=[3, 4],
                 filled=True, hatches=['|||', '---'])  # 2 first small, else only label
 
-            for i in range(6):
-                mask = np.where(self.main.current_roi[i+3], 0, 1)
-                colors = ['lime', 'cyan', 'k', 'k', 'k', 'k']
-                mask_pos = np.where(mask == 0)
-                xpos = np.mean(mask_pos[1])
-                ypos = np.mean(mask_pos[0])
-                if np.isfinite(xpos) and np.isfinite(ypos):
-                    self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
-                                 f'S{i+1}',
-                                 fontsize=self.fontsize, color=colors[i])
+            if self.main.tab_nm.sni_show_labels.isChecked():
+                for i in range(6):
+                    mask = np.where(self.main.current_roi[i+3], 0, 1)
+                    colors = ['lime', 'cyan', 'k', 'k', 'k', 'k']
+                    mask_pos = np.where(mask == 0)
+                    xpos = np.mean(mask_pos[1])
+                    ypos = np.mean(mask_pos[0])
+                    if np.isfinite(xpos) and np.isfinite(ypos):
+                        self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
+                                     f'S{i+1}',
+                                     fontsize=self.fontsize, color=colors[i])
         elif self.main.current_paramset.sni_type in [1, 2]:
             self.add_contours_to_all_rois(
                 colors=['red'], roi_indexes=[0])  # full
             self.contours = []
             for row, col in [(1, 0), (2, 1), (-2, -2), (-1, -1)]:
+                mask = np.where(self.main.current_roi[row][col], 0, 1)
                 self.contours.append(
-                    self.ax.contourf(
-                        np.where(self.main.current_roi[row][col], 0, 1),
-                        levels=[0, 0.5], colors='red', alpha=0.3))
-            roi_idx = int(self.main.tab_nm.sni_selected_roi_idx.value())
+                    self.ax.contourf(mask, levels=[0, 0.5], colors='red', alpha=0.3))
+                if self.main.tab_nm.sni_show_labels.isChecked():
+                    mask_pos = np.where(mask == 0)
+                    xmin = np.min(mask_pos[1])
+                    xmean = np.mean(mask_pos[1])
+                    xpos = int(0.75*xmin + 0.25*xmean)
+                    ypos = np.mean(mask_pos[0]) + 2
+                    if np.isfinite(xpos) and np.isfinite(ypos):
+                        colno = col
+                        rowno = row
+                        if col < 0:
+                            colno = len(self.main.current_roi[row]) - col
+                        if row < 0:
+                            rowno = len(self.main.current_roi) - row
+                        self.ax.text(xpos, ypos, f'r{rowno-1}_c{colno}',
+                                     fontsize=self.fontsize, color='k')
+            roi_idx = int(self.main.tab_nm.sni_selected_roi.currentIndex())
         else:  # 3 Siemens
             self.add_contours_to_all_rois(
                 colors=['red'], roi_indexes=[0])  # full
@@ -759,7 +772,7 @@ class ImageCanvas(GenericImageCanvas):
                             if np.isfinite(xpos) and np.isfinite(ypos):
                                 self.ax.text(xpos, ypos, f'r{rowno}_c{colno}',
                                              fontsize=self.fontsize, color='red')
-            roi_idx = int(self.main.tab_nm.sni_selected_roi_idx.value())
+            roi_idx = int(self.main.tab_nm.sni_selected_roi.currentIndex())
         if roi_idx > 0 and self.main.results:
             plot_txt = self.main.tab_nm.sni_plot.currentText()
             img_txt = self.main.tab_nm.sni_result_image.currentText()
@@ -830,24 +843,24 @@ class ResultImageCanvas(GenericImageCanvas):
 
         if self.current_image is not None:
             if self.min_val is None:
-                self.min_val = np.min(self.current_image)
+                self.min_val = np.amin(self.current_image)
             if self.max_val is None:
-                self.max_val = np.max(self.current_image)
+                self.max_val = np.amax(self.current_image)
             if self.positive_negative:
                 if self.min_val != - self.max_val:
                     maxv = np.max(np.abs([self.min_val, self.max_val]))
                     self.min_val = -maxv
                     self.max_val = maxv
                 self.cmap = 'coolwarm'
+            self.parent.wid_window_level.positive_negative = self.positive_negative
+
             self.img = self.ax.imshow(
                 self.current_image,
                 cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
             self.parent.image_title.setText(self.title)
-            amin = np.amin(self.current_image)
-            amax = np.amax(self.current_image)
             proceed = True
             try:
-                contrast = amax - amin
+                contrast = self.max_val - self.min_val
             except TypeError:
                 proceed = False
             if proceed:
@@ -856,22 +869,15 @@ class ResultImageCanvas(GenericImageCanvas):
                     self.parent.wid_window_level.decimals = 2
                 elif contrast < 20:
                     self.parent.wid_window_level.decimals = 1
-                rmin = round(amin * 10 ** self.parent.wid_window_level.decimals)
-                rmax = round(amax * 10 ** self.parent.wid_window_level.decimals)
+                rmin = round(self.min_val * 10 ** self.parent.wid_window_level.decimals)
+                rmax = round(self.max_val * 10 ** self.parent.wid_window_level.decimals)
                 self.parent.wid_window_level.min_wl.setRange(rmin, rmax)
                 self.parent.wid_window_level.max_wl.setRange(rmin, rmax)
-                if self.positive_negative:
-                    self.parent.wid_window_level.canvas.plot(
-                        self.current_image,
-                        decimals=self.parent.wid_window_level.decimals,
-                        minimum=self.min_val, maximum=self.max_val)
-                else:
-                    self.parent.wid_window_level.canvas.plot(
-                        self.current_image,
-                        decimals=self.parent.wid_window_level.decimals)
                 self.parent.wid_window_level.update_window_level(
-                    self.min_val, self.max_val)
-                self.parent.wid_window_level.colorbar.colorbar_draw(cmap=self.cmap)
+                    self.min_val, self.max_val, cmap=self.cmap)
+                self.parent.wid_window_level.canvas.plot(
+                    self.current_image,
+                    decimals=self.parent.wid_window_level.decimals)
         else:
             self.img = self.ax.imshow(np.zeros((100, 100)))
             at = matplotlib.offsetbox.AnchoredText(
@@ -880,6 +886,8 @@ class ResultImageCanvas(GenericImageCanvas):
                 frameon=False, loc='center')
             self.ax.add_artist(at)
             self.parent.image_title.setText('')
+            self.parent.wid_window_level.colorbar.fig.clf()
+            self.parent.wid_window_level.canvas.fig.clear()
         self.ax.axis('off')
         self.draw()
 
@@ -988,10 +996,8 @@ class ResultImageCanvas(GenericImageCanvas):
                 image_text = self.main.tab_nm.sni_result_image.currentText()
                 roi_txt = self.main.tab_nm.sni_selected_roi.currentText()
                 self.title = f'{image_text} for ROI {roi_txt}'
-                if self.main.current_paramset.sni_type == 0:
-                    roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
-                else:
-                    roi_idx = int(self.main.tab_nm.sni_selected_roi_idx.value())
+                roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
+                if self.main.current_paramset.sni_type > 0:
                     self.main.wid_image_display.canvas.roi_draw()
                 try:
                     details_this = details_dict['pr_roi'][roi_idx]

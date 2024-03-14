@@ -134,7 +134,6 @@ def get_rois(image, image_number, input_main):
         if input_main.current_modality == 'Mammo':
             roi_mask = np.full(image_info.shape[0:2], False)
             if paramset.hom_mask_max:
-                roi_mask = get_mask_max(image)
                 roi_mask[image == np.max(image)] = True
             roi_array.append(roi_mask)
 
@@ -666,8 +665,6 @@ def get_roi_circle(image_shape, delta_xy, radius):
         np.arange(0, image_shape[1], dtype=int),
         np.arange(0, image_shape[0], dtype=int),
         sparse=True)
-    #center_pos = [delta_xy[0] + round(0.5*image_shape[1]),
-    #              delta_xy[1] + round(0.5*image_shape[0])]
     center_pos = [delta_xy[0] + image_shape[1] // 2,
                   delta_xy[1] + image_shape[0] // 2]
 
@@ -825,35 +822,6 @@ def get_roi_hom(image_info,
         roi_array = None
 
     return roi_array
-
-
-def get_mask_max(image):
-    """Get mask area wher max in image. Assumed to be rectangular, continuous shape.
-
-    Parameters
-    ----------
-    image : np.array
-        dtype float
-
-    Returns
-    -------
-    mask_max : np.array
-        dtype bool
-    """
-    mask_max = np.full(image.shape, False)
-    row_maxs = np.max(image, axis=0)
-    row_max_id = np.where(row_maxs == np.max(image))
-    if row_max_id[0].size > 1:
-        row_test = np.arange(np.min(row_max_id), np.max(row_max_id) + 1)
-        if row_test.size == row_max_id[0].size:
-            col_maxs = np.max(image, axis=1)
-            col_max_id = np.where(col_maxs == np.max(image))
-            col_test = np.arange(np.min(col_max_id), np.max(col_max_id) + 1)
-            if col_test.size == col_max_id[0].size:
-                mask_max[np.min(row_test):np.max(row_test),
-                         np.min(col_test):np.max(col_test)] = True
-
-    return mask_max
 
 
 def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):

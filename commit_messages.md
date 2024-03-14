@@ -10,7 +10,7 @@ New functionalities:
 - Added colorbar to window level widget.
 - Added CT test TTF (task based MTF) - working on automated TTF/NPS/d' solution
 - Added option to read GE QAP Mammo result files and option to bulk-generate automation templates for reading the different file types.
-- Under construction: Added option to calculate SNI based on ROIs positioned in grid matching PMT positions for Siemens gamma camera
+- Under construction: Added option to calculate SNI based on ROIs positioned in grid matching PMT positions for Siemens gamma camera and other optimalization of the test
 
 Changes:
 - Added option to lock NM uniformity CFOV to 75% of UFOV.
@@ -21,7 +21,8 @@ Changes:
 	- considerably more robust for Siemens gamma camera savescreens that differ in screen size from day to day
 	- default templates updated with larger ROIs to handle these day to day changes, ignoring parts of text at left/right border of ROI
 - Changed startup time (saved some update after gui presented)
-- Mammo test Homogeneity: Added option to not calculate variance-map (time consuming)
+- Mammo test Homogeneity: Added option to not calculate variance-map (to speed up if not needed)
+- Mammo Ghost: Changed default ROI size to 20 mm to get the recommended 4 cm^2 ROIs. Also adjustet default position of ROI_1 by 5 mm.
 
 Bugfixes:
 - fixed error when using image names for QuickTest where more images than expected are loaded (IndexError on set_names[i], calculate_qc.py line 158)

@@ -1638,26 +1638,35 @@ class ResultPlotCanvas(PlotCanvas):
         self.ytitle = r'NPS ($\mathregular{mm^{2}}$)'
         self.xtitle = 'frequency (pr mm)'
         details_dict = self.main.results['SNI']['details_dict'][imgno]
-        roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+        cbx = self.main.tab_nm.sni_selected_roi
+        roi_names = [cbx.itemText(i) for i in range(cbx.count())]#'L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
         nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
 
         def plot_SNI_values_bar():
             """Plot SNI values as columns pr ROI."""
             if self.main.current_paramset.sni_type == 0:
-                self.bars.append({
-                    'names': roi_names,
-                    'values': self.main.results['SNI']['values'][imgno][1:]
-                    })
-            else:
-                SNI_values = details_dict['SNI_map']
                 try:
-                    SNI_values = details_dict['SNI_map'].flatten()
-                except AttributeError:
+                    self.bars.append({
+                        'names': roi_names,
+                        'values': self.main.results['SNI']['values'][imgno][1:]
+                        })
+                except KeyError:
                     pass
-                self.bars.append({
-                    'names': [str(idx) for idx in range(len(SNI_values))],
-                    'values': SNI_values
-                    })
+            else:
+                proceed = True
+                try:
+                    SNI_values = details_dict['SNI_map']
+                except KeyError:
+                    proceed = False
+                if proceed:
+                    try:
+                        SNI_values = details_dict['SNI_map'].flatten()
+                    except AttributeError:
+                        pass
+                    self.bars.append({
+                        'names': roi_names,#[str(idx) for idx in range(len(SNI_values))],
+                        'values': SNI_values
+                        })
             self.title = 'Structured Noise Index for each ROI in selected image'
             self.ytitle = 'SNI'
             self.xtitle = 'ROI'
@@ -1687,16 +1696,14 @@ class ResultPlotCanvas(PlotCanvas):
                     self.curves.append(
                         {'label': labels[j], 'xvals': xvals,
                          'yvals': yvals, 'color': colors[j], 'style': styles[j]})
-            except IndexError:
+            except (KeyError, IndexError):
                 pass
 
         def plot_filtered_NPS(roi_name='L1'):
             """Plot filtered NPS + NPS structure for selected ROI +quantum noise txt."""
             self.default_range_x = [0, nyquist_freq]
-            if self.main.current_paramset.sni_type == 0:
-                roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
-            else:
-                roi_idx = int(self.main.tab_nm.sni_selected_roi_idx.value())
+            roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
+            if self.main.current_paramset.sni_type > 0:
                 self.main.wid_image_display.canvas.roi_draw()
             proceed = True
             try:

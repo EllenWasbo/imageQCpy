@@ -463,12 +463,12 @@ class ParamSetMammo(ParamSetCommon):
     rlr_roi_size: float = 5.
     rlr_relative_to_right: bool = True  # if false relative to left
     rlr_x_mm: float = 60.  # distance to left or right border
-    gho_roi_size: float = 10.
+    gho_roi_size: float = 20.
     gho_relative_to_right: bool = True  # if false relative to left
     gho_table: PositionTable = field(
         default_factory=lambda: PositionTable(
             labels=['ROI_1', 'ROI_2', 'ROI_3'],
-            pos_x=[20, 80, 80], pos_y=[30, 30, -30]))
+            pos_x=[25, 80, 80], pos_y=[30, 30, -30]))
     mtf_roi_size_x: int = 20.
     mtf_roi_size_y: int = 50.
     mtf_plot: int = 3

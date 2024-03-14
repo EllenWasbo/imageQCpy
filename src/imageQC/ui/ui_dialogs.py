@@ -347,9 +347,24 @@ class EditAnnotationsDialog(ImageQCDialog):
 class WindowLevelEditDialog(ImageQCDialog):
     """Dialog to set window level by numbers."""
 
-    def __init__(self, min_max=[0, 0], show_lock_wl=True):
-        super().__init__()
+    def __init__(self, min_max=[0, 0], show_lock_wl=True, decimals=0,
+                 positive_negative=False):
+        """
 
+        Parameters
+        ----------
+        min_max : list of floats
+            Current min and max for the window level.
+        show_lock_wl : bool, optional
+            Show the checkbox to set window level to locked (not update for each image).
+            The default is True.
+        decimals : int, optional
+            Number of decimals to display. The default is 0.
+        positive_negative : bool, optional
+            Lock window level to be centered at zero. The default is False.
+        """
+        super().__init__()
+        self.positive_negative = positive_negative
         self.setWindowTitle('Edit window level')
         self.setMinimumHeight(400)
         self.setMinimumWidth(300)
@@ -359,30 +374,36 @@ class WindowLevelEditDialog(ImageQCDialog):
         fLO = QFormLayout()
         vLO.addLayout(fLO)
 
-        self.spin_min = QSpinBox()
+        self.spin_min = QDoubleSpinBox(decimals=decimals)
         self.spin_min.setRange(-1000000, 1000000)
-        self.spin_min.setValue(round(min_max[0]))
-        self.spin_min.editingFinished.connect(
-            lambda: self.recalculate_others(sender='min'))
+        self.spin_min.setValue(min_max[0])
+        if positive_negative:
+            self.spin_min.setEnabled(False)
+        else:
+            self.spin_min.editingFinished.connect(
+                lambda: self.recalculate_others(sender='min'))
         fLO.addRow(QLabel('Minimum'), self.spin_min)
 
-        self.spin_max = QSpinBox()
+        self.spin_max = QDoubleSpinBox(decimals=decimals)
         self.spin_max.setRange(-1000000, 1000000)
-        self.spin_max.setValue(round(min_max[1]))
+        self.spin_max.setValue(min_max[1])
         self.spin_max.editingFinished.connect(
             lambda: self.recalculate_others(sender='max'))
         fLO.addRow(QLabel('Maximum'), self.spin_max)
 
-        self.spin_center = QSpinBox()
+        self.spin_center = QDoubleSpinBox(decimals=decimals)
         self.spin_center.setRange(-1000000, 1000000)
-        self.spin_center.setValue(round(0.5*(min_max[0] + min_max[1])))
-        self.spin_center.editingFinished.connect(
-            lambda: self.recalculate_others(sender='center'))
+        self.spin_center.setValue(0.5*(min_max[0] + min_max[1]))
+        if positive_negative:
+            self.spin_center.setEnabled(False)
+        else:
+            self.spin_center.editingFinished.connect(
+                lambda: self.recalculate_others(sender='center'))
         fLO.addRow(QLabel('Center'), self.spin_center)
 
-        self.spin_width = QSpinBox()
+        self.spin_width = QDoubleSpinBox(decimals=decimals)
         self.spin_width.setRange(0, 2000000)
-        self.spin_width.setValue(round(min_max[1] - min_max[0]))
+        self.spin_width.setValue(min_max[1] - min_max[0])
         self.spin_width.editingFinished.connect(
             lambda: self.recalculate_others(sender='width'))
         fLO.addRow(QLabel('Width'), self.spin_width)
@@ -415,16 +436,22 @@ class WindowLevelEditDialog(ImageQCDialog):
     def recalculate_others(self, sender='min'):
         """Reset others based on input."""
         self.blockSignals(True)
+        if self.positive_negative:
+            if sender == 'max':
+                self.spin_min.setValue(-self.spin_max.value())
+            elif sender == 'width':
+                self.spin_min.setValue(-self.spin_width.value()/2)
+                self.spin_max.setValue(self.spin_width.value()/2)
         minval = self.spin_min.value()
         maxval = self.spin_max.value()
         width = self.spin_width.value()
         center = self.spin_center.value()
         if sender in ['min', 'max']:
-            self.spin_center.setValue(round(0.5*(minval + maxval)))
+            self.spin_center.setValue(0.5*(minval + maxval))
             self.spin_width.setValue(maxval-minval)
         else:  # sender in ['center', 'width']:
-            self.spin_min.setValue(center - round(0.5*width))
-            self.spin_max.setValue(center + round(0.5*width))
+            self.spin_min.setValue(center - 0.5*width)
+            self.spin_max.setValue(center + 0.5*width)
         self.blockSignals(False)
 
     def get_min_max_lock(self):

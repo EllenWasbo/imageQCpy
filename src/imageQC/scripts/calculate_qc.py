@@ -856,14 +856,6 @@ def calculate_qc(input_main, wid_auto=None,
                     'min_max', set_tools=True)
                 input_main.set_active_img(
                     input_main.results['Rec']['details_dict']['max_slice_idx'])
-            elif 'SNI' in input_main.results:
-                if input_main.current_paramset.sni_type > 0:
-                    try:
-                        n_roi = input_main.results['SNI'][
-                            'details_dict'][0]['SNI_map'].size
-                    except:
-                        n_roi = 100
-                    input_main.tab_nm.sni_selected_roi_idx.setMaximum(n_roi)
             try:
                 input_main.progress_modal.setValue(input_main.progress_modal.maximum())
             except AttributeError:
@@ -4006,7 +3998,11 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
 
         values = [np.max(SNI_values)] + SNI_values
     else:
-        rows = np.max(roi_array[1][0], axis=1)
+        try:
+            rows = np.max(roi_array[1][0], axis=1)
+        except (np.AxisError, TypeError):  # if first is ignored Siemens
+            rows = np.max(roi_array[3][3], axis=1)  # central
+            # TODO better catch - what if this also (not likely) is None?
         eye_filter = get_eye_filter(
             np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c)
         details_dict['eye_filter'] = eye_filter['curve']
@@ -4020,29 +4016,42 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         rNPS_struct_filt_sum = None
         for rowno, row in enumerate(roi_array[1:]):
             for colno, roi in enumerate(row):
-                SNI, details_dict_roi = calculate_SNI_ROI(
-                    image2d, roi,
-                    eye_filter['filter_2d'], unit=eye_filter['unit'],
-                    pix=image_info.pix[0], fit_dict=fit_dict)
-                details_dict['pr_roi'].append(details_dict_roi)
-                if paramset.sni_type in [1, 2]:
-                    SNI_map[rowno, colno] = SNI
-                else:  # 3 Siemens
-                    SNI_map.append(SNI)
-                SNI_vals.append(SNI)
-                if rNPS_filt_sum is None:
-                    rNPS_filt_sum = details_dict_roi['rNPS_filt']
-                    rNPS_struct_filt_sum = details_dict_roi['rNPS_struct_filt']
+                if roi is not None:
+                    SNI, details_dict_roi = calculate_SNI_ROI(
+                        image2d, roi,
+                        eye_filter['filter_2d'], unit=eye_filter['unit'],
+                        pix=image_info.pix[0], fit_dict=fit_dict)
+                    details_dict['pr_roi'].append(details_dict_roi)
+                    if paramset.sni_type in [1, 2]:
+                        SNI_map[rowno, colno] = SNI
+                    else:  # 3 Siemens
+                        SNI_map.append(SNI)
+                    SNI_vals.append(SNI)
+                    if rNPS_filt_sum is None:
+                        rNPS_filt_sum = details_dict_roi['rNPS_filt']
+                        rNPS_struct_filt_sum = details_dict_roi['rNPS_struct_filt']
+                    else:
+                        rNPS_filt_sum = rNPS_filt_sum + details_dict_roi['rNPS_filt']
+                        rNPS_struct_filt_sum = (
+                            rNPS_struct_filt_sum + details_dict_roi['rNPS_struct_filt'])
                 else:
-                    rNPS_filt_sum = rNPS_filt_sum + details_dict_roi['rNPS_filt']
-                    rNPS_struct_filt_sum = (
-                        rNPS_struct_filt_sum + details_dict_roi['rNPS_struct_filt'])
-        max_no = np.where(SNI_vals == np.max(SNI_vals))
+                    details_dict['pr_roi'].append(None)
+                    SNI_vals.append(np.nan)
+                    if paramset.sni_type == 3:  # always? if ignored
+                        SNI_map.append(np.nan)
+        if paramset.sni_type == 3:  # avoid np.nan for ignored
+            arr = np.array(SNI_map)
+            max_no = np.where(arr == np.max(arr[arr > -1]))
+        else:
+            max_no = np.where(SNI_vals == np.max(SNI_vals))
         details_dict['roi_max_idx'] = max_no[0][0]
         details_dict['avg_rNPS_filt'] = rNPS_filt_sum / len(SNI_vals)
         details_dict['avg_rNPS_struct_filt'] = rNPS_struct_filt_sum / len(SNI_vals)
         details_dict['SNI_map'] = SNI_map
-        values = [np.max(SNI_map), np.mean(SNI_map), np.median(SNI_map)]
+        values = [
+            np.max(SNI_map),
+            np.mean(SNI_map, where=(SNI_map > -1)),
+            np.median(SNI_map, where=(SNI_map > -1))]
 
     return (values, values_sup, details_dict, errmsgs)
 

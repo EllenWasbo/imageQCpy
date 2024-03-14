@@ -519,8 +519,15 @@ class ToolBarWindowLevel(QToolBar):
 
     def set_window_level_by_numbers(self):
         """Dialog box to set min/max or center/width and option to lock."""
+        factor = 1 / 10 ** self.parent.decimals
         dlg = WindowLevelEditDialog(
-            min_max=[self.parent.min_wl.value(), self.parent.max_wl.value()])
+            min_max=[
+                factor * self.parent.min_wl.value(),
+                factor * self.parent.max_wl.value()
+                ],
+            decimals=self.parent.decimals,
+            show_lock_wl=self.chk_wl_update.isVisible(),
+            positive_negative=self.parent.positive_negative)
         res = dlg.exec()
         if res:
             minval, maxval, lock = dlg.get_min_max_lock()
@@ -628,15 +635,18 @@ class WindowLevelWidget(QGroupBox):
         self.max_wl = QSlider(Qt.Horizontal)
         self.lbl_min_wl = QLabel('-200')
         self.lbl_max_wl = QLabel('200')
-        self.canvas = WindowLevelHistoCanvas()
+        self.canvas = WindowLevelHistoCanvas(self)
 
         self.max_wl.setRange(-200, 200)
         self.max_wl.setValue(200)
         self.min_wl.setRange(-200, 200)
         self.min_wl.setValue(-200)
-        self.min_wl.sliderReleased.connect(self.correct_window_level_sliders)
-        self.max_wl.sliderReleased.connect(self.correct_window_level_sliders)
+        self.min_wl.sliderReleased.connect(
+            lambda: self.correct_window_level_sliders(sender='min'))
+        self.max_wl.sliderReleased.connect(
+            lambda: self.correct_window_level_sliders(sender='max'))
         self.decimals = 0  # 1 if difference < 10, 2 if difference < 1
+        self.positive_negative = False  # True if center always should be zero
         self.lbl_center = QLabel('0')
         self.lbl_width = QLabel('400')
         self.colorbar = ColorBar(slider_min=self.min_wl, slider_max=self.max_wl)
@@ -680,7 +690,12 @@ class WindowLevelWidget(QGroupBox):
         return (self.min_wl.value() / (10 ** self.decimals),
                 self.max_wl.value() / (10 ** self.decimals))
 
-    def update_window_level(self, minval, maxval):
+    def read_range(self):
+        """Get current slider range."""
+        return (self.min_wl.minimum() / (10 ** self.decimals),
+                self.max_wl.maximum() / (10 ** self.decimals))
+
+    def update_window_level(self, minval, maxval, cmap=''):
         """Update GUI for window level sliders and labels + active image.
 
         Parameters
@@ -697,14 +712,9 @@ class WindowLevelWidget(QGroupBox):
         self.lbl_width.setText(f'{(maxval-minval):{formatstr}}')
 
         self.parent.set_active_image_min_max(minval, maxval)
-        range_min = self.min_wl.minimum()
-        range_max = self.min_wl.maximum()
-        full = range_max - range_min
-        min_ratio = (minval - range_min) / full
-        max_ratio = (maxval - range_min) / full
-        self.colorbar.fig.subplots_adjust(min_ratio, 0., max_ratio, 1.)
+        self.colorbar.colorbar_draw(cmap=cmap)
 
-    def correct_window_level_sliders(self):
+    def correct_window_level_sliders(self, sender='min'):
         """Make sure min_wl < max_wl after user input."""
         if self.max_wl.value() < self.min_wl.value():
             maxval = self.min_wl.value()
@@ -712,6 +722,11 @@ class WindowLevelWidget(QGroupBox):
         else:
             minval = self.min_wl.value()
             maxval = self.max_wl.value()
+        if self.positive_negative:
+            if sender == 'min':
+                maxval = - minval
+            else:
+                minval = - maxval
         minval = minval / (10 ** self.decimals)
         maxval = maxval / (10 ** self.decimals)
         self.update_window_level(minval, maxval)
@@ -720,12 +735,13 @@ class WindowLevelWidget(QGroupBox):
 class WindowLevelHistoCanvas(FigureCanvasQTAgg):
     """Canvas for display of histogram for the active image."""
 
-    def __init__(self):
+    def __init__(self, parent):
         self.fig = matplotlib.figure.Figure(figsize=(2, 1))
         self.fig.subplots_adjust(0., 0., 1., 1.)
         FigureCanvasQTAgg.__init__(self, self.fig)
+        self.parent = parent
 
-    def plot(self, nparr, decimals=0, minimum=None, maximum=None):
+    def plot(self, nparr, decimals=0):
         """Refresh histogram."""
         self.fig.clear()
         self.ax = self.fig.add_subplot(111)
@@ -745,13 +761,17 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
             self.ax.add_artist(at_min)
             self.ax.add_artist(at_max)
 
-            if minimum is not None and maximum is not None:
-                full = maximum - minimum
+            if all([self.parent.min_wl, self.parent.max_wl]):
+                factor = 1 / 10 ** self.parent.decimals
+                range_max = factor * self.parent.max_wl.maximum()
+                range_min = factor * self.parent.min_wl.minimum()
+
+                full = range_max - range_min
                 if full > 0:
-                    min_ratio = (amin - minimum) / full
-                    max_ratio = (amax - minimum) / full
-                    print('plot histo')
-                    print(f'amin max {amin} {amax} range {minimum} {maximum} ratio {min_ratio} {max_ratio}')
+                    min_ratio = (amin - range_min) / full
+                    max_ratio = (amax - range_min) / full
+                    if max_ratio == min_ratio:
+                        max_ratio = min_ratio + 0.01
                     self.fig.subplots_adjust(min_ratio, 0., max_ratio, 1.)
 
             self.draw()
@@ -768,11 +788,16 @@ class ColorBar(FigureCanvasQTAgg):
         FigureCanvasQTAgg.__init__(self, self.fig)
         self.slider_min = slider_min
         self.slider_max = slider_max
+        self.cmap = 'gray'
 
-    def colorbar_draw(self, cmap='gray'):
+    def colorbar_draw(self, cmap=''):
         """Draw or update colorbar."""
         self.fig.clf()
         ax = self.fig.add_subplot(111)
+        if cmap == '':
+            cmap = self.cmap
+        else:
+            self.cmap = cmap
         if cmap:
             _ = matplotlib.colorbar.ColorbarBase(
                 ax, cmap=cmap, orientation='horizontal')

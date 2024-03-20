@@ -423,6 +423,8 @@ class ResultPlotCanvas(PlotCanvas):
             try:
                 for bar in self.bars:
                     self.ax.bar(bar['names'], bar['values'])
+                    self.ax.set_xticklabels(bar['names'], rotation=60,
+                                            ha='right', rotation_mode='anchor')
             except ValueError:
                 pass  # seen when in results, results and options change, #TODO better avoid
         else:
@@ -1639,7 +1641,7 @@ class ResultPlotCanvas(PlotCanvas):
         self.xtitle = 'frequency (pr mm)'
         details_dict = self.main.results['SNI']['details_dict'][imgno]
         cbx = self.main.tab_nm.sni_selected_roi
-        roi_names = [cbx.itemText(i) for i in range(cbx.count())]#'L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+        roi_names = [cbx.itemText(i) for i in range(cbx.count())]
         nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
 
         def plot_SNI_values_bar():
@@ -1653,27 +1655,18 @@ class ResultPlotCanvas(PlotCanvas):
                 except KeyError:
                     pass
             else:
-                proceed = True
                 try:
-                    SNI_values = details_dict['SNI_map']
+                    SNI_values = details_dict['SNI_values']
+                    self.bars.append({'names': roi_names, 'values': SNI_values})
                 except KeyError:
-                    proceed = False
-                if proceed:
-                    try:
-                        SNI_values = details_dict['SNI_map'].flatten()
-                    except AttributeError:
-                        pass
-                    self.bars.append({
-                        'names': roi_names,#[str(idx) for idx in range(len(SNI_values))],
-                        'values': SNI_values
-                        })
+                    pass
             self.title = 'Structured Noise Index for each ROI in selected image'
             self.ytitle = 'SNI'
             self.xtitle = 'ROI'
 
         def plot_SNI_values_line():
             """Plot SNI values as columns pr ROI."""
-            self.title = 'Structured Noise Index all images'
+            self.title = 'Structured Noise Index, values from result table'
             self.ytitle = 'SNI'
             self.xtitle = 'Image number'
             labels = self.main.results['SNI']['headers']
@@ -1711,6 +1704,8 @@ class ResultPlotCanvas(PlotCanvas):
             except IndexError:
                 proceed = False
             if proceed:
+                name = self.main.tab_nm.sni_selected_roi.currentText()
+                self.title = f'Filtered NPS and NPS structure for {name}'
                 yvals = details_dict_roi['rNPS_filt']
                 xvals = details_dict_roi['freq']
                 self.curves.append(
@@ -1745,6 +1740,7 @@ class ResultPlotCanvas(PlotCanvas):
         def plot_all_NPS():
             """Plot NPS for all ROIs + hum vis filter (normalized to NPS in max)."""
             if self.main.current_paramset.sni_type == 0:
+                self.title = 'NPS all ROIs'
                 colors = ['red', 'blue', 'green', 'cyan'] + [self.color_k] * 4
                 styles = ['-', '-', '-', '-', '-', '--', ':', '-.']
                 for roi_no in range(8):
@@ -1766,7 +1762,7 @@ class ResultPlotCanvas(PlotCanvas):
                      'xvals': eye_filter_curve['r'], 'yvals': yvals,
                      'color': self.color_darkgray, 'style': '-'})
                 self.default_range_x = [0, nyquist_freq]
-            else:
+            else:  # currently not selectable option:
                 for roi_no, dd in enumerate(details_dict['pr_roi']):
                     yvals = dd['rNPS']
                     if roi_no == 0:
@@ -1775,27 +1771,28 @@ class ResultPlotCanvas(PlotCanvas):
                     self.curves.append(
                         {'label': '_no_legend_',
                          'xvals': xvals, 'yvals': yvals})
-                eye_filter_curve = details_dict['eye_filter']
-                yvals = eye_filter_curve['V'] * np.median(details_dict[
-                    'pr_roi'][0]['rNPS'])
-                self.curves.append(
-                    {'label': 'Visual filter',
-                     'xvals': eye_filter_curve['r'], 'yvals': yvals,
-                     'color': self.color_darkgray, 'style': '-'})
+                for suf in ['large', 'small']:
+                    eye_filter_curve = details_dict['eye_filter_' + suf]
+                    yvals = eye_filter_curve['V'] * np.median(details_dict[
+                        'pr_roi'][0]['rNPS'])
+                    self.curves.append(
+                        {'label': 'Visual filter',
+                         'xvals': eye_filter_curve['r'], 'yvals': yvals,
+                         'color': self.color_darkgray, 'style': '-'})
                 self.default_range_x = [0, nyquist_freq]
 
         def plot_filtered_max_avg():
             xvals = details_dict['pr_roi'][0]['freq']
-            yvals = details_dict['avg_rNPS_filt']
+            yvals = details_dict['avg_rNPS_filt_small']
             self.curves.append(
                 {'label': 'avg NPS with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': '-b'})
-            yvals = details_dict['avg_rNPS_struct_filt']
+            yvals = details_dict['avg_rNPS_struct_filt_small']
             self.curves.append(
                 {'label': 'avg structured NPS with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': '-r'})
-            idx_max = details_dict['roi_max_idx']
-            yvals = details_dict['pr_roi'][idx_max]['rNPS_filt']
+            idx_max = details_dict['roi_max_idx_small']
+            yvals = details_dict['pr_roi'][idx_max + 2]['rNPS_filt']
             self.curves.append(
                 {'label': 'max NPS with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': ':b'})
@@ -1803,7 +1800,8 @@ class ResultPlotCanvas(PlotCanvas):
             self.curves.append(
                 {'label': 'max structured NPS with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': ':r'})
-
+            name = roi_names[idx_max + 2]
+            self.title = f'Filtered NPS and NPS structure for {name} (max) and avg'
             self.default_range_x = [0, nyquist_freq]
 
         def plot_curve_corr_check():

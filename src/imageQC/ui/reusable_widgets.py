@@ -1091,6 +1091,7 @@ class ImageNavigationToolbar(NavigationToolbar2QT):
 
     # from https://github.com/matplotlib/matplotlib/blob/main/lib/matplotlib/backends/backend_qt.py
     #  dirty fix to avoid crash on self.canvas.parent() TypeError
+    # also added .csv save
     def save_figure(self, *args):
         filetypes = self.canvas.get_supported_filetypes_grouped()
         sorted_filetypes = sorted(filetypes.items())
@@ -1102,18 +1103,27 @@ class ImageNavigationToolbar(NavigationToolbar2QT):
         selectedFilter = None
         for name, exts in sorted_filetypes:
             exts_list = " ".join(['*.%s' % ext for ext in exts])
-            filter = f'{name} ({exts_list})'
+            filter_this = f'{name} ({exts_list})'
             if default_filetype in exts:
-                selectedFilter = filter
-            filters.append(filter)
+                selectedFilter = filter_this
+            filters.append(filter_this)
+        filters.insert(0, '*.csv')  # TODO - also .npy (np.save(fname, arr))
         filters = ';;'.join(filters)
 
-        fname, filter = QFileDialog.getSaveFileName(
+        fname, filter_selected = QFileDialog.getSaveFileName(
             self, 'Choose a filename to save to', '',
             filters, selectedFilter)
         if fname:
-            try:
-                self.canvas.figure.savefig(fname)
-            except Exception as e:
-                QMessageBox.critical(
-                    self, "Error saving file", str(e))
+            if filter_selected == '*.csv':
+                try:
+                    current_image = self.canvas.ax.get_images()[0].get_array()
+                    np.savetxt(fname, current_image, delimiter=',')
+                except (AttributeError, IndexError) as e:
+                    QMessageBox.critical(
+                        self, "Error saving file", str(e))
+            else:
+                try:
+                    self.canvas.figure.savefig(fname)
+                except Exception as e:
+                    QMessageBox.critical(
+                        self, "Error saving file", str(e))

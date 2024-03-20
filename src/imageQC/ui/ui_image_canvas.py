@@ -356,6 +356,7 @@ class ImageCanvas(GenericImageCanvas):
     def add_contours_to_all_rois(self, colors=None, reset_contours=True,
                                  roi_indexes=None, filled=False,
                                  labels=None, labels_pos='upper_left',
+                                 linestyles='solid',
                                  hatches=None):
         """Draw all ROIs in self.main.current_roi (list) with specific colors.
 
@@ -371,6 +372,8 @@ class ImageCanvas(GenericImageCanvas):
             if true used contourf (filled) instead
         labels : str, optional
             'upper_left' or 'center' relative to roi
+        linestyles : str, optional
+            fx 'dotted'. Default is 'solid'
         hatches : list of str, optional
             Used if filled is True. Default is None.
         """
@@ -399,7 +402,8 @@ class ImageCanvas(GenericImageCanvas):
             else:
                 contour = self.ax.contour(
                     mask, levels=[0.9],
-                    colors=colors[color_no], alpha=0.5, linewidths=self.linewidth)
+                    colors=colors[color_no], alpha=0.5, linewidths=self.linewidth,
+                    linestyles=linestyles)
             if labels:
                 try:
                     label = labels[color_no]
@@ -407,6 +411,9 @@ class ImageCanvas(GenericImageCanvas):
                     if labels_pos == 'center':
                         xpos = np.mean(mask_pos[1]) - 2
                         ypos = np.mean(mask_pos[0]) + 2
+                    elif labels_pos == 'upper_left_inside':
+                        xpos = np.min(mask_pos[1]) + 10
+                        ypos = np.min(mask_pos[0]) + 30  # TODO better fit to image res.
                     else:  # upper left
                         xpos = np.min(mask_pos[1]) - 5
                         ypos = np.min(mask_pos[0]) - 5
@@ -417,10 +424,6 @@ class ImageCanvas(GenericImageCanvas):
                 except (ValueError, IndexError):
                     pass
             self.contours.append(contour)
-
-        # if hatches is not None:
-        #   for i, collection in enumerate(self.contours.collections):
-        #      collection.set_edgecolor(colors[i % len(colors)])
 
     def Bar(self):
         """Draw Bar ROIs."""
@@ -707,35 +710,45 @@ class ImageCanvas(GenericImageCanvas):
     def SNI(self):
         """Draw NM uniformity ROI."""
         roi_idx = -1
+        small_start_idx = 3  # for type>0, small rois start from list index idx
+        labels = None
+        show_labels = False
+        try:
+            show_labels = self.main.tab_nm.sni_show_labels.isChecked()
+        except AttributeError:
+            pass
+        if show_labels:
+            labels = ['L1', 'L2']
+        self.add_contours_to_all_rois(
+            colors=['red', 'blue'], roi_indexes=[1, 2], labels=labels,
+            labels_pos='upper_left_inside')
+
         if self.main.current_paramset.sni_type == 0:
             self.add_contours_to_all_rois(
-                colors=['red', 'blue'], roi_indexes=[1, 2],
-                filled=True, hatches=['//', '\\'])  # 2 large
-            self.add_contours_to_all_rois(
-                colors=['lime', 'cyan'], reset_contours=False,
-                roi_indexes=[3, 4],
-                filled=True, hatches=['|||', '---'])  # 2 first small, else only label
+                reset_contours=False,
+                colors=['red', 'blue', 'red', 'blue', 'red', 'blue'],
+                roi_indexes=[i for i in range(3, 9)],
+                filled=True)
 
-            if self.main.tab_nm.sni_show_labels.isChecked():
+            if show_labels:
                 for i in range(6):
                     mask = np.where(self.main.current_roi[i+3], 0, 1)
-                    colors = ['lime', 'cyan', 'k', 'k', 'k', 'k']
+                    colors = 'k'
                     mask_pos = np.where(mask == 0)
                     xpos = np.mean(mask_pos[1])
                     ypos = np.mean(mask_pos[0])
                     if np.isfinite(xpos) and np.isfinite(ypos):
                         self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
                                      f'S{i+1}',
-                                     fontsize=self.fontsize, color=colors[i])
+                                     fontsize=self.fontsize, color=colors)
         elif self.main.current_paramset.sni_type in [1, 2]:
-            self.add_contours_to_all_rois(
-                colors=['red'], roi_indexes=[0])  # full
-            self.contours = []
-            for row, col in [(1, 0), (2, 1), (-2, -2), (-1, -1)]:
+            for row, col in [
+                    (small_start_idx, 0),
+                    (small_start_idx+1, 1), (-2, -2), (-1, -1)]:
                 mask = np.where(self.main.current_roi[row][col], 0, 1)
                 self.contours.append(
                     self.ax.contourf(mask, levels=[0, 0.5], colors='red', alpha=0.3))
-                if self.main.tab_nm.sni_show_labels.isChecked():
+                if show_labels:
                     mask_pos = np.where(mask == 0)
                     xmin = np.min(mask_pos[1])
                     xmean = np.mean(mask_pos[1])
@@ -748,14 +761,10 @@ class ImageCanvas(GenericImageCanvas):
                             colno = len(self.main.current_roi[row]) - col
                         if row < 0:
                             rowno = len(self.main.current_roi) - row
-                        self.ax.text(xpos, ypos, f'r{rowno-1}_c{colno}',
+                        self.ax.text(xpos, ypos, f'r{rowno-small_start_idx}_c{colno}',
                                      fontsize=self.fontsize, color='k')
-            roi_idx = int(self.main.tab_nm.sni_selected_roi.currentIndex())
         else:  # 3 Siemens
-            self.add_contours_to_all_rois(
-                colors=['red'], roi_indexes=[0])  # full
-            self.contours = []
-            for rowno, rois_row in enumerate(self.main.current_roi[1:]):
+            for rowno, rois_row in enumerate(self.main.current_roi[small_start_idx:]):
                 for colno, roi in enumerate(rois_row):
                     if roi is not None:  # None if ignored
                         mask = np.where(roi, 0, 1)
@@ -763,7 +772,7 @@ class ImageCanvas(GenericImageCanvas):
                             self.ax.contour(
                                 mask, levels=[0.9], colors='red',
                                 alpha=0.5, linewidths=self.linewidth))
-                        if self.main.tab_nm.sni_show_labels.isChecked():
+                        if show_labels:
                             mask_pos = np.where(mask == 0)
                             xmin = np.min(mask_pos[1])
                             xmean = np.mean(mask_pos[1])
@@ -772,21 +781,28 @@ class ImageCanvas(GenericImageCanvas):
                             if np.isfinite(xpos) and np.isfinite(ypos):
                                 self.ax.text(xpos, ypos, f'r{rowno}_c{colno}',
                                              fontsize=self.fontsize, color='red')
-            roi_idx = int(self.main.tab_nm.sni_selected_roi.currentIndex())
-        if roi_idx > 0 and self.main.results:
+        if self.main.current_paramset.sni_type > 0:
+            try:
+                roi_idx = int(self.main.tab_nm.sni_selected_roi.currentIndex())
+            except AttributeError:
+                pass
+        if roi_idx > small_start_idx and self.main.results:
             plot_txt = self.main.tab_nm.sni_plot.currentText()
             img_txt = self.main.tab_nm.sni_result_image.currentText()
             if 'selected' in plot_txt or 'selected' in img_txt:
-                flat_list = [item for row in self.main.current_roi[1:] for item in row]
+                flat_list = [
+                    item for row in self.main.current_roi[small_start_idx:]
+                    for item in row]
                 try:
                     selected_roi = flat_list[roi_idx]
+                except IndexError:
+                    selected_roi = None
+                if selected_roi is not None:
                     self.contours.append(
                         self.ax.contour(
                             np.where(selected_roi, 0, 1),
                             levels=[0.9], colors='b', linestyles='dotted',
                             alpha=0.5, linewidths=1.5 * self.linewidth))
-                except IndexError:
-                    pass
 
     def SNR(self):
         """Draw MR SNR ROI(s)."""
@@ -925,6 +941,8 @@ class ResultImageCanvas(GenericImageCanvas):
                     elif sel_txt == 'Deviating pixels':
                         self.current_image = details_dict['deviating_pixels']
                         self.cmap = 'RdYlGn_r'
+                    elif sel_txt == '# deviating pixels pr ROI':
+                        self.current_image = details_dict['deviating_pixel_clusters']
                 except KeyError:
                     pass
 
@@ -1002,7 +1020,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 try:
                     details_this = details_dict['pr_roi'][roi_idx]
                     self.current_image = details_this['NPS']
-                except (IndexError, KeyError):
+                except (IndexError, KeyError, TypeError):
                     self.current_image = None
             elif 'SNI values map' in sel_txt:
                 self.title = 'SNI values map'

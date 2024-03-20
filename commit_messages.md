@@ -6,6 +6,7 @@ New functionalities:
 	- Colormap select
 	- Show projection (maximum/average intensity projection) with additional option to plot values from results table (e.g. mAs profile from extracted DCM values)
 	- Set active area (rectangle) for defining rectangular ROIs (previously defined by zoom functionality). The active area will also be used when setting window level based on active area (min/max or avg/stdev)
+- Added option to save image (or result image) as .csv to further study the values in e.g. Excel
 - Added window level widget for result image.
 - Added colorbar to window level widget.
 - Added CT test TTF (task based MTF) - working on automated TTF/NPS/d' solution
@@ -29,9 +30,10 @@ Bugfixes:
 - default spinbox maximum is 100. Increased this value for different test-parameters that were not yet specified with max > 100.
 - avoiding crash when scrolling through images using arrow keys (therefore skips showing some images as signal is blocked while processing). 
 - black and dark gray plot lines in dark-mode changed to white and light gray
+- other small fixes
 
 Code structure:
-- moved some methods from ui_main to ui_main_methods for better reuse of methods for task_based_image_quality dialog
+- moved some methods from ui_main to ui_main_methods for better reuse of methods for coming task_based_image_quality dialog
 - + some other changes to what is available from widgets_reusable to avoid import loops
 
 

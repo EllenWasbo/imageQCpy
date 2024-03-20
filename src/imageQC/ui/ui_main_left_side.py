@@ -40,12 +40,13 @@ class TreeFileList(QTreeWidget):
         self.setColumnCount(5)
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setAcceptDrops(True)
-        self.setHeaderLabels(['Image', 'Frame', 'Test', 'Image name', 'Group name'])
-        self.setColumnHidden(3, True)  # image name
-        self.setColumnHidden(4, True)  # group name
-        self.setColumnWidth(0, round(0.55*self.main.gui.panel_width))
-        self.setColumnWidth(1, 60)
-        self.setColumnWidth(2, round(0.2*self.main.gui.panel_width))
+        self.setHeaderLabels(['Idx', 'Image', 'Frame', 'Test', 'Image name', 'Group name'])
+        self.setColumnHidden(4, True)  # image name
+        self.setColumnHidden(5, True)  # group name
+        self.setColumnWidth(0, 50)
+        self.setColumnWidth(1, round(0.55*self.main.gui.panel_width))
+        self.setColumnWidth(2, 60)
+        self.setColumnWidth(3, round(0.2*self.main.gui.panel_width))
         self.currentItemChanged.connect(self.main.update_active_img)
         self.itemDoubleClicked.connect(self.dbl_click_item)
         self.installEventFilter(self)
@@ -104,9 +105,9 @@ class TreeFileList(QTreeWidget):
         self.setColumnHidden(3, not quicktest_active)  # image name
         self.setColumnHidden(4, not quicktest_active)  # group name
         if len(self.main.imgs) == 0:
-            QTreeWidgetItem(self, [''] * 5)
+            QTreeWidgetItem(self, [''] * 6)
         else:
-            for img in self.main.imgs:
+            for idx, img in enumerate(self.main.imgs):
                 image_name = ''
                 group_name = ''
                 if quicktest_active:
@@ -124,7 +125,7 @@ class TreeFileList(QTreeWidget):
                         file_text = img.filepath
                     else:
                         file_text = ' '.join(img.file_list_strings)
-                QTreeWidgetItem(self, [file_text, frameno, test_string,
+                QTreeWidgetItem(self, [str(idx), file_text, frameno, test_string,
                                        image_name, group_name])
             self.main.lbl_n_loaded.setText(str(len(self.main.imgs)))
             if keep_active is False:
@@ -326,14 +327,13 @@ class TreeFileList(QTreeWidget):
                     order.pop(i)
                 if direction == 'to':
                     if len(selrows) == 1:
-                        msg = 'Let the selected image be number:'
+                        msg = 'Move selected image to index:'
                     else:
-                        msg = 'Let the selected images start at image number:'
+                        msg = 'Move selected images to index:'
                     num, proceed = QInputDialog.getInt(
                         self, "Move image(s) to...",
-                        msg, value=1, min=1, max=len(self.main.imgs))
+                        msg, value=0, min=0, max=len(self.main.imgs))
                     if proceed:
-                        num -= 1
                         for i, selidx in enumerate(selrows_ord):
                             self.main.imgs.insert(num + i, popped_imgs[i])
                             order.insert(num + i, selidx)

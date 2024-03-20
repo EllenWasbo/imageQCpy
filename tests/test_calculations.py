@@ -417,11 +417,12 @@ def test_Mammo_Hom():
     vals_1 = np.round(np.array(input_main.results['Hom']['values'][1]))
     sup_0 = np.round(np.array(input_main.results['Hom']['values_sup'][0]))
     sup_1 = np.round(np.array(input_main.results['Hom']['values_sup'][1]))
+
     vals_0_exp = np.array([786., 110., 2628., 0., 870., 870., 33., 0., 0.])
     vals_1_exp = np.array([375., 59., 2710., 0., 1039., 1039., 38., 0., 0.])
     sup_0_exp = np.array([685., 835., 724., 808., 62., 134., 47., 56., 4., 1.])
     sup_1_exp = np.array([3.030e+02, 4.140e+02, 3.500e+02, 3.860e+02, 3.100e+01,
-                          7.200e+01, 4.600e+01, 5.900e+01, 4.000e+00, 1.298e+04])
+                          7.200e+01, 4.600e+01, 5.900e+01, 4.000e+00, 1.1252e+04])
     assert np.array_equal(vals_0, vals_0_exp)
     assert np.array_equal(vals_1, vals_1_exp)
     assert np.array_equal(sup_0, sup_0_exp)

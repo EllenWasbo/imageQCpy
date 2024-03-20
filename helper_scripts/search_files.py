@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "get_mask_max"
+search_string = "f'r{rowno}_c{colno}'"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

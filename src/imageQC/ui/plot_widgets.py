@@ -74,6 +74,13 @@ class PlotWidget(QWidget):
                 values.append(yvalues)
                 headers.append(f'{curve["label"]}_{self.plotcanvas.xtitle}')
                 headers.append(curve['label'])
+        if len(values) == 0:
+            for bar_values in self.plotcanvas.bars:
+                names = bar_values['names']
+                yvalues = val_2_str(bar_values['values'], decimal_mark=decimal_mark)
+                values.append(names)
+                values.append(yvalues)
+                headers.append(['names', 'values'])
 
         df = pd.DataFrame(values)
         df = df.transpose()
@@ -114,6 +121,7 @@ class PlotCanvas(FigureCanvasQTAgg):
         self.default_range_y = [None, None]
         self.legend_location = 'upper right'
         self.curves = []
+        self.bars = []
         self.marked_this = []
         self.zpos_all = []
 

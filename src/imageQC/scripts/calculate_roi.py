@@ -1050,14 +1050,22 @@ def get_roi_SNI(image, image_info, paramset):
     idxs_row = np.where(rows == True)
     first_row = idxs_row[0][0]
 
-    if paramset.sni_type == 0:
+    # 2 large ROIs always
+    if width_x > width_y:
+        # large ROIs (2)
+        left_large = np.full(roi_full.shape, False)
+        left_large[rows, first_col:first_col + large_dim] = True
+        roi_array.append(left_large)
+        roi_array.append(np.fliplr(left_large))
+    else:
+        # large ROIs (2)
+        first_large = np.full(roi_full.shape, False)
+        first_large[first_row:first_row + large_dim, cols] = True
+        roi_array.append(first_large)
+        roi_array.append(np.flipud(first_large))
+
+    if paramset.sni_type == 0:  # 6 small ROIs
         if width_x > width_y:
-            # large ROIs (2)
-            left_large = np.full(roi_full.shape, False)
-            left_large[rows, first_col:first_col + large_dim] = True
-            roi_array.append(left_large)
-            roi_array.append(np.fliplr(left_large))
-            # small ROIs (6)
             upper_left = np.full(roi_full.shape, False)
             upper_left[
                 first_row:first_row + small_dim, first_col:first_col + small_dim] = True
@@ -1075,12 +1083,6 @@ def get_roi_SNI(image, image_info, paramset):
             roi_array.append(np.flipud(upper_mid))
             roi_array.append(np.flipud(np.fliplr(upper_left)))
         else:
-            # large ROIs (2)
-            first_large = np.full(roi_full.shape, False)
-            first_large[first_row:first_row + large_dim, cols] = True
-            roi_array.append(first_large)
-            roi_array.append(np.flipud(first_large))
-            # small ROIs (6)
             upper_left = np.full(roi_full.shape, False)
             upper_left[
                 first_row:first_row + small_dim, first_col:first_col + small_dim] = True
@@ -1117,23 +1119,23 @@ def get_roi_SNI(image, image_info, paramset):
                     roi_row.append(roi_this)
                 roi_array.append(roi_row)
         else:  # sni_type 3 Siemens
+            small_start_idx = 3
             dist = 76  # mm diameter PMTs = distance between centers
             dist_pix = round(dist / image_info.pix[0])
             dy = round(dist_pix * np.sin(np.pi/3))  # hexagonal pattern
             radius = roi_size // 2
             dx7 = dist_pix * (np.arange(7) - 3)
             dx6 = np.round(dist_pix * (np.arange(6) - 2.5))
-            roi_array = [
-                roi_full,
+            roi_array.extend([
                 [get_roi_circle(image.shape, (dx, -dy*2), radius) for dx in dx7],
                 [get_roi_circle(image.shape, (dx, -dy), radius) for dx in dx6],
                 [get_roi_circle(image.shape, (dx, 0), radius) for dx in dx7],
                 [get_roi_circle(image.shape, (dx, dy), radius) for dx in dx6],
                 [get_roi_circle(image.shape, (dx, dy*2), radius) for dx in dx7]
-                ]
+                ])
 
             dys = [-dy*2, -dy, 0, dy, dy*2]
-            for rowno, roi_row in enumerate(roi_array[1:]):
+            for rowno, roi_row in enumerate(roi_array[small_start_idx:]):
                 dxs = dx7 if rowno % 2 == 0 else dx6
                 for colno, roi in enumerate(roi_row):
                     roi_outside = np.copy(roi)
@@ -1144,25 +1146,18 @@ def get_roi_SNI(image, image_info, paramset):
                         roi_outside[int(dys[rowno] + image.shape[0] // 2)])
                     if n_rows + n_cols > 0:
                         if paramset.sni_roi_outside == 0:  # ignore
-                            roi_array[rowno + 1][colno] = None
+                            roi_array[rowno + small_start_idx][colno] = None
                         elif paramset.sni_roi_outside == 1:  # move
                             xshift = n_cols
                             yshift = n_rows
                             if colno > len(roi_row) // 2:
                                 xshift = - xshift
-                            if rowno < len(roi_array[1:]) // 2:
+                            if rowno < len(roi_array[small_start_idx:]) // 2:
                                 yshift = - yshift
                             roi_array[rowno + 1][colno] = get_roi_circle(
                                 image.shape,
                                 (dxs[colno] + xshift, dys[rowno] + yshift),
                                 radius)
-                        '''TODO DELETE or include option?
-                        elif paramset.sni_roi_outside == 2:  # shrink
-                            overlap = max([n_rows, n_cols])
-                            roi_array[rowno + 1][colno] = get_roi_circle(
-                                image.shape, (dxs[colno], dys[rowno]),
-                                radius - overlap)
-                        '''
 
     return (roi_array, errmsg)
 

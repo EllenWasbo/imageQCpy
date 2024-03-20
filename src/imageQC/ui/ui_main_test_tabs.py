@@ -1584,7 +1584,8 @@ class ParamsTabMammo(ParamsTabCommon):
                 'SNR pr ROI (% difference from global SNR)',
                 'Pixel values (% difference from global average)',
                 'Deviating ROIs',
-                'Deviating pixels'
+                'Deviating pixels',
+                '# deviating pixels pr ROI'
              ])
         self.hom_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
@@ -1885,17 +1886,13 @@ class ParamsTabNM(ParamsTabCommon):
                           'NPS all ROIs + human visual filter',
                           'Filtered NPS and NPS structure selected ROI']
             items_res_image = ['2d NPS for selected ROI']
-            #self.sni_selected_roi.setVisible(True)
-            #self.sni_selected_roi_idx.setVisible(False)
         else:
             items_plot = [
                 'SNI values each ROI',
                 'SNI values all images',
-                'Filtered NPS and NPS structure max+avg',
+                'Filtered NPS and NPS structure max+avg (small ROIs)',
                 'Filtered NPS and NPS structure selected ROI']
             items_res_image = ['SNI values map', '2d NPS for selected ROI']
-            #self.sni_selected_roi_idx.setVisible(True)
-            #self.sni_selected_roi.setVisible(False)
         if self.sni_type.currentIndex() == 3:
             self.sni_roi_outside.setVisible(True)
             self.sni_roi_outside_label.setVisible(True)
@@ -1920,8 +1917,8 @@ class ParamsTabNM(ParamsTabCommon):
         if self.sni_type.currentIndex() == 0:
             items = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
         else:
-            items = []
-            for rowno, rois_row in enumerate(self.main.current_roi[1:]):
+            items = ['L1', 'L2']
+            for rowno, rois_row in enumerate(self.main.current_roi[3:]):
                 for colno, roi in enumerate(rois_row):
                     name = f'r{rowno}_c{colno}'
                     if roi is None:  # None if ignored
@@ -2050,6 +2047,9 @@ class ParamsTabNM(ParamsTabCommon):
         the image. Noise Power Spectrum (NPS) is calculated for each ROI and the <br>
         expected quantum noise NPS is subtracted. A human eye filter is applied.<br>
         <br>
+        The original suggestion by Nelson et al (2014) was to use two large and 6<br>
+        small ROIs. There are different options for the small ROIs.<br>
+        <br>
         For the option to correct for point source curvature, the quantum noise is <br>
         based on counts in image. For calibration images (Siemens) this is not <br>
         sufficient. For that case it is recommended to use a reference image to <br>
@@ -2112,20 +2112,15 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_plot = QComboBox()
         self.sni_result_image = QComboBox()
         self.sni_selected_roi = QComboBox()
-        #self.sni_selected_roi.addItems(['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])
-        #self.sni_selected_roi_idx = QDoubleSpinBox(
-        #    decimals=0, minimum=0, maximum=1000, singleStep=1)
         self.update_sni_display_options()
         self.sni_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
         self.sni_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
-        self.sni_selected_roi.currentIndexChanged.connect(
-            self.main.refresh_results_display)
         self.sni_selected_roi.addItems(
             ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])
-        #self.sni_selected_roi_idx.valueChanged.connect(
-        #    self.main.refresh_results_display)
+        self.sni_selected_roi.currentIndexChanged.connect(
+            self.main.refresh_results_display)
         self.sni_show_labels = QCheckBox('Show ROI labels in image')
         self.sni_show_labels.setChecked(True)
         self.sni_show_labels.toggled.connect(
@@ -2140,7 +2135,7 @@ class ParamsTabNM(ParamsTabCommon):
 
         hlo_type = QHBoxLayout()
         vlo_left.addLayout(hlo_type)
-        hlo_type.addWidget(QLabel('ROI setup'))
+        hlo_type.addWidget(QLabel('Small ROIs'))
         hlo_type.addWidget(self.sni_type)
         self.sni_roi_label = QLabel('ROI size ratio')
         hlo_type.addWidget(self.sni_roi_label)

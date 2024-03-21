@@ -6,14 +6,15 @@ New functionalities:
 	- Colormap select
 	- Show projection (maximum/average intensity projection) with additional option to plot values from results table (e.g. mAs profile from extracted DCM values)
 	- Set active area (rectangle) for defining rectangular ROIs (previously defined by zoom functionality). The active area will also be used when setting window level based on active area (min/max or avg/stdev)
+	- The edit-tool: option to display the axis for images (x/y position)
 - Added option to save image (or result image) as .csv to further study the values in e.g. Excel
 - Added window level widget for result image.
 - Added colorbar to window level widget.
 - Added CT test TTF (task based MTF) - working on automated TTF/NPS/d' solution
 - Added option to read GE QAP Mammo result files and option to bulk-generate automation templates for reading the different file types.
-- Under construction: Added option to calculate SNI based on ROIs positioned in grid matching PMT positions for Siemens gamma camera and other optimalization of the test
 
 Changes:
+- Added image index first in file list
 - Added option to lock NM uniformity CFOV to 75% of UFOV.
 - Added option to set NPS sampling frequency for test SNI.
 - Cancel when running automation templates now stops during sessions of one template running, not just between templates.
@@ -22,7 +23,18 @@ Changes:
 	- considerably more robust for Siemens gamma camera savescreens that differ in screen size from day to day
 	- default templates updated with larger ROIs to handle these day to day changes, ignoring parts of text at left/right border of ROI
 - Changed startup time (saved some update after gui presented)
-- Mammo test Homogeneity: Added option to not calculate variance-map (to speed up if not needed)
+- NM test Uniformity and SNI:
+	- Searching for non-zero image now also ignore neighbour row/column of zero values according to NEMA (i.e. smaller found active image by 1 pixel each direction)
+	- Uniformity:
+		- Ignoring outer values of UFOV < 0.75 CFOV mean also performed before reducing scale to avoid edge effects. (Now both before rescale and after).
+		- Added to supplement result table: scaled pixel size + center pixel count (after scaling)
+		- Added warning if center pixel < 10000 (NEMA minimum)
+	- SNI:
+		- Added option to calculate SNI based on ROIs positioned in grid matching PMT positions for Siemens gamma camera
+		- Two large ROIs for all grid options
+- Mammo test Homogeneity:
+   - Added option to not calculate variance-map (to speed up if not needed)
+   - Added option show count of deviating pixels within each ROI to better detect where these are located, list coordinates of these pixels and highlight with circles
 - Mammo Ghost: Changed default ROI size to 20 mm to get the recommended 4 cm^2 ROIs. Also adjustet default position of ROI_1 by 5 mm.
 
 Bugfixes:

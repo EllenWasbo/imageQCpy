@@ -941,6 +941,8 @@ def get_ratio_NM(image, image_info, threshold=0.00, ufov_ratio=0.95, cfov_ratio=
     """Calculate rectangular roi array for given ratio of UFOV, CFOV.
 
     First find non-zero part of image (ignoring padded part of image).
+    Also ignore neighbour of zero counts if threshold == 0
+    (according to NEMA NU-1 about uniformity)
 
     Parameters
     ----------
@@ -949,7 +951,7 @@ def get_ratio_NM(image, image_info, threshold=0.00, ufov_ratio=0.95, cfov_ratio=
     image_info : DcmInfo
         as defined in scripts/dcm.py
     threshold : float
-    ufove_ratio: float
+    ufov_ratio: float
     cfov_ratio: float
 
     Returns
@@ -960,13 +962,15 @@ def get_ratio_NM(image, image_info, threshold=0.00, ufov_ratio=0.95, cfov_ratio=
     """
     roi_array = []
 
-    # image might be padded, avoid padding
     image_binary = np.zeros(image.shape)
     image_binary[image > threshold*np.max(image)] = 1
     prof_y = np.max(image_binary, axis=1)
     width_y = np.count_nonzero(prof_y)
     prof_x = np.max(image_binary, axis=0)
     width_x = np.count_nonzero(prof_x)
+    if threshold == 0:  # avoid also neighbour of zero count pixels
+        width_y = width_y - 2
+        width_x = width_x - 2
 
     roi_array.append(
         get_roi_rectangle(

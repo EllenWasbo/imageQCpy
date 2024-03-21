@@ -68,7 +68,7 @@ class GenericImageCanvas(FigureCanvasQTAgg):
 
         # default display
         self.img = self.ax.imshow(np.zeros((2, 2)))
-        self.ax.cla()
+        self.ax.clear()
         self.ax.axis('off')
 
         # intialize parameters to make pylint happy
@@ -192,7 +192,7 @@ class ImageCanvas(GenericImageCanvas):
             cmap = self.ax.get_images()[0].cmap.name
         except (AttributeError, IndexError):
             cmap = 'gray'
-        self.ax.cla()
+        self.ax.clear()
         self.img = self.ax.imshow(np.zeros((100, 100)), cmap=cmap)
         self.ax.axis('off')
         at = matplotlib.offsetbox.AnchoredText(
@@ -204,7 +204,7 @@ class ImageCanvas(GenericImageCanvas):
 
     def img_clear(self):
         """Clear image."""
-        self.ax.cla()
+        self.ax.clear()
         self.draw()
 
     def img_draw(self, auto=False, window_level=[]):
@@ -224,7 +224,7 @@ class ImageCanvas(GenericImageCanvas):
         except (AttributeError, IndexError):
             cmap = 'gray'
 
-        self.ax.cla()
+        self.ax.clear()
         nparr = self.main.active_img
         if auto is False and hasattr(self.main, 'wid_window_level'):
             wl_min, wl_max = self.main.wid_window_level.tb_wl.get_min_max()
@@ -246,7 +246,11 @@ class ImageCanvas(GenericImageCanvas):
             self.ax.set_xlim(xlim)
             self.ax.set_ylim(ylim)
 
-        self.ax.axis('off')
+        if self.main.gui.show_axis is False:
+            self.ax.axis('off')
+            self.fig.subplots_adjust(.0, .0, 1., 1.)
+        else:
+            self.fig.subplots_adjust(.05, .05, 1., 1.)
         if annotate:
             try:
                 linewidth = self.main.gui.annotations_line_thick
@@ -843,7 +847,7 @@ class ResultImageCanvas(GenericImageCanvas):
 
     def result_image_draw(self):
         """Refresh result image."""
-        self.ax.cla()
+        self.ax.clear()
         self.current_image = None
         self.cmap = 'gray'
         self.min_val = None
@@ -894,6 +898,19 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.parent.wid_window_level.canvas.plot(
                     self.current_image,
                     decimals=self.parent.wid_window_level.decimals)
+            if self.main.current_modality == 'Mammo':
+                if 'Hom' in self.main.results and self.main.current_test == 'Hom':
+                    if self.current_image.shape == self.main.active_img.shape:
+                        try:
+                            details_dict = self.main.results['Hom']['details_dict'][
+                                self.main.gui.active_img_no]
+                        except (IndexError, KeyError):
+                            details_dict = None
+                        if details_dict:
+                            if 'deviating_pixel_coordinates' in details_dict:
+                                for coord in details_dict['deviating_pixel_coordinates']:
+                                    self.ax.add_patch(patches.Circle(
+                                        coord, radius=20, color='r', fill=False))
         else:
             self.img = self.ax.imshow(np.zeros((100, 100)))
             at = matplotlib.offsetbox.AnchoredText(
@@ -904,7 +921,11 @@ class ResultImageCanvas(GenericImageCanvas):
             self.parent.image_title.setText('')
             self.parent.wid_window_level.colorbar.fig.clf()
             self.parent.wid_window_level.canvas.fig.clear()
-        self.ax.axis('off')
+        if self.main.gui.show_axis is False:
+            self.ax.axis('off')
+            self.fig.subplots_adjust(.0, .0, 1., 1.)
+        else:
+            self.fig.subplots_adjust(.05, .05, 1., 1.)
         self.draw()
 
     def Hom(self):

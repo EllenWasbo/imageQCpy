@@ -364,12 +364,12 @@ class TextImageCanvas(FigureCanvasQTAgg):
         self.current_image = None
 
         # default display
-        self.ax.cla()
+        self.ax.clear()
         self.ax.axis('off')
 
     def img_draw(self):
         """Refresh image."""
-        self.ax.cla()
+        self.ax.clear()
         nparr = self.parent.current_image
         if nparr is not None:
             self.img = self.ax.imshow(nparr, cmap='gray')

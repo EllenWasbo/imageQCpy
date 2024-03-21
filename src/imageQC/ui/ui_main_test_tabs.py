@@ -1487,6 +1487,47 @@ class ParamsTabMammo(ParamsTabCommon):
 
         self.flag_ignore_signals = False
 
+    def hom_get_coordinates(self):
+        """Add coordinates of deviating pixels to results."""
+        if 'Hom' in self.main.results:
+            try:
+                details_dict = self.main.results['Hom']['details_dict'][
+                    self.main.gui.active_img_no]
+            except (IndexError, KeyError):
+                details_dict = None
+            if details_dict:
+                if 'deviating_pixel_coordinates' not in details_dict:
+                    deviating_pixels = details_dict['deviating_pixels']
+                    coords = []
+                    idxs = np.where(deviating_pixels)
+                    try:
+                        ys = idxs[0]
+                        xs = idxs[1]
+                        coords = [(xs[i], ys[i]) for i in range(xs.size)]
+                        details_dict['deviating_pixel_coordinates'] = coords
+                    except IndexError:
+                        pass
+                else:
+                    coords = details_dict['deviating_pixel_coordinates']
+                if len(coords) == 0:
+                    QMessageBox.information(
+                        self, 'No deviating pixels found',
+                        'Found no deviating pixels for the current image.')
+                else:
+                    question = 'Copy list of coordinates to clipboard?'
+                    proceed = messageboxes.proceed_question(self, question)
+                    if proceed:
+                        df = pd.DataFrame(coords)
+                        df.columns = ['x', 'y']
+                        df.to_clipboard(index=False, excel=True)
+                        self.main.status_bar.showMessage('Values in clipboard', 2000)
+                self.main.refresh_results_display()
+            else:
+                QMessageBox.warning(
+                    self, 'Calculate homogeneity first',
+                    'Could not find results for current image. '
+                    'Calculate homogeneity first.')
+
     def create_tab_sdn(self):
         """GUI of tab SDNR."""
         self.tab_sdn = ParamsWidget(self, run_txt='Calculate SDNR')
@@ -1601,10 +1642,15 @@ class ParamsTabMammo(ParamsTabCommon):
                    self.hom_deviating_rois)
         self.tab_hom.hlo.addLayout(flo)
         self.tab_hom.hlo.addWidget(uir.VLine())
-        hlo_right = QHBoxLayout()
-        hlo_right.addWidget(QLabel('Result image'))
-        hlo_right.addWidget(self.hom_result_image)
-        self.tab_hom.hlo.addLayout(hlo_right)
+        vlo_right = QVBoxLayout()
+        self.tab_hom.hlo.addLayout(vlo_right)
+        hlo_res_img = QHBoxLayout()
+        hlo_res_img.addWidget(QLabel('Result image'))
+        hlo_res_img.addWidget(self.hom_result_image)
+        vlo_right.addLayout(hlo_res_img)
+        btn_get_coord = QPushButton('Get coordinates of deviating pixels')
+        btn_get_coord.clicked.connect(self.hom_get_coordinates)
+        vlo_right.addWidget(btn_get_coord)
 
     def create_tab_rlr(self):
         """GUI of tab ROI left/right."""
@@ -1930,10 +1976,6 @@ class ParamsTabNM(ParamsTabCommon):
         """GUI of tab Uniformity."""
         self.tab_uni = ParamsWidget(self, run_txt='Calculate uniformity')
 
-        #self.uni_threshold = QDoubleSpinBox(
-        #    decimals=2, minimum=0.0, maximum=1., singleStep=0.01)
-        #self.uni_threshold.valueChanged.connect(
-        #    lambda: self.param_changed_from_gui(attribute='uni_threshold'))
         self.uni_ufov_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.uni_ufov_ratio.valueChanged.connect(
@@ -1992,8 +2034,6 @@ class ParamsTabNM(ParamsTabCommon):
 
         hlo_fov = QHBoxLayout()
         flo = QFormLayout()
-        #flo.addRow(QLabel('Image where signal above (relative to max)'),
-        #           self.uni_threshold)
         flo.addRow(QLabel('UFOV ratio'), self.uni_ufov_ratio)
         flo.addRow(QLabel('CFOV ratio'), self.uni_cfov_ratio)
         flo.addRow(QLabel('     Lock CFOV ratio to 75% of UFOV'), self.uni_cfov_ratio75)

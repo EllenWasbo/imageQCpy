@@ -79,6 +79,7 @@ class GuiVariables():
     annotations: bool = True
     annotations_line_thick: int = 3
     annotations_font_size: int = 14
+    show_axis: bool = False
 
 
 class MainWindow(QMainWindow):
@@ -244,7 +245,7 @@ class MainWindow(QMainWindow):
             self.wid_image_display.tool_sum.setIcon(QIcon(
                 f'{os.environ[ENV_ICON_PATH]}sigma.png'))
             self.tree_file_list.update_file_list()
-            self.wid_image_display.canvas.ax.cla()
+            self.wid_image_display.canvas.ax.clear()
             self.wid_image_display.canvas.ax.axis('off')
             self.wid_image_display.canvas.draw()
             self.refresh_results_display()

@@ -293,10 +293,10 @@ class EditAnnotationsDialog(ImageQCDialog):
     """Dialog to set annotation settings."""
 
     def __init__(self, annotations=True, annotations_line_thick=0,
-                 annotations_font_size=0):
+                 annotations_font_size=0, show_axis=False):
         super().__init__()
 
-        self.setWindowTitle('Set annotations')
+        self.setWindowTitle('Set display options')
         self.setMinimumHeight(300)
         self.setMinimumWidth(300)
 
@@ -319,6 +319,10 @@ class EditAnnotationsDialog(ImageQCDialog):
         self.spin_font.setValue(annotations_font_size)
         fLO.addRow(QLabel('Font size'), self.spin_font)
 
+        self.chk_show_axis = QCheckBox('Show axis')
+        self.chk_show_axis.setChecked(show_axis)
+        fLO.addRow(self.chk_show_axis)
+
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
@@ -336,11 +340,14 @@ class EditAnnotationsDialog(ImageQCDialog):
             line_thick
         int
             font_size
+        bool
+            show_axis
         """
         return (
             self.chk_annotations.isChecked(),
             self.spin_line.value(),
-            self.spin_font.value()
+            self.spin_font.value(),
+            self.chk_show_axis.isChecked()
             )
 
 

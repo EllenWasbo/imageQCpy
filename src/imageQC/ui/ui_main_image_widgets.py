@@ -290,13 +290,15 @@ class ImageDisplayWidget(GenericImageWidget):
         dlg = EditAnnotationsDialog(
             annotations=self.main.gui.annotations,
             annotations_line_thick=self.main.gui.annotations_line_thick,
-            annotations_font_size=self.main.gui.annotations_font_size)
+            annotations_font_size=self.main.gui.annotations_font_size,
+            show_axis=self.main.gui.show_axis)
         res = dlg.exec()
         if res:
-            ann, line_thick, font_size = dlg.get_data()
+            ann, line_thick, font_size, show_axis = dlg.get_data()
             self.main.gui.annotations = ann
             self.main.gui.annotations_line_thick = line_thick
             self.main.gui.annotations_font_size = font_size
+            self.main.gui.show_axis = show_axis
             if self.main.gui.active_img_no > -1:
                 self.canvas.img_draw()
 

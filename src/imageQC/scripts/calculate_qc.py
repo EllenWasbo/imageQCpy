@@ -1762,7 +1762,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         res = Results(headers=headers, values=values)
         return res
 
-    def Uni():
+    def Uni():  # NM uniformity
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
         if image2d is None:
@@ -1793,11 +1793,19 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             details_dict['du_matrix'] = res['du_matrix']
             details_dict['pix_size'] = res['pix_size']
             values = res['values']
+            values_sup.append(res['pix_size'])
+            values_sup.append(res['center_pixel_count'])
+            errmsg = [errmsg]
+            if res['center_pixel_count'] < 10000:
+                if errmsg:
+                    errmsg.append(
+                        f'Center pixel (after scaling) = {res["center_pixel_count"]} '
+                        '< 10000 (minimum set by NEMA)')
 
             res = Results(
                 headers=headers, values=values,
                 headers_sup=headers_sup, values_sup=values_sup,
-                details_dict=details_dict, errmsg=[errmsg])
+                details_dict=details_dict, errmsg=errmsg)
 
         return res
 
@@ -3688,6 +3696,7 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
                 min_val = np.min(sub)
                 if max_val and min_val:
                     du_cols[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
+
         du_rows = np.zeros(image.shape)
         for y in range(sz_y):
             for x in range(2, sz_x - 3):
@@ -3697,6 +3706,15 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
                 if max_val and min_val:
                     du_rows[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
         du_matrix = np.maximum(du_cols, du_rows)
+
+        # TODO consider faster:
+        '''
+        view_y = np.lib.stride_tricks.sliding_window_view(image, (5, 1))
+        moving_y_max = view_y.max(axis=-1)
+        moving_y_min = view_y.min(axis=-1)
+        moving_y_du = 100. * (moving_y_max - moving_y_min) / (moving_y_max - moving_y_min)
+        #handle (avoid) divide by zero
+        '''
         return {'du_matrix': du_matrix, 'du': np.max(du_matrix)}
 
     # continue with image within ufov only
@@ -3706,10 +3724,21 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
     roi_array[0] = roi_array[0][rows][:, cols]
     roi_array[1] = roi_array[1][rows][:, cols]
 
+    # roi already handeled ignoring pixels with zero counts as nearest neighbour (NEMA)
+
+    # ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
+    cfov_mean_orig = np.mean(image2d[roi_array[1] == True])
+    if np.min(image2d) < 0.75*cfov_mean_orig:
+        above_75 = np.where(image2d > 0.75*cfov_mean_orig, True, False)
+        above_75[1:-1][:, 1:-1] = True  # only outer rows/cols
+        if False in above_75:
+            ufov = above_75
+    else:
+        ufov = roi_array[0]
+
     if scale_factor == 1:
         image = image2d
         cfov = roi_array[1]
-        ufov = roi_array[0]
     else:
         # resize to 6.4+/-30% mm pixels according to NEMA
         # pix_range = [6.4*0.7, 6.4*1.3]
@@ -3718,12 +3747,17 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
             pix_diff = np.abs(pix*np.array(scale_factors) - 6.4)
             selected_pix = np.where(pix_diff == np.min(pix_diff))
             scale_factor = int(scale_factors[selected_pix[0][0]])
-        image = skimage.measure.block_reduce(
-            image2d, (scale_factor, scale_factor), np.sum)  # scale down to ~6.4mm/pix
+
+        image2d[ufov == False] = np.nan
+        image = scale_factor ** 2 * skimage.measure.block_reduce(
+            image2d, (scale_factor, scale_factor), np.nanmean, cval=np.nan)
+        # scale down to ~6.4mm/pix
+        # use nanmean x number of pixels because sum lower because of nan
+        # padding with nan as block size might not exactly fit full image
 
         # cfov, NEMA - at least 50% of the pixel should be inside UFOV to be included
         reduced_roi = skimage.measure.block_reduce(
-            roi_array[1], (scale_factor, scale_factor), np.mean)
+            roi_array[1], (scale_factor, scale_factor), np.mean, cval=False)
         cfov = np.where(reduced_roi > 0.5, True, False)
 
         # ufov, NEMA
@@ -3731,10 +3765,11 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
         arr = np.ma.masked_array(image, mask=np.invert(cfov))
         cfov_mean = np.mean(arr)  # TODO test against minimum 10000 (NEMA)
         reduced_roi = skimage.measure.block_reduce(
-            roi_array[0], (scale_factor, scale_factor), np.mean)
+            ufov, (scale_factor, scale_factor), np.mean, cval=False)
         ufov = np.where(reduced_roi >= 1, True, False)
 
         # ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
+        # once again after reduced pixelsize
         rows = np.max(ufov, axis=1)
         cols = np.max(ufov, axis=0)
         sub = image[rows][:, cols]
@@ -3743,7 +3778,9 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
             sub_above_75[1:-1][:, 1:-1] = True  # only outer rows/cols
             if False in sub_above_75:
                 ufov[rows][:, cols] = sub_above_75
-            # TODO also ignore pixels with zero counts as nearest neighbour (NEMA)?
+
+    sz_y, sz_x = image.shape
+    center_pixel_count = image[sz_y//2][sz_x//2]
 
     # smooth masked array
     kernel = np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]])
@@ -3777,6 +3814,7 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
 
     return {'matrix': smooth64, 'matrix_ufov': smooth64ufov,
             'du_matrix': du_ufov_dict['du_matrix'], 'pix_size': pix * scale_factor,
+            'center_pixel_count': center_pixel_count,
             'values': [iu_ufov, du_ufov, iu_cfov, du_cfov]}
 
 
@@ -4204,7 +4242,6 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
                     this_roi.append(None)
             roi_spheres.append(this_roi)
             values = None
-            #values_peak = None
             max_all = []
             max_all_smoothed_1cc = []
             for i, image in enumerate(matrix):

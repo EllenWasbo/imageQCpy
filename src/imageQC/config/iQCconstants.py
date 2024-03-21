@@ -18,7 +18,7 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.8-b13'
+VERSION = '3.0.8-b14'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -317,7 +317,9 @@ HEADERS_SUP = {
         'ROI': {'alt0': roi_headers_sup},
         'Uni': {
             'altAll': ['FitX (mm from center)', 'FitY (mm from center)',
-                       'Fit distance (mm)']
+                       'Fit distance (mm)',
+                       'Scaled pixel size (mm)',
+                       'Center pixel count (after scaling)']
             },
         'SNI': {
             'altAll': ['FitX (mm from center)', 'FitY (mm from center)',

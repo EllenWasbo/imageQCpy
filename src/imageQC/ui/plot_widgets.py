@@ -135,7 +135,7 @@ class PlotCanvas(FigureCanvasQTAgg):
     def plot(self, title='', xtitle='x', ytitle='y',
              xvals=[], yvals=[], labels=[]):
         """Refresh plot."""
-        self.ax.cla()
+        self.ax.clear()
         styles = ['k', 'g', 'b', 'r', 'p', 'c']
         self.curves = []
         self.xtitle = xtitle

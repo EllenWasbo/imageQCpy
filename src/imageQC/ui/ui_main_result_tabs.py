@@ -346,7 +346,7 @@ class ResultPlotCanvas(PlotCanvas):
 
     def plot(self):
         """Refresh plot."""
-        self.ax.cla()
+        self.ax.clear()
         self.title = ''
         self.xtitle = 'x'
         self.ytitle = 'y'
@@ -426,7 +426,8 @@ class ResultPlotCanvas(PlotCanvas):
                     self.ax.set_xticklabels(bar['names'], rotation=60,
                                             ha='right', rotation_mode='anchor')
             except ValueError:
-                pass  # seen when in results, results and options change, #TODO better avoid
+                pass
+                # seen when in results, results and options change, #TODO better avoid
         else:
             self.ax.axis('off')
 
@@ -2267,10 +2268,10 @@ class ResultImageWidget(GenericImageWidget):
         tb_right_top.addWidget(self.tool_profile)
         tb_right_top.addWidget(self.tool_cmap)
         tb_right_top.addWidget(self.tool_rectangle)
-        vlo_right = QVBoxLayout()
-        vlo_right.addWidget(tb_right_top)
-        vlo_right.addWidget(toolb)
-        vlo_right.addStretch()
+        hlo_right = QHBoxLayout()
+        hlo_right.addWidget(toolb)
+        hlo_right.addWidget(tb_right_top)
+        hlo_right.addStretch()
 
         self.image_title = QLabel()
         tb_top = QToolBar()
@@ -2281,7 +2282,7 @@ class ResultImageWidget(GenericImageWidget):
         vlo_left.addWidget(tb_top)
         vlo_left.addWidget(self.canvas)
         hlo.addLayout(vlo_left)
-        hlo.addLayout(vlo_right)
+        hlo.addLayout(hlo_right)
 
         wid_image_toolbars = QWidget()
         wid_image_toolbars.setLayout(hlo)
@@ -2321,6 +2322,6 @@ class ResultImageNavigationToolbar(ImageNavigationToolbar):
     def __init__(self, canvas, window):
         super().__init__(canvas, window)
         for act in self.actions():
-            if act.text() in ['Back', 'Forward', 'Pan', 'Customize']:
+            if act.text() in ['Customize']:
                 self.removeAction(act)
         self.setOrientation(Qt.Vertical)

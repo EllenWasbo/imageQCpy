@@ -24,9 +24,10 @@ Changes:
 	- default templates updated with larger ROIs to handle these day to day changes, ignoring parts of text at left/right border of ROI
 - Changed startup time (saved some update after gui presented)
 - NM test Uniformity and SNI:
-	- Searching for non-zero image now also ignore neighbour row/column of zero values according to NEMA (i.e. smaller found active image by 1 pixel each direction)
+	- Searching for non-zero image now also ignore neighbour row/column of zero values according to NEMA NU-1 (i.e. smaller found active image by 1 pixel each direction)
 	- Uniformity:
-		- Ignoring outer values of UFOV < 0.75 CFOV mean also performed before reducing scale to avoid edge effects. (Now both before rescale and after).
+		- Several changes speed up and to get closer to NEMA NU-1. This highly affect the results with UFOV ratio close to 1, else minimal effect (as intended).
+		- Default ufov_ratio is changed from 0.95 to 1
 		- Added to supplement result table: scaled pixel size + center pixel count (after scaling)
 		- Added warning if center pixel < 10000 (NEMA minimum)
 	- SNI:

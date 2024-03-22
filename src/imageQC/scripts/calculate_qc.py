@@ -14,6 +14,7 @@ import numpy as np
 import scipy as sp
 from scipy.signal import find_peaks
 import skimage
+import warnings
 
 from PyQt5.QtWidgets import qApp
 
@@ -30,6 +31,8 @@ from imageQC.config.config_func import get_config_folder
 from imageQC.scripts import digit_methods
 # imageQC block end
 
+
+warnings.filterwarnings(action='ignore', message='All-NaN slice encountered')
 
 @dataclass
 class Results:
@@ -1788,7 +1791,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
             res = calculate_NM_uniformity(
                 image_input, roi_array, image_info.pix[0], paramset.uni_scale_factor)
-            details_dict['matrix'] = res['matrix']
             details_dict['matrix_ufov'] = res['matrix_ufov']
             details_dict['du_matrix'] = res['du_matrix']
             details_dict['pix_size'] = res['pix_size']
@@ -2373,7 +2375,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 image_input, roi_array, img_infos[0].pix[0], paramset.uni_scale_factor)
             details_dict = {
                 'sum_image': image_input,
-                'matrix': res['matrix'],
                 'du_matrix': res['du_matrix'],
                 'matrix_ufov': res['matrix_ufov']
                 }
@@ -3686,8 +3687,12 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
     values : list of float
         ['IU_UFOV %', 'DU_UFOV %', 'IU_CFOV %', 'DU_CFOV %']
     """
-    def get_differential_uniformity(image):
+    def get_differential_uniformity(image, cfov):
+        # assume image is part of image within ufov
+        # cfov = True where inside cfov
         sz_y, sz_x = image.shape
+        '''
+        t = time()
         du_cols = np.zeros(image.shape)
         for x in range(sz_x):
             for y in range(2, sz_y - 3):
@@ -3696,6 +3701,8 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
                 min_val = np.min(sub)
                 if max_val and min_val:
                     du_cols[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
+        print(f'time cols {time()-t}')
+        t = time()
 
         du_rows = np.zeros(image.shape)
         for y in range(sz_y):
@@ -3705,79 +3712,96 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
                 min_val = np.min(sub)
                 if max_val and min_val:
                     du_rows[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
+        print(f'time rows {time()-t}')
         du_matrix = np.maximum(du_cols, du_rows)
+        '''
 
-        # TODO consider faster:
-        '''
-        view_y = np.lib.stride_tricks.sliding_window_view(image, (5, 1))
-        moving_y_max = view_y.max(axis=-1)
-        moving_y_min = view_y.min(axis=-1)
-        moving_y_du = 100. * (moving_y_max - moving_y_min) / (moving_y_max - moving_y_min)
-        #handle (avoid) divide by zero
-        '''
-        return {'du_matrix': du_matrix, 'du': np.max(du_matrix)}
+        from numpy.lib.stride_tricks import sliding_window_view
+
+        du_cols_ufov = np.zeros(image.shape)
+        du_cols_cfov = np.zeros(image.shape)
+        image_data_ufov = np.copy(image.data)
+        image_data_ufov[image.mask == True] = np.nan
+        image_data_cfov = np.copy(image.data)
+        image_data_cfov[cfov == False] = np.nan
+        for x in range(sz_x):
+            view = sliding_window_view(image_data_ufov[:, x], 5)
+            maxs = np.nanmax(view, axis=-1)
+            mins = np.nanmin(view, axis=-1)
+            du_cols_ufov[2:-2, x] = 100. * (maxs - mins) / (maxs + mins)
+            cfov_data = image_data_cfov[:, x]
+            if not np.isnan(cfov_data).all():
+                view = sliding_window_view(cfov_data, 5)
+                maxs = np.nanmax(view, axis=-1)
+                mins = np.nanmin(view, axis=-1)
+                du_cols_cfov[2:-2, x] = 100. * (maxs - mins) / (maxs + mins)
+
+        du_rows_ufov = np.zeros(image.shape)
+        du_rows_cfov = np.zeros(image.shape)
+        for y in range(sz_y):
+            view = sliding_window_view(image_data_ufov[y, :], 5)
+            maxs = np.nanmax(view, axis=-1)
+            mins = np.nanmin(view, axis=-1)
+            du_rows_ufov[y, 2:-2] = 100. * (maxs - mins) / (maxs + mins)
+            cfov_data = image_data_cfov[y, :]
+            if not np.isnan(cfov_data).all():
+                view = sliding_window_view(cfov_data, 5)
+            maxs = np.nanmax(view, axis=-1)
+            mins = np.nanmin(view, axis=-1)
+            du_rows_cfov[y, 2:-2] = 100. * (maxs - mins) / (maxs + mins)
+
+        du_matrix_ufov = np.maximum(du_cols_ufov, du_rows_ufov)
+        du_matrix_ufov[image.mask == True] = np.nan
+        du_matrix_cfov = np.maximum(du_cols_cfov, du_rows_cfov)
+        du_matrix_cfov[cfov == False] = np.nan
+
+        return {'du_matrix': du_matrix_ufov, 'du_ufov': np.nanmax(du_matrix_ufov),
+                'du_cfov': np.nanmax(du_matrix_cfov)}
 
     # continue with image within ufov only
     rows = np.max(roi_array[0], axis=1)
     cols = np.max(roi_array[0], axis=0)
     image2d = image2d[rows][:, cols]
-    roi_array[0] = roi_array[0][rows][:, cols]
-    roi_array[1] = roi_array[1][rows][:, cols]
+    cfov = roi_array[1][rows][:, cols]
 
     # roi already handeled ignoring pixels with zero counts as nearest neighbour (NEMA)
-
-    # ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
-    cfov_mean_orig = np.mean(image2d[roi_array[1] == True])
-    if np.min(image2d) < 0.75*cfov_mean_orig:
-        above_75 = np.where(image2d > 0.75*cfov_mean_orig, True, False)
-        above_75[1:-1][:, 1:-1] = True  # only outer rows/cols
-        if False in above_75:
-            ufov = above_75
-    else:
-        ufov = roi_array[0]
-
     if scale_factor == 1:
         image = image2d
-        cfov = roi_array[1]
+        block_size = 1
     else:
         # resize to 6.4+/-30% mm pixels according to NEMA
         # pix_range = [6.4*0.7, 6.4*1.3]
+        block_size = scale_factor
         if scale_factor == 0:  # Auto scale
             scale_factors = [(np.floor(64/pix)), (np.ceil(6.4/pix))]
             pix_diff = np.abs(pix*np.array(scale_factors) - 6.4)
             selected_pix = np.where(pix_diff == np.min(pix_diff))
-            scale_factor = int(scale_factors[selected_pix[0][0]])
+            block_size = int(scale_factors[selected_pix[0][0]])
 
-        image2d[ufov == False] = np.nan
-        image = scale_factor ** 2 * skimage.measure.block_reduce(
-            image2d, (scale_factor, scale_factor), np.nanmean, cval=np.nan)
+        # skip pixels excess of size/block_size = NEMA at least 50% of pixel inside
+        sz_y, sz_x = image2d.shape
+        skip_y, skip_x = (sz_y % block_size, sz_x % block_size)
+        n_blocks_y, n_blocks_x = (sz_y // block_size, sz_x // block_size)
+        start_y, start_x = (skip_y // 2, skip_x // 2)
+        end_x = start_x + n_blocks_x * block_size
+        end_y = start_y + n_blocks_y * block_size
+        cfov = cfov[start_y:end_y, start_x:end_x]
+        image2d = image2d[start_y:end_y, start_x:end_x]
+        image = skimage.measure.block_reduce(
+            image2d, (block_size, block_size), np.sum)
         # scale down to ~6.4mm/pix
-        # use nanmean x number of pixels because sum lower because of nan
-        # padding with nan as block size might not exactly fit full image
 
         # cfov, NEMA - at least 50% of the pixel should be inside UFOV to be included
         reduced_roi = skimage.measure.block_reduce(
-            roi_array[1], (scale_factor, scale_factor), np.mean, cval=False)
+            cfov, (block_size, block_size), np.mean)
         cfov = np.where(reduced_roi > 0.5, True, False)
 
-        # ufov, NEMA
-        # - at least 50% of the pixel should be inside UFOV to be included
-        arr = np.ma.masked_array(image, mask=np.invert(cfov))
-        cfov_mean = np.mean(arr)  # TODO test against minimum 10000 (NEMA)
-        reduced_roi = skimage.measure.block_reduce(
-            ufov, (scale_factor, scale_factor), np.mean, cval=False)
-        ufov = np.where(reduced_roi >= 1, True, False)
-
-        # ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
-        # once again after reduced pixelsize
-        rows = np.max(ufov, axis=1)
-        cols = np.max(ufov, axis=0)
-        sub = image[rows][:, cols]
-        if np.min(sub) < 0.75*cfov_mean:
-            sub_above_75 = np.where(sub > 0.75*cfov_mean, True, False)
-            sub_above_75[1:-1][:, 1:-1] = True  # only outer rows/cols
-            if False in sub_above_75:
-                ufov[rows][:, cols] = sub_above_75
+    # ufov, NEMA NU-1: ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
+    arr_cfov = np.ma.masked_array(image, mask=np.invert(cfov))
+    cfov_mean = np.mean(arr_cfov)  # TODO test against minimum 10000 (NEMA)
+    ufov = np.where(image > 0.75*cfov_mean, True, False)
+    if False in ufov:
+        ufov[1:-1][:, 1:-1] = True  # ignore only outer rows/cols
 
     sz_y, sz_x = image.shape
     center_pixel_count = image[sz_y//2][sz_x//2]
@@ -3788,32 +3812,23 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
     arr = np.ma.masked_array(image, mask=np.invert(ufov))
     smooth64 = mmcalc.masked_convolve2d(arr, kernel, boundary='symm', mode='same')
 
-    rows = np.max(ufov, axis=1)
-    cols = np.max(ufov, axis=0)
-    smooth64ufov = smooth64[rows][:, cols]
-    rows = np.max(cfov, axis=1)
-    cols = np.max(cfov, axis=0)
-    smooth64cfov = smooth64[rows][:, cols]
     # differential uniformity
-    du_ufov_dict = get_differential_uniformity(smooth64ufov)
-    du_cfov_dict = get_differential_uniformity(smooth64cfov)
-    du_ufov = du_ufov_dict['du']
-    du_cfov = du_cfov_dict['du']
+    du_dict = get_differential_uniformity(smooth64, cfov)
+    du_ufov = du_dict['du_ufov']
+    du_cfov = du_dict['du_cfov']
+
+    smooth64_data = smooth64.data
 
     # integral uniformity
-    max_val = np.max(smooth64ufov)
-    min_val = np.min(smooth64ufov)
+    max_val = np.max(smooth64_data[ufov == True])
+    min_val = np.min(smooth64_data[ufov == True])
     iu_ufov = 100. * (max_val - min_val) / (max_val + min_val)
-    max_val = np.max(smooth64cfov)
-    min_val = np.min(smooth64cfov)
+    max_val = np.max(smooth64_data[cfov == True])
+    min_val = np.min(smooth64_data[cfov == True])
     iu_cfov = 100. * (max_val - min_val) / (max_val + min_val)
 
-    # remove mask to avoid warnings on display (widget position and value)
-    smooth64 = smooth64.data
-    smooth64ufov = smooth64ufov.data
-
-    return {'matrix': smooth64, 'matrix_ufov': smooth64ufov,
-            'du_matrix': du_ufov_dict['du_matrix'], 'pix_size': pix * scale_factor,
+    return {'matrix_ufov': smooth64_data,
+            'du_matrix': du_dict['du_matrix'], 'pix_size': pix * block_size,
             'center_pixel_count': center_pixel_count,
             'values': [iu_ufov, du_ufov, iu_cfov, du_cfov]}
 

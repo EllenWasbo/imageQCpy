@@ -494,7 +494,7 @@ class ParamSetNM(ParamSetCommon):
     """Set of parameters regarding NM tests."""
 
     uni_threshold: float = 0.0  # search image where signal > threshold (rel. to max)
-    uni_ufov_ratio: float = 0.95
+    uni_ufov_ratio: float = 1.
     uni_cfov_ratio: float = 0.75
     uni_cfov_ratio75: bool = False
     uni_correct: bool = False

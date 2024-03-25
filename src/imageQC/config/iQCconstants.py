@@ -18,7 +18,7 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.8-b15'
+VERSION = '3.0.8-b16'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -60,7 +60,8 @@ ALTERNATIVES = {
         'ROI': ALTERNATIVES_ROI,
         'Sli': ['Wire ramp Catphan',
                 'Beaded ramp Catphan (helical)',
-                'Vertical beaded ramps GE phantom'],
+                'Vertical beaded ramps GE phantom',
+                'Wire ramp Siemens'],
         'MTF': ['bead', 'wire', 'circular edge'],
         },
     'Xray': {
@@ -127,7 +128,8 @@ HEADERS = {
                      'Diff nominal (%)'],
             'alt1': ['Nominal', 'H1', 'H2', 'V1', 'V2',
                      'inner V1', 'inner V2'],
-            'alt2': ['Nominal', 'V1', 'V2']
+            'alt2': ['Nominal', 'V1', 'V2'],
+            'alt3': ['Nominal', 'Measured']
             },
         'MTF': {
             'alt0': ['MTFx 50%', 'MTFx 10%', 'MTFx 2%',

@@ -136,6 +136,12 @@ def get_rois(image, image_number, input_main):
             if paramset.hom_mask_max:
                 roi_mask[image == np.max(image)] = True
             roi_array.append(roi_mask)
+            roi_mask_outer = np.full(image_info.shape[0:2], False)
+            if paramset.hom_mask_outer_mm > 0:
+                n_pix = round(paramset.hom_mask_outer_mm / image_info.pix[0])
+                if n_pix > 0:
+                    roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
+            roi_array.append(roi_mask_outer)
 
         return roi_array
 
@@ -550,7 +556,7 @@ def get_rois(image, image_number, input_main):
     def Uni():  # Uniformity NM
         return get_ratio_NM(
             image, image_info,
-            threshold=paramset.uni_threshold,
+            mask_corner=paramset.uni_mask_corner,
             ufov_ratio=paramset.uni_ufov_ratio,
             cfov_ratio=paramset.uni_cfov_ratio
             )
@@ -937,11 +943,11 @@ def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
     return (roi_array, errmsg)
 
 
-def get_ratio_NM(image, image_info, threshold=0.00, ufov_ratio=0.95, cfov_ratio=0.75):
+def get_ratio_NM(image, image_info, mask_corner=0.0, ufov_ratio=0.95, cfov_ratio=0.75):
     """Calculate rectangular roi array for given ratio of UFOV, CFOV.
 
     First find non-zero part of image (ignoring padded part of image).
-    Also ignore neighbour of zero counts if threshold == 0
+    Also ignore neighbour of zero counts
     (according to NEMA NU-1 about uniformity)
 
     Parameters
@@ -950,7 +956,7 @@ def get_ratio_NM(image, image_info, threshold=0.00, ufov_ratio=0.95, cfov_ratio=
         pixeldata
     image_info : DcmInfo
         as defined in scripts/dcm.py
-    threshold : float
+    mask_corner : float
     ufov_ratio: float
     cfov_ratio: float
 
@@ -963,22 +969,37 @@ def get_ratio_NM(image, image_info, threshold=0.00, ufov_ratio=0.95, cfov_ratio=
     roi_array = []
 
     image_binary = np.zeros(image.shape)
-    image_binary[image > threshold*np.max(image)] = 1
+    image_binary[image > 0] = 1
     prof_y = np.max(image_binary, axis=1)
     width_y = np.count_nonzero(prof_y)
     prof_x = np.max(image_binary, axis=0)
     width_x = np.count_nonzero(prof_x)
-    if threshold == 0:  # avoid also neighbour of zero count pixels
-        width_y = width_y - 2
-        width_x = width_x - 2
+    # avoid also neighbour of zero count pixels
+    width_y = width_y - 2
+    width_x = width_x - 2
 
-    roi_array.append(
-        get_roi_rectangle(
-            image.shape,
-            roi_width=ufov_ratio * width_x,
-            roi_height=ufov_ratio * width_y
-            )
+    ufov = get_roi_rectangle(image.shape,
+        roi_width=ufov_ratio * width_x,
+        roi_height=ufov_ratio * width_y
         )
+    if mask_corner > 0:
+        n_pix = round(mask_corner / image_info.pix[0])
+        if n_pix > 0:
+            rows = np.max(ufov, axis=1)
+            cols = np.max(ufov, axis=0)
+            sub = ufov[rows][:, cols]
+            sz_y, sz_x = sub.shape
+            corner = np.triu(np.array([1] * n_pix), 0)
+            corner = np.array(corner, dtype=bool)
+            sub[:n_pix, 0:n_pix] = np.flipud(corner)
+            sub[:n_pix, sz_x-n_pix:] = corner.T
+            sub[sz_y-n_pix:, :n_pix] = corner
+            sub[sz_y-n_pix:, sz_x-n_pix:] = np.fliplr(corner)
+            ufov[rows][:, cols] = sub
+            rows = np.where(rows)
+            cols = np.where(cols)
+            ufov[rows[0][0]:rows[0][-1]+1, cols[0][0]:cols[0][-1]+1] = sub
+    roi_array.append(ufov)
     roi_array.append(
         get_roi_rectangle(
             image.shape,
@@ -1038,8 +1059,7 @@ def get_roi_SNI(image, image_info, paramset):
     """
     errmsg = None
     roi_full, not_used = get_ratio_NM(
-        image, image_info, threshold=paramset.sni_threshold,
-        ufov_ratio=paramset.sni_area_ratio)
+        image, image_info, ufov_ratio=paramset.sni_area_ratio)
     roi_array = [roi_full]
 
     rows = np.max(roi_full, axis=1)
@@ -1408,9 +1428,10 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
                 center_x, center_y, _, _ = res
                 dxya[0] = center_x - 0.5*image_info.shape[1]
                 dxya[1] = center_y - 0.5*image_info.shape[0]
-        if paramset.sli_type != 1:
+        dist = 0  # if Siemens CT phantom
+        if paramset.sli_type in [0, 2]:
             dist = paramset.sli_ramp_distance / image_info.pix[0]
-        else:
+        elif paramset.sli_type == 1:
             dist = 45. / image_info.pix[0]  # beaded ramp Catphan outer ramps
         dist_b = 25. / image_info.pix[0]  # beaded ramp Catphan inner ramps
     else:
@@ -1438,7 +1459,7 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
 
     # Horizontal profiles CT
     if modality == 'CT':
-        if paramset.sli_type in [0, 1]:  # Catphan wire or beaded
+        if paramset.sli_type in [0, 1, 3]:  # Catphan wire or beaded, Siemens
 
             # first horizontal line coordinates
             if dxya[2] == 0:
@@ -1453,16 +1474,18 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
                 y2 = center_y - dist*cos_rot - prof_half*sin_rot
             h_lines.append([round(y1), round(x1), round(y2), round(x2)])
 
-            # second horizontal line coordinates
-            if dxya[2] == 0:
-                y1 = center_y + dist
-                y2 = y1
-            else:
-                x1 = center_x + dist*sin_rot - prof_half*cos_rot
-                x2 = center_x + dist*sin_rot + prof_half*cos_rot
-                y1 = center_y + dist*cos_rot + prof_half*sin_rot
-                y2 = center_y + dist*cos_rot - prof_half*sin_rot
-            h_lines.append([round(y1), round(x1), round(y2), round(x2)])
+            if paramset.sli_type in [0, 1]:  # not Siemens
+                # second horizontal line coordinates
+                if dxya[2] == 0:
+                    y1 = center_y + dist
+                    y2 = y1
+                else:
+                    x1 = center_x + dist*sin_rot - prof_half*cos_rot
+                    x2 = center_x + dist*sin_rot + prof_half*cos_rot
+                    y1 = center_y + dist*cos_rot + prof_half*sin_rot
+                    y2 = center_y + dist*cos_rot - prof_half*sin_rot
+                h_lines.append([round(y1), round(x1), round(y2), round(x2)])
+
     else:
         for d in dist:
             if dxya[2] == 0:
@@ -1481,6 +1504,8 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
         # Vertical profiles
         if paramset.sli_type == 1:  # Catphan beaded helical
             dists = [dist, dist_b]
+        elif paramset.sli_type == 3:  # Siemens - no vertical
+            dists = []
         else:
             dists = [dist]
 

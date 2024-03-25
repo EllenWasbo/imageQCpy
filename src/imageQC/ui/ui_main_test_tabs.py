@@ -915,13 +915,16 @@ class ParamsTabCT(ParamsTabCommon):
         """Update plot options for slice thickness."""
         self.sli_plot.clear()
         items = ['all']
+        self.sli_type.setEnabled(True)
         if self.sli_type.currentIndex() == 0:
             items.extend(['H1 upper', 'H2 lower', 'V1 left', 'V2 right'])
         elif self.sli_type.currentIndex() == 1:
             items.extend(['H1 upper', 'H2 lower',
                           'V1 left', 'V2 right', 'V1 inner', 'V2 inner'])
-        else:
+        elif self.sli_type.currentIndex() == 2:
             items.extend(['V1 left', 'V2 right'])
+        else:
+            self.sli_type.setEnabled(False)
         self.sli_plot.addItems(items)
         self.param_changed_from_gui(attribute='sli_type')
 
@@ -1587,8 +1590,14 @@ class ParamsTabMammo(ParamsTabCommon):
         <br>
         Variance matrix added as specified in the European guidelines.<br>
         <br>
-        For Siemens equipment one courner may be filled with a high value.<br>
-        Use the option to mask these values from the analysis.
+        For Siemens equipment one courner may be filled with a high value and for <br>
+        Hologic equiment an upper and lower rim may be filled with a high value.<br>
+        Use the option to mask pixels with maximum value.
+
+        Increasing the limit for ignoring an ROI based on masked pixels from 0 % <br>
+        will cause the statistics of the unmasked pixels to be calculated.<br>
+        This limit cannot be set higher than 95% (i.e. accepting calculation of <br>
+        ROI statistics with as little as 5% of unmasked pixels left in an ROI).
         '''
         self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
@@ -1606,6 +1615,14 @@ class ParamsTabMammo(ParamsTabCommon):
         self.hom_mask_max = QCheckBox()
         self.hom_mask_max.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='hom_mask_max'))
+        self.hom_mask_outer_mm = QDoubleSpinBox(
+            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
+        self.hom_mask_outer_mm.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_mask_outer_mm'))
+        self.hom_ignore_roi_percent = QDoubleSpinBox(
+            decimals=0, minimum=0., maximum=95, singleStep=1)
+        self.hom_ignore_roi_percent.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_ignore_roi_percent'))
         self.hom_deviating_pixels = QDoubleSpinBox(
             decimals=0, minimum=1, singleStep=1)
         self.hom_deviating_pixels.valueChanged.connect(
@@ -1636,14 +1653,18 @@ class ParamsTabMammo(ParamsTabCommon):
         flo.addRow(QLabel('Calculate variance within each ROI'), self.hom_variance)
         flo.addRow(QLabel('     ROI size variance (mm)'), self.hom_roi_size_variance)
         flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
-        flo.addRow(QLabel('Deviating pixels (% from average)'),
-                   self.hom_deviating_pixels)
-        flo.addRow(QLabel('Deviating ROIs (% from average)'),
-                   self.hom_deviating_rois)
+        flo.addRow(QLabel('Ignore outer mm'), self.hom_mask_outer_mm)
+        flo.addRow(QLabel('Ignore ROIs where more than (%) pixels masked'), self.hom_ignore_roi_percent)
         self.tab_hom.hlo.addLayout(flo)
         self.tab_hom.hlo.addWidget(uir.VLine())
         vlo_right = QVBoxLayout()
         self.tab_hom.hlo.addLayout(vlo_right)
+        flo_right = QFormLayout()
+        flo_right.addRow(QLabel('Deviating pixels (% from average)'),
+                   self.hom_deviating_pixels)
+        flo_right.addRow(QLabel('Deviating ROIs (% from average)'),
+                   self.hom_deviating_rois)
+        vlo_right.addLayout(flo_right)
         hlo_res_img = QHBoxLayout()
         hlo_res_img.addWidget(QLabel('Result image'))
         hlo_res_img.addWidget(self.hom_result_image)
@@ -1917,9 +1938,6 @@ class ParamsTabNM(ParamsTabCommon):
                     self.sni_roi_size.setEnabled(True)
                     self.sni_roi_ratio.setVisible(False)
 
-            if paramset.uni_cfov_ratio75:
-                self.uni_cfov_ratio.setValue(0.75*self.uni_ufov_ratio.value())
-
     def update_sni_display_options(self, attribute=''):
         """Update plot and result image options for SNI."""
         self.sni_plot.clear()
@@ -1984,9 +2002,10 @@ class ParamsTabNM(ParamsTabCommon):
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.uni_cfov_ratio.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='uni_cfov_ratio'))
-        self.uni_cfov_ratio75 = QCheckBox('')
-        self.uni_cfov_ratio75.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='uni_cfov_ratio75'))
+        self.uni_mask_corner = QDoubleSpinBox(
+            decimals=1, minimum=0, maximum=50, singleStep=1)
+        self.uni_mask_corner.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='uni_mask_corner'))
 
         self.uni_correct_pos_x = QCheckBox('x')
         self.uni_correct_pos_y = QCheckBox('y')
@@ -2036,7 +2055,7 @@ class ParamsTabNM(ParamsTabCommon):
         flo = QFormLayout()
         flo.addRow(QLabel('UFOV ratio'), self.uni_ufov_ratio)
         flo.addRow(QLabel('CFOV ratio'), self.uni_cfov_ratio)
-        flo.addRow(QLabel('     Lock CFOV ratio to 75% of UFOV'), self.uni_cfov_ratio75)
+        flo.addRow(QLabel('Mask corners of UFOV (mm)'), self.uni_mask_corner)
         hlo_fov.addLayout(flo)
         hlo_fov.addSpacing(100)
         vlo_left.addLayout(hlo_fov)

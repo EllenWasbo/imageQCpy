@@ -656,6 +656,7 @@ def calculate_qc(input_main, wid_auto=None,
                         curr_progress_val + (i+1) * progress_increment)
                     if image is not None and wid_auto.chk_display_images.isChecked():
                         wid_auto.wid_image_display.canvas.main.active_img = image
+                        wid_auto.wid_image_display.canvas.main.gui.active_img_no = i
                         wid_auto.wid_image_display.canvas.img_draw(
                             auto=True, window_level=tags[-1])
                     else:
@@ -1168,7 +1169,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
             if image2d is not None:
                 details = calculate_flatfield_mammo(
-                    image2d, roi_array[-1], image_info, paramset)
+                    image2d, roi_array[-2], roi_array[-1], image_info, paramset)
                 if details:
                     values = [
                         np.mean(details['averages']),
@@ -1181,7 +1182,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         details['n_deviating_pixels'],
                         100 * details['n_deviating_pixels'] / details['n_pixels'],
                         ]
-                    masked_image = np.ma.masked_array(image2d, mask=roi_array[-1])
+                    masked_image = np.ma.masked_array(image2d, mask=details['roi_mask'])
                     values_sup = [
                         np.min(masked_image), np.max(masked_image),
                         np.min(details['averages']), np.max(details['averages']),
@@ -2470,6 +2471,8 @@ def calculate_slicethickness(
         elif paramset.sli_type == 2:
             details_dict['labels'] = ['left', 'right']
             sli_signal_low_density = True
+        elif paramset.sli_type == 3:
+            details_dict['labels'] = ['line']
     else:  # MR
         details_dict['labels'] = ['upper', 'lower']
 
@@ -2510,7 +2513,7 @@ def calculate_slicethickness(
             details_dict['halfpeak'].append(halfmax + background)
 
         if modality == 'CT':
-            if paramset.sli_type == 0:  # wire ramp Catphan
+            if paramset.sli_type in [0, 3]:  # wire ramp Catphan or Siemens
                 width, center = mmcalc.get_width_center_at_threshold(
                     profile, halfmax, force_above=True)
                 if width is not None:
@@ -3401,7 +3404,7 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
     return (values, details_dict)
 
 
-def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
+def calculate_flatfield_mammo(image2d, mask_max, mask_outer, image_info, paramset):
     """Calculate homogeneity Mammo according to EU guidelines.
 
     Parameters
@@ -3410,6 +3413,8 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
         input image
     mask_max : numpy.ndarray
         mask of max values if paramset.hom_mask_max is set
+    mask_outer : numpy.ndarray
+        mask of outer mm if paramset.hom_mask_outer_mm > 0
     image_info : DcmInfo
         as defined in scripts/dcm.py
     paramset : cfc.ParamSetMammo
@@ -3441,6 +3446,8 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     roi_mask = np.full(image2d.shape[0:2], False)
     if paramset.hom_mask_max:
         roi_mask[image2d == np.max(image2d)] = True
+    if paramset.hom_mask_outer_mm > 0:
+        roi_mask[mask_outer == False] = True
     masked_image = np.ma.masked_array(image2d, mask=roi_mask)
 
     avgs = np.zeros(matrix_shape)
@@ -3454,17 +3461,21 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     kernel = np.full((roi_var_in_pix, roi_var_in_pix),
                      1./(roi_var_in_pix**2))
 
+    max_masked = 0
+    if paramset.hom_ignore_roi_percent > 0:
+        n_pix_roi = roi_size_in_pix ** 2
+        max_masked = paramset.hom_ignore_roi_percent/100. * n_pix_roi
     for j, ystart in enumerate(ystarts):
         for i, xstart in enumerate(xstarts):
             sub = masked_image[ystart:ystart+roi_size_in_pix,
                                xstart:xstart+roi_size_in_pix]
-            if np.ma.count_masked(sub) == 0:  # avoid trouble with mask
-                avg_sub = np.mean(sub)
+            if np.ma.count_masked(sub) <= max_masked:
+                avg_sub = np.ma.mean(sub)
                 avgs[j, i] = avg_sub
-                std_sub = np.std(sub)
+                std_sub = np.ma.std(sub)
                 if std_sub != 0 and roi_var_in_pix < roi_size_in_pix:
+                    snrs[j, i] = avg_sub / std_sub
                     if np.ma.count_masked(sub) == 0:
-                        snrs[j, i] = avg_sub / np.std(sub)
                         if paramset.hom_variance:
                             mu = sp.signal.fftconvolve(sub, kernel, mode='same')
                             ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='same')
@@ -3480,14 +3491,14 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
 
     n_masked_rois = np.count_nonzero(masked_roi_matrix)
     n_rois = avgs.size - n_masked_rois
-    n_masked_pixels = np.count_nonzero(mask_max)
+    n_masked_pixels = np.count_nonzero(roi_mask)
     n_pixels = image2d.size - n_masked_pixels
 
     masked_avgs = np.ma.masked_array(avgs, mask=masked_roi_matrix)
     masked_snrs = np.ma.masked_array(snrs, mask=masked_roi_matrix)
-    overall_avg = np.mean(masked_avgs)
+    overall_avg = np.ma.mean(masked_avgs)
     diff_avgs = 100 / overall_avg * (avgs - overall_avg)
-    diff_snrs = 100 / np.mean(masked_snrs) * (snrs - np.mean(masked_snrs))
+    diff_snrs = 100 / np.ma.mean(masked_snrs) * (snrs - np.ma.mean(masked_snrs))
     deviating_rois = np.zeros(matrix_shape, dtype=bool)
     deviating_rois[np.logical_or(
         np.abs(diff_avgs) > paramset.hom_deviating_rois,
@@ -3513,9 +3524,9 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     diff_pixels = 100 / overall_avg * (image2d - overall_avg)
     deviating_pixels = np.zeros(image_info.shape, dtype=bool)
     deviating_pixels[np.abs(diff_pixels) > paramset.hom_deviating_pixels] = True
-    deviating_pixels[mask_max == True] = False
+    deviating_pixels[roi_mask == True] = False
     n_deviating_pixels = np.count_nonzero(deviating_pixels)
-    deviating_pixels = np.ma.masked_array(deviating_pixels, mask=mask_max)
+    deviating_pixels = np.ma.masked_array(deviating_pixels, mask=roi_mask)
     diff_pixels = np.ma.masked_array(diff_pixels, mask=roi_mask)
 
     dev_pixel_clusters = None
@@ -3536,7 +3547,8 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
                'deviating_pixels': deviating_pixels,
                'n_deviating_pixels': n_deviating_pixels,
                'deviating_pixel_clusters': dev_pixel_clusters,
-               'n_pixels': n_pixels, 'n_masked_pixels': n_masked_pixels}
+               'n_pixels': n_pixels, 'n_masked_pixels': n_masked_pixels,
+               'roi_mask': roi_mask}
 
     return details
 
@@ -3690,34 +3702,8 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
     def get_differential_uniformity(image, cfov):
         # assume image is part of image within ufov
         # cfov = True where inside cfov
-        sz_y, sz_x = image.shape
-        '''
-        t = time()
-        du_cols = np.zeros(image.shape)
-        for x in range(sz_x):
-            for y in range(2, sz_y - 3):
-                sub = image[y-2:y+3, x]
-                max_val = np.max(sub)
-                min_val = np.min(sub)
-                if max_val and min_val:
-                    du_cols[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
-        print(f'time cols {time()-t}')
-        t = time()
-
-        du_rows = np.zeros(image.shape)
-        for y in range(sz_y):
-            for x in range(2, sz_x - 3):
-                sub = image[y, x-2:x+3]
-                max_val = np.max(sub)
-                min_val = np.min(sub)
-                if max_val and min_val:
-                    du_rows[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
-        print(f'time rows {time()-t}')
-        du_matrix = np.maximum(du_cols, du_rows)
-        '''
-
         from numpy.lib.stride_tricks import sliding_window_view
-
+        sz_y, sz_x = image.shape
         du_cols_ufov = np.zeros(image.shape)
         du_cols_cfov = np.zeros(image.shape)
         image_data_ufov = np.copy(image.data)
@@ -3763,6 +3749,7 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
     cols = np.max(roi_array[0], axis=0)
     image2d = image2d[rows][:, cols]
     cfov = roi_array[1][rows][:, cols]
+    ufov_input = roi_array[0][rows][:, cols]
 
     # roi already handeled ignoring pixels with zero counts as nearest neighbour (NEMA)
     if scale_factor == 1:
@@ -3786,6 +3773,7 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
         end_x = start_x + n_blocks_x * block_size
         end_y = start_y + n_blocks_y * block_size
         cfov = cfov[start_y:end_y, start_x:end_x]
+        ufov_input = ufov_input[start_y:end_y, start_x:end_x]
         image2d = image2d[start_y:end_y, start_x:end_x]
         image = skimage.measure.block_reduce(
             image2d, (block_size, block_size), np.sum)
@@ -3796,12 +3784,19 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
             cfov, (block_size, block_size), np.mean)
         cfov = np.where(reduced_roi > 0.5, True, False)
 
+        if False in ufov_input:
+            reduced_roi = skimage.measure.block_reduce(
+                ufov_input, (block_size, block_size), np.mean)
+            ufov_input = np.where(reduced_roi > 0.5, True, False)
+
     # ufov, NEMA NU-1: ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
     arr_cfov = np.ma.masked_array(image, mask=np.invert(cfov))
     cfov_mean = np.mean(arr_cfov)  # TODO test against minimum 10000 (NEMA)
     ufov = np.where(image > 0.75*cfov_mean, True, False)
     if False in ufov:
         ufov[1:-1][:, 1:-1] = True  # ignore only outer rows/cols
+    if False in ufov_input:
+        ufov[ufov_input == False] = False
 
     sz_y, sz_x = image.shape
     center_pixel_count = image[sz_y//2][sz_x//2]

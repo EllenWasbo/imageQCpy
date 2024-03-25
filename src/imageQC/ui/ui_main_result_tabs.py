@@ -1580,6 +1580,8 @@ class ResultPlotCanvas(PlotCanvas):
                     colors = ['b', 'lime', 'c', 'r', 'm', 'darkorange']
                 elif self.main.current_paramset.sli_type == 2:
                     colors = ['c', 'r']
+                elif self.main.current_paramset.sli_type == 3:
+                    colors = ['b']
                 if self.main.tab_ct.sli_plot.currentIndex() == 0:  # plot all
                     l_idxs = list(np.arange(len(details_dict['profiles'])))
                 else:

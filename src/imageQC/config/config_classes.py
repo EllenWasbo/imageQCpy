@@ -395,7 +395,7 @@ class ParamSetCT(ParamSetCommon):
     sli_background_width: float = 5.
     sli_search_width: int = 10
     sli_average_width: int = 1
-    sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom
+    sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom, 3=Siemens phantom
     sli_auto_center: bool = False
     rin_sigma_image: float = 0.  # sigma for gaussfilter of image
     rin_sigma_profile: float = 0.  # sigma for gaussfilter of radial profile
@@ -458,6 +458,8 @@ class ParamSetMammo(ParamSetCommon):
     hom_variance: bool = True
     hom_roi_size_variance: float = 2.
     hom_mask_max: bool = False
+    hom_mask_outer_mm: float = 0.
+    hom_ignore_roi_percent: int = 0
     hom_deviating_pixels: float = 20.
     hom_deviating_rois: float = 15.
     rlr_roi_size: float = 5.
@@ -493,10 +495,9 @@ class ParamSetMammo(ParamSetCommon):
 class ParamSetNM(ParamSetCommon):
     """Set of parameters regarding NM tests."""
 
-    uni_threshold: float = 0.0  # search image where signal > threshold (rel. to max)
     uni_ufov_ratio: float = 1.
     uni_cfov_ratio: float = 0.75
-    uni_cfov_ratio75: bool = False
+    uni_mask_corner: float = 0.0  # mm to ignore in corners
     uni_correct: bool = False
     uni_correct_pos_x: bool = False
     uni_correct_pos_y: bool = False
@@ -504,7 +505,6 @@ class ParamSetNM(ParamSetCommon):
     uni_radius: float = 330.
     uni_sum_first: bool = False
     uni_scale_factor: int = 0  # 0 = Auto, 1= no scale, 2... = scale factor
-    sni_threshold: float = 0.0  # search image where signal > threshold (rel. to max)
     sni_area_ratio: float = 0.9
     sni_type: int = 0  # 0 as Nelson 2014, 1= grid roi_ratio, 2 grid roi_size, 3 Siemens
     sni_roi_ratio: float = 0.2  # relative to sni_area defined by sni_area_ratio

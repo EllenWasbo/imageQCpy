@@ -307,8 +307,8 @@ class ImageCanvas(GenericImageCanvas):
             self.draw()
         self.current_image = nparr
 
-    def roi_draw(self):
-        """Update ROI countours on image."""
+    def remove_annotations(self):
+        """Remove current annotations."""
         for contour in self.contours:
             try:
                 for coll in contour.collections:
@@ -340,6 +340,12 @@ class ImageCanvas(GenericImageCanvas):
         except AttributeError:  # matplotlib 3.7+
             for txt in self.ax.texts:
                 txt.remove()
+
+        self.draw_idle()
+
+    def roi_draw(self):
+        """Update ROI countours on image."""
+        self.remove_annotations()
 
         if self.main.current_roi is not None:
             try:
@@ -438,7 +444,6 @@ class ImageCanvas(GenericImageCanvas):
 
     def CTn(self):
         """Draw CTn ROI."""
-        self.contours = []
         ctn_table = self.main.current_paramset.ctn_table
         nroi = len(ctn_table.labels)
         self.add_contours_to_all_rois(
@@ -487,6 +492,13 @@ class ImageCanvas(GenericImageCanvas):
                 self.add_contours_to_all_rois(
                     colors=['red'], roi_indexes=[2],
                     filled=True, hatches=['////'], reset_contours=False)
+            if self.main.current_paramset.hom_mask_outer_mm > 0:
+                mask = np.where(self.main.current_roi[-1], 0, 1)
+                contour = self.ax.contour(
+                    mask, levels=[0.9],
+                    colors='blue', alpha=0.5, linewidths=self.linewidth,
+                    linestyles='dotted')
+                self.contours.append(contour)
         else:
             self.add_contours_to_all_rois(colors=COLORS)
 
@@ -817,7 +829,7 @@ class ImageCanvas(GenericImageCanvas):
 
     def TTF(self):
         """Draw TTF ROIs."""
-        self.contours = []
+        #self.contours = []
         ttf_table = self.main.current_paramset.ttf_table
         self.add_contours_to_all_rois(labels=ttf_table.labels, colors=COLORS)
         if 'TTF' in self.main.results:
@@ -1078,6 +1090,8 @@ class ResultImageCanvas(GenericImageCanvas):
             self.title = 'Differential uniformity map in UFOV (max in x/y direction)'
             if 'du_matrix' in details_dict:
                 self.current_image = details_dict['du_matrix']
+                self.min_val = np.nanmin(self.current_image)
+                self.max_val = np.nanmax(self.current_image)
         elif type_img == 1:
             if 'pix_size' in details_dict:
                 pix_sz = details_dict['pix_size']
@@ -1101,11 +1115,11 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.current_image = details_dict['sum_image']
                 set_min_max_avoid_zero = True
         if set_min_max_avoid_zero:
-            max_val = np.max(self.current_image)
+            max_val = np.nanmax(self.current_image)
             if max_val > 0:
                 self.max_val = max_val
                 non_zero = self.current_image[self.current_image != 0]
-                self.min_val = np.min(non_zero)
+                self.min_val = np.nanmin(non_zero)
 
     def Var(self):
         """Prepare variance image."""

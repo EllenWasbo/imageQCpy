@@ -6,16 +6,16 @@ New functionalities:
 	- Colormap select
 	- Show projection (maximum/average intensity projection) with additional option to plot values from results table (e.g. mAs profile from extracted DCM values)
 	- Set active area (rectangle) for defining rectangular ROIs (previously defined by zoom functionality). The active area will also be used when setting window level based on active area (min/max or avg/stdev)
-	- The edit-tool: option to display the axis for images (x/y position)
+	- The edit-tool: option to display the axis for images (x/y position) (affect also results image when redrawn)
 - Added option to save image (or result image) as .csv to further study the values in e.g. Excel
 - Added window level widget for result image.
 - Added colorbar to window level widget.
+- Added option for CT slicethickness from Siemens CT constancy phantom.
 - Added CT test TTF (task based MTF) - working on automated TTF/NPS/d' solution
 - Added option to read GE QAP Mammo result files and option to bulk-generate automation templates for reading the different file types.
 
 Changes:
 - Added image index first in file list
-- Added option to lock NM uniformity CFOV to 75% of UFOV.
 - Added option to set NPS sampling frequency for test SNI.
 - Cancel when running automation templates now stops during sessions of one template running, not just between templates.
 - More modal progress bars with option to Cancel.
@@ -27,6 +27,7 @@ Changes:
 	- Searching for non-zero image now also ignore neighbour row/column of zero values according to NEMA NU-1 (i.e. smaller found active image by 1 pixel each direction)
 	- Uniformity:
 		- Several changes speed up and to get closer to NEMA NU-1. This highly affect the results with UFOV ratio close to 1, else minimal effect (as intended).
+		- Added option to cut the corners as the largest errors in ufov often are found there which is generally not clinical relevant.
 		- Default ufov_ratio is changed from 0.95 to 1
 		- Added to supplement result table: scaled pixel size + center pixel count (after scaling)
 		- Added warning if center pixel < 10000 (NEMA minimum)
@@ -36,6 +37,8 @@ Changes:
 - Mammo test Homogeneity:
    - Added option to not calculate variance-map (to speed up if not needed)
    - Added option show count of deviating pixels within each ROI to better detect where these are located, list coordinates of these pixels and highlight with circles
+   - Added option to set limit for ignoring calculations of ROI if masked pixels higher than the limit (%). Previously always ignored if any pixels masked. Calculations are performed ignoring the masked pixels.  
+   - Added option to mask outer rim of given mm.
 - Mammo Ghost: Changed default ROI size to 20 mm to get the recommended 4 cm^2 ROIs. Also adjustet default position of ROI_1 by 5 mm.
 
 Bugfixes:
@@ -43,6 +46,7 @@ Bugfixes:
 - default spinbox maximum is 100. Increased this value for different test-parameters that were not yet specified with max > 100.
 - avoiding crash when scrolling through images using arrow keys (therefore skips showing some images as signal is blocked while processing). 
 - black and dark gray plot lines in dark-mode changed to white and light gray
+- fixed error when using slicethickness test in automation. (AttributeError 'Gui' object has no attribute 'active_img_no'
 - other small fixes
 
 Code structure:

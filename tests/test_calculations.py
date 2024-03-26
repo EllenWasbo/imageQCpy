@@ -451,7 +451,8 @@ def test_NM_uniformity():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(np.array(input_main.results['Uni']['values'][0]))
-    assert np.array_equal(values, np.array([2., 1., 2., 1.]))
+
+    assert np.array_equal(values, np.array([3., 2., 2., 1.]))
 
 
 def test_NM_uniformity_sum():

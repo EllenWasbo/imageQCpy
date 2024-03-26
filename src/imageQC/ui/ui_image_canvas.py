@@ -670,8 +670,11 @@ class ImageCanvas(GenericImageCanvas):
         else:
             search_margin = self.main.current_paramset.sli_search_width
         background_length = self.main.current_paramset.sli_background_width
-        pix = self.main.imgs[self.main.gui.active_img_no].pix
-        background_length = background_length / pix[0]
+        try:
+            pix = self.main.imgs[self.main.gui.active_img_no].pix
+            background_length = background_length / pix[0]
+        except (AttributeError, IndexError):  # with automation
+            background_length = 0
         for l_idx, line in enumerate(self.main.current_roi['h_lines']):
             y1, x1, y2, x2 = line
             self.ax.add_artist(matplotlib.lines.Line2D(

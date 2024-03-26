@@ -656,7 +656,6 @@ def calculate_qc(input_main, wid_auto=None,
                         curr_progress_val + (i+1) * progress_increment)
                     if image is not None and wid_auto.chk_display_images.isChecked():
                         wid_auto.wid_image_display.canvas.main.active_img = image
-                        wid_auto.wid_image_display.canvas.main.gui.active_img_no = i
                         wid_auto.wid_image_display.canvas.img_draw(
                             auto=True, window_level=tags[-1])
                     else:
@@ -1799,11 +1798,13 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             values_sup.append(res['pix_size'])
             values_sup.append(res['center_pixel_count'])
             errmsg = [errmsg]
+            ''' A bit annoying message when automation and this is settled.
             if res['center_pixel_count'] < 10000:
                 if errmsg:
                     errmsg.append(
                         f'Center pixel (after scaling) = {res["center_pixel_count"]} '
                         '< 10000 (minimum set by NEMA)')
+            '''
 
             res = Results(
                 headers=headers, values=values,

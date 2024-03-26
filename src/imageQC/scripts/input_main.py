@@ -21,7 +21,6 @@ class Gui():
     delta_x: int = 0
     delta_y: int = 0
     delta_a: float = 0.0
-    active_img_no: int = -1
     show_axis: bool = False
 
 

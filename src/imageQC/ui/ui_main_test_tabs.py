@@ -3402,14 +3402,8 @@ class PositionWidget(QWidget):
             for patch in self.main.wid_image_display.canvas.ax.patches:
                 if patch.get_gid() == 'rectangle':
                     [x0, y0], [x1, y1] = patch.get_bbox().get_points()
-                    x_tuple = (int(x0) + 1, int(x1) + 1)
-                    y_tuple = (int(y0) + 1, int(y1) + 1)
-            ''' when zoom
-            xs = np.sort(self.main.wid_image_display.canvas.ax.get_xlim())
-            ys = np.sort(self.main.wid_image_display.canvas.ax.get_ylim())
-            x_tuple = (int(xs[0])+1, int(xs[1])+1)
-            y_tuple = (int(ys[0])+1, int(ys[1])+1)
-            '''
+                    x_tuple = (int(min([x0, x1])) + 1, int(max([x0, x1])) + 1)
+                    y_tuple = (int(min([y0, y1])) + 1, int(max([y0, y1])) + 1)
             proceed = True
             if x_tuple == (0, sz_x) and y_tuple == (0, sz_y):
                 question = (

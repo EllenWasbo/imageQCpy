@@ -904,15 +904,18 @@ class ResultImageCanvas(GenericImageCanvas):
                     self.parent.wid_window_level.decimals = 2
                 elif contrast < 20:
                     self.parent.wid_window_level.decimals = 1
-                rmin = round(self.min_val * 10 ** self.parent.wid_window_level.decimals)
-                rmax = round(self.max_val * 10 ** self.parent.wid_window_level.decimals)
-                self.parent.wid_window_level.min_wl.setRange(rmin, rmax)
-                self.parent.wid_window_level.max_wl.setRange(rmin, rmax)
-                self.parent.wid_window_level.update_window_level(
-                    self.min_val, self.max_val, cmap=self.cmap)
-                self.parent.wid_window_level.canvas.plot(
-                    self.current_image,
-                    decimals=self.parent.wid_window_level.decimals)
+                try:
+                    rmin = round(self.min_val * 10 ** self.parent.wid_window_level.decimals)
+                    rmax = round(self.max_val * 10 ** self.parent.wid_window_level.decimals)
+                    self.parent.wid_window_level.min_wl.setRange(rmin, rmax)
+                    self.parent.wid_window_level.max_wl.setRange(rmin, rmax)
+                    self.parent.wid_window_level.update_window_level(
+                        self.min_val, self.max_val, cmap=self.cmap)
+                    self.parent.wid_window_level.canvas.plot(
+                        self.current_image,
+                        decimals=self.parent.wid_window_level.decimals)
+                except ValueError:
+                    pass
             if self.main.current_modality == 'Mammo':
                 if 'Hom' in self.main.results and self.main.current_test == 'Hom':
                     if self.current_image.shape == self.main.active_img.shape:

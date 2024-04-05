@@ -740,7 +740,7 @@ def test_limits(headers=None, values=None,
         QuickTest result values (one row). The default is None.
     limits_label : str, optional
         automation template set limits label. The default is ''.
-    limits_mod_templates : TYPE, optional
+    limits_mod_templates : list, optional
         limits_and_plot_templates for current modality. The default is None.
 
     Return

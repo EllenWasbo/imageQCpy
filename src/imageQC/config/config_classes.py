@@ -813,6 +813,7 @@ class LimitsAndPlotTemplate:
     # ex. [['col a', 'col c'],['col b', 'col d'],['col e'], ['col f']]
     groups_limits: list = field(default_factory=list)  # list of lists
     # eg [min, max] * number of groups, default is [None, None] for each group
+    # [textval, textval]textvalue to accept
     groups_ranges: list = field(default_factory=list)  # list of lists
     # min y, max y in display
     # eg [min, max] * number of groups, default is [None, None] for each group = Auto

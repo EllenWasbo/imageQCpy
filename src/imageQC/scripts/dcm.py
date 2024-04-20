@@ -48,6 +48,7 @@ class DcmInfo():
     zpos: Optional[float] = None
     acq_date: str = ''
     studyUID: str = ''
+    artifacts: list = field(default_factory=list)  # simulate scripts/artifacts.py
 
 
 @dataclass

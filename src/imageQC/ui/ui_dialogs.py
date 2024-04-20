@@ -14,8 +14,8 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
-    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox, QListWidget, QTextEdit,
-    QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox, QFileDialog
+    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox, QListWidget,
+    QTextEdit, QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox, QFileDialog
     )
 
 import matplotlib
@@ -29,6 +29,7 @@ from imageQC.config.iQCconstants import (
 from imageQC.config.config_func import init_user_prefs
 from imageQC.ui import messageboxes
 from imageQC.ui import reusable_widgets as uir
+from imageQC.scripts.artifact import Artifact, add_artifact
 from imageQC.scripts.dcm import get_projection
 from imageQC.scripts.read_vendor_QC_reports import read_GE_Mammo_date
 import imageQC.resources
@@ -351,6 +352,156 @@ class EditAnnotationsDialog(ImageQCDialog):
             )
 
 
+class AddArtifactsDialog(ImageQCDialog):
+    """Dialog to add simulated artifacts to images."""
+
+    def __init__(self, main):
+        super().__init__()
+        self.main = main
+
+        self.setWindowTitle('Add simulated artifact')
+        self.setMinimumHeight(300)
+        self.setMinimumWidth(500)
+
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        fLO = QFormLayout()
+        vlo.addLayout(fLO)
+        self.form = QComboBox()
+        self.form.addItems(['circular', 'ring', 'rectangle'])
+        self.form.setCurrentIndex(0)
+        self.form.currentIndexChanged.connect(self.update_form)
+        fLO.addRow(QLabel('Artifact form'), self.form)
+        self.x_offset = QDoubleSpinBox(decimals=1)
+        self.x_offset.setRange(-1000, 1000)
+        self.y_offset = QDoubleSpinBox(decimals=1)
+        self.y_offset.setRange(-1000, 1000)
+        fLO.addRow(QLabel('Center offset x'), self.x_offset)
+        fLO.addRow(QLabel('Center offset y'), self.y_offset)
+        self.size_1 = QDoubleSpinBox(decimals=1)
+        self.size_1.setRange(0, 1000)
+        self.size_1_txt = QLabel('')
+        self.size_2 = QDoubleSpinBox(decimals=1)
+        self.size_2.setRange(0, 1000)
+        self.size_2_txt = QLabel('')
+        fLO.addRow(self.size_1_txt, self.size_1)
+        fLO.addRow(self.size_2_txt, self.size_2)
+        self.rotation = QDoubleSpinBox(decimals=1)
+        self.rotation.setRange(-359.9, 359.9)
+        fLO.addRow(QLabel('Rotation (degrees)'), self.rotation)
+        self.sigma = QDoubleSpinBox(decimals=2)
+        self.sigma.setRange(0, 1000)
+        fLO.addRow(QLabel('Gaussian blur, sigma (mm)'), self.sigma)
+        self.method = QComboBox()
+        self.method.addItems(['adding', 'multiplying'])
+        fLO.addRow(QLabel('Apply artifact value by'), self.method)
+        self.value = QDoubleSpinBox(decimals=3)
+        self.value.setRange(-1000000, 1000000)
+        fLO.addRow(QLabel('Artifact value'), self.value)
+
+        btn_view = QPushButton('View list of current artifacts...')
+        vlo.addWidget(btn_view)
+        btn_view.clicked.connect(self.view_artifacts)
+        btn_delete_all = QPushButton('Delete all artifacts')
+        vlo.addWidget(btn_delete_all)
+        btn_delete_all.clicked.connect(self.delete_all)
+
+        # add, overwrite, close
+        hlo_buttons_btm = QHBoxLayout()
+        vlo.addLayout(hlo_buttons_btm)
+        btn_add = QPushButton('Add')
+        hlo_buttons_btm.addWidget(btn_add)
+        btn_add.clicked.connect(self.add)
+        btn_overwrite = QPushButton('Overwrite')
+        btn_overwrite.clicked.connect(self.overwrite)
+        hlo_buttons_btm.addWidget(btn_overwrite)
+        btn_close = QPushButton('Close')
+        btn_close.clicked.connect(self.reject)
+        hlo_buttons_btm.addWidget(btn_close)
+
+        self.update_form()
+
+    def update_form(self):
+        """Update ROI size descriptions when form changes."""
+        form = self.form.currentText()
+        if form == 'circular':
+            self.size_1_txt.setText('Radius (mm)')
+            self.size_2_txt.setText('-')
+            self.size_2.setEnabled(False)
+            self.rotation.setEnabled(False)
+        elif form == 'ring':
+            self.size_1_txt.setText('Outer radius (mm)')
+            self.size_2_txt.setText('Inner radius (mm)')
+            self.size_2.setEnabled(True)
+            self.rotation.setEnabled(False)
+        else:
+            self.size_1_txt.setText('Width (mm)')
+            self.size_2_txt.setText('Height (mm)')
+            self.size_2.setEnabled(True)
+            self.rotation.setEnabled(True)
+
+    def get_artifact_object(self):
+        """Get settings as artifact object."""
+        obj = None
+        errmsg = ''
+        if self.size_2.value() == 0 and self.form.currentText() == 'rectangle':
+            errmsg = 'ROI height cannot be zero.'
+        elif self.value.value() == 0:
+            errmsg = 'Value of the artifact cannot be zero.'
+        else:
+            obj = Artifact(
+                form=self.form.currentText(),
+                x_offset=self.x_offset.value(),
+                y_offset=self.y_offset.value(),
+                size_1=self.size_1.value(),
+                size_2=self.size_2.value(),
+                rotation=self.rotation.value(),
+                sigma=self.sigma.value(),
+                method=self.method.currentText(),
+                value=self.value.value()
+                )
+        if errmsg:
+            QMessageBox.warning(self, 'Warning', errmsg)
+        return obj
+
+    def add(self):
+        """Add artifact."""
+        artifact = self.get_artifact_object()
+        if artifact:
+            add_artifact(artifact, self.main, overwrite=False)
+
+    def overwrite(self):
+        """Overwrite artifact."""
+        artifact = self.get_artifact_object()
+        if artifact:
+            add_artifact(artifact, self.main, overwrite=True)
+
+    def view_artifacts(self):
+        """View or delete artifacts."""
+        text = []
+        for idx, img in enumerate(self.main.imgs):
+            if len(img.artifacts) > 0:
+                text.append(f'Image {idx}')
+                text.extend([str(artifact) for artifact in img.artifacts])
+        if len(text) == 0:
+            QMessageBox.information(self, 'Information', 'Found no added artifacts.')
+        else:
+            dlg = TextDisplay(self, '\n'.join(text), title='Current artifacts',
+                              min_width=1100, min_height=500)
+            dlg.exec()
+
+    def delete_all(self):
+        """Remove all artifacts from imgs."""
+        for img in self.main.imgs:
+            img.artifacts = None
+        self.main.update_active_img(
+            self.main.tree_file_list.topLevelItem(self.main.gui.active_img_no))
+        self.main.refresh_img_display()
+
+    #TODO def save_artifacts(self):
+    #TODO def load_artifacts(self):
+
+
 class WindowLevelEditDialog(ImageQCDialog):
     """Dialog to set window level by numbers."""
 
@@ -427,7 +578,7 @@ class WindowLevelEditDialog(ImageQCDialog):
         vLO.addWidget(self.button_box)
 
     def accept(self):
-        """Aoid close on enter if not ok button focus."""
+        """Avoid close on enter if not ok button focus."""
         if self.button_box.button(QDialogButtonBox.Ok).hasFocus():
             if self.spin_width.value() == 0:
                 QMessageBox.warning(

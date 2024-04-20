@@ -289,6 +289,8 @@ class ParamsTabCommon(QTabWidget):
                     content = None
 
             if content is not None:
+                if clear_results:
+                    self.clear_results_current_test()
                 setattr(self.main.current_paramset, attribute, content)
                 self.update_enabled()
                 if edit_ignore is False:
@@ -297,8 +299,6 @@ class ParamsTabCommon(QTabWidget):
                     self.main.update_roi()
                     if attribute.startswith('sni_'):
                         self.update_sni_roi_names()
-                if clear_results:
-                    self.clear_results_current_test()
                 if ((update_plot or update_results_table)
                         and clear_results is False):
                     if attribute == 'mtf_gaussian':
@@ -915,16 +915,24 @@ class ParamsTabCT(ParamsTabCommon):
         """Update plot options for slice thickness."""
         self.sli_plot.clear()
         items = ['all']
-        self.sli_type.setEnabled(True)
+        #self.sli_type.setEnabled(True)
+        self.blockSignals(True)
         if self.sli_type.currentIndex() == 0:
             items.extend(['H1 upper', 'H2 lower', 'V1 left', 'V2 right'])
+            dist = 38.
         elif self.sli_type.currentIndex() == 1:
             items.extend(['H1 upper', 'H2 lower',
                           'V1 left', 'V2 right', 'V1 inner', 'V2 inner'])
+            dist = 45.
         elif self.sli_type.currentIndex() == 2:
             items.extend(['V1 left', 'V2 right'])
+            dist = 70.
         else:
-            self.sli_type.setEnabled(False)
+            dist = 0.
+            #self.sli_type.setEnabled(False)
+        self.main.current_paramset.sli_ramp_distance = dist
+        self.sli_ramp_distance.setValue(dist)
+        self.blockSignals(False)
         self.sli_plot.addItems(items)
         self.param_changed_from_gui(attribute='sli_type')
 
@@ -985,7 +993,7 @@ class ParamsTabCT(ParamsTabCommon):
         self.sli_type = QComboBox()
         self.sli_type.addItems(ALTERNATIVES['CT']['Sli'])
         self.sli_type.currentIndexChanged.connect(self.update_sli_plot_options)
-        self.sli_ramp_distance = QDoubleSpinBox(decimals=1, minimum=0.1)
+        self.sli_ramp_distance = QDoubleSpinBox(decimals=1, minimum=0.)
         self.sli_ramp_distance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_ramp_distance'))
         self.sli_ramp_length = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
@@ -1750,7 +1758,7 @@ class GroupBoxCorrectPointSource(QGroupBox):
 
     def __init__(self, parent, testcode='Uni',
                  chk_pos_x=None, chk_pos_y=None,
-                 chk_radius=None, wid_radius=None, wid_ref_image=None):
+                 chk_radius=None, wid_radius=None):
         super().__init__('Correct for point source curvature')
         testcode = testcode.lower()
         self.parent = parent
@@ -1774,10 +1782,6 @@ class GroupBoxCorrectPointSource(QGroupBox):
         wid_radius.valueChanged.connect(
             lambda: parent.param_changed_from_gui(
                 attribute=f'{testcode}_radius'))
-        if wid_ref_image is not None:
-            wid_ref_image.currentIndexChanged.connect(
-                lambda: parent.param_changed_from_gui(
-                    attribute=f'{testcode}_ref_image'))
 
         vlo_gb = QVBoxLayout()
         self.setLayout(vlo_gb)
@@ -1792,29 +1796,35 @@ class GroupBoxCorrectPointSource(QGroupBox):
         hlo_lock_dist.addWidget(wid_radius)
         hlo_lock_dist.addWidget(QLabel('mm'))
 
+
+class WidgetReferenceImage(QWidget):
+    """Widget in NM SNI holding reference images."""
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+        self.parent.sni_ref_image.currentIndexChanged.connect(
+            lambda: self.parent.param_changed_from_gui(attribute=f'sni_ref_image'))
         self.ref_folder = Path(cff.get_config_folder()) / 'SNI_ref_images'
-        self.wid_ref_image = wid_ref_image
-        if wid_ref_image is not None:
-            self.update_reference_images()
-            hlo_ref_image = QHBoxLayout()
-            hlo_ref_image.addWidget(QLabel('Ref. image (optional):'))
-            hlo_ref_image.addWidget(wid_ref_image)
-            act_add = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
-                'Add refernce image', self)
-            act_add.triggered.connect(self.add_reference_image)
-            act_delete = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
-                'Delete reference image', self)
-            act_delete.triggered.connect(self.delete_reference_image)
-            act_info = QAction(
-                QIcon(f'{os.environ[ENV_ICON_PATH]}info.png'),
-                'Info about reference image', self)
-            act_info.triggered.connect(self.info_reference_image)
-            toolb = QToolBar()
-            toolb.addActions([act_add, act_delete, act_info])
-            hlo_ref_image.addWidget(toolb)
-            vlo_gb.addLayout(hlo_ref_image)
+        self.update_reference_images()
+        hlo_ref_image = QHBoxLayout()
+        hlo_ref_image.addWidget(QLabel('Ref. image (optional):'))
+        hlo_ref_image.addWidget(self.parent.sni_ref_image)
+        act_add = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+            'Add refernce image', self)
+        act_add.triggered.connect(self.add_reference_image)
+        act_delete = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+            'Delete reference image', self)
+        act_delete.triggered.connect(self.delete_reference_image)
+        act_info = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}info.png'),
+            'Info about reference image', self)
+        act_info.triggered.connect(self.info_reference_image)
+        toolb = QToolBar()
+        toolb.addActions([act_add, act_delete, act_info])
+        hlo_ref_image.addWidget(toolb)
+        self.setLayout(hlo_ref_image)
 
     def update_reference_images(self, set_text=''):
         """Update reference images for NM SNI."""
@@ -1823,9 +1833,9 @@ class GroupBoxCorrectPointSource(QGroupBox):
             filenames = [x.stem for x in self.ref_folder.glob('*')
                          if x.suffix == '.dcm']
             available_images.extend(filenames)
-        self.wid_ref_image.clear()
-        self.wid_ref_image.addItems(available_images)
-        self.wid_ref_image.setCurrentText(set_text)
+        self.parent.sni_ref_image.clear()
+        self.parent.sni_ref_image.addItems(available_images)
+        self.parent.sni_ref_image.setCurrentText(set_text)
 
     def add_reference_image(self):
         """Add reference images for NM SNI."""
@@ -1853,12 +1863,14 @@ class GroupBoxCorrectPointSource(QGroupBox):
 
     def delete_reference_image(self):
         """Delete reference images for NM SNI."""
-        if self.wid_ref_image.currentText() != '':
-            filename = self.ref_folder / (self.wid_ref_image.currentText() + '.dcm')
+        if self.parent.sni_ref_image.currentText() != '':
+            filename = self.ref_folder / (
+                self.parent.sni_ref_image.currentText() + '.dcm')
             if filename.exists():
                 ref_images = [p.sni_ref_image for p in self.parent.main.paramsets]
                 labels = [p.label for p in self.parent.main.paramsets]
-                idxs = get_all_matches(ref_images, self.wid_ref_image.currentText())
+                idxs = get_all_matches(
+                    ref_images, self.parent.sni_ref_image.currentText())
                 if len(idxs) > 1:
                     labels_used = [label for i, label in enumerate(labels) if i in idxs]
                     labels_used.remove(self.parent.main.current_paramset.label)
@@ -1878,9 +1890,9 @@ class GroupBoxCorrectPointSource(QGroupBox):
     def info_reference_image(self):
         """Info about reference images for NM SNI."""
         html_body_text = (
-            'Estimating noise for calibration images using Siemens gamma camera '
-            'is not straight forward.<br>'
-            'Find a calibration image without artifacts and use this as a reference '
+            'Estimating noise using a verified reference image.<br>'
+            'Find an image acquired under the same circumstances, free of artifacts '
+            'and use this as a reference '
             'to detect changes over time compared to the reference image.'
             )
         dlg = ImageQCDialog()
@@ -2152,11 +2164,11 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_correct_radius = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=5000, singleStep=0.1)
         self.sni_ref_image = QComboBox()
+        self.wid_ref_image = WidgetReferenceImage(self)
         self.sni_correct = GroupBoxCorrectPointSource(
             self, testcode='sni',
             chk_pos_x=self.sni_correct_pos_x, chk_pos_y=self.sni_correct_pos_y,
-            chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_correct_radius,
-            wid_ref_image=self.sni_ref_image)
+            chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_correct_radius)
 
         gb_eye_filter = QGroupBox('Human visual respose filter')
         self.sni_eye_filter_c = QDoubleSpinBox(
@@ -2215,6 +2227,7 @@ class ParamsTabNM(ParamsTabCommon):
         vlo_left.addWidget(gb_eye_filter)
         vlo_left.addWidget(self.sni_sum_first)
 
+        vlo_right.addWidget(self.wid_ref_image)
         vlo_right.addWidget(self.sni_correct)
 
         f_btm = QFormLayout()

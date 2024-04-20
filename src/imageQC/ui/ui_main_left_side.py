@@ -102,8 +102,8 @@ class TreeFileList(QTreeWidget):
         self.clear()
         self.blockSignals(False)
         quicktest_active = self.main.wid_quicktest.gb_quicktest.isChecked()
-        self.setColumnHidden(3, not quicktest_active)  # image name
-        self.setColumnHidden(4, not quicktest_active)  # group name
+        self.setColumnHidden(4, not quicktest_active)  # image name
+        self.setColumnHidden(5, not quicktest_active)  # group name
         if len(self.main.imgs) == 0:
             QTreeWidgetItem(self, [''] * 6)
         else:

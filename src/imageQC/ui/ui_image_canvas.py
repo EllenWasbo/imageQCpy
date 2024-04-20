@@ -295,8 +295,11 @@ class ImageCanvas(GenericImageCanvas):
                     else ['Summed image', '']
                     )
             else:
-                annot_text = self.main.imgs[
-                    self.main.gui.active_img_no].annotation_list
+                try:
+                    annot_text = self.main.imgs[
+                        self.main.gui.active_img_no].annotation_list
+                except IndexError:
+                    pass
             at = matplotlib.offsetbox.AnchoredText(
                 '\n'.join(annot_text),
                 prop=dict(size=self.main.gui.annotations_font_size, color='red'),
@@ -347,7 +350,11 @@ class ImageCanvas(GenericImageCanvas):
         """Update ROI countours on image."""
         self.remove_annotations()
 
-        if self.main.current_roi is not None:
+        annotate = True
+        if hasattr(self.main, 'wid_window_level'):
+            annotate = self.main.gui.annotations
+
+        if self.main.current_roi is not None and annotate:
             try:
                 self.linewidth = self.main.gui.annotations_line_thick
                 self.fontsize = self.main.gui.annotations_font_size
@@ -729,7 +736,7 @@ class ImageCanvas(GenericImageCanvas):
     def SNI(self):
         """Draw NM uniformity ROI."""
         roi_idx = -1
-        small_start_idx = 3  # for type>0, small rois start from list index idx
+        small_start_idx = 3  # index of roi_array where small ROIs start
         labels = None
         show_labels = False
         try:
@@ -764,6 +771,7 @@ class ImageCanvas(GenericImageCanvas):
             for row, col in [
                     (small_start_idx, 0),
                     (small_start_idx+1, 1), (-2, -2), (-1, -1)]:
+                print(f'row {row} col {col}')
                 mask = np.where(self.main.current_roi[row][col], 0, 1)
                 self.contours.append(
                     self.ax.contourf(mask, levels=[0, 0.5], colors='red', alpha=0.3))
@@ -777,9 +785,9 @@ class ImageCanvas(GenericImageCanvas):
                         colno = col
                         rowno = row
                         if col < 0:
-                            colno = len(self.main.current_roi[row]) - col
+                            colno = len(self.main.current_roi[row]) + col
                         if row < 0:
-                            rowno = len(self.main.current_roi) - row
+                            rowno = len(self.main.current_roi) + row
                         self.ax.text(xpos, ypos, f'r{rowno-small_start_idx}_c{colno}',
                                      fontsize=self.fontsize, color='k')
         else:  # 3 Siemens
@@ -805,17 +813,18 @@ class ImageCanvas(GenericImageCanvas):
                 roi_idx = int(self.main.tab_nm.sni_selected_roi.currentIndex())
             except AttributeError:
                 pass
-        if roi_idx > small_start_idx and self.main.results:
+        if roi_idx > 1 and self.main.results:  # not for L1 or L2
             plot_txt = self.main.tab_nm.sni_plot.currentText()
             img_txt = self.main.tab_nm.sni_result_image.currentText()
             if 'selected' in plot_txt or 'selected' in img_txt:
                 flat_list = [
-                    item for row in self.main.current_roi[small_start_idx:]
+                    item for row in self.main.current_roi[1:]
                     for item in row]
                 try:
-                    selected_roi = flat_list[roi_idx]
+                    selected_roi = flat_list[roi_idx - 1]
                 except IndexError:
                     selected_roi = None
+
                 if selected_roi is not None:
                     self.contours.append(
                         self.ax.contour(
@@ -889,12 +898,12 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.cmap = 'coolwarm'
             self.parent.wid_window_level.positive_negative = self.positive_negative
 
-            self.img = self.ax.imshow(
-                self.current_image,
-                cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
-            self.parent.image_title.setText(self.title)
             proceed = True
             try:
+                self.img = self.ax.imshow(
+                    self.current_image,
+                    cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
+                self.parent.image_title.setText(self.title)
                 contrast = self.max_val - self.min_val
             except TypeError:
                 proceed = False

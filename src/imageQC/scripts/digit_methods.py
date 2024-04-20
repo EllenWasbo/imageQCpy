@@ -147,17 +147,19 @@ def compare_char_blocks_2_template(img_blocks, template):
         subtr = [None for i in range(12)]
         for i, temp_img in enumerate(template_images):
             if isinstance(temp_img, np.ndarray):
+                proceed = True
                 if img.shape != temp_img.shape:
                     try:
                         temp_img = resize(temp_img, img.shape)
-                        if np.array_equal(img, temp_img):
-                            char = chars[i]
-                            break
-                        else:
-                            diff = np.subtract(img, temp_img)
-                            subtr[i] = np.abs(np.sum(diff))
                     except OverflowError:  # on resize
-                        pass
+                        proceed = False
+                if proceed:
+                    if np.array_equal(img, temp_img):
+                        char = chars[i]
+                        break
+                    else:
+                        diff = np.subtract(img, temp_img)
+                        subtr[i] = np.abs(np.sum(diff))
 
         if char is None and any(subtr):
             idx = np.where(subtr == np.min(subtr))

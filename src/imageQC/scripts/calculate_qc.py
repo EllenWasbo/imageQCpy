@@ -29,6 +29,7 @@ from imageQC.config.iQCconstants import (
 import imageQC.config.config_classes as cfc
 from imageQC.config.config_func import get_config_folder
 from imageQC.scripts import digit_methods
+from imageQC.scripts.artifact import apply_artifacts
 # imageQC block end
 
 
@@ -189,7 +190,8 @@ def quicktest_output(input_main):
         for test in input_main.results:  # add defaults if not defined
             if input_main.results[test] is not None:
                 if test not in output_all_actual or len(output_all_actual[test]) == 0:
-                    output_all_actual[test] = [cfc.QuickTestOutputSub(columns=[])]
+                    output_all_actual[test] = [
+                        cfc.QuickTestOutputSub(columns=[], alternative=-1)]
 
         for test in output_all_actual:
             output_subs = output_all_actual[test]
@@ -204,7 +206,13 @@ def quicktest_output(input_main):
                     values = input_main.results[test]['values_sup']
                     headers = input_main.results[test]['headers_sup']
                 else:
-                    if input_main.results[test]['alternative'] == sub.alternative:
+                    proceed = False
+                    if sub.alternative == -1:  # not defined use all as default
+                        proceed = True
+                    else:
+                        if input_main.results[test]['alternative'] == sub.alternative:
+                            proceed = True
+                    if proceed:
                         values = input_main.results[test]['values']
                         headers = input_main.results[test]['headers']
                 out_values = []
@@ -446,7 +454,7 @@ def calculate_qc(input_main, wid_auto=None,
             NM_count = [False] * n_img
             extras = None  # placeholder for extra arguments to pass to calc_2d/3d
             if input_main.current_modality == 'NM' and 'SNI' in flattened_marked:
-                if paramset.sni_correct and paramset.sni_ref_image != '':
+                if paramset.sni_ref_image != '':
                     extras = get_SNI_ref_image(paramset, tag_infos)
             if 'Num' in flattened_marked:
                 digit_templates = input_main.digit_templates[
@@ -599,6 +607,11 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_infos=tag_infos, NM_count=NM_count[i],
                             get_window_level=any(auto_template_label)
                             )
+                        try:
+                            if len(input_main.imgs[i].artifacts) > 0:
+                                image = apply_artifacts(image, input_main.imgs[i])
+                        except (TypeError, AttributeError, IndexError):
+                            pass
                         if len(tags) > 0:
                             if isinstance(tags[0], dict):
                                 tag_lists[i] = tags[0]['dummy']
@@ -645,6 +658,11 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_infos=tag_infos,
                             get_window_level=any(auto_template_label)
                             )
+                        try:
+                            if len(input_main.imgs[i].artifacts) > 0:
+                                image = apply_artifacts(image, input_main.imgs[i])
+                        except (TypeError, AttributeError, IndexError):
+                            pass
                         if len(tags) > 0:
                             input_main.current_group_indicators[i] = '_'.join(tags[0])
                 if wid_auto is not None:
@@ -3894,7 +3912,7 @@ def get_SNI_ref_image(paramset, tag_infos):
 
 
 def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
-                      pix=1., fit_dict=None):
+                      pix=1., fit_dict=None, image_mean=0.):
     """Calculate SNI for one ROI.
 
     Parameters
@@ -3910,6 +3928,8 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
     pix : float
     fit_dict : dict
         dictionary from get_corrections_point_source (if corrections else None)
+    image_mean : float
+        average value within the large area
 
     Returns
     -------
@@ -3931,7 +3951,7 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
     rNPS_quantum_noise = None
     if fit_dict is None:  # uncorrected image
         NPS = mmcalc.get_2d_NPS(subarray, pix)
-        quantum_noise = np.mean(image2d[rows][:, cols]) * pix**2
+        quantum_noise = image_mean * pix**2
         """ explained how quantum noise is found above
         Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
         Total(NPS)=NPSvalue*ROIsz^2
@@ -3940,14 +3960,15 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         NPS[line, line] = 0
         NPS_struct = NPS - quantum_noise
     else:
-        # curve correct both subarray and quantum noise
-        corr_matrix = fit_dict['correction_matrix'][rows][:, cols]
-        subarray = subarray + corr_matrix
         if 'reference_image' in fit_dict:
             sub_estimated_noise = fit_dict['reference_image'][rows][:, cols]
         else:
             sub_estimated_noise = fit_dict['estimated_noise_image'][rows][:, cols]
-        sub_estimated_noise = sub_estimated_noise + corr_matrix
+        if 'correction_matrix' in fit_dict:
+            # curve correct both subarray and quantum noise
+            corr_matrix = fit_dict['correction_matrix'][rows][:, cols]
+            subarray = subarray + corr_matrix
+            sub_estimated_noise = sub_estimated_noise + corr_matrix
         # 2d NPS
         NPS = mmcalc.get_2d_NPS(subarray, pix)
         quantum_noise = mmcalc.get_2d_NPS(sub_estimated_noise, pix)
@@ -4018,13 +4039,19 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         if errmsg is not None:
             errmsgs.append(errmsg)
         values_sup = [fit_dict['dx'], fit_dict['dy'], fit_dict['distance']]
-        if reference_image is not None:
-            if reference_image.shape == image2d.shape:
-                fit_dict['reference_image'] = reference_image
-            else:
-                errmsgs.append('Reference image not same size as image to analyse. '
-                               'Quantum noise estimated.')
+    if reference_image is not None:
+        if reference_image.shape == image2d.shape:
+            if fit_dict is None:
+                fit_dict = {}
+            fit_dict['reference_image'] = reference_image
+        else:
+            errmsgs.append('Reference image not same size as image to analyse. '
+                           'Quantum noise estimated.')
+    if fit_dict is not None:
         details_dict = fit_dict
+
+    arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[0]))
+    image_mean = np.mean(arr)
 
     details_dict['pr_roi'] = []
 
@@ -4037,7 +4064,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         SNI, details_dict_roi = calculate_SNI_ROI(
             image2d, roi_array[i],
             eye_filter=eye_filter['filter_2d'], unit=eye_filter['unit'],
-            pix=image_info.pix[0], fit_dict=fit_dict)
+            pix=image_info.pix[0], fit_dict=fit_dict, image_mean=image_mean)
         details_dict['pr_roi'].append(details_dict_roi)
         SNI_values.append(SNI)
     values_sup.append('L1' if SNI_values[0] > SNI_values[1] else 'L2')
@@ -4052,7 +4079,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
             SNI, details_dict_roi = calculate_SNI_ROI(
                 image2d, roi_array[i],
                 eye_filter['filter_2d'], unit=eye_filter['unit'],
-                pix=image_info.pix[0], fit_dict=fit_dict)
+                pix=image_info.pix[0], fit_dict=fit_dict, image_mean=image_mean)
             details_dict['pr_roi'].append(details_dict_roi)
             SNI_values.append(SNI)
 
@@ -4085,7 +4112,8 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                     SNI, details_dict_roi = calculate_SNI_ROI(
                         image2d, roi,
                         eye_filter['filter_2d'], unit=eye_filter['unit'],
-                        pix=image_info.pix[0], fit_dict=fit_dict)
+                        pix=image_info.pix[0], fit_dict=fit_dict,
+                        image_mean=image_mean)
                     details_dict['pr_roi'].append(details_dict_roi)
                     if paramset.sni_type in [1, 2]:
                         SNI_map[rowno, colno] = SNI

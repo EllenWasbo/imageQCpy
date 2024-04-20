@@ -38,7 +38,7 @@ from imageQC.ui.settings import SettingsDialog
 from imageQC.ui import automation_wizard
 from imageQC.ui import open_multi
 from imageQC.ui import open_automation
-from imageQC.ui.ui_dialogs import TextDisplay, AboutDialog
+from imageQC.ui.ui_dialogs import TextDisplay, AboutDialog, AddArtifactsDialog
 from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
@@ -50,8 +50,8 @@ from imageQC.config.iQCconstants import (
     )
 from imageQC.config import config_classes as cfc
 from imageQC.scripts import dcm
-from imageQC.scripts.calculate_roi import get_rois
 from imageQC.scripts.mini_methods import get_modality_index
+from imageQC.scripts.artifact import apply_artifacts
 # imageQC block end
 
 
@@ -388,6 +388,12 @@ class MainWindow(QMainWindow):
                     frame_number=self.imgs[self.gui.active_img_no].frame_number,
                     tag_infos=self.tag_infos)
             if self.active_img is not None:
+                try: 
+                    if len(self.imgs[self.gui.active_img_no].artifacts) > 0:
+                        self.active_img = apply_artifacts(
+                            self.active_img, self.imgs[self.gui.active_img_no])
+                except (TypeError, AttributeError, IndexError):
+                    pass
                 amin = round(np.amin(self.active_img))
                 amax = round(np.amax(self.active_img))
                 self.wid_window_level.min_wl.setRange(amin, amax)
@@ -530,27 +536,8 @@ class MainWindow(QMainWindow):
         return self.tree_file_list.get_marked_imgs_current_test()
 
     def update_roi(self, clear_results_test=False):
+        """Recalculate ROIs."""
         ui_main_methods.update_roi(self, clear_results_test=clear_results_test)
-        """Recalculate ROI."""
-        '''
-        errmsg = None
-        if self.active_img is not None:
-            self.start_wait_cursor()
-            self.status_bar.showMessage('Updating ROI...')
-            self.current_roi, errmsg = get_rois(
-                self.active_img,
-                self.gui.active_img_no, self)
-            self.status_bar.clearMessage()
-            self.stop_wait_cursor()
-        else:
-            self.current_roi = None
-        self.wid_image_display.canvas.roi_draw()
-        self.display_errmsg(errmsg)
-        if clear_results_test:
-            if self.current_test in [*self.results]:
-                self.results[self.current_test] = None
-                self.refresh_results_display()
-        '''
 
     def reset_results(self):
         """Clear results and update display."""
@@ -841,6 +828,11 @@ class MainWindow(QMainWindow):
         dlg = task_based_image_quality.TaskBasedImageQualityDialog(self)
         dlg.exec()
 
+    def run_sim_artifact(self):
+        """Open dialog to simulate artifacts."""
+        dlg = AddArtifactsDialog(self)
+        dlg.exec()
+
     def run_settings(self, initial_view='', initial_template_label='',
                      paramset_output=False):
         """Display settings dialog."""
@@ -900,7 +892,7 @@ class MainWindow(QMainWindow):
             pass
 
         if after_edit_settings:
-            self.tab_nm.sni_correct.update_reference_images()
+            self.tab_nm.wid_ref_image.update_reference_images()
             self.update_paramset()  # update Num digit templates list
         else:
             print('imageQC is ready')
@@ -1138,13 +1130,16 @@ class MainWindow(QMainWindow):
         act_wiki.triggered.connect(self.wiki)
         act_task_based_auto = QAction('CT task based image quality analysis...', self)
         act_task_based_auto.triggered.connect(self.run_task_based_auto)
+        act_sim_artifact = QAction(
+            'Add/manage simulated artifact to image(s)...', self)
+        act_sim_artifact.triggered.connect(self.run_sim_artifact)
 
         # fill menus
         menu_file = QMenu('&File', self)
         menu_file.addActions([
             act_open, act_open_adv, act_read_header, act_open_auto, act_wizard_auto,
             act_rename_dcm, #act_task_based_auto,
-            act_close, act_close_all, act_quit])
+            act_sim_artifact, act_close, act_close_all, act_quit])
         menu_bar.addMenu(menu_file)
         menu_settings = QMenu('&Settings', self)
         menu_settings.addAction(act_settings)

@@ -321,7 +321,7 @@ class QuickTestOutputSub:
     """Class for holding details for element of QuickTestOutputTemplates."""
 
     label: str = ''  # header_ prefix when header included
-    alternative: int = 0  # if supplement table starting with 10
+    alternative: int = 0  # if supplement table starting with 10, -1 used for not defined
     columns: list = field(default_factory=lambda: [])  # list of ints
     calculation: str = '='
     per_group: bool = False

@@ -969,7 +969,7 @@ def get_ratio_NM(image, image_info, mask_corner=0.0, ufov_ratio=0.95, cfov_ratio
     roi_array = []
 
     image_binary = np.zeros(image.shape)
-    image_binary[image > 0] = 1
+    image_binary[image > 0.1] = 1  # 0.1 instead of 0 to ignore where very low values
     prof_y = np.max(image_binary, axis=1)
     width_y = np.count_nonzero(prof_y)
     prof_x = np.max(image_binary, axis=0)
@@ -1131,15 +1131,17 @@ def get_roi_SNI(image, image_info, paramset):
         if paramset.sni_type in [1, 2]:
             n_rois_x = width_x // (0.5 * roi_size) - 1
             n_rois_y = width_y // (0.5 * roi_size) - 1
-            pos_x = width_x // (n_rois_x + 1) * np.arange(n_rois_x) + first_col
-            pos_y = width_y // (n_rois_y + 1) * np.arange(n_rois_y) + first_row
+            pos_x = width_x / (n_rois_x + 1) * np.arange(n_rois_x) + first_col
+            pos_y = width_y / (n_rois_y + 1) * np.arange(n_rois_y) + first_row
+            pos_x = [int(x) for x in pos_x]
+            pos_y = [int(y) for y in pos_y]
             for j in pos_y:
                 roi_row = []
                 for i in pos_x:
                     roi_this = get_roi_rectangle(
                         image.shape,
-                        coords_x=(int(i), int(i)+roi_size),
-                        coords_y=(int(j), int(j)+roi_size))
+                        coords_x=(i, i + roi_size),
+                        coords_y=(j, j + roi_size))
                     roi_row.append(roi_this)
                 roi_array.append(roi_row)
         else:  # sni_type 3 Siemens
@@ -1428,12 +1430,11 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
                 center_x, center_y, _, _ = res
                 dxya[0] = center_x - 0.5*image_info.shape[1]
                 dxya[1] = center_y - 0.5*image_info.shape[0]
-        dist = 0  # if Siemens CT phantom
-        if paramset.sli_type in [0, 2]:
-            dist = paramset.sli_ramp_distance / image_info.pix[0]
-        elif paramset.sli_type == 1:
-            dist = 45. / image_info.pix[0]  # beaded ramp Catphan outer ramps
         dist_b = 25. / image_info.pix[0]  # beaded ramp Catphan inner ramps
+        if paramset.sli_type == 1:
+            dist = 45. / image_info.pix[0]  # beaded ramp Catphan outer ramps
+        else:
+            dist = paramset.sli_ramp_distance / image_info.pix[0]
     else:
         dist = [
             paramset.sli_dist_upper / image_info.pix[0],

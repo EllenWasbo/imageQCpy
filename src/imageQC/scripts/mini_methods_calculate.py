@@ -479,7 +479,7 @@ def point_source_func_fit(x, y, center_value=0., avg_radius=0., lock_radius=Fals
     """Fit foton fluence from point source at detector."""
     C = center_value*avg_radius**2
     if lock_radius:
-        popt, pcov = curve_fit(gauss, x, y,
+        popt, pcov = curve_fit(point_source_func, x, y,
                                p0=[C, avg_radius],
                                bounds=([0.5*C, avg_radius], [1.5*C, avg_radius+0.01])
                                )

@@ -10,9 +10,10 @@ New functionalities:
 - Added option to save image (or result image) as .csv to further study the values in e.g. Excel
 - Added window level widget for result image.
 - Added colorbar to window level widget.
-- Added option for CT slicethickness from Siemens CT constancy phantom.
+- Added option for CT slicethickness from Siemens CT constancy phantom. Also auto updates ramp distance to typical value when changing ramp type.
 - Added CT test TTF (task based MTF) - working on automated TTF/NPS/d' solution
 - Added option to read GE QAP Mammo result files and option to bulk-generate automation templates for reading the different file types.
+- Added option to simulate added artifacts to images (from the File menu). Valueable for example to simulate artifacts and look on how NPS is affected.
 
 Changes:
 - Added image index first in file list
@@ -47,6 +48,7 @@ Bugfixes:
 - avoiding crash when scrolling through images using arrow keys (therefore skips showing some images as signal is blocked while processing). 
 - black and dark gray plot lines in dark-mode changed to white and light gray
 - fixed error when using slicethickness test in automation. (AttributeError 'Gui' object has no attribute 'active_img_no'
+- fixed error when locking source distance for NM Uniformity and SNI when correcting for point source curvature.
 - other small fixes
 
 Code structure:

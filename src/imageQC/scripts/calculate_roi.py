@@ -285,7 +285,7 @@ def get_rois(image, image_number, input_main):
                     res = find_lines(image)
                     if len(res[0]) == 2 and len(res[1]) == 2:
                         roi_this = []
-                        for i in [0, 1]:
+                        for i in [1, 0]:  # 1 first for line in xdir = y profile
                             height_idx = i % 2
                             width_idx = 1 if height_idx == 0 else 0
                             roi_this.append(get_roi_rectangle(
@@ -978,10 +978,8 @@ def get_ratio_NM(image, image_info, mask_corner=0.0, ufov_ratio=0.95, cfov_ratio
     width_y = width_y - 2
     width_x = width_x - 2
 
-    ufov = get_roi_rectangle(image.shape,
-        roi_width=ufov_ratio * width_x,
-        roi_height=ufov_ratio * width_y
-        )
+    ufov = get_roi_rectangle(image.shape, roi_width=ufov_ratio * width_x,
+                             roi_height=ufov_ratio * width_y)
     if mask_corner > 0:
         n_pix = round(mask_corner / image_info.pix[0])
         if n_pix > 0:

@@ -771,7 +771,6 @@ class ImageCanvas(GenericImageCanvas):
             for row, col in [
                     (small_start_idx, 0),
                     (small_start_idx+1, 1), (-2, -2), (-1, -1)]:
-                print(f'row {row} col {col}')
                 mask = np.where(self.main.current_roi[row][col], 0, 1)
                 self.contours.append(
                     self.ax.contourf(mask, levels=[0, 0.5], colors='red', alpha=0.3))
@@ -818,10 +817,10 @@ class ImageCanvas(GenericImageCanvas):
             img_txt = self.main.tab_nm.sni_result_image.currentText()
             if 'selected' in plot_txt or 'selected' in img_txt:
                 flat_list = [
-                    item for row in self.main.current_roi[1:]
+                    item for row in self.main.current_roi[3:]
                     for item in row]
                 try:
-                    selected_roi = flat_list[roi_idx - 1]
+                    selected_roi = flat_list[roi_idx - 2]
                 except IndexError:
                     selected_roi = None
 

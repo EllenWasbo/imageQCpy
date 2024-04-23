@@ -2670,6 +2670,10 @@ def get_profile_sli(image, paramset, line, direction='h'):
             profile = np.diff(profile)
         if paramset.sli_sigma > 0:
             profile = sp.ndimage.gaussian_filter(profile, sigma=paramset.sli_sigma)
+    else:  # CT
+        if paramset.sli_median_filter > 0:
+            profile = sp.ndimage.median_filter(profile, size=paramset.sli_median_filter)
+
 
     return (profile, errmsg)
 

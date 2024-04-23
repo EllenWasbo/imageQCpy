@@ -195,7 +195,7 @@ def main_ui():
 if __name__ == '__main__':
     print('imageQC is starting up...', flush=True)
     warnings = []
-    developer_mode = True
+    developer_mode = False
     if developer_mode:
         prepare_debug()  # type c to continue, developer_mode=False in imageQC.py to deactivate debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
@@ -217,16 +217,28 @@ if __name__ == '__main__':
         if ok:
             log_mode = auto_common.log_mode
     parent_folder = Path(user_prefs_path).parent
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[
-            logging.FileHandler(
-                os.path.join(parent_folder, LOG_FILENAME), mode=log_mode),
-            logging.StreamHandler(sys.stdout)
-        ],
-    )
+    if user_prefs_path != '':
+        print(f'logging to {parent_folder}')
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            datefmt='%Y-%m-%d %H:%M:%S',
+            handlers=[
+                logging.FileHandler(
+                    os.path.join(parent_folder, LOG_FILENAME), mode=log_mode),
+                logging.StreamHandler(sys.stdout)
+            ],
+        )
+    else:  # logging only to sys.stdout
+        print('logging to stdout')
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            datefmt='%Y-%m-%d %H:%M:%S',
+            handlers=[
+                logging.StreamHandler(sys.stdout)
+            ],
+        )
 
     if len(sys.argv) > 1:
         main_non_ui()

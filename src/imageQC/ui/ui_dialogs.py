@@ -7,7 +7,9 @@
 
 import os
 import copy
+from dataclasses import asdict
 import numpy as np
+import pandas as pd
 
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5 import QtCore
@@ -376,8 +378,8 @@ class AddArtifactsDialog(ImageQCDialog):
         self.x_offset.setRange(-1000, 1000)
         self.y_offset = QDoubleSpinBox(decimals=1)
         self.y_offset.setRange(-1000, 1000)
-        fLO.addRow(QLabel('Center offset x'), self.x_offset)
-        fLO.addRow(QLabel('Center offset y'), self.y_offset)
+        fLO.addRow(QLabel('Center offset x (mm)'), self.x_offset)
+        fLO.addRow(QLabel('Center offset y (mm)'), self.y_offset)
         self.size_1 = QDoubleSpinBox(decimals=1)
         self.size_1.setRange(0, 1000)
         self.size_1_txt = QLabel('')
@@ -400,8 +402,14 @@ class AddArtifactsDialog(ImageQCDialog):
         fLO.addRow(QLabel('Artifact value'), self.value)
 
         btn_view = QPushButton('View list of current artifacts...')
-        vlo.addWidget(btn_view)
         btn_view.clicked.connect(self.view_artifacts)
+        vlo.addWidget(btn_view)
+        btn_copy = QPushButton('Copy current artifact to clipboard...')
+        btn_copy.clicked.connect(self.copy_artifact)
+        vlo.addWidget(btn_copy)
+        btn_load = QPushButton('Load artifact(s) from clipboard...')
+        btn_load.clicked.connect(self.load_artifact)
+        vlo.addWidget(btn_load)
         btn_delete_all = QPushButton('Delete all artifacts')
         vlo.addWidget(btn_delete_all)
         btn_delete_all.clicked.connect(self.delete_all)
@@ -477,18 +485,77 @@ class AddArtifactsDialog(ImageQCDialog):
             add_artifact(artifact, self.main, overwrite=True)
 
     def view_artifacts(self):
-        """View or delete artifacts."""
+        """View currently applied artifacts as text."""
         text = []
         for idx, img in enumerate(self.main.imgs):
             if len(img.artifacts) > 0:
                 text.append(f'Image {idx}')
-                text.extend([str(artifact) for artifact in img.artifacts])
+                dataf = None
+                for ano, artifact in enumerate(img.artifacts):
+                    if ano == 0:
+                        dataf = pd.DataFrame(asdict(artifact), index=[ano])
+                    else:
+                        dataf = dataf.append(asdict(artifact), ignore_index = True)
+                text.append(dataf.to_string(index=False))
         if len(text) == 0:
             QMessageBox.information(self, 'Information', 'Found no added artifacts.')
         else:
             dlg = TextDisplay(self, '\n'.join(text), title='Current artifacts',
                               min_width=1100, min_height=500)
             dlg.exec()
+
+    def copy_artifact(self):
+        """Copy current artifact to clipboard."""
+        artifact = self.get_artifact_object()
+        if artifact:
+            dataf = pd.DataFrame(asdict(artifact), index=[0])
+            dataf.to_clipboard(index=False)
+            QMessageBox.information(
+                self, 'Information', 'Current artifact in clipboard.')
+
+    def load_artifact(self):
+        """Load artifact from clipboard."""
+        dataf_split = {}
+        try:
+            dataf = pd.read_clipboard()
+            dataf_split = dataf.to_dict('split')
+        except pd.errors.ParserError as err:
+            QMessageBox.warning(
+                self, 'Validation failed',
+                f'Trouble validating input table: {err}')
+        if 'columns' in dataf_split:
+            keys = dataf_split['columns']
+        else:
+            keys = []
+        if len(set(keys).difference([*asdict(Artifact())])) == 0:
+            if len(dataf_split['data']) > 1:
+                quest = ('Found more than one artifact in the loaded values.')
+                res = messageboxes.QuestionBox(
+                    self, title='Load multiple artifacts', msg=quest,
+                    yes_text='Add/replace all to current image', no_text='Cancel')
+                if res.exec():
+                    self.main.imgs[self.main.gui.active_img_no].artifacts = None
+                    dataf_idx = dataf.to_dict('index')
+                    for key, artifact_dict in dataf_idx.items():
+                        add_artifact(
+                            Artifact(**artifact_dict), self.main, overwrite=False)
+            else:
+                values = dataf_split['data'][0]
+                dataf_dict = {keys[i]: values[i] for i in range(len(keys))}
+                self.form.setCurrentText(dataf_dict['form'])
+                self.x_offset.setValue(dataf_dict['x_offset'])
+                self.y_offset.setValue(dataf_dict['y_offset'])
+                self.size_1.setValue(dataf_dict['size_1'])
+                self.size_2.setValue(dataf_dict['size_2'])
+                self.rotation.setValue(dataf_dict['rotation'])
+                self.sigma.setValue(dataf_dict['sigma'])
+                self.method.setCurrentText(dataf_dict['method'])
+                self.value.setValue(dataf_dict['value'])
+        else:
+            QMessageBox.warning(
+                self, 'Validation failed',
+                'Unexpected keys in clipboard {keys} compared to expected '
+                f'{[*asdict(Artifact())]}')
 
     def delete_all(self):
         """Remove all artifacts from imgs."""
@@ -498,16 +565,13 @@ class AddArtifactsDialog(ImageQCDialog):
             self.main.tree_file_list.topLevelItem(self.main.gui.active_img_no))
         self.main.refresh_img_display()
 
-    #TODO def save_artifacts(self):
-    #TODO def load_artifacts(self):
-
 
 class WindowLevelEditDialog(ImageQCDialog):
     """Dialog to set window level by numbers."""
 
     def __init__(self, min_max=[0, 0], show_lock_wl=True, decimals=0,
                  positive_negative=False):
-        """
+        """Initiate..
 
         Parameters
         ----------

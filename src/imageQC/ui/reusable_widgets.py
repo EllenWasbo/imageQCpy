@@ -24,7 +24,6 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
 # imageQC block start
 from imageQC.config.iQCconstants import ENV_ICON_PATH
-from imageQC.ui.ui_dialogs import WindowLevelEditDialog
 # imageQC block end
 
 
@@ -520,6 +519,10 @@ class ToolBarWindowLevel(QToolBar):
     def set_window_level_by_numbers(self):
         """Dialog box to set min/max or center/width and option to lock."""
         factor = 1 / 10 ** self.parent.decimals
+        try:
+            from imageQC.ui.ui_dialogs import WindowLevelEditDialog
+        except:
+            from ui.ui_dialogs import WindowLevelEditDialog
         dlg = WindowLevelEditDialog(
             min_max=[
                 factor * self.parent.min_wl.value(),

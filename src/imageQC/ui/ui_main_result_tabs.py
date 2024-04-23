@@ -978,16 +978,28 @@ class ResultPlotCanvas(PlotCanvas):
                     except KeyError:
                         proceed = False
                 elif len(edge_details_dicts) > 1:
-                    for i in range(len(edge_details_dicts)):
-                        if 'sorted_pixels' in edge_details_dicts[i][0]:
-                            try:
-                                xvals.append(
-                                    edge_details_dicts[i][0]['sorted_pixels_x'])
-                                sorted_pixels.append(
-                                    edge_details_dicts[i][0]['sorted_pixels'])
-                                proceed = True
-                            except KeyError:
-                                proceed = False
+                    if self.main.current_modality == 'NM':  # TODO? make fit others
+                        for i in range(len(edge_details_dicts[0])):
+                            if 'sorted_pixels' in edge_details_dicts[0][i]:
+                                try:
+                                    xvals.append(
+                                        edge_details_dicts[0][i]['sorted_pixels_x'])
+                                    sorted_pixels.append(
+                                        edge_details_dicts[0][i]['sorted_pixels'])
+                                    proceed = True
+                                except KeyError:
+                                    proceed = False
+                    else:
+                        for i in range(len(edge_details_dicts)):
+                            if 'sorted_pixels' in edge_details_dicts[i][0]:
+                                try:
+                                    xvals.append(
+                                        edge_details_dicts[i][0]['sorted_pixels_x'])
+                                    sorted_pixels.append(
+                                        edge_details_dicts[i][0]['sorted_pixels'])
+                                    proceed = True
+                                except KeyError:
+                                    proceed = False
 
             if proceed:
                 self.xtitle = 'pos (mm)'
@@ -1695,7 +1707,7 @@ class ResultPlotCanvas(PlotCanvas):
             except (KeyError, IndexError):
                 pass
 
-        def plot_filtered_NPS(roi_name='L1'):
+        def plot_filtered_NPS():
             """Plot filtered NPS + NPS structure for selected ROI +quantum noise txt."""
             self.default_range_x = [0, nyquist_freq]
             roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
@@ -1858,7 +1870,7 @@ class ResultPlotCanvas(PlotCanvas):
             if 'max' in sel_text:
                 plot_filtered_max_avg()
             else:
-                plot_filtered_NPS(roi_name=sel_text[-2:])
+                plot_filtered_NPS()
         elif 'all' in sel_text:
             plot_all_NPS()
         elif 'correction' in sel_text:

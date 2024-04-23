@@ -299,6 +299,9 @@ class ParamsTabCommon(QTabWidget):
                     self.main.update_roi()
                     if attribute.startswith('sni_'):
                         self.update_sni_roi_names()
+                    elif attribute == 'mtf_type' and self.main.current_modality == 'NM':
+                        if content == 2:
+                            self.mtf_auto_center.setChecked(True)
                 if ((update_plot or update_results_table)
                         and clear_results is False):
                     if attribute == 'mtf_gaussian':
@@ -1010,6 +1013,9 @@ class ParamsTabCT(ParamsTabCommon):
         self.sli_average_width = QDoubleSpinBox(decimals=0, minimum=1)
         self.sli_average_width.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_average_width'))
+        self.sli_median_filter = QDoubleSpinBox(decimals=0, minimum=0)
+        self.sli_median_filter.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_median_filter'))
         self.sli_auto_center = QCheckBox('')
         self.sli_auto_center.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='sli_auto_center'))
@@ -1037,6 +1043,9 @@ class ParamsTabCT(ParamsTabCommon):
         flo2.addRow(
             QLabel('Within search margin, average over neighbour profiles (#)'),
             self.sli_average_width)
+        flo2.addRow(
+            QLabel('Median filter profiles, filter width (# pixels)'),
+            self.sli_median_filter)
         flo2.addRow(QLabel('Background from profile outer (mm)'),
                     self.sli_background_width)
         flo2.addRow(QLabel('Plot image profiles'), self.sli_plot)
@@ -2139,7 +2148,7 @@ class ParamsTabNM(ParamsTabCommon):
             lambda: self.update_sni_display_options(attribute='sni_type'))
         self.sni_roi_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.05, maximum=1., singleStep=0.01)
-        self.sni_roi_ratio.valueChanged.connect(
+        self.sni_roi_ratio.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='sni_roi_ratio'))
         self.sni_roi_size = QDoubleSpinBox(
             decimals=0, minimum=16, maximum=1000, singleStep=1)

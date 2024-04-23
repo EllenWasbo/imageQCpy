@@ -1,5 +1,5 @@
 # v3.0.8
-_mon dd, 2024_
+_Apr 23, 2024_
 
 New functionalities:
 - New buttons in image toolbar:
@@ -24,6 +24,8 @@ Changes:
 	- considerably more robust for Siemens gamma camera savescreens that differ in screen size from day to day
 	- default templates updated with larger ROIs to handle these day to day changes, ignoring parts of text at left/right border of ROI
 - Changed startup time (saved some update after gui presented)
+- CT test Slice thickness:
+	- Added option to median filter profiles before finding the FWHM (for noisy images - better option is probably to increase mAs)
 - NM test Uniformity and SNI:
 	- Searching for non-zero image now also ignore neighbour row/column of zero values according to NEMA NU-1 (i.e. smaller found active image by 1 pixel each direction)
 	- Uniformity:
@@ -35,6 +37,8 @@ Changes:
 	- SNI:
 		- Added option to calculate SNI based on ROIs positioned in grid matching PMT positions for Siemens gamma camera
 		- Two large ROIs for all grid options
+- NM test MTF (Spatial resolution from two perpendicular lines):
+	- x and y used to be mixed up (now: x results = results for profile found from line in y direction and vise versa)
 - Mammo test Homogeneity:
    - Added option to not calculate variance-map (to speed up if not needed)
    - Added option show count of deviating pixels within each ROI to better detect where these are located, list coordinates of these pixels and highlight with circles
@@ -49,6 +53,7 @@ Bugfixes:
 - black and dark gray plot lines in dark-mode changed to white and light gray
 - fixed error when using slicethickness test in automation. (AttributeError 'Gui' object has no attribute 'active_img_no'
 - fixed error when locking source distance for NM Uniformity and SNI when correcting for point source curvature.
+- logging to file avoided (avoiding permission errors) when user_preferences path not yet set
 - other small fixes
 
 Code structure:

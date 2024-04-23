@@ -549,14 +549,14 @@ def test_NM_SNI_sum():
     calculate_qc.calculate_qc(input_main)
     values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
 
-    assert max(values) < 10  # [9., 8., 8., 8., 6., 7., 7., 9., 9.]
+    assert max(values) < 12  # [11.,  8.,  8.,  7.,  7.,  7.,  7., 11.,  9.]
 
     # include first image to simulate central stripe as (strange) artifact
     input_main.current_quicktest.tests[0] = ['SNI']
     calculate_qc.calculate_qc(input_main)
     values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
 
-    assert max(values) > 30  # [33., 22., 22.,  8., 30.,  7.,  7., 33.,  9.]
+    assert max(values) > 30  # [35., 22., 23.,  5., 33.,  6.,  5., 35.,  8.]
 
 
 def test_NM_MTF_pointsource():
@@ -602,7 +602,7 @@ def test_NM_MTF_2_linesources():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(10*np.array(input_main.results['MTF']['values'][0]))
-    assert np.array_equal(values, np.array([73., 133.,  74., 135.]))
+    assert np.array_equal(values, np.array([74., 135., 73., 133.]))
 
 
 def test_NM_MTF_edge():

@@ -395,6 +395,7 @@ class ParamSetCT(ParamSetCommon):
     sli_background_width: float = 5.
     sli_search_width: int = 10
     sli_average_width: int = 1
+    sli_median_filter: int = 0
     sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom, 3=Siemens phantom
     sli_auto_center: bool = False
     rin_sigma_image: float = 0.  # sigma for gaussfilter of image
@@ -613,6 +614,7 @@ class ParamSetMR(ParamSetCommon):
     sli_background_width: float = 5.
     # sli_search_width: int = 0  # currently not in use
     sli_average_width: int = 0
+    sli_median_filter: int = 0  #currently not in use for MR, CT only
     sli_dist_lower: float = -2.5
     sli_dist_upper: float = 2.5
     sli_optimize_center: bool = True

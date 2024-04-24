@@ -1931,12 +1931,15 @@ class ResultPlotCanvas(PlotCanvas):
                             xvals = dd_this['MTF_freq']
                             yvals = dd_this['MTF']
                             color = colors[no] if len(idxs) == 1 else COLORS[m_idx]
-                            self.curves.append({
-                                'label': infotext[no] + ' MTF ' + materials[m_idx],
-                                'xvals': xvals,
-                                'yvals': yvals,
-                                'color': color
-                                 })
+                            try:
+                                self.curves.append({
+                                    'label': infotext[no] + ' MTF ' + materials[m_idx],
+                                    'xvals': xvals,
+                                    'yvals': yvals,
+                                    'color': color
+                                     })
+                            except IndexError:
+                                pass
 
                 if 'MTF_filtered' in dd['gMTF_details'] and len(idxs) == 1:
                     yvals = dd['gMTF_details']['MTF_filtered']

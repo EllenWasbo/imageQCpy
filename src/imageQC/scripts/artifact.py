@@ -35,7 +35,7 @@ class Artifact:
 
 
 def add_artifact(artifact, main, overwrite=False):
-    # apply to current image or all (if > 1)
+    """Add artifact objects to image info."""
     if len(main.imgs) == 0:
         QMessageBox.information(main, 'No images loaded',
                                 'No images loaded to add artifacts to.')
@@ -71,7 +71,7 @@ def add_artifact(artifact, main, overwrite=False):
 
 
 def apply_artifacts(image, image_info):
-    """Add artifact to image number of main.imgs."""
+    """Apply artifact to image number of main.imgs."""
     if hasattr(image_info, 'artifacts'):
         for artifact in image_info.artifacts:
             roi_array = None

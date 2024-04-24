@@ -488,15 +488,18 @@ class AddArtifactsDialog(ImageQCDialog):
         """View currently applied artifacts as text."""
         text = []
         for idx, img in enumerate(self.main.imgs):
-            if len(img.artifacts) > 0:
+            if img.artifacts is not None:
                 text.append(f'Image {idx}')
                 dataf = None
                 for ano, artifact in enumerate(img.artifacts):
                     if ano == 0:
                         dataf = pd.DataFrame(asdict(artifact), index=[ano])
                     else:
-                        dataf = dataf.append(asdict(artifact), ignore_index = True)
-                text.append(dataf.to_string(index=False))
+                        dataf = dataf.append(asdict(artifact), ignore_index=True)
+                if dataf is not None:
+                    text.append(dataf.to_string(index=False))
+                else:
+                    text.append('No added artifacts.')
         if len(text) == 0:
             QMessageBox.information(self, 'Information', 'Found no added artifacts.')
         else:

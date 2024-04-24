@@ -741,7 +741,10 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
 
         orient = pyd.get('PatientPosition', '')
         if orient == 'FFS':
-            npout = np.fliplr(npout)
+            try:
+                npout = np.fliplr(npout)
+            except ValueError:
+                pass
 
         if len(tag_patterns) > 0 and tag_infos is not None:
             tag_strings = read_tag_patterns(

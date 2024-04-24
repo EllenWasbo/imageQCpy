@@ -10,12 +10,12 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
 import copy
+import warnings
+
 import numpy as np
 import scipy as sp
 from scipy.signal import find_peaks
 import skimage
-import warnings
-
 from PyQt5.QtWidgets import qApp
 
 # imageQC block start
@@ -513,7 +513,7 @@ def calculate_qc(input_main, wid_auto=None,
                             if paramset.sli_auto_center:
                                 force_new_roi.append('Sli')
                         if 'CTn' in marked[i]:
-                            if paramset.ctn_auto_center:
+                            if paramset.ctn_auto_center or paramset.ctn_search:
                                 force_new_roi.append('CTn')
                     elif modality == 'Xray':
                         if 'Noi' in marked[i]:
@@ -4218,7 +4218,7 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
             summed_img = summed_img + this_centered
 
     # get position of spheres
-    pol, (rads, angs) = mmcalc.topolar(summed_img)
+    pol, (_, angs) = mmcalc.topolar(summed_img)
     prof = np.max(pol, axis=0)
     prof = prof - np.min(prof)
     peaks = find_peaks(prof, distance=prof.shape[0]/10)

@@ -17,13 +17,10 @@ from PyQt5.QtCore import Qt
 
 # imageQC block start
 import imageQC.resources
-import imageQC.ui.ui_main as ui_main
-from imageQC.ui.ui_dialogs import StartUpDialog
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants import (
     ENV_ICON_PATH, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER, LOG_FILENAME
     )
-import imageQC.scripts.automation as automation
 # imageQC block end
 
 
@@ -44,6 +41,155 @@ def prepare_debug():
     # import matplotlib.pyplot as plt
     # plt.imshow(your_image) /or plt.plot(xs, ys)
     # plt.pause(1) not plt.show() which will show empty figure and errmsg
+
+
+def main_non_ui():
+    """Start imageQC without user interface, just automation."""
+    if os.environ[ENV_CONFIG_FOLDER] == '':
+        print('Config folder not specified. Run GUI version to configure imageQC.')
+    else:
+        parser = argparse.ArgumentParser(
+            prog='imageQC',
+            # desription=''
+            )
+        parser.add_argument('-i', '--import_images', action='store_true',
+                            help='Import new files from the image pool')
+        parser.add_argument('-n', '--ndays', type=int, default=-2,
+                            help='Override configured setting on maximum age '
+                            '(days) of the files to import. Default (-2) keep '
+                            'saved settings. -1 = ignore none.')
+        parser.add_argument('-a', '--auto',
+                            choices=['none', 'all', 'dicom', 'vendor'],
+                            default='none',
+                            help='Run templates in both DICOM and vendor based '
+                            'templates (-a all) or just from DICOM based '
+                            '(-a dicom) or vendor base templates (-a vendor).')
+        parser.add_argument('-d', '--dash', action='store_true',
+                            help='Display dashboard')
+        parser.add_argument('modality_temp', metavar='modality1 modality2/temp7',
+                            nargs='*',
+                            help='Limit the run for specified modalities '
+                            'or the specified modality/templatename '
+                            'e.g. CT Xray/lab9 MR/lab3.')
+        args = parser.parse_args()
+
+        import imageQC.scripts.automation as automation
+        automation.run_automation_non_gui(args)
+
+    sys.exit('Program exits')
+
+
+def main_ui():
+    """Start imageQC with user interface."""
+    # to set taskbar icon correctly for windows
+    try:
+        from ctypes import windll  # Only exists on Windows.
+        myappid = 'sus.imageQC.app.3'
+        windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except ImportError:
+        pass
+
+    app = QApplication(sys.argv)
+    screen = app.primaryScreen()
+    sz = screen.geometry()
+
+    splash_img = QPixmap(':/icons/iQC_splash.png')
+    splash = QSplashScreen(
+        splash_img, Qt.WindowStaysOnTopHint)
+    splash.show()
+
+    app.setStyle('Fusion')
+    if user_prefs.dark_mode:
+        gb_background = 'background-color: #484848;'
+        hover_background = 'background-color: #585858;'
+        pressed_background = 'background-color: #686868;'
+    else:
+        gb_background = 'background-color: #e7e7e7;'
+        hover_background = 'background-color: #d7d7d7;'
+        pressed_background = 'background-color: #c7c7c7;'
+    app.setStyleSheet(
+        f"""QSplitter::handle:horizontal {{
+            width: 4px;
+            background-color: #6e94c0;
+            }}
+        QSplitter::handle:vertical {{
+            height: 4px;
+            background-color: #6e94c0;
+            }}
+        QWidget {{
+            padding: 2px;
+            }}
+        QGroupBox {{
+            {gb_background}
+            border-radius: 5px;
+            border: 1px solid grey;
+            margin-top: 10px;
+            }}
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            padding-left: 10px;
+            padding-top: -7px;
+            font-style: italic;
+            }}
+        QPushButton {{
+            border-style: solid;
+            border-width: 2px;
+            border-color: #888888;
+            border-radius: 10px;
+            padding: 6px;
+            {gb_background}
+            }}
+        QPushButton::hover {{
+            {hover_background}
+            }}
+        QPushButton:pressed {{
+            {pressed_background}
+            }}""")
+    myFont = QFont()
+    myFont.setPointSize(user_prefs.font_size)
+    app.setFont(myFont)
+    font_metric = QFontMetrics(myFont)
+    char_width = font_metric.averageCharWidth()
+
+    if user_prefs.dark_mode:
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor(53, 53, 53))
+        palette.setColor(QPalette.WindowText, Qt.white)
+        palette.setColor(QPalette.Base, QColor(25, 25, 25))
+        palette.setColor(
+            QPalette.AlternateBase, QColor(53, 53, 53))
+        palette.setColor(QPalette.ToolTipBase, Qt.black)
+        palette.setColor(QPalette.ToolTipText, Qt.white)
+        palette.setColor(QPalette.Text, Qt.white)
+        palette.setColor(QPalette.Button, QColor(53, 53, 53))
+        palette.setColor(QPalette.ButtonText, Qt.white)
+        palette.setColor(QPalette.BrightText, Qt.red)
+        palette.setColor(QPalette.Link, QColor(42, 130, 218))
+        palette.setColor(
+            QPalette.Highlight, QColor(42, 130, 218))
+        palette.setColor(QPalette.HighlightedText, Qt.black)
+        app.setPalette(palette)
+
+    if os.environ[ENV_USER_PREFS_PATH] == '':
+        try:
+            from imageQC.ui.ui_dialogs import StartUpDialog
+        except ModuleNotFoundError:
+            from ui.ui_dialogs import StartUpDialog
+        dlg = StartUpDialog()
+        dlg.show()
+        splash.finish(dlg)
+        dlg.exec()
+    try:
+        import imageQC.ui.ui_main as ui_main
+    except ModuleNotFoundError:
+        import ui.ui_main as ui_main
+    w = ui_main.MainWindow(scX=sz.width(), scY=sz.height(), char_width=char_width,
+                           developer_mode=developer_mode, warnings=warnings)
+    w.show()
+    splash.finish(w)
+    w.version_control()
+    app.exec()
 
 
 if __name__ == '__main__':
@@ -71,148 +217,30 @@ if __name__ == '__main__':
         if ok:
             log_mode = auto_common.log_mode
     parent_folder = Path(user_prefs_path).parent
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[
-            logging.FileHandler(
-                os.path.join(parent_folder, LOG_FILENAME), mode=log_mode),
-            logging.StreamHandler(sys.stdout)
-        ],
-    )
+    if user_prefs_path != '':
+        print(f'logging to {parent_folder}')
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            datefmt='%Y-%m-%d %H:%M:%S',
+            handlers=[
+                logging.FileHandler(
+                    os.path.join(parent_folder, LOG_FILENAME), mode=log_mode),
+                logging.StreamHandler(sys.stdout)
+            ],
+        )
+    else:  # logging only to sys.stdout
+        print('logging to stdout')
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            datefmt='%Y-%m-%d %H:%M:%S',
+            handlers=[
+                logging.StreamHandler(sys.stdout)
+            ],
+        )
 
     if len(sys.argv) > 1:
-        if os.environ[ENV_CONFIG_FOLDER] == '':
-            print('Config folder not specified. Run GUI version to configure imageQC.')
-        else:
-            parser = argparse.ArgumentParser(
-                prog='imageQC',
-                # desription=''
-                )
-            parser.add_argument('-i', '--import_images', action='store_true',
-                                help='Import new files from the image pool')
-            parser.add_argument('-n', '--ndays', type=int, default=-2,
-                                help='Override configured setting on maximum age '
-                                '(days) of the files to import. Default (-2) keep '
-                                'saved settings. -1 = ignore none.')
-            parser.add_argument('-a', '--auto',
-                                choices=['none', 'all', 'dicom', 'vendor'],
-                                default='none',
-                                help='Run templates in both DICOM and vendor based '
-                                'templates (-a all) or just from DICOM based '
-                                '(-a dicom) or vendor base templates (-a vendor).')
-            parser.add_argument('-d', '--dash', action='store_true',
-                                help='Display dashboard')
-            parser.add_argument('modality_temp', metavar='modality1 modality2/temp7',
-                                nargs='*',
-                                help='Limit the run for specified modalities '
-                                'or the specified modality/templatename '
-                                'e.g. CT Xray/lab9 MR/lab3.')
-            args = parser.parse_args()
-
-            automation.run_automation_non_gui(args)
-
-        sys.exit('Program exits')
+        main_non_ui()
     else:
-        # to set taskbar icon correctly for windows
-        try:
-            from ctypes import windll  # Only exists on Windows.
-            myappid = 'sus.imageQC.app.3'
-            windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
-        except ImportError:
-            pass
-
-        app = QApplication(sys.argv)
-        screen = app.primaryScreen()
-        sz = screen.geometry()
-
-        splash_img = QPixmap(':/icons/iQC_splash.png')
-        splash = QSplashScreen(
-            splash_img, Qt.WindowStaysOnTopHint)
-        splash.show()
-
-        app.setStyle('Fusion')
-        if user_prefs.dark_mode:
-            gb_background = 'background-color: #484848;'
-            hover_background = 'background-color: #585858;'
-            pressed_background = 'background-color: #686868;'
-        else:
-            gb_background = 'background-color: #e7e7e7;'
-            hover_background = 'background-color: #d7d7d7;'
-            pressed_background = 'background-color: #c7c7c7;'
-        app.setStyleSheet(
-            f"""QSplitter::handle:horizontal {{
-                width: 4px;
-                background-color: #6e94c0;
-                }}
-            QSplitter::handle:vertical {{
-                height: 4px;
-                background-color: #6e94c0;
-                }}
-            QWidget {{
-                padding: 2px;
-                }}
-            QGroupBox {{
-                {gb_background}
-                border-radius: 5px;
-                border: 1px solid grey;
-                margin-top: 10px;
-                }}
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding-left: 10px;
-                padding-top: -7px;
-                font-style: italic;
-                }}
-            QPushButton {{
-                border-style: solid;
-                border-width: 2px;
-                border-color: #888888;
-                border-radius: 10px;
-                padding: 6px;
-                {gb_background}
-                }}
-            QPushButton::hover {{
-                {hover_background}
-                }}
-            QPushButton:pressed {{
-                {pressed_background}
-                }}""")
-        myFont = QFont()
-        myFont.setPointSize(user_prefs.font_size)
-        app.setFont(myFont)
-        font_metric = QFontMetrics(myFont)
-        char_width = font_metric.averageCharWidth()
-
-        if user_prefs.dark_mode:
-            palette = QPalette()
-            palette.setColor(QPalette.Window, QColor(53, 53, 53))
-            palette.setColor(QPalette.WindowText, Qt.white)
-            palette.setColor(QPalette.Base, QColor(25, 25, 25))
-            palette.setColor(
-                QPalette.AlternateBase, QColor(53, 53, 53))
-            palette.setColor(QPalette.ToolTipBase, Qt.black)
-            palette.setColor(QPalette.ToolTipText, Qt.white)
-            palette.setColor(QPalette.Text, Qt.white)
-            palette.setColor(QPalette.Button, QColor(53, 53, 53))
-            palette.setColor(QPalette.ButtonText, Qt.white)
-            palette.setColor(QPalette.BrightText, Qt.red)
-            palette.setColor(QPalette.Link, QColor(42, 130, 218))
-            palette.setColor(
-                QPalette.Highlight, QColor(42, 130, 218))
-            palette.setColor(QPalette.HighlightedText, Qt.black)
-            app.setPalette(palette)
-
-        if os.environ[ENV_USER_PREFS_PATH] == '':
-            dlg = StartUpDialog()
-            dlg.show()
-            splash.finish(dlg)
-            dlg.exec()
-        w = ui_main.MainWindow(scX=sz.width(), scY=sz.height(), char_width=char_width,
-                               developer_mode=developer_mode, warnings=warnings)
-        w.show()
-        splash.finish(w)
-        w.version_control()
-        app.exec()
+        main_ui()

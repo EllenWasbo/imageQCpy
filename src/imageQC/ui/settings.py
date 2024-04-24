@@ -30,7 +30,7 @@ from imageQC.config.iQCconstants import (
 from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
 from imageQC.config.read_config_idl import ConfigIdl2Py
-from imageQC.ui.ui_dialogs import ImageQCDialog
+from imageQC.ui.ui_dialogs import ImageQCDialog, SelectTextsDialog
 from imageQC.ui.settings_reusables import StackWidget, QuickTestTreeView
 from imageQC.ui import settings_automation
 from imageQC.ui import settings_dicom_tags
@@ -342,9 +342,11 @@ class SettingsDialog(ImageQCDialog):
         """Import settings from another config folder."""
         def select_yaml_files_for_import(filenames):
             """Select which files to import from a config_folder."""
-            dlg = SelectImportFilesDialog(filenames)
+            dlg = SelectTextsDialog(
+                filenames, title='Select files to import from',
+                select_info='Select files to import from')
             if dlg.exec():
-                filenames = dlg.get_checked_files()
+                filenames = dlg.get_checked_texts()
             else:
                 filenames = []
             return filenames
@@ -1113,46 +1115,3 @@ class ImportMain:
     auto_vendor_templates: dict = field(default_factory=dict)
     dash_settings: cfc.DashSettings = field(default_factory=cfc.DashSettings)
     limits_and_plot_templates: dict = field(default_factory=dict)
-
-
-class SelectImportFilesDialog(ImageQCDialog):
-    """Dialog to select files to import from."""
-
-    def __init__(self, filenames):
-        super().__init__()
-        self.setWindowTitle('Select files to import from')
-        vlo = QVBoxLayout()
-        self.setLayout(vlo)
-
-        vlo.addWidget(QLabel('Select files to import from'))
-        self.list_widget = uir.ListWidgetCheckable(
-            texts=filenames,
-            set_checked_ids=list(np.arange(len(filenames)))
-            )
-        vlo.addWidget(self.list_widget)
-        self.btn_select_all = QPushButton('Deselect all')
-        self.btn_select_all.clicked.connect(self.select_all)
-        vlo.addWidget(self.btn_select_all)
-
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        button_box = QDialogButtonBox(buttons)
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        vlo.addWidget(button_box)
-
-    def select_all(self):
-        """Select or deselect all in list."""
-        if self.btn_select_all.text() == 'Deselect all':
-            set_state = Qt.Unchecked
-            self.btn_select_all.setText('Select all')
-        else:
-            set_state = Qt.Checked
-            self.btn_select_all.setText('Deselect all')
-
-        for i in range(len(self.list_widget.texts)):
-            item = self.list_widget.item(i)
-            item.setCheckState(set_state)
-
-    def get_checked_files(self):
-        """Get list of checked testcode ids."""
-        return self.list_widget.get_checked_texts()

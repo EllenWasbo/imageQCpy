@@ -88,14 +88,20 @@ class ParamsTabVendor(QWidget):
                 'Siemens exported energy spectrum (.txt)',
                 'Philips MR ACR report (.pdf)',
                 'GE QAP (.txt)',
+                'GE Mammo QAP (txt)',
                 ]
             if file_type in implemented_types:
                 file_suffix = file_type.split('(')[1]
                 file_suffix = file_suffix.split(')')[0]
+                if '.' not in file_suffix:
+                    file_suffix = ''
                 temp = AutoVendorTemplate(file_type=file_type, file_suffix=file_suffix)
-                fnames = QFileDialog.getOpenFileNames(
-                        self, f'Open {file_type}',
-                        filter=f'{file_suffix[1:].upper()} files (*{file_suffix})')
+                if file_suffix:
+                    fnames = QFileDialog.getOpenFileNames(
+                            self, f'Open {file_type}',
+                            filter=f'{file_suffix[1:].upper()} files (*{file_suffix})')
+                else:
+                    fnames = QFileDialog.getOpenFileNames(self, f'Open {file_type}')
                 if len(fnames[0]) > 0:
                     self.run_template(template=temp, files=fnames[0])
             else:

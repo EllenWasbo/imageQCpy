@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QAction, QToolBar, QToolButton, QMenu,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QAbstractScrollArea,
-    QMessageBox, QLabel, QSizePolicy
+    QSplitter, QMessageBox, QLabel
     )
 import matplotlib
 import matplotlib.figure
@@ -26,7 +26,7 @@ from imageQC.ui.ui_main_image_widgets import (
     GenericImageWidget, GenericImageToolbarPosVal, ImageNavigationToolbar)
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui.plot_widgets import PlotWidget, PlotCanvas
-from imageQC.config.iQCconstants import ENV_ICON_PATH
+from imageQC.config.iQCconstants import ENV_ICON_PATH, COLORS
 from imageQC.scripts import mini_methods_format as mmf
 from imageQC.scripts.mini_methods_calculate import find_median_spectrum
 # imageQC block end
@@ -164,7 +164,7 @@ class ResultTable(QTableWidget):
     def cell_selected(self):
         """Set new active image when current cell changed."""
         if self.linked_image_list:
-            marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+            marked_imgs = self.main.get_marked_imgs_current_test()
             self.main.set_active_img(marked_imgs[self.currentRow()])
 
     def copy_selection(self):
@@ -242,7 +242,7 @@ class ResultTable(QTableWidget):
                 pass
         else:
             if linked_image_list:
-                marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+                marked_imgs = self.main.get_marked_imgs_current_test()
                 values_rows_copy = [
                     row for i, row in enumerate(values_rows_copy) if i in marked_imgs]
             if self.main.current_test == 'MTF' and self.main.current_modality == 'CT':
@@ -336,10 +336,17 @@ class ResultPlotCanvas(PlotCanvas):
 
     def __init__(self, main):
         super().__init__(main)
+        self.color_k = 'k'
+        self.color_gray = 'gray'
+        self.color_darkgray = 'darkgray'
+        if main.user_prefs.dark_mode:
+            self.color_k = 'w'
+            self.color_gray = 'whitesmoke'
+            self.color_darkgray = 'lightgray'
 
     def plot(self):
         """Refresh plot."""
-        self.ax.cla()
+        self.ax.clear()
         self.title = ''
         self.xtitle = 'x'
         self.ytitle = 'y'
@@ -356,8 +363,7 @@ class ResultPlotCanvas(PlotCanvas):
                 pass
         else:
             self.zpos_all = [img.zpos for img in self.main.imgs]
-            self.marked_this = self.main.tree_file_list.get_marked_imgs_current_test()
-
+            self.marked_this = self.main.get_marked_imgs_current_test()
             if self.main.gui.active_img_no in self.marked_this:
                 if self.main.current_test in self.main.results:
                     if self.main.results[self.main.current_test] is not None:
@@ -374,33 +380,36 @@ class ResultPlotCanvas(PlotCanvas):
                     markersize = 6.
                 if 'style' not in curve:
                     curve['style'] = '-'
-                if 'color' in curve:
-                    self.ax.plot(curve['xvals'], curve['yvals'],
-                                 curve['style'], label=curve['label'],
-                                 markersize=markersize,
-                                 color=curve['color'])
+                if 'alpha' not in curve:  # TODO currently have no effect?
+                    alpha = 1.
                 else:
-                    self.ax.plot(curve['xvals'], curve['yvals'],
-                                 curve['style'], label=curve['label'],
-                                 markersize=markersize)
+                    alpha = curve['alpha']
+                proceed = True
+                try:
+                    if curve['xvals'].size != curve['yvals'].size:
+                        proceed = False
+                except AttributeError:
+                    try:
+                        if len(curve['xvals']) != len(curve['yvals']):
+                            proceed = False
+                    except TypeError:
+                        pass
+                if proceed:
+                    if 'color' in curve:
+                        self.ax.plot(curve['xvals'], curve['yvals'],
+                                     curve['style'], label=curve['label'],
+                                     markersize=markersize, alpha=alpha,
+                                     color=curve['color'])
+                    else:
+                        self.ax.plot(curve['xvals'], curve['yvals'],
+                                     curve['style'], label=curve['label'],
+                                     markersize=markersize, alpha=alpha)
+
                 if x_only_int:
                     xx = list(curve['xvals'])
                     if not isinstance(xx[0], int):
                         x_only_int = False
-            '''
-            if self.main.current_test == 'SNI':
-                test_widget = self.main.stack_test_tabs.currentWidget()
-                try:
-                    sel_text = test_widget.sni_plot.currentText()
-                except AttributeError:
-                    sel_text = ''
-                if 'Filtered' in sel_text:
-                    self.ax.fill_between(
-                        self.curves[0]['xvals'],
-                        self.curves[0]['yvals'],
-                        self.curves[1]['yvals'],
-                        hatch='X', edgecolor='b')
-                    '''
+
             if x_only_int:
                 self.ax.xaxis.set_major_locator(
                     matplotlib.ticker.MaxNLocator(integer=True))
@@ -414,8 +423,11 @@ class ResultPlotCanvas(PlotCanvas):
             try:
                 for bar in self.bars:
                     self.ax.bar(bar['names'], bar['values'])
+                    self.ax.set_xticklabels(bar['names'], rotation=60,
+                                            ha='right', rotation_mode='anchor')
             except ValueError:
-                pass  # seen when in results, results and options change, #TODO better avoid
+                pass
+                # seen when in results, results and options change, #TODO better avoid
         else:
             self.ax.axis('off')
 
@@ -481,7 +493,7 @@ class ResultPlotCanvas(PlotCanvas):
         details_dict = self.main.results['Cro']['details_dict']
         self.curves.append(
             {'label': 'all slices', 'xvals': details_dict['zpos'],
-             'yvals': details_dict['roi_averages'], 'style': '-k'})
+             'yvals': details_dict['roi_averages'], 'style': '-' + self.color_k})
         self.curves.append(
             {'label': 'used slices', 'xvals': details_dict['used_zpos'],
              'yvals': details_dict['used_roi_averages'], 'style': '-r'})
@@ -639,7 +651,7 @@ class ResultPlotCanvas(PlotCanvas):
             tolmax = {'label': 'tolerance max',
                       'xvals': [min(xvals), max(xvals)],
                       'yvals': [4, 4],
-                      'style': '--k'}
+                      'style': '--' + self.color_k}
             tolmin = tolmax.copy()
             tolmin['label'] = 'tolerance min'
             tolmin['yvals'] = [-4, -4]
@@ -685,7 +697,7 @@ class ResultPlotCanvas(PlotCanvas):
             tolmax = {'label': 'tolerance max',
                       'xvals': [min(xvals), max(xvals)],
                       'yvals': [5, 5],
-                      'style': '--k'}
+                      'style': '--' + self.color_k}
             tolmin = tolmax.copy()
             tolmin['label'] = 'tolerance min'
             tolmin['yvals'] = [-5, -5]
@@ -716,7 +728,7 @@ class ResultPlotCanvas(PlotCanvas):
         tolmax = {'label': 'tolerance max',
                   'xvals': [min(xvals), max(xvals)],
                   'yvals': [4, 4],
-                  'style': '--k'}
+                  'style': '--' + self.color_k}
         tolmin = tolmax.copy()
         tolmin['yvals'] = [-4, -4]
         tolmin['label'] = 'tolerance min'
@@ -749,7 +761,7 @@ class ResultPlotCanvas(PlotCanvas):
                 self.xtitle = 'frequency [1/mm]' if mtf_cy_pr_mm else 'frequency [1/cm]'
                 self.ytitle = 'MTF'
 
-                colors = ['k', 'r']  # gaussian black, discrete red
+                colors = [self.color_k, 'r']  # gaussian black, discrete red
                 linestyles = ['-', '--']
                 infotext = ['gaussian', 'discrete']
                 prefix = ['g', 'd']
@@ -788,7 +800,7 @@ class ResultPlotCanvas(PlotCanvas):
                             'xvals': xvals,
                             'yvals': yvals,
                             'style': '--',
-                            'color': 'gray'
+                            'color': self.color_gray
                              })
 
                 self.default_range_y = self.test_values_outside_yrange(
@@ -798,10 +810,10 @@ class ResultPlotCanvas(PlotCanvas):
                     'label': '_nolegend_',
                     'xvals': [nyquist_freq, nyquist_freq],
                     'yvals': [0, 1.3],
-                    'style': ':k'
+                    'style': ':' + self.color_k
                      })
                 self.ax.text(0.9*nyquist_freq, 0.5, 'Nyquist frequency',
-                             ha='left', size=8, color='gray')
+                             ha='left', size=8, color=self.color_gray)
 
                 # MTF %
                 if self.main.current_modality != 'NM':
@@ -821,7 +833,7 @@ class ResultPlotCanvas(PlotCanvas):
                                 'label': '_nolegend_',
                                 'xvals': xvals[i],
                                 'yvals': yvals[i],
-                                'style': ':k'
+                                'style': ':' + self.color_k
                                  })
 
                     else:
@@ -840,7 +852,7 @@ class ResultPlotCanvas(PlotCanvas):
                                     'label': '_nolegend_',
                                     'xvals': xvals[i],
                                     'yvals': yvals[i],
-                                    'style': ':k'
+                                    'style': ':' + self.color_k
                                      })
 
         def prepare_plot_LSF():
@@ -903,7 +915,7 @@ class ResultPlotCanvas(PlotCanvas):
                         'label': f'LSF{lbl_prefilter} - gaussian fit' + suffix[ddno],
                         'xvals': xvals,
                         'yvals': yvals,
-                        'style': linestyles[ddno] + 'k'
+                        'style': linestyles[ddno] + self.color_k
                          })
                     if curve_corrected:
                         self.curves.append(curve_corrected)
@@ -919,11 +931,11 @@ class ResultPlotCanvas(PlotCanvas):
                                         'label': '_nolegend_',
                                         'xvals': [x * cw] * 2,
                                         'yvals': minmax,
-                                        'style': ':k'
+                                        'style': ':' + self.color_k
                                         })
                                     self.ax.text(
                                         x * cw, np.mean(minmax), 'cut',
-                                        ha='left', size=8, color='gray')
+                                        ha='left', size=8, color=self.color_gray)
                                 if 'cut_width_fade' in dd_this:
                                     cwf = dd_this['cut_width_fade']
                                     for x in [-1, 1]:
@@ -931,11 +943,11 @@ class ResultPlotCanvas(PlotCanvas):
                                             'label': '_nolegend_',
                                             'xvals': [x * cwf] * 2,
                                             'yvals': minmax,
-                                            'style': ':k'
+                                            'style': ':' + self.color_k
                                             })
                                         self.ax.text(
                                             x * cwf, np.mean(minmax), 'fade',
-                                            ha='left', size=8, color='gray')
+                                            ha='left', size=8, color=self.color_gray)
                                 self.default_range_x = [-1.5*cw, 1.5*cw]
 
         def prepare_plot_sorted_pix():
@@ -966,16 +978,28 @@ class ResultPlotCanvas(PlotCanvas):
                     except KeyError:
                         proceed = False
                 elif len(edge_details_dicts) > 1:
-                    for i in range(len(edge_details_dicts)):
-                        if 'sorted_pixels' in edge_details_dicts[i][0]:
-                            try:
-                                xvals.append(
-                                    edge_details_dicts[i][0]['sorted_pixels_x'])
-                                sorted_pixels.append(
-                                    edge_details_dicts[i][0]['sorted_pixels'])
-                                proceed = True
-                            except KeyError:
-                                proceed = False
+                    if self.main.current_modality == 'NM':  # TODO? make fit others
+                        for i in range(len(edge_details_dicts[0])):
+                            if 'sorted_pixels' in edge_details_dicts[0][i]:
+                                try:
+                                    xvals.append(
+                                        edge_details_dicts[0][i]['sorted_pixels_x'])
+                                    sorted_pixels.append(
+                                        edge_details_dicts[0][i]['sorted_pixels'])
+                                    proceed = True
+                                except KeyError:
+                                    proceed = False
+                    else:
+                        for i in range(len(edge_details_dicts)):
+                            if 'sorted_pixels' in edge_details_dicts[i][0]:
+                                try:
+                                    xvals.append(
+                                        edge_details_dicts[i][0]['sorted_pixels_x'])
+                                    sorted_pixels.append(
+                                        edge_details_dicts[i][0]['sorted_pixels'])
+                                    proceed = True
+                                except KeyError:
+                                    proceed = False
 
             if proceed:
                 self.xtitle = 'pos (mm)'
@@ -1104,7 +1128,7 @@ class ResultPlotCanvas(PlotCanvas):
                 self.ytitle = 'Pixel value'
 
                 linestyles = ['-', '--']  # x, y
-                colors = ['g', 'b', 'r', 'k', 'c', 'm']
+                colors = ['g', 'b', 'r', self.color_k, 'c', 'm']
                 if len(details_dicts) == 2:
                     center_xy = [details_dicts[i]['center'] for i in range(2)]
                     submatrix = [details_dicts[0]['matrix']]
@@ -1112,7 +1136,7 @@ class ResultPlotCanvas(PlotCanvas):
                     center_xy = details_dicts[0]['center_xy']
                     submatrix = details_dicts[0]['matrix']
 
-                marked_imgs = self.main.tree_file_list.get_marked_imgs_current_test()
+                marked_imgs = self.main.get_marked_imgs_current_test()
                 pix = self.main.imgs[marked_imgs[0]].pix[0]
 
                 for no, sli in enumerate(submatrix):
@@ -1158,7 +1182,7 @@ class ResultPlotCanvas(PlotCanvas):
                         'xvals': xvals,
                         'yvals': yvals,
                         'style': '.',
-                        'color': 'darkgray',
+                        'color': self.color_darkgray,
                         'markersize': 2.,
                          })
                     xvals = ed['edge_fit_x']
@@ -1287,11 +1311,11 @@ class ResultPlotCanvas(PlotCanvas):
                     'label': '_nolegend_',
                     'xvals': [nyquist_freq, nyquist_freq],
                     'yvals': [0, maxy],
-                    'style': ':k'
+                    'style': ':' + self.color_k
                      })
                 self.ax.text(
                     0.9*nyquist_freq, 0.5*maxy,
-                    'Nyquist frequency', ha='left', size=8, color='gray')
+                    'Nyquist frequency', ha='left', size=8, color=self.color_gray)
             except (KeyError, IndexError):
                 pass
 
@@ -1335,13 +1359,13 @@ class ResultPlotCanvas(PlotCanvas):
 
                     self.curves.append(
                         {'label': 'average NPS', 'xvals': xvals, 'yvals': y_avg,
-                         'style': '-k'})
+                         'style': '-' + self.color_k})
                     median_frequency, median_val = find_median_spectrum(xvals, y_avg)
                     self.curves.append({
                         'label': '_nolegend_',
                         'xvals': [median_frequency, median_frequency],
                         'yvals': [0, median_val],
-                        'style': '-k'})
+                        'style': '-' + self.color_k})
             except (KeyError, IndexError):
                 pass
 
@@ -1367,7 +1391,7 @@ class ResultPlotCanvas(PlotCanvas):
                                 xvals = details_dict['freq']
                             else:
                                 xvals = details_dict['freq_uv']
-                            color = 'r' if i == imgno else 'darkgray'
+                            color = 'r' if i == imgno else self.color_darkgray
                             curve = {'label': f'img {i}',
                                      'xvals': xvals, 'yvals': yvals, 'color': color}
                             max_ys.append(np.max(yvals))
@@ -1452,11 +1476,11 @@ class ResultPlotCanvas(PlotCanvas):
                         tolmin = {'label': f'EARL{idx} lower',
                                   'xvals': roi_sizes,
                                   'yvals': yvals[idx_lower],
-                                  'style': '--k'}
+                                  'style': '--' + self.color_k}
                         tolmax = {'label': f'EARL{idx} upper',
                                   'xvals': roi_sizes,
                                   'yvals': yvals[idx_lower + 1],
-                                  'style': '--k'}
+                                  'style': '--' + self.color_k}
                         self.curves.append(tolmin)
                         self.curves.append(tolmax)
             else:
@@ -1470,7 +1494,7 @@ class ResultPlotCanvas(PlotCanvas):
             self.curves.append(
                 {'label': 'first background ROI average, all',
                  'xvals': details_dict['zpos'],
-                 'yvals': details_dict['roi_averages'], 'style': '-k'})
+                 'yvals': details_dict['roi_averages'], 'style': '-' + self.color_k})
             self.curves.append(
                 {'label': 'first background ROI average, used slices',
                  'xvals': details_dict['used_zpos'],
@@ -1505,7 +1529,8 @@ class ResultPlotCanvas(PlotCanvas):
             if 'radial_profile_smoothed' in details_dict:
                 self.curves.append(
                     {'label': 'Radial profile smoothed', 'xvals': xvals,
-                     'yvals': details_dict['radial_profile_smoothed'], 'style': '-k'})
+                     'yvals': details_dict['radial_profile_smoothed'],
+                     'style': '-' + self.color_k})
             if 'radial_profile_trend' in details_dict:
                 self.curves.append(
                     {'label': 'Radial profile trend', 'xvals': xvals,
@@ -1537,13 +1562,12 @@ class ResultPlotCanvas(PlotCanvas):
             self.ytitle = 'Average pixel value'
         else:
             headers = self.main.results['ROI']['headers']
-            colors = mmf.get_color_list(n_colors=len(headers))
             for i in range(len(yvals[0])):
                 curve = {'label': headers[i],
                          'xvals': xvals,
                          'yvals': [vals[i] for vals in yvals],
                          'style': '-',
-                         'color': colors[i]}
+                         'color': COLORS[i]}
                 self.curves.append(curve)
             test_widget = self.main.stack_test_tabs.currentWidget()
             val_text = test_widget.roi_table_val.currentText()
@@ -1568,6 +1592,8 @@ class ResultPlotCanvas(PlotCanvas):
                     colors = ['b', 'lime', 'c', 'r', 'm', 'darkorange']
                 elif self.main.current_paramset.sli_type == 2:
                     colors = ['c', 'r']
+                elif self.main.current_paramset.sli_type == 3:
+                    colors = ['b']
                 if self.main.tab_ct.sli_plot.currentIndex() == 0:  # plot all
                     l_idxs = list(np.arange(len(details_dict['profiles'])))
                 else:
@@ -1629,19 +1655,38 @@ class ResultPlotCanvas(PlotCanvas):
         self.ytitle = r'NPS ($\mathregular{mm^{2}}$)'
         self.xtitle = 'frequency (pr mm)'
         details_dict = self.main.results['SNI']['details_dict'][imgno]
-        roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
+        cbx = self.main.tab_nm.sni_selected_roi
+        roi_names = [cbx.itemText(i) for i in range(cbx.count())]
         nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
 
-        def plot_SNI_values():
+        def plot_SNI_values_bar():
             """Plot SNI values as columns pr ROI."""
-            self.bars.append({'names': roi_names,
-                              'values': self.main.results['SNI']['values'][imgno][1:]})
-            self.title = 'Structured Noise Index per image'
+            if self.main.current_paramset.sni_type == 0:
+                try:
+                    self.bars.append({
+                        'names': roi_names,
+                        'values': self.main.results['SNI']['values'][imgno][1:]
+                        })
+                except KeyError:
+                    pass
+            else:
+                try:
+                    SNI_values = details_dict['SNI_values']
+                    self.bars.append({'names': roi_names, 'values': SNI_values})
+                except KeyError:
+                    pass
+            self.title = 'Structured Noise Index for each ROI in selected image'
+            self.ytitle = 'SNI'
+            self.xtitle = 'ROI'
+
+        def plot_SNI_values_line():
+            """Plot SNI values as columns pr ROI."""
+            self.title = 'Structured Noise Index, values from result table'
             self.ytitle = 'SNI'
             self.xtitle = 'Image number'
             labels = self.main.results['SNI']['headers']
             img_nos = []
-            colors = ['red', 'blue', 'green', 'cyan', 'k', 'k', 'k', 'k']
+            colors = ['red', 'blue', 'green', 'cyan'] + [self.color_k] * 4
             styles = ['-', '-', '-', '-', '-', '--', ':', '-.']
 
             try:
@@ -1659,49 +1704,59 @@ class ResultPlotCanvas(PlotCanvas):
                     self.curves.append(
                         {'label': labels[j], 'xvals': xvals,
                          'yvals': yvals, 'color': colors[j], 'style': styles[j]})
-            except IndexError:
+            except (KeyError, IndexError):
                 pass
 
-        def plot_filtered_NPS(roi_name='L1'):
+        def plot_filtered_NPS():
             """Plot filtered NPS + NPS structure for selected ROI +quantum noise txt."""
             self.default_range_x = [0, nyquist_freq]
-            roi_no = roi_names.index(roi_name)
-            details_dict_roi = details_dict['pr_roi'][roi_no]
-            yvals = details_dict_roi['rNPS_filt']
-            xvals = details_dict_roi['freq']
-            self.curves.append(
-                {'label': 'NPS with eye filter',
-                 'xvals': xvals, 'yvals': yvals, 'style': '-b'})
-            self.default_range_y = [0, 1.1 * np.max(yvals[10:])]
-
-            self.curves.append(
-                {'label': 'NPS',
-                 'xvals': xvals, 'yvals': details_dict_roi['rNPS'],
-                 'style': ':b'})
-            self.curves.append(
-                {'label': 'NPS structured noise with eye filter',
-                 'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct_filt'],
-                 'style': '-r'})
-            self.curves.append(
-                {'label': 'NPS structured noise',
-                 'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct'],
-                 'style': ':r'})
-
-            if isinstance(details_dict_roi['quantum_noise'], float):
-                yvals = [details_dict_roi['quantum_noise']] * len(xvals)
+            roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
+            if self.main.current_paramset.sni_type > 0:
+                self.main.wid_image_display.canvas.roi_draw()
+            proceed = True
+            try:
+                details_dict_roi = details_dict['pr_roi'][roi_idx]
+            except IndexError:
+                proceed = False
+            if proceed:
+                name = self.main.tab_nm.sni_selected_roi.currentText()
+                self.title = f'Filtered NPS and NPS structure for {name}'
+                yvals = details_dict_roi['rNPS_filt']
+                xvals = details_dict_roi['freq']
                 self.curves.append(
-                    {'label': 'NPS estimated quantum noise',
-                     'xvals': xvals, 'yvals': yvals, 'style': ':k'})
-            else:
-                yvals = details_dict_roi['rNPS_quantum_noise']
+                    {'label': 'NPS with eye filter',
+                     'xvals': xvals, 'yvals': yvals, 'style': '-b'})
+                self.default_range_y = [0, 1.1 * np.max(yvals[10:])]
+
                 self.curves.append(
-                    {'label': 'NPS estimated quantum noise',
-                     'xvals': xvals, 'yvals': yvals, 'style': ':k'})
+                    {'label': 'NPS',
+                     'xvals': xvals, 'yvals': details_dict_roi['rNPS'],
+                     'style': ':b'})
+                self.curves.append(
+                    {'label': 'NPS structured noise with eye filter',
+                     'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct_filt'],
+                     'style': '-r'})
+                self.curves.append(
+                    {'label': 'NPS structured noise',
+                     'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct'],
+                     'style': ':r'})
+
+                if isinstance(details_dict_roi['quantum_noise'], float):
+                    yvals = [details_dict_roi['quantum_noise']] * len(xvals)
+                    self.curves.append(
+                        {'label': 'NPS estimated quantum noise',
+                         'xvals': xvals, 'yvals': yvals, 'style': ':' + self.color_k})
+                else:
+                    yvals = details_dict_roi['rNPS_quantum_noise']
+                    self.curves.append(
+                        {'label': 'NPS estimated quantum noise',
+                         'xvals': xvals, 'yvals': yvals, 'style': ':' + self.color_k})
 
         def plot_all_NPS():
             """Plot NPS for all ROIs + hum vis filter (normalized to NPS in max)."""
             if self.main.current_paramset.sni_type == 0:
-                colors = ['red', 'blue', 'green', 'cyan', 'k', 'k', 'k', 'k']
+                self.title = 'NPS all ROIs'
+                colors = ['red', 'blue', 'green', 'cyan'] + [self.color_k] * 4
                 styles = ['-', '-', '-', '-', '-', '--', ':', '-.']
                 for roi_no in range(8):
                     details_dict_roi = details_dict['pr_roi'][roi_no]
@@ -1720,9 +1775,9 @@ class ResultPlotCanvas(PlotCanvas):
                 self.curves.append(
                     {'label': 'Visual filter',
                      'xvals': eye_filter_curve['r'], 'yvals': yvals,
-                     'color': 'darkgray', 'style': '-'})
+                     'color': self.color_darkgray, 'style': '-'})
                 self.default_range_x = [0, nyquist_freq]
-            else:
+            else:  # currently not selectable option:
                 for roi_no, dd in enumerate(details_dict['pr_roi']):
                     yvals = dd['rNPS']
                     if roi_no == 0:
@@ -1731,27 +1786,28 @@ class ResultPlotCanvas(PlotCanvas):
                     self.curves.append(
                         {'label': '_no_legend_',
                          'xvals': xvals, 'yvals': yvals})
-                eye_filter_curve = details_dict['eye_filter']
-                yvals = eye_filter_curve['V'] * np.median(details_dict[
-                    'pr_roi'][0]['rNPS'])
-                self.curves.append(
-                    {'label': 'Visual filter',
-                     'xvals': eye_filter_curve['r'], 'yvals': yvals,
-                     'color': 'darkgray', 'style': '-'})
+                for suf in ['large', 'small']:
+                    eye_filter_curve = details_dict['eye_filter_' + suf]
+                    yvals = eye_filter_curve['V'] * np.median(details_dict[
+                        'pr_roi'][0]['rNPS'])
+                    self.curves.append(
+                        {'label': 'Visual filter',
+                         'xvals': eye_filter_curve['r'], 'yvals': yvals,
+                         'color': self.color_darkgray, 'style': '-'})
                 self.default_range_x = [0, nyquist_freq]
 
         def plot_filtered_max_avg():
             xvals = details_dict['pr_roi'][0]['freq']
-            yvals = details_dict['avg_rNPS_filt']
+            yvals = details_dict['avg_rNPS_filt_small']
             self.curves.append(
                 {'label': 'avg NPS with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': '-b'})
-            yvals = details_dict['avg_rNPS_struct_filt']
+            yvals = details_dict['avg_rNPS_struct_filt_small']
             self.curves.append(
                 {'label': 'avg structured NPS with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': '-r'})
-            idx_max = details_dict['roi_max_idx']
-            yvals = details_dict['pr_roi'][idx_max]['rNPS_filt']
+            idx_max = details_dict['roi_max_idx_small']
+            yvals = details_dict['pr_roi'][idx_max + 2]['rNPS_filt']
             self.curves.append(
                 {'label': 'max NPS with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': ':b'})
@@ -1759,7 +1815,8 @@ class ResultPlotCanvas(PlotCanvas):
             self.curves.append(
                 {'label': 'max structured NPS with eye filter',
                  'xvals': xvals, 'yvals': yvals, 'style': ':r'})
-
+            name = roi_names[idx_max + 2]
+            self.title = f'Filtered NPS and NPS structure for {name} (max) and avg'
             self.default_range_x = [0, nyquist_freq]
 
         def plot_curve_corr_check():
@@ -1805,13 +1862,15 @@ class ResultPlotCanvas(PlotCanvas):
             sel_text = test_widget.sni_plot.currentText()
         except AttributeError:
             sel_text = ''
-        if 'SNI' in sel_text:
-            plot_SNI_values()
+        if 'SNI values each ROI' in sel_text:
+            plot_SNI_values_bar()
+        elif 'SNI values all images' in sel_text:
+            plot_SNI_values_line()
         elif 'Filtered' in sel_text:
             if 'max' in sel_text:
                 plot_filtered_max_avg()
             else:
-                plot_filtered_NPS(roi_name=sel_text[-2:])
+                plot_filtered_NPS()
         elif 'all' in sel_text:
             plot_all_NPS()
         elif 'correction' in sel_text:
@@ -1832,7 +1891,7 @@ class ResultPlotCanvas(PlotCanvas):
             tolmax = {'label': 'tolerance max',
                       'xvals': [min(xvals), max(xvals)],
                       'yvals': [5, 5],
-                      'style': '--k'}
+                      'style': '--' + self.color_k}
             tolmin = tolmax.copy()
             tolmin['yvals'] = [-5, -5]
             tolmin['label'] = 'tolerance min'
@@ -1840,6 +1899,262 @@ class ResultPlotCanvas(PlotCanvas):
             self.curves.append(tolmax)
 
             self.default_range_y = self.test_values_outside_yrange([-7, 7])
+
+    def TTF(self):
+        """Prepare plot for test TTF."""
+        details_dicts = self.main.results['TTF']['details_dict']
+        imgno = self.main.gui.active_img_no
+        materials = self.main.current_paramset.ttf_table.labels
+
+        def prepare_plot_MTF(idxs):
+            nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
+            self.xtitle = 'frequency [1/mm]'
+            self.ytitle = 'MTF'
+            colors = [self.color_k, 'r']  # gaussian black, discrete red
+            linestyles = ['-', '--']
+            infotext = ['gaussian', 'discrete']
+            prefix = ['g', 'd']
+            if len(idxs) > 1:
+                cno = int(not self.main.current_paramset.ttf_gaussian)
+                colors = [colors[cno]]
+                linestyles = [linestyles[cno]]
+                infotext = [infotext[cno]]
+                prefix = [prefix[cno]]
+
+            for m_idx in idxs:
+                dd = details_dicts[m_idx]
+                if 'dMTF_details' in dd:
+                    for no in range(len(prefix)):
+                        key = f'{prefix[no]}MTF_details'
+                        if key in dd:
+                            dd_this = dd[key]
+                            xvals = dd_this['MTF_freq']
+                            yvals = dd_this['MTF']
+                            color = colors[no] if len(idxs) == 1 else COLORS[m_idx]
+                            try:
+                                self.curves.append({
+                                    'label': infotext[no] + ' MTF ' + materials[m_idx],
+                                    'xvals': xvals,
+                                    'yvals': yvals,
+                                    'color': color
+                                     })
+                            except IndexError:
+                                pass
+
+                if 'MTF_filtered' in dd['gMTF_details'] and len(idxs) == 1:
+                    yvals = dd['gMTF_details']['MTF_filtered']
+                    if yvals is not None:
+                        xvals = dd['gMTF_details']['MTF_freq']
+                        yvals = dd['gMTF_details']['MTF_filtered']
+                        self.curves.append({
+                            'label': 'gaussian MTF pre-smoothed',
+                            'xvals': xvals,
+                            'yvals': yvals,
+                            'style': '--',
+                            'color': self.color_gray
+                             })
+
+            if len(self.curves) > 0:
+                self.default_range_y = self.test_values_outside_yrange(
+                    [0, 1.3], limit_xrange=[0, nyquist_freq])
+                self.default_range_x = [0, 1.1 * nyquist_freq]
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [nyquist_freq, nyquist_freq],
+                    'yvals': [0, 1.3],
+                    'style': ':' + self.color_k
+                     })
+                self.ax.text(0.9*nyquist_freq, 0.5, 'Nyquist frequency',
+                             ha='left', size=8, color=self.color_gray)
+
+        def prepare_plot_LSF(idxs):
+            self.xtitle = 'pos (mm)'
+            self.ytitle = 'LSF'
+            self.legend_location = 'upper left'
+
+            lbl_prefilter = ''
+            prefilter = False
+
+            for m_idx in idxs:
+                dd = details_dicts[m_idx]
+
+                dd_this = dd['gMTF_details']
+                curve_corrected = None
+                if len(idxs) == 1:
+                    if 'sigma_prefilter' in dd and len(idxs) == 1:
+                        if dd['sigma_prefilter'] > 0:
+                            prefilter = True
+                            lbl_prefilter = ' presmoothed'
+
+                    xvals = dd['LSF_x']
+                    yvals = dd['LSF']
+                    self.curves.append({
+                        'label': 'LSF',
+                        'xvals': xvals,
+                        'yvals': yvals,
+                        'style': 'r'
+                         })
+                    if prefilter:
+                        xvals = dd_this['LSF_fit_x']
+                        yvals = dd_this['LSF_prefit']
+                        self.curves.append({
+                            'label': f'LSF{lbl_prefilter}',
+                            'xvals': xvals,
+                            'yvals': yvals,
+                            'style': '-b'
+                             })
+                        if 'LSF_corrected' in dd_this:
+                            yvals = dd_this['LSF_corrected']
+                            if yvals is not None:
+                                curve_corrected = {
+                                    'label': (
+                                        'LSF corrected - gaussian fit'),
+                                    'xvals': xvals,
+                                    'yvals': yvals,
+                                    'style': '--',
+                                    'color': 'green'
+                                     }
+
+                xvals = dd_this['LSF_fit_x']
+                yvals = dd_this['LSF_fit']
+                color = self.color_k if len(idxs) == 1 else COLORS[m_idx]
+                self.curves.append({
+                    'label': f'LSF{lbl_prefilter} - gaussian fit',
+                    'xvals': xvals,
+                    'yvals': yvals,
+                    'style': '-',
+                    'color': color
+                     })
+                if curve_corrected:
+                    self.curves.append(curve_corrected)
+
+                if 'dMTF_details' in dd and len(idxs) == 1:
+                    dd_this = dd['dMTF_details']
+                    if 'cut_width' in dd_this:
+                        cw = dd_this['cut_width']
+                        if cw > 0:
+                            minmax = [np.min(yvals), np.max(yvals)]
+                            for x in [-1, 1]:
+                                self.curves.append({
+                                    'label': '_nolegend_',
+                                    'xvals': [x * cw] * 2,
+                                    'yvals': minmax,
+                                    'style': ':' + self.color_k
+                                    })
+                                self.ax.text(
+                                    x * cw, np.mean(minmax), 'cut',
+                                    ha='left', size=8, color=self.color_gray)
+                            if 'cut_width_fade' in dd_this:
+                                cwf = dd_this['cut_width_fade']
+                                for x in [-1, 1]:
+                                    self.curves.append({
+                                        'label': '_nolegend_',
+                                        'xvals': [x * cwf] * 2,
+                                        'yvals': minmax,
+                                        'style': ':' + self.color_k
+                                        })
+                                    self.ax.text(
+                                        x * cwf, np.mean(minmax), 'fade',
+                                        ha='left', size=8, color=self.color_gray)
+                            self.default_range_x = [-1.5*cw, 1.5*cw]
+
+        def prepare_plot_sorted_pix(idxs):
+            self.xtitle = 'pos (mm)'
+            self.ytitle = 'Pixel value'
+
+            dot_colors = COLORS if len(idxs) > 0 else ['mediumseagreen']
+            for m_idx in idxs:
+                dd = details_dicts[m_idx]
+                for slino, yvals in enumerate(dd['sorted_pixels']):
+                    lbl = f'Sorted pixels {materials[m_idx]}' if slino == 0 \
+                        else '_nolegend_'
+                    self.curves.append({
+                        'label': lbl,
+                        'xvals': dd['sorted_pixels_x'],
+                        'yvals': yvals,
+                        'style': '.',
+                        'color': dot_colors[m_idx % len(dot_colors)],
+                        'markersize': 2.,
+                        'alpha': 0.5
+                         })
+
+                if 'interpolated_x' in dd and len(idxs) == 1:
+                    self.curves.append({
+                            'label': f'Interpolated {materials[m_idx]}',
+                            'xvals': dd['interpolated_x'],
+                            'yvals': dd['interpolated'],
+                            'style': '--',
+                            'color': COLORS[m_idx]
+                             })
+
+                if 'presmoothed' in dd and len(idxs) == 1:
+                    self.curves.append({
+                        'label': 'Presmoothed',
+                        'xvals': dd['interpolated_x'],
+                        'yvals': dd['presmoothed'],
+                        'style': '-b'
+                         })
+
+        def prepare_plot_centered_profiles(idxs):
+            m_idx = idxs[0]  # force only first
+            center_xy = details_dicts[m_idx]['center_xy']
+            submatrix = details_dicts[m_idx]['matrix']
+
+            self.xtitle = 'pos (mm)'
+            self.ytitle = 'Pixel value'
+
+            marked_imgs = self.main.get_marked_imgs_current_test()
+            pix = self.main.imgs[marked_imgs[0]].pix[0]
+
+            for no, sli in enumerate(submatrix):
+                proceed = True
+                if no not in marked_imgs:
+                    proceed = False
+                if proceed and sli is not None:
+                    suffix = f' {no}' if len(submatrix) > 1 else ''
+                    szy, szx = sli.shape
+                    xvals1 = pix * (np.arange(szx) - center_xy[0])
+                    yvals1 = sli[round(center_xy[1]), :]
+                    self.curves.append({
+                        'label': 'x' + suffix,
+                        'xvals': xvals1,
+                        'yvals': yvals1,
+                        'style': '-',
+                        'color': COLORS[no % len(COLORS)]
+                         })
+                    xvals2 = pix * (np.arange(szy) - center_xy[1])
+                    yvals2 = sli[:, round(center_xy[0])]
+                    self.curves.append({
+                        'label': 'y' + suffix,
+                        'xvals': xvals2,
+                        'yvals': yvals2,
+                        'style': '--',
+                        'color': COLORS[no % len(COLORS)]
+                         })
+
+        test_widget = self.main.stack_test_tabs.currentWidget()
+        try:
+            sel_text = test_widget.ttf_plot.currentText()
+            sel_material_idx = test_widget.ttf_plot_material.currentIndex() - 1
+        except AttributeError:
+            sel_text = ''
+            sel_material_idx = -1  # all
+        if sel_material_idx == -1:
+            sel_material_idxs = list(range(len(details_dicts)))
+        else:
+            sel_material_idxs = [sel_material_idx]
+
+        txt_add = ''
+        if sel_text == 'MTF':
+            prepare_plot_MTF(sel_material_idxs)
+        elif sel_text == 'LSF':
+            prepare_plot_LSF(sel_material_idxs)
+        elif sel_text == 'Sorted pixel values':
+            prepare_plot_sorted_pix(sel_material_idxs)
+        elif sel_text == 'Centered xy profiles':
+            prepare_plot_centered_profiles(sel_material_idxs)
+            txt_add = f' {materials[sel_material_idxs[0]]}'
+        self.title = sel_text + txt_add
 
     def Uni(self):
         """Prepare plot for test Uni."""
@@ -1963,27 +2278,59 @@ class ResultImageWidget(GenericImageWidget):
         toolb = ResultImageNavigationToolbar(self.canvas, self)
         hlo = QHBoxLayout()
 
-        tbm = QToolBar()
+        tb_right_top = QToolBar()
         self.tool_resultsize = ToolMaximizeResults(self.main)
-        tbm.addWidget(self.tool_resultsize)
-        tbm.setOrientation(Qt.Vertical)
-        tbm.addWidget(self.tool_profile)
+        tb_right_top.addWidget(self.tool_resultsize)
+        tb_right_top.setOrientation(Qt.Vertical)
+        tb_right_top.addWidget(self.tool_profile)
+        tb_right_top.addWidget(self.tool_cmap)
+        tb_right_top.addWidget(self.tool_rectangle)
+        hlo_right = QHBoxLayout()
+        hlo_right.addWidget(toolb)
+        hlo_right.addWidget(tb_right_top)
+        hlo_right.addStretch()
 
+        self.image_title = QLabel()
         tb_top = QToolBar()
         tb_top.addWidget(GenericImageToolbarPosVal(self.canvas, self))
-        self.image_title = QLabel()
-        tb_top.addWidget(self.image_title)
-        empty = QWidget()
-        empty.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        tb_top.addWidget(empty)
 
-        hlo.addWidget(toolb)
-        vlo_mid = QVBoxLayout()
-        vlo_mid.addWidget(tb_top)
-        vlo_mid.addWidget(self.canvas)
-        hlo.addLayout(vlo_mid)
-        hlo.addWidget(tbm)
-        self.setLayout(hlo)
+        vlo_left = QVBoxLayout()
+        vlo_left.addWidget(self.image_title)
+        vlo_left.addWidget(tb_top)
+        vlo_left.addWidget(self.canvas)
+        hlo.addLayout(vlo_left)
+        hlo.addLayout(hlo_right)
+
+        wid_image_toolbars = QWidget()
+        wid_image_toolbars.setLayout(hlo)
+
+        self.wid_window_level = uir.WindowLevelWidget(
+            self, show_dicom_wl=False, show_lock_wl=False)
+
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.addWidget(wid_image_toolbars)
+        self.splitter.addWidget(self.wid_window_level)
+        hlo_ = QHBoxLayout()
+        hlo_.addWidget(self.splitter)
+        self.setLayout(hlo_)
+
+        self.reset_split_sizes()
+
+    def set_active_image_min_max(self, minval, maxval):
+        """Update window level."""
+        if self.canvas.current_image is not None:
+            self.canvas.img.set_clim(vmin=minval, vmax=maxval)
+            self.canvas.draw_idle()
+
+    def reset_split_sizes(self):
+        """Set and reset QSplitter sizes."""
+        default_rgt_panel = self.main.gui.panel_width*0.8
+        self.splitter.setSizes(
+            [round(default_rgt_panel*0.7), round(default_rgt_panel*0.3)])
+
+    def hide_window_level(self):
+        """Set window level widget to zero width."""
+        self.splitter.setSizes([round(self.main.gui.panel_width*0.8), 0])
 
 
 class ResultImageNavigationToolbar(ImageNavigationToolbar):
@@ -1992,6 +2339,6 @@ class ResultImageNavigationToolbar(ImageNavigationToolbar):
     def __init__(self, canvas, window):
         super().__init__(canvas, window)
         for act in self.actions():
-            if act.text() in ['Back', 'Forward', 'Pan']:  # already removed 'Subplots'
+            if act.text() in ['Customize']:
                 self.removeAction(act)
         self.setOrientation(Qt.Vertical)

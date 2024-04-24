@@ -58,6 +58,10 @@ def calculate_version_difference(version_string, reference_version=None):
                 version_number = 1e6*int(main_x) + 1e4*int(main_y) + 1e2*int(main_z)
                 if beta_str != '':
                     version_number = version_number + int(beta_str)
+                else:
+                    version_number += 100
+                    # assume max b99 and let beta versions have lower number than
+                    # final version without beta indicator
             except ValueError:
                 print(f'version string {vstring} not as expected. Failed converting '
                       '(config_func - calculate_version_number).')
@@ -562,6 +566,134 @@ def convert_OneDrive(path):
     return path
 
 
+def load_paramsets(fnames, path):
+    """Load paramsets (subprocess of load_settings).
+
+    Parameters
+    ----------
+    fnames : list of str
+        file base name of specific or all paramsets (paramset_<modality>)
+    path : str
+        parent path for paramset yaml files
+
+    Returns
+    -------
+    settings : list or dict
+        list if single modality, dict if all modalities
+    return_default : bool
+        True if no saved paramset found
+    """
+    return_default = False
+    settings = {} if len(fnames) > 1 else []
+
+    for fname_this in fnames:
+        sett_this = []
+        if len(fnames) > 1:
+            path_this = str(Path(path) / f'{fname_this}.yaml')
+        else:
+            path_this = path
+        if Path(path_this).exists():
+            try:
+                with open(path_this, 'r') as file:
+                    docs = yaml.safe_load_all(file)
+                    for doc in docs:
+                        upd = verify_input_dict(doc['dcm_tagpattern'],
+                                                cfc.TagPatternFormat())
+                        doc['dcm_tagpattern'] = cfc.TagPatternFormat(
+                            **upd)
+                        tests = {}
+                        for key, test in doc['output']['tests'].items():
+                            tests[key] = []
+                            for sub in test:
+                                upd = verify_input_dict(
+                                    sub, cfc.QuickTestOutputSub())
+                                tests[key].append(
+                                    cfc.QuickTestOutputSub(**upd))
+                        try:
+                            decimal_all = doc['output']['decimal_all']
+                        except KeyError:
+                            decimal_all = False
+                        doc['output'] = cfc.QuickTestOutputTemplate(
+                            include_header=doc[
+                                'output']['include_header'],
+                            transpose_table=doc[
+                                'output']['transpose_table'],
+                            decimal_mark=doc['output']['decimal_mark'],
+                            decimal_all=decimal_all,
+                            include_filename=doc[
+                                'output']['include_filename'],
+                            group_by=doc['output']['group_by'],
+                            tests=tests)
+                        modality = fname_this.split('_')[1]
+                        if 'roi_table' in doc:
+                            upd = verify_input_dict(doc['roi_table'],
+                                                    cfc.PositionTable())
+                            doc['roi_table'] = cfc.PositionTable(**upd)
+                        if 'num_table' in doc:
+                            upd = verify_input_dict(doc['num_table'],
+                                                    cfc.PositionTable())
+                            doc['num_table'] = cfc.PositionTable(**upd)
+                        if modality == 'CT':
+                            if 'ctn_table' in doc:
+                                upd = verify_input_dict(doc['ctn_table'],
+                                                        cfc.HUnumberTable())
+                                doc['ctn_table'] = cfc.HUnumberTable(**upd)
+                            if 'ttf_table' in doc:
+                                upd = verify_input_dict(doc['ttf_table'],
+                                                        cfc.PositionTable())
+                                doc['ttf_table'] = cfc.PositionTable(**upd)
+                        elif modality == 'Mammo':
+                            upd = verify_input_dict(doc['gho_table'],
+                                                    cfc.PositionTable())
+                            doc['gho_table'] = cfc.PositionTable(**upd)
+                        elif modality == 'PET':
+                            if 'rec_table' in doc:
+                                upd = verify_input_dict(
+                                    doc['rec_table'], cfc.RecTable())
+                                doc['rec_table'] = cfc.RecTable(**upd)
+
+                        if 'task_based' in fname_this:
+                            class_ = cfc.ParamSetCT_TaskBased()
+                        else:
+                            class_ = getattr(cfc, f'ParamSet{modality}')
+                        upd = verify_input_dict(doc, class_())
+                        sett_this.append(class_(**upd))
+
+                        if len(fnames) == 1:
+                            settings = sett_this
+                        else:
+                            settings[modality] = sett_this
+            except OSError as error:
+                print(
+                    f'config_func.py load_settings {fname_this}: '
+                    f'{str(error)}')
+                return_default = True
+        else:
+            return_default = True
+
+    if return_default:
+        default_tags_dcm = load_default_dcm_test_tag_patterns()
+        if len(fnames) > 1:  # load as dict
+            for mod in QUICKTEST_OPTIONS:
+                if mod not in settings:
+                    class_ = getattr(cfc, f'ParamSet{mod}')
+                    settings[mod] = [class_(
+                        dcm_tagpattern=default_tags_dcm[mod])]
+        else:
+            if 'task_based' in fnames[0]:
+                settings = [cfc.ParamSetCT_TaskBased(
+                    dcm_tagpattern=cfc.TagPatternFormat(
+                        list_tags=['ConvolutionKernel', 'mAs'],
+                        list_format=['', '']
+                        ))]
+            else:
+                mod = fnames[0].split('_')[1]
+                class_ = getattr(cfc, f'ParamSet{mod}')
+                settings = [class_(dcm_tagpattern=default_tags_dcm[mod])]
+
+    return settings
+
+
 def load_settings(fname='', temp_config_folder=''):
     """Load settings from yaml file in config folder.
 
@@ -619,87 +751,9 @@ def load_settings(fname='', temp_config_folder=''):
                 else:  # paramsets
                     if all_paramsets:  # load as dict
                         fnames = [f'paramsets_{m}' for m in QUICKTEST_OPTIONS]
-                        settings = {}
                     else:
                         fnames = [fname]
-
-                    for fname_this in fnames:
-                        sett_this = []
-                        if len(fnames) > 1:
-                            path_this = str(Path(path) / f'{fname_this}.yaml')
-                        else:
-                            path_this = path
-                        if Path(path_this).exists():
-                            try:
-                                with open(path_this, 'r') as file:
-                                    docs = yaml.safe_load_all(file)
-                                    for doc in docs:
-                                        upd = verify_input_dict(doc['dcm_tagpattern'],
-                                                                cfc.TagPatternFormat())
-                                        doc['dcm_tagpattern'] = cfc.TagPatternFormat(
-                                            **upd)
-                                        tests = {}
-                                        for key, test in doc['output']['tests'].items():
-                                            tests[key] = []
-                                            for sub in test:
-                                                upd = verify_input_dict(
-                                                    sub, cfc.QuickTestOutputSub())
-                                                tests[key].append(
-                                                    cfc.QuickTestOutputSub(**upd))
-                                        try:
-                                            decimal_all = doc['output']['decimal_all']
-                                        except KeyError:
-                                            decimal_all = False
-                                        doc['output'] = cfc.QuickTestOutputTemplate(
-                                            include_header=doc[
-                                                'output']['include_header'],
-                                            transpose_table=doc[
-                                                'output']['transpose_table'],
-                                            decimal_mark=doc['output']['decimal_mark'],
-                                            decimal_all=decimal_all,
-                                            include_filename=doc[
-                                                'output']['include_filename'],
-                                            group_by=doc['output']['group_by'],
-                                            tests=tests)
-                                        modality = fname_this.split('_')[1]
-                                        if 'roi_table' in doc:
-                                            upd = verify_input_dict(doc['roi_table'],
-                                                                    cfc.PositionTable())
-                                            doc['roi_table'] = cfc.PositionTable(**upd)
-                                        if 'num_table' in doc:
-                                            upd = verify_input_dict(doc['num_table'],
-                                                                    cfc.PositionTable())
-                                            doc['num_table'] = cfc.PositionTable(**upd)
-                                        if modality == 'CT':
-                                            upd = verify_input_dict(doc['ctn_table'],
-                                                                    cfc.HUnumberTable())
-                                            doc['ctn_table'] = cfc.HUnumberTable(**upd)
-                                        elif modality == 'Mammo':
-                                            upd = verify_input_dict(doc['gho_table'],
-                                                                    cfc.PositionTable())
-                                            doc['gho_table'] = cfc.PositionTable(**upd)
-                                        elif modality == 'PET':
-                                            if 'rec_table' in doc:
-                                                upd = verify_input_dict(
-                                                    doc['rec_table'], cfc.RecTable())
-                                                doc['rec_table'] = cfc.RecTable(**upd)
-
-                                        class_ = getattr(cfc, f'ParamSet{modality}')
-                                        upd = verify_input_dict(doc, class_())
-                                        sett_this.append(class_(**upd))
-
-                                        if len(fnames) == 1:
-                                            settings = sett_this
-                                        else:
-                                            settings[modality] = sett_this
-                            except OSError as error:
-                                print(
-                                    f'config_func.py load_settings {fname_this}: '
-                                    f'{str(error)}')
-                                return_default = True
-                        else:
-                            return_default = True
-
+                    settings = load_paramsets(fnames, path)
                 status = True
 
             elif CONFIG_FNAMES[fname_]['saved_as'] == 'modality_dict':
@@ -806,17 +860,7 @@ def load_settings(fname='', temp_config_folder=''):
 
         if return_default:
             if 'paramsets' in fname:
-                default_tags_dcm = load_default_dcm_test_tag_patterns()
-                if fname == 'paramsets':  # load as dict
-                    for mod in QUICKTEST_OPTIONS:
-                        if mod not in settings:
-                            class_ = getattr(cfc, f'ParamSet{mod}')
-                            settings[mod] = [class_(
-                                dcm_tagpattern=default_tags_dcm[mod])]
-                else:
-                    mod = fname.split('_')[1]
-                    class_ = getattr(cfc, f'ParamSet{mod}')
-                    settings = [class_(dcm_tagpattern=default_tags_dcm[mod])]
+                settings = load_paramsets([fname], '--')
             else:
                 settings = CONFIG_FNAMES[fname]['default']
                 if fname == 'tag_infos':

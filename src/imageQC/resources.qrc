@@ -14,6 +14,7 @@
 		<file alias="arrowRight.png">icons\arrowRight.png</file>
 		<file alias="arrowUp.png">icons\arrowUp.png</file>
 		<file alias="clear.png">icons\clear.png</file>
+		<file alias="colorbar.png">icons\colorbar.png</file>
 		<file alias="copy.png">icons\copy.png</file>
 		<file alias="copy2clipboard.png">icons\copy2clipboard.png</file>
 		<file alias="decimal_all.png">icons\decimal_all.png</file>
@@ -61,7 +62,10 @@
 		<file alias="play.png">icons\play.png</file>
 		<file alias="playGears.png">icons\playGears.png</file>
 		<file alias="profile.png">icons\profile.png</file>
+		<file alias="projections.png">icons\projections.png</file>
 		<file alias="range.png">icons\range.png</file>
+		<file alias="rectangle.png">icons\rectangle.png</file>
+		<file alias="rectangle_select.png">icons\rectangle_select.png</file>
 		<file alias="refresh.png">icons\refresh.png</file>
 		<file alias="rename.png">icons\rename.png</file>
 		<file alias="rename_dicom.png">icons\rename_dicom.png</file>
@@ -92,6 +96,7 @@
 		<file alias="arrowRight.png">icons\darkmode\arrowRight.png</file>
 		<file alias="arrowUp.png">icons\darkmode\arrowUp.png</file>
 		<file alias="clear.png">icons\darkmode\clear.png</file>
+		<file alias="colorbar.png">icons\darkmode\colorbar.png</file>
 		<file alias="copy.png">icons\darkmode\copy.png</file>
 		<file alias="copy2clipboard.png">icons\darkmode\copy2clipboard.png</file>
 		<file alias="decimal_all.png">icons\darkmode\decimal_all.png</file>
@@ -138,7 +143,10 @@
 		<file alias="play.png">icons\darkmode\play.png</file>
 		<file alias="playGears.png">icons\darkmode\playGears.png</file>
 		<file alias="profile.png">icons\darkmode\profile.png</file>
+		<file alias="projections.png">icons\darkmode\projections.png</file>
 		<file alias="range.png">icons\darkmode\range.png</file>
+		<file alias="rectangle.png">icons\darkmode\rectangle.png</file>
+		<file alias="rectangle_select.png">icons\darkmode\rectangle_select.png</file>
 		<file alias="refresh.png">icons\darkmode\refresh.png</file>
 		<file alias="rename.png">icons\darkmode\rename.png</file>
 		<file alias="rename_dicom.png">icons\darkmode\rename_dicom.png</file>

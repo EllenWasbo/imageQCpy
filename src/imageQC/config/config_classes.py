@@ -321,7 +321,7 @@ class QuickTestOutputSub:
     """Class for holding details for element of QuickTestOutputTemplates."""
 
     label: str = ''  # header_ prefix when header included
-    alternative: int = 0  # if supplement table starting with 10
+    alternative: int = 0  # if supplement table starting with 10, -1 used for not defined
     columns: list = field(default_factory=lambda: [])  # list of ints
     calculation: str = '='
     per_group: bool = False
@@ -377,6 +377,13 @@ class ParamSetCT(ParamSetCommon):
     mtf_offset_mm: bool = False  # False = pix, True = mm
     mtf_auto_center: bool = False
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
+    ttf_roi_size: float = 11.
+    ttf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
+    ttf_cut_lsf: bool = True
+    ttf_cut_lsf_w: float = 3.  # lsf_w from halfmax x FWHM
+    ttf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
+    ttf_sampling_frequency: float = 0.01  # mm-1 for gaussian
+    ttf_table:  PositionTable = field(default_factory=PositionTable)
     ctn_roi_size: float = 3.
     ctn_search_size: float = 11.
     ctn_search: bool = True
@@ -388,7 +395,8 @@ class ParamSetCT(ParamSetCommon):
     sli_background_width: float = 5.
     sli_search_width: int = 10
     sli_average_width: int = 1
-    sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom
+    sli_median_filter: int = 0
+    sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom, 3=Siemens phantom
     sli_auto_center: bool = False
     rin_sigma_image: float = 0.  # sigma for gaussfilter of image
     rin_sigma_profile: float = 0.  # sigma for gaussfilter of radial profile
@@ -448,19 +456,22 @@ class ParamSetMammo(ParamSetCommon):
     sdn_auto_center: bool = True
     sdn_auto_center_mask_outer: int = 30  # mask outer mm
     hom_roi_size: float = 10.
+    hom_variance: bool = True
     hom_roi_size_variance: float = 2.
     hom_mask_max: bool = False
+    hom_mask_outer_mm: float = 0.
+    hom_ignore_roi_percent: int = 0
     hom_deviating_pixels: float = 20.
     hom_deviating_rois: float = 15.
     rlr_roi_size: float = 5.
     rlr_relative_to_right: bool = True  # if false relative to left
     rlr_x_mm: float = 60.  # distance to left or right border
-    gho_roi_size: float = 10.
+    gho_roi_size: float = 20.
     gho_relative_to_right: bool = True  # if false relative to left
     gho_table: PositionTable = field(
         default_factory=lambda: PositionTable(
             labels=['ROI_1', 'ROI_2', 'ROI_3'],
-            pos_x=[20, 80, 80], pos_y=[30, 30, -30]))
+            pos_x=[25, 80, 80], pos_y=[30, 30, -30]))
     mtf_roi_size_x: int = 20.
     mtf_roi_size_y: int = 50.
     mtf_plot: int = 3
@@ -485,8 +496,9 @@ class ParamSetMammo(ParamSetCommon):
 class ParamSetNM(ParamSetCommon):
     """Set of parameters regarding NM tests."""
 
-    uni_ufov_ratio: float = 0.95
+    uni_ufov_ratio: float = 1.
     uni_cfov_ratio: float = 0.75
+    uni_mask_corner: float = 0.0  # mm to ignore in corners
     uni_correct: bool = False
     uni_correct_pos_x: bool = False
     uni_correct_pos_y: bool = False
@@ -495,8 +507,11 @@ class ParamSetNM(ParamSetCommon):
     uni_sum_first: bool = False
     uni_scale_factor: int = 0  # 0 = Auto, 1= no scale, 2... = scale factor
     sni_area_ratio: float = 0.9
-    sni_type: int = 0  # 0 as Nelson 2013, 1= all same roi_size defined by sni_roi_ratio
+    sni_type: int = 0  # 0 as Nelson 2014, 1= grid roi_ratio, 2 grid roi_size, 3 Siemens
     sni_roi_ratio: float = 0.2  # relative to sni_area defined by sni_area_ratio
+    sni_roi_size: int = 128  # number of pixels
+    sni_roi_outside: int = 0  # alternatives ignore/move
+    sni_sampling_frequency: float = 0.01
     sni_correct: bool = False
     sni_correct_pos_x: bool = False
     sni_correct_pos_y: bool = False
@@ -599,6 +614,7 @@ class ParamSetMR(ParamSetCommon):
     sli_background_width: float = 5.
     # sli_search_width: int = 0  # currently not in use
     sli_average_width: int = 0
+    sli_median_filter: int = 0  #currently not in use for MR, CT only
     sli_dist_lower: float = -2.5
     sli_dist_upper: float = 2.5
     sli_optimize_center: bool = True
@@ -630,6 +646,39 @@ class ParamSet:
     SPECT: ParamSetSPECT = field(default_factory=ParamSetSPECT)
     PET: ParamSetPET = field(default_factory=ParamSetPET)
     MR: ParamSetMR = field(default_factory=ParamSetMR)
+
+
+@dataclass
+class ParamSetCT_TaskBased:
+    """Parameter set used for automated task based analysis."""
+
+    label: str = ''
+    output: QuickTestOutputTemplate = field(
+        default_factory=QuickTestOutputTemplate)
+    dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
+    ttf_roi_size: float = 11.
+    ttf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
+    ttf_cut_lsf: bool = True
+    ttf_cut_lsf_w: float = 3.  # lsf_w from halfmax x FWHM
+    ttf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
+    ttf_sampling_frequency: float = 0.01  # mm-1 for gaussian
+    ttf_table:  PositionTable = field(default_factory=PositionTable)
+    zrange_table: PositionTable = field(
+        default_factory=lambda: PositionTable(
+            pos_x=[(-1000., 1000.)], pos_y=[(-1000., 1000.)]))
+    #  zrange: pos_x = ttf (min, max), pos_y = nps zrange (min, max)
+    nps_roi_size: int = 64
+    nps_roi_distance_match_ttf: bool = True
+    nps_roi_distance: float = 50.  # ignored if _match_ttf is True
+    nps_n_sub: int = 65
+    nps_smooth_width: float = 0.05  # 1/mm
+    # nps_sampling_frequency: float = 0.01  # 1/mm, should match ttf_sampling_frequency
+    nps_normalize: int = 0  # normalize curve by 0 = None, 1 = AUC, 2 = large area sign
+    nps_plot: int = 0  # default plot 0=pr image, 1=avg, 2=pr image+avg, 3=all img+avg
+    dpr_size: float = 10
+    dpr_contrast: float = 10
+    dpr_designer: bool = True  # False = rect func, True = designer contrast profile
+    dpr_power: float = 1.
 
 
 @dataclass
@@ -750,7 +799,8 @@ class AutoVendorTemplate:
     limits_and_plot_label: str = ''
     archive: bool = False
     file_type: str = ''
-    file_suffix: str = ''  # starting with . e.g. '.pdf'
+    file_prefix: str = ''  # filter on start of filename (e.g. Mammo QAP)
+    file_suffix: str = ''  # starting with .(dot) e.g. '.pdf'
     active: bool = True
 
 
@@ -765,6 +815,7 @@ class LimitsAndPlotTemplate:
     # ex. [['col a', 'col c'],['col b', 'col d'],['col e'], ['col f']]
     groups_limits: list = field(default_factory=list)  # list of lists
     # eg [min, max] * number of groups, default is [None, None] for each group
+    # [textval, textval]textvalue to accept
     groups_ranges: list = field(default_factory=list)  # list of lists
     # min y, max y in display
     # eg [min, max] * number of groups, default is [None, None] for each group = Auto

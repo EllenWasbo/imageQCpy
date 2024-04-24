@@ -11,10 +11,12 @@ from time import sleep
 import matplotlib
 import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+from matplotlib import patches
 
 # imageQC block start
 from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
-from imageQC.scripts.mini_methods_format import get_color_list
+from imageQC.scripts.calculate_roi import generate_SNI_Siemens_image
+from imageQC.config.iQCconstants import COLORS
 # imageQC block end
 
 
@@ -61,11 +63,12 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         self.ax = self.fig.add_subplot(111)
         self.last_clicked_pos = (-1, -1)
         self.profile_length = 20  # assume click drag > length in pix = draw profile
+        self.rectangle = patches.Rectangle((0, 0), 1, 1)
         self.current_image = None
 
         # default display
         self.img = self.ax.imshow(np.zeros((2, 2)))
-        self.ax.cla()
+        self.ax.clear()
         self.ax.axis('off')
 
         # intialize parameters to make pylint happy
@@ -73,7 +76,6 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         self.scatters = []
         self.linewidth = 2
         self.fontsize = 10
-        self.current_image = None
         self.cmap = 'gray'
         self.min_val = None
         self.max_val = None
@@ -120,6 +122,49 @@ class GenericImageCanvas(FigureCanvasQTAgg):
                     self.draw_idle()
                     break
 
+    def rectangle_mark(self, x2, y2):
+        """Mark rectangle in image for e.g. setting window level, draw ROI.
+
+        Parameters
+        ----------
+        x2 : float
+            endpoint x coordinate
+        y2 : float
+            endpoint y coordinate
+
+        Returns
+        -------
+        status : bool
+            True if setting rectangle was possible
+        """
+        self.rectangle_remove()
+        status = False
+        if self.last_clicked_pos != (-1, -1):
+            x1 = self.last_clicked_pos[0]
+            y1 = self.last_clicked_pos[1]
+            width = x2 - x1
+            height = y2 - y1
+
+            if abs(width) > 5 and abs(height) > 5:
+                self.rectangle = patches.Rectangle(
+                    (x1, y1), width, height,
+                    edgecolor='red', fill=False, gid='rectangle',
+                    linewidth=self.main.gui.annotations_line_thick,
+                    linestyle='dotted')
+                self.ax.add_patch(self.rectangle)
+                self.draw_idle()
+                status = True
+        return status
+
+    def rectangle_remove(self):
+        """Clear marked rectangle."""
+        if len(self.ax.patches) > 0:
+            for i, p in enumerate(self.ax.patches):
+                if p.get_gid() == 'rectangle':
+                    self.ax.patches[i].remove()
+                    break
+        self.draw_idle()
+
     def draw(self):
         """Avoid super().draw when figure collapsed by sliders."""
         try:
@@ -147,7 +192,7 @@ class ImageCanvas(GenericImageCanvas):
             cmap = self.ax.get_images()[0].cmap.name
         except (AttributeError, IndexError):
             cmap = 'gray'
-        self.ax.cla()
+        self.ax.clear()
         self.img = self.ax.imshow(np.zeros((100, 100)), cmap=cmap)
         self.ax.axis('off')
         at = matplotlib.offsetbox.AnchoredText(
@@ -159,7 +204,7 @@ class ImageCanvas(GenericImageCanvas):
 
     def img_clear(self):
         """Clear image."""
-        self.ax.cla()
+        self.ax.clear()
         self.draw()
 
     def img_draw(self, auto=False, window_level=[]):
@@ -176,13 +221,14 @@ class ImageCanvas(GenericImageCanvas):
             pass
         try:
             cmap = self.ax.get_images()[0].cmap.name
-        except:
+        except (AttributeError, IndexError):
             cmap = 'gray'
 
-        self.ax.cla()
+        self.ax.clear()
         nparr = self.main.active_img
-        if auto is False:
-            wl_min, wl_max = self.main.wid_window_level.get_min_max()
+        if auto is False and hasattr(self.main, 'wid_window_level'):
+            wl_min, wl_max = self.main.wid_window_level.tb_wl.get_min_max()
+            self.main.wid_window_level.colorbar.colorbar_draw(cmap=cmap)
             annotate = self.main.gui.annotations
         else:
             annotate = False
@@ -200,7 +246,11 @@ class ImageCanvas(GenericImageCanvas):
             self.ax.set_xlim(xlim)
             self.ax.set_ylim(ylim)
 
-        self.ax.axis('off')
+        if self.main.gui.show_axis is False:
+            self.ax.axis('off')
+            self.fig.subplots_adjust(.0, .0, 1., 1.)
+        else:
+            self.fig.subplots_adjust(.05, .05, 1., 1.)
         if annotate:
             try:
                 linewidth = self.main.gui.annotations_line_thick
@@ -232,17 +282,24 @@ class ImageCanvas(GenericImageCanvas):
                     color='red', linewidth=linewidth, linestyle='--',
                     gid='axis2'))
             # DICOM annotations
-            marked_idxs = self.main.tree_file_list.get_marked_imgs_current_test()
-            if (
-                    self.parent.tool_sum.isChecked()
-                    and self.main.gui.active_img_no in marked_idxs):
+            try:
+                tool_sum = self.parent.tool_sum.isChecked()
+                if tool_sum:
+                    marked_idxs = self.main.get_marked_imgs_current_test()
+                    tool_sum = self.main.gui.active_img_no in marked_idxs
+            except AttributeError:
+                tool_sum = False
+            if tool_sum:
                 annot_text = (
                     ['Average image', ''] if self.main.average_img
                     else ['Summed image', '']
                     )
             else:
-                annot_text = self.main.imgs[
-                    self.main.gui.active_img_no].annotation_list
+                try:
+                    annot_text = self.main.imgs[
+                        self.main.gui.active_img_no].annotation_list
+                except IndexError:
+                    pass
             at = matplotlib.offsetbox.AnchoredText(
                 '\n'.join(annot_text),
                 prop=dict(size=self.main.gui.annotations_font_size, color='red'),
@@ -253,8 +310,8 @@ class ImageCanvas(GenericImageCanvas):
             self.draw()
         self.current_image = nparr
 
-    def roi_draw(self):
-        """Update ROI countours on image."""
+    def remove_annotations(self):
+        """Remove current annotations."""
         for contour in self.contours:
             try:
                 for coll in contour.collections:
@@ -287,7 +344,17 @@ class ImageCanvas(GenericImageCanvas):
             for txt in self.ax.texts:
                 txt.remove()
 
-        if self.main.current_roi is not None:
+        self.draw_idle()
+
+    def roi_draw(self):
+        """Update ROI countours on image."""
+        self.remove_annotations()
+
+        annotate = True
+        if hasattr(self.main, 'wid_window_level'):
+            annotate = self.main.gui.annotations
+
+        if self.main.current_roi is not None and annotate:
             try:
                 self.linewidth = self.main.gui.annotations_line_thick
                 self.fontsize = self.main.gui.annotations_font_size
@@ -306,6 +373,7 @@ class ImageCanvas(GenericImageCanvas):
     def add_contours_to_all_rois(self, colors=None, reset_contours=True,
                                  roi_indexes=None, filled=False,
                                  labels=None, labels_pos='upper_left',
+                                 linestyles='solid',
                                  hatches=None):
         """Draw all ROIs in self.main.current_roi (list) with specific colors.
 
@@ -321,6 +389,8 @@ class ImageCanvas(GenericImageCanvas):
             if true used contourf (filled) instead
         labels : str, optional
             'upper_left' or 'center' relative to roi
+        linestyles : str, optional
+            fx 'dotted'. Default is 'solid'
         hatches : list of str, optional
             Used if filled is True. Default is None.
         """
@@ -349,7 +419,8 @@ class ImageCanvas(GenericImageCanvas):
             else:
                 contour = self.ax.contour(
                     mask, levels=[0.9],
-                    colors=colors[color_no], alpha=0.5, linewidths=self.linewidth)
+                    colors=colors[color_no], alpha=0.5, linewidths=self.linewidth,
+                    linestyles=linestyles)
             if labels:
                 try:
                     label = labels[color_no]
@@ -357,6 +428,9 @@ class ImageCanvas(GenericImageCanvas):
                     if labels_pos == 'center':
                         xpos = np.mean(mask_pos[1]) - 2
                         ypos = np.mean(mask_pos[0]) + 2
+                    elif labels_pos == 'upper_left_inside':
+                        xpos = np.min(mask_pos[1]) + 10
+                        ypos = np.min(mask_pos[0]) + 30  # TODO better fit to image res.
                     else:  # upper left
                         xpos = np.min(mask_pos[1]) - 5
                         ypos = np.min(mask_pos[0]) - 5
@@ -368,20 +442,15 @@ class ImageCanvas(GenericImageCanvas):
                     pass
             self.contours.append(contour)
 
-        # if hatches is not None:
-        #   for i, collection in enumerate(self.contours.collections):
-        #      collection.set_edgecolor(colors[i % len(colors)])
-
     def Bar(self):
         """Draw Bar ROIs."""
         self.add_contours_to_all_rois(
-            colors=['red', 'blue', 'lime', 'cyan'],
+            colors=COLORS,
             labels=[str(i+1) for i in range(4)]
             )
 
     def CTn(self):
         """Draw CTn ROI."""
-        self.contours = []
         ctn_table = self.main.current_paramset.ctn_table
         nroi = len(ctn_table.labels)
         self.add_contours_to_all_rois(
@@ -416,12 +485,11 @@ class ImageCanvas(GenericImageCanvas):
 
     def Gho(self):
         """Draw Ghosting ROIs."""
-        colors = ['red', 'blue', 'green', 'yellow', 'cyan']
         try:
             labels = self.main.current_paramset.gho_table.labels
         except AttributeError:
             labels = None
-        self.add_contours_to_all_rois(colors=colors, labels=labels)
+        self.add_contours_to_all_rois(colors=COLORS, labels=labels)
 
     def Hom(self):
         """Draw Hom ROI."""
@@ -431,9 +499,15 @@ class ImageCanvas(GenericImageCanvas):
                 self.add_contours_to_all_rois(
                     colors=['red'], roi_indexes=[2],
                     filled=True, hatches=['////'], reset_contours=False)
+            if self.main.current_paramset.hom_mask_outer_mm > 0:
+                mask = np.where(self.main.current_roi[-1], 0, 1)
+                contour = self.ax.contour(
+                    mask, levels=[0.9],
+                    colors='blue', alpha=0.5, linewidths=self.linewidth,
+                    linestyles='dotted')
+                self.contours.append(contour)
         else:
-            colors = ['red', 'blue', 'green', 'yellow', 'cyan']
-            self.add_contours_to_all_rois(colors=colors)
+            self.add_contours_to_all_rois(colors=COLORS)
 
     def MTF(self):
         """Draw MTF ROI."""
@@ -452,7 +526,7 @@ class ImageCanvas(GenericImageCanvas):
                 roi_indexes = list(range(len(self.main.current_roi) - 1))
                 self.add_contours_to_all_rois(
                     roi_indexes=roi_indexes,
-                    colors=['red', 'blue', 'green', 'cyan'])
+                    colors=COLORS)
                 mask = np.where(self.main.current_roi[-1], 0, 1)
                 contour = self.ax.contour(
                     mask, levels=[0.9],
@@ -460,7 +534,7 @@ class ImageCanvas(GenericImageCanvas):
                     linestyles='dotted')
                 self.contours.append(contour)
             else:
-                self.add_contours_to_all_rois(colors=['red', 'blue', 'green', 'cyan'])
+                self.add_contours_to_all_rois(colors=COLORS)
 
             if 'MTF' in self.main.results and self.main.current_modality == 'CT':
                 try:
@@ -471,7 +545,7 @@ class ImageCanvas(GenericImageCanvas):
                             mask = np.where(roi_disc, 0, 1)
                             contour = self.ax.contour(
                                 mask, levels=[0.9],
-                                colors='blue', alpha=0.5, linewidths=self.linewidth,
+                                colors='red', alpha=0.5, linewidths=self.linewidth,
                                 linestyles='dotted')
                             self.contours.append(contour)
                 except (TypeError, KeyError, IndexError):
@@ -492,8 +566,16 @@ class ImageCanvas(GenericImageCanvas):
 
     def Num(self):
         """Draw  ROIs with labels."""
-        self.add_contours_to_all_rois(
-            labels=self.main.current_paramset.num_table.labels)
+        labels = self.main.current_paramset.num_table.labels
+        colors = ['r'] * len(labels)
+        try:
+            widget = self.main.stack_test_tabs.currentWidget()
+            sel = widget.num_table_widget.table.selectedIndexes()
+            idx = sel[0].row()
+            colors[idx] = 'b'
+        except (AttributeError, IndexError):
+            pass
+        self.add_contours_to_all_rois(colors=colors, labels=labels)
 
     def PIU(self):
         """Draw MR PIU ROI."""
@@ -567,7 +649,7 @@ class ImageCanvas(GenericImageCanvas):
         """Drow ROIs with labels if any."""
         if self.main.current_paramset.roi_use_table > 0:
             labels = self.main.current_paramset.roi_table.labels
-            colors = get_color_list(n_colors=len(labels))
+            colors = COLORS
         else:
             labels = None
             colors = None
@@ -595,8 +677,11 @@ class ImageCanvas(GenericImageCanvas):
         else:
             search_margin = self.main.current_paramset.sli_search_width
         background_length = self.main.current_paramset.sli_background_width
-        pix = self.main.imgs[self.main.gui.active_img_no].pix
-        background_length = background_length / pix[0]
+        try:
+            pix = self.main.imgs[self.main.gui.active_img_no].pix
+            background_length = background_length / pix[0]
+        except (AttributeError, IndexError):  # with automation
+            background_length = 0
         for l_idx, line in enumerate(self.main.current_roi['h_lines']):
             y1, x1, y2, x2 = line
             self.ax.add_artist(matplotlib.lines.Line2D(
@@ -650,34 +735,101 @@ class ImageCanvas(GenericImageCanvas):
 
     def SNI(self):
         """Draw NM uniformity ROI."""
+        roi_idx = -1
+        small_start_idx = 3  # index of roi_array where small ROIs start
+        labels = None
+        show_labels = False
+        try:
+            show_labels = self.main.tab_nm.sni_show_labels.isChecked()
+        except AttributeError:
+            pass
+        if show_labels:
+            labels = ['L1', 'L2']
+        self.add_contours_to_all_rois(
+            colors=['red', 'blue'], roi_indexes=[1, 2], labels=labels,
+            labels_pos='upper_left_inside')
+
         if self.main.current_paramset.sni_type == 0:
             self.add_contours_to_all_rois(
-                colors=['red', 'blue'], roi_indexes=[1, 2],
-                filled=True, hatches=['//', '\\'])  # 2 large
-            self.add_contours_to_all_rois(
-                colors=['lime', 'cyan'], reset_contours=False,
-                roi_indexes=[3, 4],
-                filled=True, hatches=['|||', '---'])  # 2 first small, else only label
+                reset_contours=False,
+                colors=['red', 'blue', 'red', 'blue', 'red', 'blue'],
+                roi_indexes=[i for i in range(3, 9)],
+                filled=True)
 
-            for i in range(6):
-                mask = np.where(self.main.current_roi[i+3], 0, 1)
-                colors = ['lime', 'cyan', 'k', 'k', 'k', 'k']
-                mask_pos = np.where(mask == 0)
-                xpos = np.mean(mask_pos[1])
-                ypos = np.mean(mask_pos[0])
-                if np.isfinite(xpos) and np.isfinite(ypos):
-                    self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
-                                 f'S{i+1}',
-                                 fontsize=self.fontsize, color=colors[i])
-        else:
-            self.add_contours_to_all_rois(
-                colors=['red'], roi_indexes=[0])  # full
-            self.contours = []
-            for row, col in [(1, 0), (2, 1), (-2, -2), (-1, -1)]:
+            if show_labels:
+                for i in range(6):
+                    mask = np.where(self.main.current_roi[i+3], 0, 1)
+                    colors = 'k'
+                    mask_pos = np.where(mask == 0)
+                    xpos = np.mean(mask_pos[1])
+                    ypos = np.mean(mask_pos[0])
+                    if np.isfinite(xpos) and np.isfinite(ypos):
+                        self.ax.text(xpos-self.fontsize, ypos+self.fontsize,
+                                     f'S{i+1}',
+                                     fontsize=self.fontsize, color=colors)
+        elif self.main.current_paramset.sni_type in [1, 2]:
+            for row, col in [
+                    (small_start_idx, 0),
+                    (small_start_idx+1, 1), (-2, -2), (-1, -1)]:
+                mask = np.where(self.main.current_roi[row][col], 0, 1)
                 self.contours.append(
-                    self.ax.contourf(
-                        np.where(self.main.current_roi[row][col], 0, 1),
-                        levels=[0, 0.5], colors='red', alpha=0.3))
+                    self.ax.contourf(mask, levels=[0, 0.5], colors='red', alpha=0.3))
+                if show_labels:
+                    mask_pos = np.where(mask == 0)
+                    xmin = np.min(mask_pos[1])
+                    xmean = np.mean(mask_pos[1])
+                    xpos = int(0.75*xmin + 0.25*xmean)
+                    ypos = np.mean(mask_pos[0]) + 2
+                    if np.isfinite(xpos) and np.isfinite(ypos):
+                        colno = col
+                        rowno = row
+                        if col < 0:
+                            colno = len(self.main.current_roi[row]) + col
+                        if row < 0:
+                            rowno = len(self.main.current_roi) + row
+                        self.ax.text(xpos, ypos, f'r{rowno-small_start_idx}_c{colno}',
+                                     fontsize=self.fontsize, color='k')
+        else:  # 3 Siemens
+            for rowno, rois_row in enumerate(self.main.current_roi[small_start_idx:]):
+                for colno, roi in enumerate(rois_row):
+                    if roi is not None:  # None if ignored
+                        mask = np.where(roi, 0, 1)
+                        self.contours.append(
+                            self.ax.contour(
+                                mask, levels=[0.9], colors='red',
+                                alpha=0.5, linewidths=self.linewidth))
+                        if show_labels:
+                            mask_pos = np.where(mask == 0)
+                            xmin = np.min(mask_pos[1])
+                            xmean = np.mean(mask_pos[1])
+                            xpos = int(0.75*xmin + 0.25*xmean)
+                            ypos = np.mean(mask_pos[0]) + 2
+                            if np.isfinite(xpos) and np.isfinite(ypos):
+                                self.ax.text(xpos, ypos, f'r{rowno}_c{colno}',
+                                             fontsize=self.fontsize, color='red')
+        if self.main.current_paramset.sni_type > 0:
+            try:
+                roi_idx = int(self.main.tab_nm.sni_selected_roi.currentIndex())
+            except AttributeError:
+                pass
+        if roi_idx > 1 and self.main.results:  # not for L1 or L2
+            plot_txt = self.main.tab_nm.sni_plot.currentText()
+            img_txt = self.main.tab_nm.sni_result_image.currentText()
+            if 'selected' in plot_txt or 'selected' in img_txt:
+                flat_list = [
+                    item for row in self.main.current_roi[3:]
+                    for item in row]
+                try:
+                    selected_roi = flat_list[roi_idx - 2]
+                except IndexError:
+                    selected_roi = None
+
+                if selected_roi is not None:
+                    self.contours.append(
+                        self.ax.contour(
+                            np.where(selected_roi, 0, 1),
+                            levels=[0.9], colors='b', linestyles='dotted',
+                            alpha=0.5, linewidths=1.5 * self.linewidth))
 
     def SNR(self):
         """Draw MR SNR ROI(s)."""
@@ -685,6 +837,25 @@ class ImageCanvas(GenericImageCanvas):
             self.add_contours_to_all_rois()
         else:
             self.add_contours_to_all_rois(colors=['red', 'lime'])
+
+    def TTF(self):
+        """Draw TTF ROIs."""
+        #self.contours = []
+        ttf_table = self.main.current_paramset.ttf_table
+        self.add_contours_to_all_rois(labels=ttf_table.labels, colors=COLORS)
+        if 'TTF' in self.main.results:
+            try:
+                if 'details_dict' in self.main.results['TTF']:
+                    for details_this in self.main.results['TTF']['details_dict']:
+                        roi_disc = details_this['found_disc_roi']
+                        mask = np.where(roi_disc, 0, 1)
+                        contour = self.ax.contour(
+                            mask, levels=[0.9],
+                            colors='red', alpha=0.5, linewidths=self.linewidth,
+                            linestyles='dotted')
+                        self.contours.append(contour)
+            except (TypeError, KeyError, IndexError):
+                pass
 
     def Uni(self):
         """Draw NM uniformity ROI."""
@@ -699,7 +870,7 @@ class ResultImageCanvas(GenericImageCanvas):
 
     def result_image_draw(self):
         """Refresh result image."""
-        self.ax.cla()
+        self.ax.clear()
         self.current_image = None
         self.cmap = 'gray'
         self.min_val = None
@@ -715,19 +886,57 @@ class ResultImageCanvas(GenericImageCanvas):
 
         if self.current_image is not None:
             if self.min_val is None:
-                self.min_val = np.min(self.current_image)
+                self.min_val = np.amin(self.current_image)
             if self.max_val is None:
-                self.max_val = np.max(self.current_image)
+                self.max_val = np.amax(self.current_image)
             if self.positive_negative:
                 if self.min_val != - self.max_val:
                     maxv = np.max(np.abs([self.min_val, self.max_val]))
                     self.min_val = -maxv
                     self.max_val = maxv
                 self.cmap = 'coolwarm'
-            self.img = self.ax.imshow(
-                self.current_image,
-                cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
-            self.parent.image_title.setText(self.title)
+            self.parent.wid_window_level.positive_negative = self.positive_negative
+
+            proceed = True
+            try:
+                self.img = self.ax.imshow(
+                    self.current_image,
+                    cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
+                self.parent.image_title.setText(self.title)
+                contrast = self.max_val - self.min_val
+            except TypeError:
+                proceed = False
+            if proceed:
+                self.parent.wid_window_level.decimals = 0
+                if contrast < 5:
+                    self.parent.wid_window_level.decimals = 2
+                elif contrast < 20:
+                    self.parent.wid_window_level.decimals = 1
+                try:
+                    rmin = round(self.min_val * 10 ** self.parent.wid_window_level.decimals)
+                    rmax = round(self.max_val * 10 ** self.parent.wid_window_level.decimals)
+                    self.parent.wid_window_level.min_wl.setRange(rmin, rmax)
+                    self.parent.wid_window_level.max_wl.setRange(rmin, rmax)
+                    self.parent.wid_window_level.update_window_level(
+                        self.min_val, self.max_val, cmap=self.cmap)
+                    self.parent.wid_window_level.canvas.plot(
+                        self.current_image,
+                        decimals=self.parent.wid_window_level.decimals)
+                except ValueError:
+                    pass
+            if self.main.current_modality == 'Mammo':
+                if 'Hom' in self.main.results and self.main.current_test == 'Hom':
+                    if self.current_image.shape == self.main.active_img.shape:
+                        try:
+                            details_dict = self.main.results['Hom']['details_dict'][
+                                self.main.gui.active_img_no]
+                        except (IndexError, KeyError):
+                            details_dict = None
+                        if details_dict:
+                            if 'deviating_pixel_coordinates' in details_dict:
+                                for coord in details_dict['deviating_pixel_coordinates']:
+                                    self.ax.add_patch(patches.Circle(
+                                        coord, radius=20, color='r', fill=False))
         else:
             self.img = self.ax.imshow(np.zeros((100, 100)))
             at = matplotlib.offsetbox.AnchoredText(
@@ -736,7 +945,13 @@ class ResultImageCanvas(GenericImageCanvas):
                 frameon=False, loc='center')
             self.ax.add_artist(at)
             self.parent.image_title.setText('')
-        self.ax.axis('off')
+            self.parent.wid_window_level.colorbar.fig.clf()
+            self.parent.wid_window_level.canvas.fig.clear()
+        if self.main.gui.show_axis is False:
+            self.ax.axis('off')
+            self.fig.subplots_adjust(.0, .0, 1., 1.)
+        else:
+            self.fig.subplots_adjust(.05, .05, 1., 1.)
         self.draw()
 
     def Hom(self):
@@ -752,19 +967,19 @@ class ResultImageCanvas(GenericImageCanvas):
                 sel_txt = self.main.tab_mammo.hom_result_image.currentText()
                 self.title = sel_txt
                 try:
-                    if sel_txt == 'Variance pr ROI map':
-                        self.current_image = details_dict['variances']
-                    elif sel_txt == 'Average pr ROI map':
+                    if sel_txt == 'Average pr ROI map':
                         self.current_image = details_dict['averages']
                     elif sel_txt == 'SNR pr ROI map':
                         self.current_image = details_dict['snrs']
-                    elif sel_txt == 'Average pr ROI - % difference from global average':
+                    elif sel_txt == 'Variance pr ROI map':
+                        self.current_image = details_dict['variances']
+                    elif sel_txt == 'Average pr ROI (% difference from global average)':
                         self.current_image = details_dict['diff_averages']
                         self.positive_negative = True
-                    elif sel_txt == 'SNR pr ROI - % difference from global SNR':
+                    elif sel_txt == 'SNR pr ROI (% difference from global SNR)':
                         self.current_image = details_dict['diff_snrs']
                         self.positive_negative = True
-                    elif sel_txt == 'Pixel values - % difference from global average':
+                    elif sel_txt == 'Pixel values (% difference from global average)':
                         self.current_image = details_dict['diff_pixels']
                         self.positive_negative = True
                     elif sel_txt == 'Deviating ROIs':
@@ -773,6 +988,8 @@ class ResultImageCanvas(GenericImageCanvas):
                     elif sel_txt == 'Deviating pixels':
                         self.current_image = details_dict['deviating_pixels']
                         self.cmap = 'RdYlGn_r'
+                    elif sel_txt == '# deviating pixels pr ROI':
+                        self.current_image = details_dict['deviating_pixel_clusters']
                 except KeyError:
                     pass
 
@@ -841,17 +1058,25 @@ class ResultImageCanvas(GenericImageCanvas):
                 if 'sum_image' in details_dict:
                     self.current_image = details_dict['sum_image']
             elif '2d NPS' in sel_txt:
-                sel_text = self.main.tab_nm.sni_result_image.currentText()
-                roi_txt = sel_text[-2:]
-                self.title = f'2d NPS for {roi_txt}'
-                roi_names = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
-                roi_no = roi_names.index(roi_txt)
-                details_this = details_dict['pr_roi'][roi_no]
-                self.current_image = details_this['NPS']
+                image_text = self.main.tab_nm.sni_result_image.currentText()
+                roi_txt = self.main.tab_nm.sni_selected_roi.currentText()
+                self.title = f'{image_text} for ROI {roi_txt}'
+                roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
+                if self.main.current_paramset.sni_type > 0:
+                    self.main.wid_image_display.canvas.roi_draw()
+                try:
+                    details_this = details_dict['pr_roi'][roi_idx]
+                    self.current_image = details_this['NPS']
+                except (IndexError, KeyError, TypeError):
+                    self.current_image = None
             elif 'SNI values map' in sel_txt:
                 self.title = 'SNI values map'
                 if 'SNI_map' in details_dict:
-                    self.current_image = details_dict['SNI_map']
+                    if self.main.current_paramset.sni_type == 3:  # Siemens
+                        self.current_image = generate_SNI_Siemens_image(
+                            details_dict['SNI_map'])
+                    else:
+                        self.current_image = details_dict['SNI_map']
                     self.min_val = 0
                     max_in_res = np.max([
                         row for row in self.main.results['SNI']['values']
@@ -874,26 +1099,41 @@ class ResultImageCanvas(GenericImageCanvas):
                 details_dict = {}
         self.cmap = 'viridis'
         type_img = self.main.tab_nm.uni_result_image.currentIndex()
+        set_min_max_avoid_zero = False
         if type_img == 0:
             self.title = 'Differential uniformity map in UFOV (max in x/y direction)'
             if 'du_matrix' in details_dict:
                 self.current_image = details_dict['du_matrix']
+                self.min_val = np.nanmin(self.current_image)
+                self.max_val = np.nanmax(self.current_image)
         elif type_img == 1:
-            self.title = 'Processed image ~ 6.4 mm pr pix'
-            if 'matrix' in details_dict:
-                self.current_image = details_dict['matrix']
-        elif type_img == 2:
-            self.title = 'Processed image ~ 6.4 mm pr pix, UFOV part'
+            if 'pix_size' in details_dict:
+                pix_sz = details_dict['pix_size']
+                self.title = f'Processed image {pix_sz:0.2f} mm pr pix, UFOV part'
+            else:
+                self.title = 'Processed image, ~6.4 mm pr pix, UFOV part'
             if 'matrix_ufov' in details_dict:
                 self.current_image = details_dict['matrix_ufov']
-        elif type_img == 3:
+                set_min_max_avoid_zero = True
+        elif type_img == 2:
             self.title = 'Curvature corrected image'
             if 'corrected_image' in details_dict:
                 self.current_image = details_dict['corrected_image']
-        elif type_img == 4:
+                mean = np.mean(self.current_image[self.current_image != 0])
+                stdev = np.std(self.current_image[self.current_image != 0])
+                self.min_val = mean - stdev
+                self.max_val = mean + stdev
+        elif type_img == 3:
             self.title = 'Summed image'
             if 'sum_image' in details_dict:
                 self.current_image = details_dict['sum_image']
+                set_min_max_avoid_zero = True
+        if set_min_max_avoid_zero:
+            max_val = np.nanmax(self.current_image)
+            if max_val > 0:
+                self.max_val = max_val
+                non_zero = self.current_image[self.current_image != 0]
+                self.min_val = np.nanmin(non_zero)
 
     def Var(self):
         """Prepare variance image."""

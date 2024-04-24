@@ -21,13 +21,14 @@ class Gui():
     delta_x: int = 0
     delta_y: int = 0
     delta_a: float = 0.0
+    show_axis: bool = False
 
 
 @dataclass
 class InputMain:
     """Dataclass with values as MainWindow when calculate_qc without main window."""
 
-    test_mode: bool = False
+    test_mode: bool = False  # TODO delete?
     current_modality: str = 'CT'
     current_test: str = 'DCM'
     current_paramset: dict = field(default_factory=dict)

@@ -10,11 +10,12 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
 import copy
+import warnings
+
 import numpy as np
 import scipy as sp
 from scipy.signal import find_peaks
 import skimage
-
 from PyQt5.QtWidgets import qApp
 
 # imageQC block start
@@ -28,8 +29,11 @@ from imageQC.config.iQCconstants import (
 import imageQC.config.config_classes as cfc
 from imageQC.config.config_func import get_config_folder
 from imageQC.scripts import digit_methods
+from imageQC.scripts.artifact import apply_artifacts
 # imageQC block end
 
+
+warnings.filterwarnings(action='ignore', message='All-NaN slice encountered')
 
 @dataclass
 class Results:
@@ -154,9 +158,9 @@ def quicktest_output(input_main):
         if len(input_main.current_quicktest.image_names) > 0:
             set_names = input_main.current_quicktest.image_names
             if any(set_names):
-                for i in range(n_imgs):
-                    if set_names[i] != '':
-                        image_names[i] = set_names[i]
+                for i, set_name in enumerate(set_names):
+                    if set_name != '' and i < len(image_names):
+                        image_names[i] = set_name
         uniq_group_ids_all = mm.get_uniq_ordered(input_main.current_group_indicators)
         group_names = []
         for i in range(n_imgs):
@@ -186,7 +190,8 @@ def quicktest_output(input_main):
         for test in input_main.results:  # add defaults if not defined
             if input_main.results[test] is not None:
                 if test not in output_all_actual or len(output_all_actual[test]) == 0:
-                    output_all_actual[test] = [cfc.QuickTestOutputSub(columns=[])]
+                    output_all_actual[test] = [
+                        cfc.QuickTestOutputSub(columns=[], alternative=-1)]
 
         for test in output_all_actual:
             output_subs = output_all_actual[test]
@@ -201,7 +206,13 @@ def quicktest_output(input_main):
                     values = input_main.results[test]['values_sup']
                     headers = input_main.results[test]['headers_sup']
                 else:
-                    if input_main.results[test]['alternative'] == sub.alternative:
+                    proceed = False
+                    if sub.alternative == -1:  # not defined use all as default
+                        proceed = True
+                    else:
+                        if input_main.results[test]['alternative'] == sub.alternative:
+                            proceed = True
+                    if proceed:
                         values = input_main.results[test]['values']
                         headers = input_main.results[test]['headers']
                 out_values = []
@@ -376,7 +387,6 @@ def calculate_qc(input_main, wid_auto=None,
     ----------
     input_main : object
         of class MainWindow or MainAuto containing specific attributes
-        see try block below
         alter results of input_main
         if data pr image results[test]['pr_image'] = True
         results[test]['details_dict'] is always list of dict [{}] (or None)
@@ -394,9 +404,11 @@ def calculate_qc(input_main, wid_auto=None,
     current_test_before = input_main.current_test
     modality = input_main.current_modality
     errmsgs = []
-    if 'MainWindow' in str(type(input_main)):
-        input_main.start_wait_cursor()
-        input_main.status_bar.showMessage('Calculating...')
+    main_type = input_main.__class__.__name__
+    try:
+        input_main.progress_modal.setValue(1)
+    except AttributeError:
+        pass
     delta_xya = [
         input_main.gui.delta_x,
         input_main.gui.delta_y,
@@ -442,7 +454,7 @@ def calculate_qc(input_main, wid_auto=None,
             NM_count = [False] * n_img
             extras = None  # placeholder for extra arguments to pass to calc_2d/3d
             if input_main.current_modality == 'NM' and 'SNI' in flattened_marked:
-                if paramset.sni_correct and paramset.sni_ref_image != '':
+                if paramset.sni_ref_image != '':
                     extras = get_SNI_ref_image(paramset, tag_infos)
             if 'Num' in flattened_marked:
                 digit_templates = input_main.digit_templates[
@@ -479,76 +491,83 @@ def calculate_qc(input_main, wid_auto=None,
             force_new_roi = []  # tests where a new roi should be set pr image
             for i in range(n_analyse):
                 marked_3d.append([])
-                if modality == 'CT':
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_type > 0:
-                            marked_3d[i].append('MTF')
+                if len(marked[i]) > 0:
+                    if modality == 'CT':
+                        if 'MTF' in marked[i]:
+                            if paramset.mtf_type > 0:
+                                marked_3d[i].append('MTF')
+                                extra_tag_pattern = cfc.TagPatternFormat(
+                                    list_tags=['ConvolutionKernel'])
+                                extra_tag_list = []
+                                read_tags[i] = True
+                            else:
+                                if paramset.mtf_auto_center:
+                                    force_new_roi.append('MTF')
+                        if 'TTF' in marked[i]:
+                            marked_3d[i].append('TTF')
                             extra_tag_pattern = cfc.TagPatternFormat(
-                                list_tags=['ConvolutionKernel'])
+                                list_tags=['SeriesUID'])
                             extra_tag_list = []
                             read_tags[i] = True
-                        else:
+                        if 'Sli' in marked[i]:
+                            if paramset.sli_auto_center:
+                                force_new_roi.append('Sli')
+                        if 'CTn' in marked[i]:
+                            if paramset.ctn_auto_center or paramset.ctn_search:
+                                force_new_roi.append('CTn')
+                    elif modality == 'Xray':
+                        if 'Noi' in marked[i]:
+                            force_new_roi.append('Noi')
+                        if 'MTF' in marked[i]:
                             if paramset.mtf_auto_center:
                                 force_new_roi.append('MTF')
-                    if 'Sli' in marked[i]:
-                        if paramset.sli_auto_center:
-                            force_new_roi.append('Sli')
-                    if 'CTn' in marked[i]:
-                        if paramset.ctn_auto_center:
-                            force_new_roi.append('CTn')
-                elif modality == 'Xray':
-                    if 'Noi' in marked[i]:
-                        force_new_roi.append('Noi')
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_auto_center:
-                            force_new_roi.append('MTF')
-                elif modality == 'Mammo':
-                    if 'SDN' in marked[i]:
-                        if paramset.sdn_auto_center:
-                            force_new_roi.append('SDN')
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_auto_center:
-                            force_new_roi.append('MTF')
-                elif modality == 'NM':
-                    if 'Uni' in marked[i]:
-                        if paramset.uni_sum_first:
-                            marked_3d[i].append('Uni')
-                        else:
-                            force_new_roi.append('Uni')
-                    if 'SNI' in marked[i]:
-                        if paramset.sni_sum_first:
-                            marked_3d[i].append('SNI')
-                        else:
-                            force_new_roi.append('SNI')
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_auto_center:
-                            force_new_roi.append('MTF')
-                elif modality == 'SPECT':
-                    if 'MTF' in marked[i]:
-                        if paramset.mtf_type > 0:
-                            marked_3d[i].append('MTF')
-                elif modality == 'PET':
-                    if 'Cro' in marked[i]:
-                        marked_3d[i].append('Cro')
-                        extra_tag_pattern = cfc.TagPatternFormat(
-                            list_tags=['AcquisitionTime', 'RadionuclideTotalDose',
-                                       'RadiopharmaceuticalStartTime', 'Units'])
-                        extra_tag_list = []
-                        extra_tag_list_compare = [False, True, True, True]
-                        read_tags[i] = True
-                    if 'Rec' in marked[i]:
-                        marked_3d[i].append('Rec')
-                        extra_tag_pattern = cfc.TagPatternFormat(
-                            list_tags=['AcquisitionTime', 'Units'])
-                        extra_tag_list = []
-                        extra_tag_list_keep = True
-                        extra_tag_list_compare = [False, True]
-                        read_tags[i] = True
-                elif modality == 'MR':
-                    if 'SNR' in marked[i]:
-                        if paramset.snr_type == 0:
-                            marked_3d[i].append('SNR')
-                    # TODO? force_new_roi.append all with optimize center?
+                    elif modality == 'Mammo':
+                        if 'SDN' in marked[i]:
+                            if paramset.sdn_auto_center:
+                                force_new_roi.append('SDN')
+                        if 'MTF' in marked[i]:
+                            if paramset.mtf_auto_center:
+                                force_new_roi.append('MTF')
+                    elif modality == 'NM':
+                        if 'Uni' in marked[i]:
+                            if paramset.uni_sum_first:
+                                marked_3d[i].append('Uni')
+                            else:
+                                force_new_roi.append('Uni')
+                        if 'SNI' in marked[i]:
+                            if paramset.sni_sum_first:
+                                marked_3d[i].append('SNI')
+                            else:
+                                force_new_roi.append('SNI')
+                        if 'MTF' in marked[i]:
+                            if paramset.mtf_auto_center:
+                                force_new_roi.append('MTF')
+                    elif modality == 'SPECT':
+                        if 'MTF' in marked[i]:
+                            if paramset.mtf_type > 0:
+                                marked_3d[i].append('MTF')
+                    elif modality == 'PET':
+                        if 'Cro' in marked[i]:
+                            marked_3d[i].append('Cro')
+                            extra_tag_pattern = cfc.TagPatternFormat(
+                                list_tags=['AcquisitionTime', 'RadionuclideTotalDose',
+                                           'RadiopharmaceuticalStartTime', 'Units'])
+                            extra_tag_list = []
+                            extra_tag_list_compare = [False, True, True, True]
+                            read_tags[i] = True
+                        if 'Rec' in marked[i]:
+                            marked_3d[i].append('Rec')
+                            extra_tag_pattern = cfc.TagPatternFormat(
+                                list_tags=['AcquisitionTime', 'Units'])
+                            extra_tag_list = []
+                            extra_tag_list_keep = True
+                            extra_tag_list_compare = [False, True]
+                            read_tags[i] = True
+                    elif modality == 'MR':
+                        if 'SNR' in marked[i]:
+                            if paramset.snr_type == 0:
+                                marked_3d[i].append('SNR')
+                        # TODO? force_new_roi.append all with optimize center?
 
             # list of shape + pix for testing if new roi need to be calculated
             xypix = []
@@ -563,10 +582,15 @@ def calculate_qc(input_main, wid_auto=None,
                 curr_progress_val = wid_auto.progress_modal.value()
                 progress_increment = round(
                     wid_auto.progress_modal.sub_interval / n_analyse)
+
             for i in range(n_analyse):
-                if 'MainWindow' in str(type(input_main)):
-                    input_main.status_bar.showMessage(
-                        f'Reading/calculating image {i}/{n_img}')
+                if main_type in ['MainWindow', 'TaskBasedImageQualityDialog']:
+                    try:
+                        input_main.progress_modal.setLabelText(
+                            f'Reading/calculating image {i}/{n_img}')
+                        input_main.progress_modal.setValue(round(100 * i/n_img))
+                    except AttributeError:
+                        pass
 
                 # read image or tags as needed
                 group_pattern = cfc.TagPatternFormat(list_tags=paramset.output.group_by)
@@ -583,6 +607,11 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_infos=tag_infos, NM_count=NM_count[i],
                             get_window_level=any(auto_template_label)
                             )
+                        try:
+                            if len(input_main.imgs[i].artifacts) > 0:
+                                image = apply_artifacts(image, input_main.imgs[i])
+                        except (TypeError, AttributeError, IndexError):
+                            pass
                         if len(tags) > 0:
                             if isinstance(tags[0], dict):
                                 tag_lists[i] = tags[0]['dummy']
@@ -629,6 +658,11 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_infos=tag_infos,
                             get_window_level=any(auto_template_label)
                             )
+                        try:
+                            if len(input_main.imgs[i].artifacts) > 0:
+                                image = apply_artifacts(image, input_main.imgs[i])
+                        except (TypeError, AttributeError, IndexError):
+                            pass
                         if len(tags) > 0:
                             input_main.current_group_indicators[i] = '_'.join(tags[0])
                 if wid_auto is not None:
@@ -809,7 +843,7 @@ def calculate_qc(input_main, wid_auto=None,
         if len(msgs) > 0 and input_main.automation_active:
             input_main.errmsgs = msgs
 
-    if 'MainWindow' in str(type(input_main)):
+    if main_type == 'MainWindow':
         if input_main.automation_active is False:
             if len(msgs) > 0:
                 input_main.display_errmsg(msgs)
@@ -833,14 +867,35 @@ def calculate_qc(input_main, wid_auto=None,
             input_main.current_test = set_current_test
             input_main.refresh_results_display()
             # refresh image display if result contain rois to display
-            if 'MTF' in input_main.results and input_main.current_modality == 'CT':
-                if paramset.mtf_type == 2:
+            if input_main.current_modality == 'CT':
+                if 'MTF' in input_main.results and paramset.mtf_type == 2:
+                    input_main.refresh_img_display()
+                if 'TTF' in input_main.results:
                     input_main.refresh_img_display()
             elif 'Rec' in input_main.results:
-                input_main.wid_window_level.set_window_level('min_max', set_tools=True)
+                input_main.wid_window_level.tb_wl.set_window_level(
+                    'min_max', set_tools=True)
                 input_main.set_active_img(
                     input_main.results['Rec']['details_dict']['max_slice_idx'])
-            input_main.stop_wait_cursor()
+            try:
+                input_main.progress_modal.setValue(input_main.progress_modal.maximum())
+            except AttributeError:
+                pass
+
+    elif main_type == 'TaskBasedImageQualityDialog':
+        input_main.display_errmsg(msgs)
+        if current_test_before in flattened_marked or len(flattened_marked) == 0:
+            set_current_test = current_test_before
+        else:
+            set_current_test = flattened_marked[0]
+        idx_set_test = input_main.tests.index(set_current_test)
+        widget = input_main.tab_ct
+        widget.setCurrentIndex(idx_set_test)
+        input_main.current_test = set_current_test
+        input_main.refresh_results_display()
+        if 'TTF' in input_main.results:
+            input_main.refresh_img_display()
+        input_main.progress_modal.setValue(input_main.progress_modal.maximum())
 
 
 def calculate_2d(image2d, roi_array, image_info, modality,
@@ -1131,7 +1186,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
             if image2d is not None:
                 details = calculate_flatfield_mammo(
-                    image2d, roi_array[-1], image_info, paramset)
+                    image2d, roi_array[-2], roi_array[-1], image_info, paramset)
                 if details:
                     values = [
                         np.mean(details['averages']),
@@ -1144,7 +1199,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         details['n_deviating_pixels'],
                         100 * details['n_deviating_pixels'] / details['n_pixels'],
                         ]
-                    masked_image = np.ma.masked_array(image2d, mask=roi_array[-1])
+                    masked_image = np.ma.masked_array(image2d, mask=details['roi_mask'])
                     values_sup = [
                         np.min(masked_image), np.max(masked_image),
                         np.min(details['averages']), np.max(details['averages']),
@@ -1728,7 +1783,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         res = Results(headers=headers, values=values)
         return res
 
-    def Uni():
+    def Uni():  # NM uniformity
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
         if image2d is None:
@@ -1754,15 +1809,25 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
             res = calculate_NM_uniformity(
                 image_input, roi_array, image_info.pix[0], paramset.uni_scale_factor)
-            details_dict['matrix'] = res['matrix']
             details_dict['matrix_ufov'] = res['matrix_ufov']
             details_dict['du_matrix'] = res['du_matrix']
+            details_dict['pix_size'] = res['pix_size']
             values = res['values']
+            values_sup.append(res['pix_size'])
+            values_sup.append(res['center_pixel_count'])
+            errmsg = [errmsg]
+            ''' A bit annoying message when automation and this is settled.
+            if res['center_pixel_count'] < 10000:
+                if errmsg:
+                    errmsg.append(
+                        f'Center pixel (after scaling) = {res["center_pixel_count"]} '
+                        '< 10000 (minimum set by NEMA)')
+            '''
 
             res = Results(
                 headers=headers, values=values,
                 headers_sup=headers_sup, values_sup=values_sup,
-                details_dict=details_dict, errmsg=[errmsg])
+                details_dict=details_dict, errmsg=errmsg)
 
         return res
 
@@ -1807,7 +1872,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         for each image which 3d tests to perform
     input_main : object
         of class MainWindow or InputMain containing specific attributes
-        see try block below
         alter results of input_main
     extra_taglists : None or list of strings
         used for test PET Cross calibration
@@ -1918,6 +1982,83 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                               errmsg=errmsg)
         else:
             res = None
+
+        return res
+
+    def TTF(images_to_test):
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
+        materials = paramset.ttf_table.labels
+        if len(images_to_test) == 0 or len(materials) == 0:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
+            details_dict_all = []  # list of dict
+            values = []
+            values_sup = []
+            errmsgs = []
+            prefix = 'g' if paramset.ttf_gaussian else 'd'
+
+            sum_image = matrix[images_to_test[0]]
+            if len(images_to_test) > 1:
+                for imgNo in images_to_test[1:]:
+                    sum_image = np.add(sum_image, matrix[imgNo])
+            roi_array_all, errmsg = get_rois(
+                sum_image, images_to_test[0], input_main)
+
+            paramset_ttf_fix = copy.deepcopy(paramset)
+            paramset_ttf_fix.mtf_cut_lsf = paramset_ttf_fix.ttf_cut_lsf
+            paramset_ttf_fix.mtf_cut_lsf_w = paramset_ttf_fix.ttf_cut_lsf_w
+            paramset_ttf_fix.mtf_cut_lsf_w_fade = paramset_ttf_fix.ttf_cut_lsf_w_fade
+            for idx, roi_array in enumerate(roi_array_all):
+                rows = np.max(roi_array, axis=1)
+                cols = np.max(roi_array, axis=0)
+                sub = []
+                for sli in matrix:
+                    if sli is not None:
+                        this_sub = sli[rows][:, cols]
+                        sub.append(this_sub)
+                    else:
+                        sub.append(None)
+
+                details_dict, errmsg = calculate_MTF_circular_edge(
+                    sub, roi_array[rows][:, cols],
+                    img_infos[images_to_test[0]].pix[0],
+                    paramset_ttf_fix, images_to_test)
+                if errmsg:
+                    errmsgs.append(f'{materials[idx]}:')
+                    errmsgs.extend(errmsg)
+                if details_dict['disc_radius_mm'] is not None:
+                    row0 = np.where(rows)[0][0]
+                    col0 = np.where(cols)[0][0]
+                    dx_dy = (
+                        col0 + details_dict['center_xy'][0] - sum_image.shape[1]//2,
+                        row0 + details_dict['center_xy'][1] - sum_image.shape[0]//2
+                        )
+                    roi_disc = get_roi_circle(
+                        sum_image.shape, dx_dy,
+                        details_dict['disc_radius_mm'] / img_infos[
+                            images_to_test[0]].pix[0])
+                    details_dict['found_disc_roi'] = roi_disc
+                details_dict_all.append(details_dict)
+
+                try:
+                    values.append(
+                        [materials[idx]]
+                        + details_dict[prefix + 'MTF_details']['values'])
+                except TypeError:
+                    values.append([materials[idx]] + [None] * 3)
+                try:
+                    values_sup.append(
+                        [materials[idx]]
+                        + list(details_dict['gMTF_details']['LSF_fit_params']))
+                except TypeError:
+                    values_sup.append([materials[idx]] + [None] * 4)
+
+            res = Results(headers=headers, values=values,
+                          headers_sup=headers_sup, values_sup=values_sup,
+                          details_dict=details_dict_all,
+                          pr_image=False,
+                          errmsg=errmsgs)
 
         return res
 
@@ -2254,7 +2395,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 image_input, roi_array, img_infos[0].pix[0], paramset.uni_scale_factor)
             details_dict = {
                 'sum_image': image_input,
-                'matrix': res['matrix'],
                 'du_matrix': res['du_matrix'],
                 'matrix_ufov': res['matrix_ufov']
                 }
@@ -2350,6 +2490,8 @@ def calculate_slicethickness(
         elif paramset.sli_type == 2:
             details_dict['labels'] = ['left', 'right']
             sli_signal_low_density = True
+        elif paramset.sli_type == 3:
+            details_dict['labels'] = ['line']
     else:  # MR
         details_dict['labels'] = ['upper', 'lower']
 
@@ -2390,7 +2532,7 @@ def calculate_slicethickness(
             details_dict['halfpeak'].append(halfmax + background)
 
         if modality == 'CT':
-            if paramset.sli_type == 0:  # wire ramp Catphan
+            if paramset.sli_type in [0, 3]:  # wire ramp Catphan or Siemens
                 width, center = mmcalc.get_width_center_at_threshold(
                     profile, halfmax, force_above=True)
                 if width is not None:
@@ -2528,6 +2670,10 @@ def get_profile_sli(image, paramset, line, direction='h'):
             profile = np.diff(profile)
         if paramset.sli_sigma > 0:
             profile = sp.ndimage.gaussian_filter(profile, sigma=paramset.sli_sigma)
+    else:  # CT
+        if paramset.sli_median_filter > 0:
+            profile = sp.ndimage.median_filter(profile, size=paramset.sli_median_filter)
+
 
     return (profile, errmsg)
 
@@ -3171,8 +3317,13 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
         u_profile: power spectrum x-dir
         v_profile: power spectrum y-dir
     """
+    try:
+        nps_sampling_frequency = paramset.nps_sampling_frequency
+    except AttributeError:  # task based
+        nps_sampling_frequency = paramset.ttf_sampling_frequency
+
     def smooth_profile(profile):
-        kernel_size = round(paramset.nps_smooth_width / paramset.nps_sampling_frequency)
+        kernel_size = round(paramset.nps_smooth_width / nps_sampling_frequency)
         kernel = np.ones(kernel_size) / kernel_size
         return np.convolve(profile, kernel, mode='same')
 
@@ -3199,10 +3350,10 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
         NPS = (1 / len(roi_array)) * NPS_total
 
         freq, radial_profile = mmcalc.get_radial_profile(
-            NPS, pix=unit, step_size=paramset.nps_sampling_frequency)
+            NPS, pix=unit, step_size=nps_sampling_frequency)
         if paramset.nps_smooth_width > 0:
             radial_profile = smooth_profile(radial_profile)
-        AUC = np.sum(radial_profile) * paramset.nps_sampling_frequency
+        AUC = np.sum(radial_profile) * nps_sampling_frequency
         median_frequency, median_val = mmcalc.find_median_spectrum(
             freq, radial_profile)
         values = [median_frequency, AUC, np.sum(NPS)*unit ** 2,
@@ -3243,11 +3394,11 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
 
         freq_uv, u_profile, v_profile = mmcalc.get_NPSuv_profile(
             NPS,  nlines=7, exclude_axis=True, pix=img_info.pix[0],
-            step_size=paramset.nps_sampling_frequency)
+            step_size=nps_sampling_frequency)
         freq, radial_profile = mmcalc.get_radial_profile(
-            NPS, pix=unit, step_size=paramset.nps_sampling_frequency,
+            NPS, pix=unit, step_size=nps_sampling_frequency,
             start_dist=3*unit)
-        AUC = np.sum(radial_profile) * paramset.nps_sampling_frequency
+        AUC = np.sum(radial_profile) * nps_sampling_frequency
         if paramset.nps_smooth_width > 0:
             u_profile = smooth_profile(u_profile)
             v_profile = smooth_profile(v_profile)
@@ -3276,7 +3427,7 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
     return (values, details_dict)
 
 
-def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
+def calculate_flatfield_mammo(image2d, mask_max, mask_outer, image_info, paramset):
     """Calculate homogeneity Mammo according to EU guidelines.
 
     Parameters
@@ -3285,6 +3436,8 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
         input image
     mask_max : numpy.ndarray
         mask of max values if paramset.hom_mask_max is set
+    mask_outer : numpy.ndarray
+        mask of outer mm if paramset.hom_mask_outer_mm > 0
     image_info : DcmInfo
         as defined in scripts/dcm.py
     paramset : cfc.ParamSetMammo
@@ -3295,6 +3448,7 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     """
     details = {}
 
+    # set result matrix
     roi_size_in_pix = round(paramset.hom_roi_size / image_info.pix[0])
     if roi_size_in_pix % 2 == 1:
         roi_size_in_pix += 1  # ensure even number roi size to move roi by half
@@ -3315,6 +3469,8 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     roi_mask = np.full(image2d.shape[0:2], False)
     if paramset.hom_mask_max:
         roi_mask[image2d == np.max(image2d)] = True
+    if paramset.hom_mask_outer_mm > 0:
+        roi_mask[mask_outer == False] = True
     masked_image = np.ma.masked_array(image2d, mask=roi_mask)
 
     avgs = np.zeros(matrix_shape)
@@ -3328,36 +3484,44 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     kernel = np.full((roi_var_in_pix, roi_var_in_pix),
                      1./(roi_var_in_pix**2))
 
+    max_masked = 0
+    if paramset.hom_ignore_roi_percent > 0:
+        n_pix_roi = roi_size_in_pix ** 2
+        max_masked = paramset.hom_ignore_roi_percent/100. * n_pix_roi
     for j, ystart in enumerate(ystarts):
         for i, xstart in enumerate(xstarts):
             sub = masked_image[ystart:ystart+roi_size_in_pix,
                                xstart:xstart+roi_size_in_pix]
-            if np.ma.count_masked(sub) == 0:  # avoid trouble with mask
-                avg_sub = np.mean(sub)
+            if np.ma.count_masked(sub) <= max_masked:
+                avg_sub = np.ma.mean(sub)
                 avgs[j, i] = avg_sub
-                std_sub = np.std(sub)
+                std_sub = np.ma.std(sub)
                 if std_sub != 0 and roi_var_in_pix < roi_size_in_pix:
+                    snrs[j, i] = avg_sub / std_sub
                     if np.ma.count_masked(sub) == 0:
-                        snrs[j, i] = avg_sub / np.std(sub)
-                        mu = sp.signal.fftconvolve(sub, kernel, mode='same')
-                        ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='same')
-                        variance_sub = ii - mu**2
-                        variances[j, i] = np.mean(variance_sub)
+                        if paramset.hom_variance:
+                            mu = sp.signal.fftconvolve(sub, kernel, mode='same')
+                            ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='same')
+                            variance_sub = ii - mu**2
+                            variances[j, i] = np.mean(variance_sub)
                 else:
                     variances[j, i] = np.inf
             else:
                 masked_roi_matrix[j, i] = True
 
+    if paramset.hom_variance is False:
+        variances = None
+
     n_masked_rois = np.count_nonzero(masked_roi_matrix)
     n_rois = avgs.size - n_masked_rois
-    n_masked_pixels = np.count_nonzero(mask_max)
+    n_masked_pixels = np.count_nonzero(roi_mask)
     n_pixels = image2d.size - n_masked_pixels
 
     masked_avgs = np.ma.masked_array(avgs, mask=masked_roi_matrix)
     masked_snrs = np.ma.masked_array(snrs, mask=masked_roi_matrix)
-    overall_avg = np.mean(masked_avgs)
+    overall_avg = np.ma.mean(masked_avgs)
     diff_avgs = 100 / overall_avg * (avgs - overall_avg)
-    diff_snrs = 100 / np.mean(masked_snrs) * (snrs - np.mean(masked_snrs))
+    diff_snrs = 100 / np.ma.mean(masked_snrs) * (snrs - np.ma.mean(masked_snrs))
     deviating_rois = np.zeros(matrix_shape, dtype=bool)
     deviating_rois[np.logical_or(
         np.abs(diff_avgs) > paramset.hom_deviating_rois,
@@ -3374,7 +3538,8 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     n_dev_avgs = np.count_nonzero(deviating_avgs)
     n_dev_snrs = np.count_nonzero(deviating_snrs)
 
-    variances = np.ma.masked_array(variances, mask=masked_roi_matrix)
+    if variances is not None:
+        variances = np.ma.masked_array(variances, mask=masked_roi_matrix)
     diff_avgs = np.ma.masked_array(diff_avgs, mask=masked_roi_matrix)
     diff_snrs = np.ma.masked_array(diff_snrs, mask=masked_roi_matrix)
     deviating_rois = np.ma.masked_array(deviating_rois, mask=masked_roi_matrix)
@@ -3382,10 +3547,19 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
     diff_pixels = 100 / overall_avg * (image2d - overall_avg)
     deviating_pixels = np.zeros(image_info.shape, dtype=bool)
     deviating_pixels[np.abs(diff_pixels) > paramset.hom_deviating_pixels] = True
-    deviating_pixels[mask_max == True] = False
+    deviating_pixels[roi_mask == True] = False
     n_deviating_pixels = np.count_nonzero(deviating_pixels)
-    deviating_pixels = np.ma.masked_array(deviating_pixels, mask=mask_max)
+    deviating_pixels = np.ma.masked_array(deviating_pixels, mask=roi_mask)
     diff_pixels = np.ma.masked_array(diff_pixels, mask=roi_mask)
+
+    dev_pixel_clusters = None
+    if n_deviating_pixels > 0:
+        dev_pixel_clusters = np.zeros(matrix_shape, dtype=np.int32)
+        for j, ystart in enumerate(ystarts):
+            for i, xstart in enumerate(xstarts):
+                sub = deviating_pixels[ystart:ystart+roi_size_in_pix,
+                                   xstart:xstart+roi_size_in_pix]
+                dev_pixel_clusters[j, i] = np.count_nonzero(sub)
 
     details = {'variances': variances, 'averages': masked_avgs, 'snrs': masked_snrs,
                'diff_averages': diff_avgs, 'diff_snrs': diff_snrs,
@@ -3395,7 +3569,9 @@ def calculate_flatfield_mammo(image2d, mask_max, image_info, paramset):
                'n_rois': n_rois, 'n_masked_rois': n_masked_rois,
                'deviating_pixels': deviating_pixels,
                'n_deviating_pixels': n_deviating_pixels,
-               'n_pixels': n_pixels, 'n_masked_pixels': n_masked_pixels}
+               'deviating_pixel_clusters': dev_pixel_clusters,
+               'n_pixels': n_pixels, 'n_masked_pixels': n_masked_pixels,
+               'roi_mask': roi_mask}
 
     return details
 
@@ -3546,97 +3722,132 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
     values : list of float
         ['IU_UFOV %', 'DU_UFOV %', 'IU_CFOV %', 'DU_CFOV %']
     """
-    def get_differential_uniformity(image):
+    def get_differential_uniformity(image, cfov):
+        # assume image is part of image within ufov
+        # cfov = True where inside cfov
+        from numpy.lib.stride_tricks import sliding_window_view
         sz_y, sz_x = image.shape
-        du_cols = np.zeros(image.shape)
+        du_cols_ufov = np.zeros(image.shape)
+        du_cols_cfov = np.zeros(image.shape)
+        image_data_ufov = np.copy(image.data)
+        image_data_ufov[image.mask == True] = np.nan
+        image_data_cfov = np.copy(image.data)
+        image_data_cfov[cfov == False] = np.nan
         for x in range(sz_x):
-            for y in range(2, sz_y - 3):
-                sub = image[y-2:y+3, x]
-                max_val = np.max(sub)
-                min_val = np.min(sub)
-                if max_val and min_val:
-                    du_cols[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
-        du_rows = np.zeros(image.shape)
-        for y in range(sz_y):
-            for x in range(2, sz_x - 3):
-                sub = image[y, x-2:x+3]
-                max_val = np.max(sub)
-                min_val = np.min(sub)
-                if max_val and min_val:
-                    du_rows[y][x] = 100. * (max_val - min_val) / (max_val + min_val)
-        du_matrix = np.maximum(du_cols, du_rows)
-        return {'du_matrix': du_matrix, 'du': np.max(du_matrix)}
+            view = sliding_window_view(image_data_ufov[:, x], 5)
+            maxs = np.nanmax(view, axis=-1)
+            mins = np.nanmin(view, axis=-1)
+            du_cols_ufov[2:-2, x] = 100. * (maxs - mins) / (maxs + mins)
+            cfov_data = image_data_cfov[:, x]
+            if not np.isnan(cfov_data).all():
+                view = sliding_window_view(cfov_data, 5)
+                maxs = np.nanmax(view, axis=-1)
+                mins = np.nanmin(view, axis=-1)
+                du_cols_cfov[2:-2, x] = 100. * (maxs - mins) / (maxs + mins)
 
+        du_rows_ufov = np.zeros(image.shape)
+        du_rows_cfov = np.zeros(image.shape)
+        for y in range(sz_y):
+            view = sliding_window_view(image_data_ufov[y, :], 5)
+            maxs = np.nanmax(view, axis=-1)
+            mins = np.nanmin(view, axis=-1)
+            du_rows_ufov[y, 2:-2] = 100. * (maxs - mins) / (maxs + mins)
+            cfov_data = image_data_cfov[y, :]
+            if not np.isnan(cfov_data).all():
+                view = sliding_window_view(cfov_data, 5)
+            maxs = np.nanmax(view, axis=-1)
+            mins = np.nanmin(view, axis=-1)
+            du_rows_cfov[y, 2:-2] = 100. * (maxs - mins) / (maxs + mins)
+
+        du_matrix_ufov = np.maximum(du_cols_ufov, du_rows_ufov)
+        du_matrix_ufov[image.mask == True] = np.nan
+        du_matrix_cfov = np.maximum(du_cols_cfov, du_rows_cfov)
+        du_matrix_cfov[cfov == False] = np.nan
+
+        return {'du_matrix': du_matrix_ufov, 'du_ufov': np.nanmax(du_matrix_ufov),
+                'du_cfov': np.nanmax(du_matrix_cfov)}
+
+    # continue with image within ufov only
+    rows = np.max(roi_array[0], axis=1)
+    cols = np.max(roi_array[0], axis=0)
+    image2d = image2d[rows][:, cols]
+    cfov = roi_array[1][rows][:, cols]
+    ufov_input = roi_array[0][rows][:, cols]
+
+    # roi already handeled ignoring pixels with zero counts as nearest neighbour (NEMA)
     if scale_factor == 1:
         image = image2d
-        cfov = roi_array[1]
-        ufov = roi_array[0]
+        block_size = 1
     else:
         # resize to 6.4+/-30% mm pixels according to NEMA
         # pix_range = [6.4*0.7, 6.4*1.3]
+        block_size = scale_factor
         if scale_factor == 0:  # Auto scale
             scale_factors = [(np.floor(64/pix)), (np.ceil(6.4/pix))]
             pix_diff = np.abs(pix*np.array(scale_factors) - 6.4)
             selected_pix = np.where(pix_diff == np.min(pix_diff))
-            scale_factor = int(scale_factors[selected_pix[0][0]])
+            block_size = int(scale_factors[selected_pix[0][0]])
+
+        # skip pixels excess of size/block_size = NEMA at least 50% of pixel inside
+        sz_y, sz_x = image2d.shape
+        skip_y, skip_x = (sz_y % block_size, sz_x % block_size)
+        n_blocks_y, n_blocks_x = (sz_y // block_size, sz_x // block_size)
+        start_y, start_x = (skip_y // 2, skip_x // 2)
+        end_x = start_x + n_blocks_x * block_size
+        end_y = start_y + n_blocks_y * block_size
+        cfov = cfov[start_y:end_y, start_x:end_x]
+        ufov_input = ufov_input[start_y:end_y, start_x:end_x]
+        image2d = image2d[start_y:end_y, start_x:end_x]
         image = skimage.measure.block_reduce(
-            image2d, (scale_factor, scale_factor), np.sum)  # scale down to ~6.4mm/pix
+            image2d, (block_size, block_size), np.sum)
+        # scale down to ~6.4mm/pix
 
         # cfov, NEMA - at least 50% of the pixel should be inside UFOV to be included
         reduced_roi = skimage.measure.block_reduce(
-            roi_array[1], (scale_factor, scale_factor), np.mean)
+            cfov, (block_size, block_size), np.mean)
         cfov = np.where(reduced_roi > 0.5, True, False)
 
-        # ufov, NEMA
-        # - at least 50% of the pixel should be inside UFOV to be included
-        arr = np.ma.masked_array(image, mask=np.invert(cfov))
-        cfov_mean = np.mean(arr)  # TODO test against minimum 10000 (NEMA)
-        reduced_roi = skimage.measure.block_reduce(
-            roi_array[0], (scale_factor, scale_factor), np.mean)
-        ufov = np.where(reduced_roi > 0.5, True, False)
+        if False in ufov_input:
+            reduced_roi = skimage.measure.block_reduce(
+                ufov_input, (block_size, block_size), np.mean)
+            ufov_input = np.where(reduced_roi > 0.5, True, False)
 
-        # ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
-        rows = np.max(ufov, axis=1)
-        cols = np.max(ufov, axis=0)
-        sub = image[rows][:, cols]
-        sub_above_75 = np.where(sub > 0.75*cfov_mean, True, False)
-        sub_above_75[1:-1][:, 1:-1] = True  # only outer rows/cols
-        if False in sub_above_75:
-            ufov[rows][:, cols] = sub_above_75
-        # TODO also ignore pixels with zero counts as nearest neighbour (NEMA)?
+    # ufov, NEMA NU-1: ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
+    arr_cfov = np.ma.masked_array(image, mask=np.invert(cfov))
+    cfov_mean = np.mean(arr_cfov)  # TODO test against minimum 10000 (NEMA)
+    ufov = np.where(image > 0.75*cfov_mean, True, False)
+    if False in ufov:
+        ufov[1:-1][:, 1:-1] = True  # ignore only outer rows/cols
+    if False in ufov_input:
+        ufov[ufov_input == False] = False
 
-    # smooth (after subarr to avoid edge effects)
+    sz_y, sz_x = image.shape
+    center_pixel_count = image[sz_y//2][sz_x//2]
+
+    # smooth masked array
     kernel = np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]])
     kernel = kernel / np.sum(kernel)
     arr = np.ma.masked_array(image, mask=np.invert(ufov))
     smooth64 = mmcalc.masked_convolve2d(arr, kernel, boundary='symm', mode='same')
 
-    rows = np.max(ufov, axis=1)
-    cols = np.max(ufov, axis=0)
-    smooth64ufov = smooth64[rows][:, cols]
-    rows = np.max(cfov, axis=1)
-    cols = np.max(cfov, axis=0)
-    smooth64cfov = smooth64[rows][:, cols]
     # differential uniformity
-    du_ufov_dict = get_differential_uniformity(smooth64ufov)
-    du_cfov_dict = get_differential_uniformity(smooth64cfov)
-    du_ufov = du_ufov_dict['du']
-    du_cfov = du_cfov_dict['du']
+    du_dict = get_differential_uniformity(smooth64, cfov)
+    du_ufov = du_dict['du_ufov']
+    du_cfov = du_dict['du_cfov']
+
+    smooth64_data = smooth64.data
 
     # integral uniformity
-    max_val = np.max(smooth64ufov)
-    min_val = np.min(smooth64ufov)
+    max_val = np.max(smooth64_data[ufov == True])
+    min_val = np.min(smooth64_data[ufov == True])
     iu_ufov = 100. * (max_val - min_val) / (max_val + min_val)
-    max_val = np.max(smooth64cfov)
-    min_val = np.min(smooth64cfov)
+    max_val = np.max(smooth64_data[cfov == True])
+    min_val = np.min(smooth64_data[cfov == True])
     iu_cfov = 100. * (max_val - min_val) / (max_val + min_val)
 
-    # remove mask to avoid warnings on display (widget position and value)
-    smooth64 = smooth64.data
-    smooth64ufov = smooth64ufov.data
-
-    return {'matrix': smooth64, 'matrix_ufov': smooth64ufov,
-            'du_matrix': du_ufov_dict['du_matrix'],
+    return {'matrix_ufov': smooth64_data,
+            'du_matrix': du_dict['du_matrix'], 'pix_size': pix * block_size,
+            'center_pixel_count': center_pixel_count,
             'values': [iu_ufov, du_ufov, iu_cfov, du_cfov]}
 
 
@@ -3705,7 +3916,7 @@ def get_SNI_ref_image(paramset, tag_infos):
 
 
 def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
-                      pix=1., fit_dict=None):
+                      pix=1., fit_dict=None, image_mean=0.):
     """Calculate SNI for one ROI.
 
     Parameters
@@ -3721,6 +3932,8 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
     pix : float
     fit_dict : dict
         dictionary from get_corrections_point_source (if corrections else None)
+    image_mean : float
+        average value within the large area
 
     Returns
     -------
@@ -3742,7 +3955,7 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
     rNPS_quantum_noise = None
     if fit_dict is None:  # uncorrected image
         NPS = mmcalc.get_2d_NPS(subarray, pix)
-        quantum_noise = np.mean(image2d[rows][:, cols]) * pix**2
+        quantum_noise = image_mean * pix**2
         """ explained how quantum noise is found above
         Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
         Total(NPS)=NPSvalue*ROIsz^2
@@ -3751,14 +3964,15 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         NPS[line, line] = 0
         NPS_struct = NPS - quantum_noise
     else:
-        # curve correct both subarray and quantum noise
-        corr_matrix = fit_dict['correction_matrix'][rows][:, cols]
-        subarray = subarray + corr_matrix
         if 'reference_image' in fit_dict:
             sub_estimated_noise = fit_dict['reference_image'][rows][:, cols]
         else:
             sub_estimated_noise = fit_dict['estimated_noise_image'][rows][:, cols]
-        sub_estimated_noise = sub_estimated_noise + corr_matrix
+        if 'correction_matrix' in fit_dict:
+            # curve correct both subarray and quantum noise
+            corr_matrix = fit_dict['correction_matrix'][rows][:, cols]
+            subarray = subarray + corr_matrix
+            sub_estimated_noise = sub_estimated_noise + corr_matrix
         # 2d NPS
         NPS = mmcalc.get_2d_NPS(subarray, pix)
         quantum_noise = mmcalc.get_2d_NPS(sub_estimated_noise, pix)
@@ -3829,30 +4043,37 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         if errmsg is not None:
             errmsgs.append(errmsg)
         values_sup = [fit_dict['dx'], fit_dict['dy'], fit_dict['distance']]
-        if reference_image is not None:
-            if reference_image.shape == image2d.shape:
-                fit_dict['reference_image'] = reference_image
-            else:
-                errmsgs.append('Reference image not same size as image to analyse. '
-                               'Quantum noise estimated.')
+    if reference_image is not None:
+        if reference_image.shape == image2d.shape:
+            if fit_dict is None:
+                fit_dict = {}
+            fit_dict['reference_image'] = reference_image
+        else:
+            errmsgs.append('Reference image not same size as image to analyse. '
+                           'Quantum noise estimated.')
+    if fit_dict is not None:
         details_dict = fit_dict
+
+    arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[0]))
+    image_mean = np.mean(arr)
 
     details_dict['pr_roi'] = []
 
-    if paramset.sni_type == 0:
-        # large ROIs
-        rows = np.max(roi_array[1], axis=1)
-        eye_filter = get_eye_filter(
-            np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c)
-        details_dict['eye_filter_large'] = eye_filter['curve']
-        for i in [1, 2]:
-            SNI, details_dict_roi = calculate_SNI_ROI(
-                image2d, roi_array[i],
-                eye_filter=eye_filter['filter_2d'], unit=eye_filter['unit'],
-                pix=image_info.pix[0], fit_dict=fit_dict)
-            details_dict['pr_roi'].append(details_dict_roi)
-            SNI_values.append(SNI)
+    # large ROIs
+    rows = np.max(roi_array[1], axis=1)
+    eye_filter = get_eye_filter(
+        np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c)
+    details_dict['eye_filter_large'] = eye_filter['curve']
+    for i in [1, 2]:
+        SNI, details_dict_roi = calculate_SNI_ROI(
+            image2d, roi_array[i],
+            eye_filter=eye_filter['filter_2d'], unit=eye_filter['unit'],
+            pix=image_info.pix[0], fit_dict=fit_dict, image_mean=image_mean)
+        details_dict['pr_roi'].append(details_dict_roi)
+        SNI_values.append(SNI)
+    values_sup.append('L1' if SNI_values[0] > SNI_values[1] else 'L2')
 
+    if paramset.sni_type == 0:
         # small ROIs
         rows = np.max(roi_array[3], axis=1)
         eye_filter = get_eye_filter(
@@ -3862,43 +4083,81 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
             SNI, details_dict_roi = calculate_SNI_ROI(
                 image2d, roi_array[i],
                 eye_filter['filter_2d'], unit=eye_filter['unit'],
-                pix=image_info.pix[0], fit_dict=fit_dict)
+                pix=image_info.pix[0], fit_dict=fit_dict, image_mean=image_mean)
             details_dict['pr_roi'].append(details_dict_roi)
             SNI_values.append(SNI)
 
         values = [np.max(SNI_values)] + SNI_values
+        maxno = SNI_values[2:].index(max(SNI_values[2:]))
+        values_sup.append(f'S{maxno+1}')
     else:
-        rows = np.max(roi_array[1][0], axis=1)
+        idx_roi_row_0 = 3
+        try:
+            rows = np.max(roi_array[idx_roi_row_0][0], axis=1)
+        except (np.AxisError, TypeError):  # if first is ignored Siemens
+            rows = np.max(roi_array[idx_roi_row_0 + 2][3], axis=1)  # central
+            # TODO better catch - what if this also (not likely) is None?
         eye_filter = get_eye_filter(
             np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c)
-        details_dict['eye_filter'] = eye_filter['curve']
+        details_dict['eye_filter_small'] = eye_filter['curve']
 
-        SNI_map = np.zeros((len(roi_array)-1, len(roi_array[1])))
-        SNI_vals = []
+        if paramset.sni_type in [1, 2]:
+            SNI_map = np.zeros(
+                (len(roi_array)-idx_roi_row_0, len(roi_array[idx_roi_row_0])))
+        else:  # 3 Siemens
+            SNI_map = []
         rNPS_filt_sum = None
         rNPS_struct_filt_sum = None
-        for rowno, row in enumerate(roi_array[1:]):
+        small_names = []
+        for rowno, row in enumerate(roi_array[idx_roi_row_0:]):
             for colno, roi in enumerate(row):
-                SNI, details_dict_roi = calculate_SNI_ROI(
-                    image2d, roi,
-                    eye_filter['filter_2d'], unit=eye_filter['unit'],
-                    pix=image_info.pix[0], fit_dict=fit_dict)
-                details_dict['pr_roi'].append(details_dict_roi)
-                SNI_map[rowno, colno] = SNI
-                SNI_vals.append(SNI)
-                if rNPS_filt_sum is None:
-                    rNPS_filt_sum = details_dict_roi['rNPS_filt']
-                    rNPS_struct_filt_sum = details_dict_roi['rNPS_struct_filt']
+                small_names.append(f'r{rowno}_c{colno}')
+                if roi is not None:
+                    SNI, details_dict_roi = calculate_SNI_ROI(
+                        image2d, roi,
+                        eye_filter['filter_2d'], unit=eye_filter['unit'],
+                        pix=image_info.pix[0], fit_dict=fit_dict,
+                        image_mean=image_mean)
+                    details_dict['pr_roi'].append(details_dict_roi)
+                    if paramset.sni_type in [1, 2]:
+                        SNI_map[rowno, colno] = SNI
+                    else:  # 3 Siemens
+                        SNI_map.append(SNI)
+                    SNI_values.append(SNI)
+                    if rNPS_filt_sum is None:
+                        rNPS_filt_sum = details_dict_roi['rNPS_filt']
+                        rNPS_struct_filt_sum = details_dict_roi['rNPS_struct_filt']
+                    else:
+                        rNPS_filt_sum = rNPS_filt_sum + details_dict_roi['rNPS_filt']
+                        rNPS_struct_filt_sum = (
+                            rNPS_struct_filt_sum + details_dict_roi['rNPS_struct_filt'])
                 else:
-                    rNPS_filt_sum = rNPS_filt_sum + details_dict_roi['rNPS_filt']
-                    rNPS_struct_filt_sum = (
-                        rNPS_struct_filt_sum + details_dict_roi['rNPS_struct_filt'])
-        max_no = np.where(SNI_vals == np.max(SNI_vals))
-        details_dict['roi_max_idx'] = max_no[0][0]
-        details_dict['avg_rNPS_filt'] = rNPS_filt_sum / len(SNI_vals)
-        details_dict['avg_rNPS_struct_filt'] = rNPS_struct_filt_sum / len(SNI_vals)
+                    details_dict['pr_roi'].append(None)
+                    SNI_values.append(np.nan)
+                    if paramset.sni_type == 3:  # always? if ignored
+                        SNI_map.append(np.nan)
+        if paramset.sni_type == 3:  # avoid np.nan for ignored
+            arr = np.array(SNI_map)
+            max_no = np.where(arr == np.max(arr[arr > -1]))
+            values = [
+                SNI_values[0], SNI_values[1],
+                np.max(arr[arr > -1]),
+                np.mean(arr[arr > -1]),
+                np.median(arr[arr > -1])]
+        else:
+            SNI_small = SNI_values[2:]
+            max_no = np.where(SNI_small == np.max(SNI_small))
+            values = (
+                SNI_values[0:2]
+                + [np.max(SNI_map), np.mean(SNI_map), np.median(SNI_map)])
+        details_dict['roi_max_idx_small'] = max_no[0][0]
+        values_sup.append(small_names[details_dict['roi_max_idx_small']])
+
+        details_dict['avg_rNPS_filt_small'] = rNPS_filt_sum / len(SNI_values)
+        details_dict['avg_rNPS_struct_filt_small'] = (
+            rNPS_struct_filt_sum / len(SNI_values))
         details_dict['SNI_map'] = SNI_map
-        values = [np.max(SNI_map), np.mean(SNI_map), np.median(SNI_map)]
+        details_dict['SNI_values'] = SNI_values
 
     return (values, values_sup, details_dict, errmsgs)
 
@@ -3959,7 +4218,7 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
             summed_img = summed_img + this_centered
 
     # get position of spheres
-    pol, (rads, angs) = mmcalc.topolar(summed_img)
+    pol, (_, angs) = mmcalc.topolar(summed_img)
     prof = np.max(pol, axis=0)
     prof = prof - np.min(prof)
     peaks = find_peaks(prof, distance=prof.shape[0]/10)
@@ -4026,7 +4285,6 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
                     this_roi.append(None)
             roi_spheres.append(this_roi)
             values = None
-            #values_peak = None
             max_all = []
             max_all_smoothed_1cc = []
             for i, image in enumerate(matrix):
@@ -4072,34 +4330,6 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
                              xstart:xstart + pix_kernel] = peak_kernel_bool[i]
                     this_roi_peak[peak_idx - n_slice_kernel // 2 + i] = roi_this
 
-                '''
-                # find peak - old
-                slice_where_max_this = np.where(max_all == max_this)
-                peak_idx = slice_where_max_this[0][0]
-                arr = np.ma.masked_array(
-                    matrix[peak_idx],
-                    mask=np.invert(this_roi[peak_idx]))
-                max_pos = np.where(arr == max_this)
-                peak_xy = (max_pos[1][0] - size_x//2,
-                           max_pos[0][0] - size_y//2)
-                zpos_diff_peak = np.abs(zpos - zpos[peak_idx])
-                for i, image in enumerate(matrix):
-                    if zpos_diff_peak[i] <= radius_1cc:
-                        radius_this = np.sqrt(
-                            radius_1cc ** 2 - zpos_diff_peak[i] ** 2)
-                        this_roi_peak.append(get_roi_circle(
-                            image.shape, peak_xy, radius_this / img_info.pix[0]))
-                        mask = np.where(this_roi_peak[-1], 0, 1)
-                        mask_pos = np.where(mask == 0)
-                        if values_peak is None:
-                            values_peak = image[mask_pos].flatten()
-                        else:
-                            values_peak = np.append(
-                                values_peak, image[mask_pos].flatten())
-                    else:
-                        this_roi_peak.append(None)
-                peak_values.append(np.mean(values_peak))
-                '''
             else:
                 avg_values.append(None)
                 peak_values.append(None)

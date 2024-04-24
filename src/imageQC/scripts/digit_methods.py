@@ -9,7 +9,7 @@ import numpy as np
 from skimage.transform import resize
 
 
-def extract_char_blocks(nparr):
+def extract_char_blocks(nparr, space_limit=5):
     """Chop numpy array assumed to contain a few chars.
 
     Parameters
@@ -36,6 +36,26 @@ def extract_char_blocks(nparr):
             quad_arr = arr  # assumed never used as digits are higher than wide
         return quad_arr
 
+    def trim(start_pos, end_pos, idx_space_after):
+        """Keep only largest part trimming before after spaces."""
+        n_pr_group = (
+            [idx_space_after[0] + 1]
+            + list(np.diff(idx_space_after))
+            + [len(start_pos) - 1 - idx_space_after[-1]]
+            )
+        idx_keep = n_pr_group.index(max(n_pr_group))
+        if idx_keep == 0:
+            first = 0
+            last = idx_space_after[0] + 1
+        else:
+            first = idx_space_after[idx_keep - 1] + 1
+            try:
+                last = idx_space_after[idx_keep] + 1
+            except IndexError:
+                last = len(start_pos)
+
+        return (start_pos[first:last], end_pos[first:last])
+
     list_of_nparr = []
     chopping_idxs = []
     if len(nparr.shape) == 2 and np.min(nparr.shape) > 2:
@@ -53,10 +73,29 @@ def extract_char_blocks(nparr):
         diff = np.diff(prof_x)
         start_char_pos = np.where(diff > 0)[0] + 1
         end_char_pos = np.where(diff < 0)[0] + 1
+        try:
+            if end_char_pos[0] < start_char_pos[0]:
+                end_char_pos = np.delete(end_char_pos, 0)
+        except IndexError:
+            pass
+        try:
+            if len(start_char_pos) > len(end_char_pos):
+                start_char_pos = start_char_pos[:-1]
+        except IndexError:
+            pass
 
         if all([
                 len(start_char_pos) > 0,
                 len(end_char_pos) == len(start_char_pos)]):
+            spaces = [
+                start_char_pos[i+1] - end_char_pos[i]
+                for i in range(len(start_char_pos)-1)]
+            if len(spaces) > 0:
+                if np.max(spaces) > space_limit:
+                    idxs = np.where(np.array(spaces) > space_limit)
+                    start_char_pos, end_char_pos = trim(
+                        start_char_pos, end_char_pos, idxs[0])
+
             chopping_idxs = [
                 (start_char_pos[i], end_char_pos[i])
                 for i in range(len(start_char_pos))]
@@ -108,15 +147,19 @@ def compare_char_blocks_2_template(img_blocks, template):
         subtr = [None for i in range(12)]
         for i, temp_img in enumerate(template_images):
             if isinstance(temp_img, np.ndarray):
+                proceed = True
                 if img.shape != temp_img.shape:
-                    temp_img = resize(temp_img, img.shape)
-
-                if np.array_equal(img, temp_img):
-                    char = chars[i]
-                    break
-                else:
-                    diff = np.subtract(img, temp_img)
-                    subtr[i] = np.abs(np.sum(diff))
+                    try:
+                        temp_img = resize(temp_img, img.shape)
+                    except OverflowError:  # on resize
+                        proceed = False
+                if proceed:
+                    if np.array_equal(img, temp_img):
+                        char = chars[i]
+                        break
+                    else:
+                        diff = np.subtract(img, temp_img)
+                        subtr[i] = np.abs(np.sum(diff))
 
         if char is None and any(subtr):
             idx = np.where(subtr == np.min(subtr))

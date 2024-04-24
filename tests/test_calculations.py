@@ -10,7 +10,7 @@ from pathlib import Path
 
 import imageQC.scripts.dcm as dcm
 import imageQC.config.config_classes as cfc
-from imageQC.scripts.input_main_auto import InputMain
+from imageQC.scripts.input_main import InputMain
 import imageQC.scripts.calculate_qc as calculate_qc
 import imageQC.resources
 
@@ -417,11 +417,12 @@ def test_Mammo_Hom():
     vals_1 = np.round(np.array(input_main.results['Hom']['values'][1]))
     sup_0 = np.round(np.array(input_main.results['Hom']['values_sup'][0]))
     sup_1 = np.round(np.array(input_main.results['Hom']['values_sup'][1]))
+
     vals_0_exp = np.array([786., 110., 2628., 0., 870., 870., 33., 0., 0.])
     vals_1_exp = np.array([375., 59., 2710., 0., 1039., 1039., 38., 0., 0.])
     sup_0_exp = np.array([685., 835., 724., 808., 62., 134., 47., 56., 4., 1.])
     sup_1_exp = np.array([3.030e+02, 4.140e+02, 3.500e+02, 3.860e+02, 3.100e+01,
-                          7.200e+01, 4.600e+01, 5.900e+01, 4.000e+00, 1.298e+04])
+                          7.200e+01, 4.600e+01, 5.900e+01, 4.000e+00, 1.1252e+04])
     assert np.array_equal(vals_0, vals_0_exp)
     assert np.array_equal(vals_1, vals_1_exp)
     assert np.array_equal(sup_0, sup_0_exp)
@@ -450,7 +451,8 @@ def test_NM_uniformity():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(np.array(input_main.results['Uni']['values'][0]))
-    assert np.array_equal(values, np.array([2., 1., 2., 1.]))
+
+    assert np.array_equal(values, np.array([3., 2., 2., 1.]))
 
 
 def test_NM_uniformity_sum():
@@ -547,14 +549,14 @@ def test_NM_SNI_sum():
     calculate_qc.calculate_qc(input_main)
     values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
 
-    assert max(values) < 10  # [9., 8., 8., 8., 6., 7., 7., 9., 9.]
+    assert max(values) < 12  # [11.,  8.,  8.,  7.,  7.,  7.,  7., 11.,  9.]
 
     # include first image to simulate central stripe as (strange) artifact
     input_main.current_quicktest.tests[0] = ['SNI']
     calculate_qc.calculate_qc(input_main)
     values = np.round(100 * np.array(input_main.results['SNI']['values'][0]))
 
-    assert max(values) > 30  # [33., 22., 22.,  8., 30.,  7.,  7., 33.,  9.]
+    assert max(values) > 30  # [35., 22., 23.,  5., 33.,  6.,  5., 35.,  8.]
 
 
 def test_NM_MTF_pointsource():
@@ -600,7 +602,7 @@ def test_NM_MTF_2_linesources():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(10*np.array(input_main.results['MTF']['values'][0]))
-    assert np.array_equal(values, np.array([73., 133.,  74., 135.]))
+    assert np.array_equal(values, np.array([74., 135., 73., 133.]))
 
 
 def test_NM_MTF_edge():

@@ -10,7 +10,7 @@ import numpy as np
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup,
+    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup,
     QPushButton, QLabel, QLineEdit, QSpinBox, QDoubleSpinBox,
     QListWidget, QRadioButton, QAbstractItemView,
     QFileDialog, QDialogButtonBox, QMessageBox
@@ -35,20 +35,68 @@ class OpenMultiDialog(ImageQCDialog):
     """
 
     def __init__(self, main):
-        # TODO Special tag pattern "Group open advanced" as default - modality selection option
 
         super().__init__()
         self.setWindowTitle('Select images to open')
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        # TODO Special tag pattern "Group open advanced" as default - modality selection option
+        temp = TagPatternFormat(
+            list_tags=['AcquisitionDate', 'SeriesNumber', 'SeriesDescription'],
+            list_format=['|:8|', '|:04.0f|', ''])
+        self.wid = OpenMultiWidget(main, input_template=temp, lock_on_general=True)
+        vlo.addWidget(self.wid)
+
+        hlo_dlg_btns = QHBoxLayout()
+        vlo.addLayout(hlo_dlg_btns)
+        hlo_dlg_btns.addStretch()
+        btns = QDialogButtonBox()
+        btns.setOrientation(Qt.Horizontal)
+        btns.setStandardButtons(
+            QDialogButtonBox.Open | QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.button(QDialogButtonBox.Open).setText('Open all images')
+        btns.button(QDialogButtonBox.Open).clicked.connect(self.open_all)
+        btns.button(QDialogButtonBox.Ok).setText('Open images in list above')
+        btns.button(QDialogButtonBox.Ok).clicked.connect(self.accept)
+        btns.button(QDialogButtonBox.Cancel).clicked.connect(self.reject)
+        hlo_dlg_btns.addWidget(btns)
+
+    def open_all(self):
+        """Open all images found in specified folder."""
+        self.wid.push_all()
+        self.accept()
+
+
+class OpenMultiWidget(QWidget):
+    """GUI for opening images using selection rules.
+
+    NB: Used also by task_based_image_quality.py
+
+    Reads all images also in subfolder and sort these into groups.
+    Select which files to open by selecting in list or use selection patterns
+    for consistency with repetitive tasks.
+    """
+
+    def __init__(self, main, input_template=None,
+                 lock_on_general=False, lock_on_modality=None):
+        super().__init__()
         self.main = main
         self.imgs = []
         self.open_imgs = []
-        self.current_template = TagPatternFormat(
-            list_tags=['AcquisitionDate', 'SeriesNumber', 'SeriesDescription'],
-            list_format=['|:8|', '|:04.0f|', ''])
+        self.current_template = input_template
         self.wid_series_pattern = TagPatternWidget(self, typestr='format',
-                                                   lock_on_general=True)
+                                                   lock_on_general=lock_on_general)
         self.tag_infos = self.main.tag_infos
-        self.wid_series_pattern.fill_list_tags('', avoid_special_tags=True)
+
+        modality = ''
+        avoid_special_tags = True
+        if lock_on_general is False:
+            if lock_on_modality:
+                modality = lock_on_modality
+                avoid_special_tags = False
+        self.wid_series_pattern.fill_list_tags(
+            modality, avoid_special_tags=avoid_special_tags)
         self.wid_series_pattern.update_data()
 
         vlo = QVBoxLayout()
@@ -56,7 +104,7 @@ class OpenMultiDialog(ImageQCDialog):
         info_text = [
             'All DICOM files in the selected folder will be listed as groups '
             'defined by the DICOM tag pattern below.',
-            'Use the selection rules or manually select images to open.',
+            'Use the selection rules or manually select images.',
             'Images will be displayed in the image list as defined in Settings - '
             'Special tag patterns - File list display.',
             ]
@@ -201,18 +249,6 @@ class OpenMultiDialog(ImageQCDialog):
         hlo_btns.addWidget(btn_clear_list)
         vlo_open.addLayout(hlo_btns)
         vlo_open.addStretch()
-
-        hlo_dlg_btns = QHBoxLayout()
-        vlo.addLayout(hlo_dlg_btns)
-        hlo_dlg_btns.addStretch()
-        btns = QDialogButtonBox()
-        btns.setOrientation(Qt.Horizontal)
-        btns.setStandardButtons(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Ok).setText('Open images in list above')
-        btns.button(QDialogButtonBox.Ok).clicked.connect(self.accept)
-        btns.button(QDialogButtonBox.Cancel).clicked.connect(self.reject)
-        hlo_dlg_btns.addWidget(btns)
 
     def browse(self):
         """Browse to set selected folder and start searching for images."""

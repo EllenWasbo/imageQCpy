@@ -5,9 +5,8 @@ Constants accessible for several modules within imageQC.
 
 @author: Ellen Wasbø
 """
-
-import os
 import sys
+import os
 
 # imageQC block start
 import imageQC.config.config_classes as cfc
@@ -19,14 +18,14 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.7'
+VERSION = '3.0.8'
 
-#if sys.platform.startswith("win"):
-APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
-TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
-#else:  # assume Linux for now
-#    APPDATA = os.path.expanduser('~/.config/imageQC')
-#    TEMPDIR = r'/etc/opt/imageQC'
+if sys.platform.startswith("win"):
+    APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
+    TEMPDIR = r'C:\Windows\Temp\imageQC'  # alternative to APPDATA if needed
+else:  # assume Linux for now
+    APPDATA = os.path.expanduser('~/.config/imageQC')
+    TEMPDIR = r'/etc/opt/imageQC'
 
 # os.environ variable keys to save global settings in session
 ENV_USER_PREFS_PATH = 'IMAGEQC_USER_PREFS_PATH'
@@ -39,7 +38,7 @@ USER_PREFS_FNAME = 'user_preferences.yaml'
 # dict: with lists defining modalities and their corresponding
 #  list of tests with QuickTest as option."""
 QUICKTEST_OPTIONS = {
-    'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'CTn',
+    'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'TTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
     'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
     'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'RLR', 'Gho', 'MTF', 'NPS'],
@@ -48,6 +47,7 @@ QUICKTEST_OPTIONS = {
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec'],
     'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF']}
 
+COLORS = ['r', 'b', 'g', 'y', 'c', 'm', 'skyblue', 'orange']
 
 HALFLIFE = {'F18': 109.77}
 ALTERNATIVES_ROI = ['One ROI',
@@ -60,7 +60,8 @@ ALTERNATIVES = {
         'ROI': ALTERNATIVES_ROI,
         'Sli': ['Wire ramp Catphan',
                 'Beaded ramp Catphan (helical)',
-                'Vertical beaded ramps GE phantom'],
+                'Vertical beaded ramps GE phantom',
+                'Wire ramp Siemens'],
         'MTF': ['bead', 'wire', 'circular edge'],
         },
     'Xray': {
@@ -74,7 +75,9 @@ ALTERNATIVES = {
         },
     'NM': {
         'ROI': ALTERNATIVES_ROI,
-        'SNI': ['ROIs 2 large, 6 small', 'ROI grid, same size'],
+        'SNI': ['6 small ROIs', 'ROI grid, size by full ratio',
+                'ROI grid, size by number of pixels',
+                'ROIs matched Siemens gamma camera'],
         'MTF': ['Point', 'One line source', 'Two perpendicular line sources', 'Edge']
         },
     'SPECT': {
@@ -125,7 +128,8 @@ HEADERS = {
                      'Diff nominal (%)'],
             'alt1': ['Nominal', 'H1', 'H2', 'V1', 'V2',
                      'inner V1', 'inner V2'],
-            'alt2': ['Nominal', 'V1', 'V2']
+            'alt2': ['Nominal', 'V1', 'V2'],
+            'alt3': ['Nominal', 'Measured']
             },
         'MTF': {
             'alt0': ['MTFx 50%', 'MTFx 10%', 'MTFx 2%',
@@ -133,6 +137,9 @@ HEADERS = {
             'alt1': ['MTFx 50%', 'MTFx 10%', 'MTFx 2%',
                      'MTFy 50%', 'MTFy 10%', 'MTFy 2%'],
             'alt2': ['MTF 50%', 'MTF 10%', 'MTF 2%']
+            },
+        'TTF': {
+            'alt0': ['Material', 'MTF 50%', 'MTF 10%', 'MTF 2%'],
             },
         'HUw': {'alt0': ['CT number (HU)', 'Noise=Stdev']},
         'Dim': {
@@ -197,7 +204,9 @@ HEADERS = {
         'SNI': {
             'alt0': ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', 'SNI S2',
                      'SNI S3', 'SNI S4', 'SNI S5', 'SNI S6'],
-            'alt1': ['SNI max', 'SNI avg', 'SNI median']
+            'alt1': ['SNI L1', 'SNI L2', 'SNI S max', 'SNI S avg', 'SNI S median'],
+            'alt2': ['SNI L1', 'SNI L2', 'SNI S max', 'SNI S avg', 'SNI S median'],
+            'alt3': ['SNI L1', 'SNI L2', 'SNI S max', 'SNI S avg', 'SNI S median'],
             },
         'Bar': {
             'alt0': ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',
@@ -276,6 +285,9 @@ HEADERS_SUP = {
                        'Stdev Center']
             },
         'CTn': {'altAll': ['R-squared', 'fitted intercept', 'fitted slope']},
+        'TTF': {
+            'alt0': ['Material', 'A1', 'sigma1', 'A2', 'sigma2'],
+            },
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
                      'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
@@ -307,11 +319,13 @@ HEADERS_SUP = {
         'ROI': {'alt0': roi_headers_sup},
         'Uni': {
             'altAll': ['FitX (mm from center)', 'FitY (mm from center)',
-                       'Fit distance (mm)']
+                       'Fit distance (mm)',
+                       'Scaled pixel size (mm)',
+                       'Center pixel count (after scaling)']
             },
         'SNI': {
             'altAll': ['FitX (mm from center)', 'FitY (mm from center)',
-                       'Fit distance (mm)']
+                       'Fit distance (mm)', 'ROI max Large', 'ROI max Small']
             },
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
@@ -350,7 +364,7 @@ HEADERS_SUP = {
 VENDOR_FILE_OPTIONS = {
     'CT': ['Siemens CT Constancy/Daily Reports (.pdf)'],
     'Xray': ['GE QAP (.txt)'],
-    'Mammo': [],
+    'Mammo': ['GE Mammo QAP (txt)'],
     'NM': ['Siemens exported energy spectrum (.txt)'],
     'SPECT': [],
     'PET': ['Siemens PET-CT DailyQC Reports (.pdf)',

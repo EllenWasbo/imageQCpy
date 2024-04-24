@@ -19,12 +19,13 @@ import webbrowser
 # imageQC block start
 import imageQC.config.config_func as cff
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
-from imageQC.scripts.input_main_auto import InputMain
+from imageQC.scripts.input_main import InputMain
 from imageQC.scripts.calculate_qc import calculate_qc, quicktest_output
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm
 from imageQC.scripts.mini_methods import (
-    get_all_matches, string_to_float, get_headers_first_values_in_path)
+    get_all_matches, string_to_float, get_headers_first_values_in_path,
+    find_files_prefix_suffix)
 from imageQC.scripts.mini_methods_format import valid_path, val_2_str
 import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
@@ -739,7 +740,7 @@ def test_limits(headers=None, values=None,
         QuickTest result values (one row). The default is None.
     limits_label : str, optional
         automation template set limits label. The default is ''.
-    limits_mod_templates : TYPE, optional
+    limits_mod_templates : list, optional
         limits_and_plot_templates for current modality. The default is None.
 
     Return
@@ -948,6 +949,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                 )
 
                         n_sessions = len(uniq_date_uids)
+                        finish_text = (
+                            f'Finished analysing template ({n_sessions} sessions)')
                         if parent_widget is not None:
                             curr_val = parent_widget.progress_modal.value()
                             diff = curr_val - start_progress_val
@@ -960,6 +963,13 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                       'for template ',
                                       f'{modality}/{auto_template.label} ...',
                                       sep='', end='', flush=True)
+                            else:
+                                if parent_widget.progress_modal.wasCanceled():
+                                    finish_text = (
+                                        'Analysis was cancelled after '
+                                        f'{ses_no} sessions.'
+                                        )
+                                    break
                             date_str = (
                                 uniq_date_uid[6:8] + '.'
                                 + uniq_date_uid[4:6] + '.'
@@ -979,6 +989,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             # reset
                             input_main_this.results = {}
                             input_main_this.current_group_indicators = []
+                            input_main_this.errmsgs = []
 
                             calculate_qc(
                                 input_main_this, wid_auto=parent_widget,
@@ -1023,9 +1034,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             print(
                                 '\rFinished analysing template                        ',
                                 '                                                     ')
-                        log.append(
-                            f'Finished analysing template ({n_sessions} sessions)'
-                            )
+                        log.append(finish_text)
+
         else:
             if auto_template.import_only is False:
                 if os.path.exists(auto_template.path_input) is False:
@@ -1092,28 +1102,38 @@ def run_template_vendor(auto_template, modality,
         if proceed:
             p_input = Path(auto_template.path_input)
             if p_input.is_dir():
-                files = [
-                    x for x in p_input.glob('*')
-                    if x.suffix == auto_template.file_suffix
-                    ]
-                files.sort(key=lambda t: t.stat().st_mtime)
+                files, _ = find_files_prefix_suffix(
+                    p_input, auto_template.file_prefix, auto_template.file_suffix)
+                if len(files) > 0:
+                    if auto_template.file_type == 'GE Mammo QAP (txt)':
+                        dates = []
+                        for file in files:
+                            dd, mm, yyyy = read_vendor_QC_reports.read_GE_Mammo_date(
+                                file)
+                            dates.append(f'{yyyy}{mm}{dd}')
+                        files = [file for _, file in sorted(zip(dates, files))]
+                    else:
+                        files.sort(key=lambda t: t.stat().st_ctime)
         if len(files) > 0:
             write_ok = os.access(auto_template.path_output, os.W_OK)
             if write_ok is False:
                 log.append(
-                    f'''\t Failed to write to output path
-                    {auto_template.path_output}''')
+                    f'\t Failed to write to output path {auto_template.path_output}')
             output_headers = []
             if os.path.exists(auto_template.path_output):
                 output_headers, _ = get_headers_first_values_in_path(
                     auto_template.path_output)
             for fileno, file in enumerate(files):
                 if parent_widget is not None:
-                    parent_widget.progress_modal.setLabelText(
-                        f'{log_pre} Extracting data from file {fileno}/{len(files)}...')
-                    curr_val = parent_widget.progress_modal.value()
-                    new_val = curr_val + int(100/len(files))
-                    parent_widget.progress_modal.setValue(new_val)
+                    if parent_widget.progress_modal.wasCanceled():
+                        break
+                    else:
+                        parent_widget.progress_modal.setLabelText(
+                            f'{log_pre} Extracting data from file '
+                            f'{fileno}/{len(files)}...')
+                        curr_val = parent_widget.progress_modal.value()
+                        new_val = curr_val + int(100/len(files))
+                        parent_widget.progress_modal.setValue(new_val)
                 res = read_vendor_QC_reports.read_vendor_template(auto_template, file)
                 if res is None:
                     log.append(f'\t Found no expected content in {file}')

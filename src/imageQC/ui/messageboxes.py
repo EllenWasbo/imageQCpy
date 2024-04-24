@@ -6,7 +6,7 @@ QMessageBoxes with specific settings for different uses and reuses in ImageQC.
 @author: Ellen Wasbo
 """
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox, QLabel
+from PyQt5.QtWidgets import QMessageBox, QLabel, QPushButton
 
 # imageQC block start
 # imageQC block end
@@ -97,7 +97,7 @@ class QuestionBox(QMessageBox):
     def __init__(
             self, parent=None, title='?', msg='?',
             yes_text='Yes', no_text='No', msg_width=500,
-            info='', details=[]):
+            info='', details=[], default_yes=False):
         """Initiate QuestionBox.
 
         Parameters
@@ -134,6 +134,17 @@ class QuestionBox(QMessageBox):
         _qlabels[1].setFixedWidth(msg_width)
         self.addButton(no_text, QMessageBox.RejectRole)
         self.addButton(yes_text, QMessageBox.AcceptRole)
+        _qbuttons = self.findChildren(QPushButton)
+        if default_yes:
+            _qbuttons[0].setAutoDefault(False)
+            _qbuttons[0].setDefault(False)
+            _qbuttons[1].setAutoDefault(True)
+            _qbuttons[1].setDefault(True)
+        else:
+            _qbuttons[1].setAutoDefault(False)
+            _qbuttons[1].setDefault(False)
+            _qbuttons[0].setAutoDefault(True)
+            _qbuttons[0].setDefault(True)
         self.setStyleSheet(
             f"""
             QPushButton {{

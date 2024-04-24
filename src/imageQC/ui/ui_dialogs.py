@@ -7,16 +7,22 @@
 
 import os
 import copy
+from dataclasses import asdict
 import numpy as np
+import pandas as pd
 
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5 import QtCore
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
-    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QListWidget, QTextEdit,
-    QPushButton, QLabel, QRadioButton, QCheckBox, QFileDialog
+    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox, QListWidget,
+    QTextEdit, QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox, QFileDialog
     )
+
+import matplotlib
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
 # imageQC block start
 from imageQC.config.iQCconstants import (
@@ -25,6 +31,9 @@ from imageQC.config.iQCconstants import (
 from imageQC.config.config_func import init_user_prefs
 from imageQC.ui import messageboxes
 from imageQC.ui import reusable_widgets as uir
+from imageQC.scripts.artifact import Artifact, add_artifact
+from imageQC.scripts.dcm import get_projection
+from imageQC.scripts.read_vendor_QC_reports import read_GE_Mammo_date
 import imageQC.resources
 # imageQC block end
 
@@ -242,14 +251,55 @@ class StartUpDialog(ImageQCDialog):
             self.accept()
 
 
+class SelectTextsDialog(ImageQCDialog):
+    """Dialog to select texts."""
+
+    def __init__(self, texts, title='Select texts', select_info='Select texts'):
+        super().__init__()
+        self.setWindowTitle(title)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        vlo.addWidget(QLabel(select_info))
+        self.list_widget = uir.ListWidgetCheckable(
+            texts=texts, set_checked_ids=list(np.arange(len(texts))))
+        vlo.addWidget(self.list_widget)
+        self.btn_select_all = QPushButton('Deselect all')
+        self.btn_select_all.clicked.connect(self.select_all)
+        vlo.addWidget(self.btn_select_all)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        button_box = QDialogButtonBox(buttons)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        vlo.addWidget(button_box)
+
+    def select_all(self):
+        """Select or deselect all in list."""
+        if self.btn_select_all.text() == 'Deselect all':
+            set_state = Qt.Unchecked
+            self.btn_select_all.setText('Select all')
+        else:
+            set_state = Qt.Checked
+            self.btn_select_all.setText('Deselect all')
+
+        for i in range(len(self.list_widget.texts)):
+            item = self.list_widget.item(i)
+            item.setCheckState(set_state)
+
+    def get_checked_texts(self):
+        """Get list of checked texts."""
+        return self.list_widget.get_checked_texts()
+
+
 class EditAnnotationsDialog(ImageQCDialog):
     """Dialog to set annotation settings."""
 
     def __init__(self, annotations=True, annotations_line_thick=0,
-                 annotations_font_size=0):
+                 annotations_font_size=0, show_axis=False):
         super().__init__()
 
-        self.setWindowTitle('Set annotations')
+        self.setWindowTitle('Set display options')
         self.setMinimumHeight(300)
         self.setMinimumWidth(300)
 
@@ -272,6 +322,10 @@ class EditAnnotationsDialog(ImageQCDialog):
         self.spin_font.setValue(annotations_font_size)
         fLO.addRow(QLabel('Font size'), self.spin_font)
 
+        self.chk_show_axis = QCheckBox('Show axis')
+        self.chk_show_axis.setChecked(show_axis)
+        fLO.addRow(self.chk_show_axis)
+
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
@@ -289,12 +343,397 @@ class EditAnnotationsDialog(ImageQCDialog):
             line_thick
         int
             font_size
+        bool
+            show_axis
         """
         return (
             self.chk_annotations.isChecked(),
             self.spin_line.value(),
-            self.spin_font.value()
+            self.spin_font.value(),
+            self.chk_show_axis.isChecked()
             )
+
+
+class AddArtifactsDialog(ImageQCDialog):
+    """Dialog to add simulated artifacts to images."""
+
+    def __init__(self, main):
+        super().__init__()
+        self.main = main
+
+        self.setWindowTitle('Add simulated artifact')
+        self.setMinimumHeight(300)
+        self.setMinimumWidth(500)
+
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        fLO = QFormLayout()
+        vlo.addLayout(fLO)
+        self.form = QComboBox()
+        self.form.addItems(['circular', 'ring', 'rectangle'])
+        self.form.setCurrentIndex(0)
+        self.form.currentIndexChanged.connect(self.update_form)
+        fLO.addRow(QLabel('Artifact form'), self.form)
+        self.x_offset = QDoubleSpinBox(decimals=1)
+        self.x_offset.setRange(-1000, 1000)
+        self.y_offset = QDoubleSpinBox(decimals=1)
+        self.y_offset.setRange(-1000, 1000)
+        fLO.addRow(QLabel('Center offset x (mm)'), self.x_offset)
+        fLO.addRow(QLabel('Center offset y (mm)'), self.y_offset)
+        self.size_1 = QDoubleSpinBox(decimals=1)
+        self.size_1.setRange(0, 1000)
+        self.size_1_txt = QLabel('')
+        self.size_2 = QDoubleSpinBox(decimals=1)
+        self.size_2.setRange(0, 1000)
+        self.size_2_txt = QLabel('')
+        fLO.addRow(self.size_1_txt, self.size_1)
+        fLO.addRow(self.size_2_txt, self.size_2)
+        self.rotation = QDoubleSpinBox(decimals=1)
+        self.rotation.setRange(-359.9, 359.9)
+        fLO.addRow(QLabel('Rotation (degrees)'), self.rotation)
+        self.sigma = QDoubleSpinBox(decimals=2)
+        self.sigma.setRange(0, 1000)
+        fLO.addRow(QLabel('Gaussian blur, sigma (mm)'), self.sigma)
+        self.method = QComboBox()
+        self.method.addItems(['adding', 'multiplying'])
+        fLO.addRow(QLabel('Apply artifact value by'), self.method)
+        self.value = QDoubleSpinBox(decimals=3)
+        self.value.setRange(-1000000, 1000000)
+        fLO.addRow(QLabel('Artifact value'), self.value)
+
+        btn_view = QPushButton('View list of current artifacts...')
+        btn_view.clicked.connect(self.view_artifacts)
+        vlo.addWidget(btn_view)
+        btn_copy = QPushButton('Copy current artifact to clipboard...')
+        btn_copy.clicked.connect(self.copy_artifact)
+        vlo.addWidget(btn_copy)
+        btn_load = QPushButton('Load artifact(s) from clipboard...')
+        btn_load.clicked.connect(self.load_artifact)
+        vlo.addWidget(btn_load)
+        btn_delete_all = QPushButton('Delete all artifacts')
+        vlo.addWidget(btn_delete_all)
+        btn_delete_all.clicked.connect(self.delete_all)
+
+        # add, overwrite, close
+        hlo_buttons_btm = QHBoxLayout()
+        vlo.addLayout(hlo_buttons_btm)
+        btn_add = QPushButton('Add')
+        hlo_buttons_btm.addWidget(btn_add)
+        btn_add.clicked.connect(self.add)
+        btn_overwrite = QPushButton('Overwrite')
+        btn_overwrite.clicked.connect(self.overwrite)
+        hlo_buttons_btm.addWidget(btn_overwrite)
+        btn_close = QPushButton('Close')
+        btn_close.clicked.connect(self.reject)
+        hlo_buttons_btm.addWidget(btn_close)
+
+        self.update_form()
+
+    def update_form(self):
+        """Update ROI size descriptions when form changes."""
+        form = self.form.currentText()
+        if form == 'circular':
+            self.size_1_txt.setText('Radius (mm)')
+            self.size_2_txt.setText('-')
+            self.size_2.setEnabled(False)
+            self.rotation.setEnabled(False)
+        elif form == 'ring':
+            self.size_1_txt.setText('Outer radius (mm)')
+            self.size_2_txt.setText('Inner radius (mm)')
+            self.size_2.setEnabled(True)
+            self.rotation.setEnabled(False)
+        else:
+            self.size_1_txt.setText('Width (mm)')
+            self.size_2_txt.setText('Height (mm)')
+            self.size_2.setEnabled(True)
+            self.rotation.setEnabled(True)
+
+    def get_artifact_object(self):
+        """Get settings as artifact object."""
+        obj = None
+        errmsg = ''
+        if self.size_2.value() == 0 and self.form.currentText() == 'rectangle':
+            errmsg = 'ROI height cannot be zero.'
+        elif self.value.value() == 0:
+            errmsg = 'Value of the artifact cannot be zero.'
+        else:
+            obj = Artifact(
+                form=self.form.currentText(),
+                x_offset=self.x_offset.value(),
+                y_offset=self.y_offset.value(),
+                size_1=self.size_1.value(),
+                size_2=self.size_2.value(),
+                rotation=self.rotation.value(),
+                sigma=self.sigma.value(),
+                method=self.method.currentText(),
+                value=self.value.value()
+                )
+        if errmsg:
+            QMessageBox.warning(self, 'Warning', errmsg)
+        return obj
+
+    def add(self):
+        """Add artifact."""
+        artifact = self.get_artifact_object()
+        if artifact:
+            add_artifact(artifact, self.main, overwrite=False)
+
+    def overwrite(self):
+        """Overwrite artifact."""
+        artifact = self.get_artifact_object()
+        if artifact:
+            add_artifact(artifact, self.main, overwrite=True)
+
+    def view_artifacts(self):
+        """View currently applied artifacts as text."""
+        text = []
+        for idx, img in enumerate(self.main.imgs):
+            if img.artifacts is not None:
+                text.append(f'Image {idx}')
+                dataf = None
+                for ano, artifact in enumerate(img.artifacts):
+                    if ano == 0:
+                        dataf = pd.DataFrame(asdict(artifact), index=[ano])
+                    else:
+                        dataf = dataf.append(asdict(artifact), ignore_index=True)
+                if dataf is not None:
+                    text.append(dataf.to_string(index=False))
+                else:
+                    text.append('No added artifacts.')
+        if len(text) == 0:
+            QMessageBox.information(self, 'Information', 'Found no added artifacts.')
+        else:
+            dlg = TextDisplay(self, '\n'.join(text), title='Current artifacts',
+                              min_width=1100, min_height=500)
+            dlg.exec()
+
+    def copy_artifact(self):
+        """Copy current artifact to clipboard."""
+        artifact = self.get_artifact_object()
+        if artifact:
+            dataf = pd.DataFrame(asdict(artifact), index=[0])
+            dataf.to_clipboard(index=False)
+            QMessageBox.information(
+                self, 'Information', 'Current artifact in clipboard.')
+
+    def load_artifact(self):
+        """Load artifact from clipboard."""
+        dataf_split = {}
+        try:
+            dataf = pd.read_clipboard()
+            dataf_split = dataf.to_dict('split')
+        except pd.errors.ParserError as err:
+            QMessageBox.warning(
+                self, 'Validation failed',
+                f'Trouble validating input table: {err}')
+        if 'columns' in dataf_split:
+            keys = dataf_split['columns']
+        else:
+            keys = []
+        if len(set(keys).difference([*asdict(Artifact())])) == 0:
+            if len(dataf_split['data']) > 1:
+                quest = ('Found more than one artifact in the loaded values.')
+                res = messageboxes.QuestionBox(
+                    self, title='Load multiple artifacts', msg=quest,
+                    yes_text='Add/replace all to current image', no_text='Cancel')
+                if res.exec():
+                    self.main.imgs[self.main.gui.active_img_no].artifacts = None
+                    dataf_idx = dataf.to_dict('index')
+                    for key, artifact_dict in dataf_idx.items():
+                        add_artifact(
+                            Artifact(**artifact_dict), self.main, overwrite=False)
+            else:
+                values = dataf_split['data'][0]
+                dataf_dict = {keys[i]: values[i] for i in range(len(keys))}
+                self.form.setCurrentText(dataf_dict['form'])
+                self.x_offset.setValue(dataf_dict['x_offset'])
+                self.y_offset.setValue(dataf_dict['y_offset'])
+                self.size_1.setValue(dataf_dict['size_1'])
+                self.size_2.setValue(dataf_dict['size_2'])
+                self.rotation.setValue(dataf_dict['rotation'])
+                self.sigma.setValue(dataf_dict['sigma'])
+                self.method.setCurrentText(dataf_dict['method'])
+                self.value.setValue(dataf_dict['value'])
+        else:
+            QMessageBox.warning(
+                self, 'Validation failed',
+                'Unexpected keys in clipboard {keys} compared to expected '
+                f'{[*asdict(Artifact())]}')
+
+    def delete_all(self):
+        """Remove all artifacts from imgs."""
+        for img in self.main.imgs:
+            img.artifacts = None
+        self.main.update_active_img(
+            self.main.tree_file_list.topLevelItem(self.main.gui.active_img_no))
+        self.main.refresh_img_display()
+
+
+class WindowLevelEditDialog(ImageQCDialog):
+    """Dialog to set window level by numbers."""
+
+    def __init__(self, min_max=[0, 0], show_lock_wl=True, decimals=0,
+                 positive_negative=False):
+        """Initiate..
+
+        Parameters
+        ----------
+        min_max : list of floats
+            Current min and max for the window level.
+        show_lock_wl : bool, optional
+            Show the checkbox to set window level to locked (not update for each image).
+            The default is True.
+        decimals : int, optional
+            Number of decimals to display. The default is 0.
+        positive_negative : bool, optional
+            Lock window level to be centered at zero. The default is False.
+        """
+        super().__init__()
+        self.positive_negative = positive_negative
+        self.setWindowTitle('Edit window level')
+        self.setMinimumHeight(400)
+        self.setMinimumWidth(300)
+
+        vLO = QVBoxLayout()
+        self.setLayout(vLO)
+        fLO = QFormLayout()
+        vLO.addLayout(fLO)
+
+        self.spin_min = QDoubleSpinBox(decimals=decimals)
+        self.spin_min.setRange(-1000000, 1000000)
+        self.spin_min.setValue(min_max[0])
+        if positive_negative:
+            self.spin_min.setEnabled(False)
+        else:
+            self.spin_min.editingFinished.connect(
+                lambda: self.recalculate_others(sender='min'))
+        fLO.addRow(QLabel('Minimum'), self.spin_min)
+
+        self.spin_max = QDoubleSpinBox(decimals=decimals)
+        self.spin_max.setRange(-1000000, 1000000)
+        self.spin_max.setValue(min_max[1])
+        self.spin_max.editingFinished.connect(
+            lambda: self.recalculate_others(sender='max'))
+        fLO.addRow(QLabel('Maximum'), self.spin_max)
+
+        self.spin_center = QDoubleSpinBox(decimals=decimals)
+        self.spin_center.setRange(-1000000, 1000000)
+        self.spin_center.setValue(0.5*(min_max[0] + min_max[1]))
+        if positive_negative:
+            self.spin_center.setEnabled(False)
+        else:
+            self.spin_center.editingFinished.connect(
+                lambda: self.recalculate_others(sender='center'))
+        fLO.addRow(QLabel('Center'), self.spin_center)
+
+        self.spin_width = QDoubleSpinBox(decimals=decimals)
+        self.spin_width.setRange(0, 2000000)
+        self.spin_width.setValue(min_max[1] - min_max[0])
+        self.spin_width.editingFinished.connect(
+            lambda: self.recalculate_others(sender='width'))
+        fLO.addRow(QLabel('Width'), self.spin_width)
+
+        self.chk_lock = QCheckBox('')
+        self.chk_lock.setChecked(True)
+        if show_lock_wl:
+            fLO.addRow(QLabel('Lock WL for all images'), self.chk_lock)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.button_box = QDialogButtonBox(buttons)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        vLO.addWidget(self.button_box)
+
+    def accept(self):
+        """Avoid close on enter if not ok button focus."""
+        if self.button_box.button(QDialogButtonBox.Ok).hasFocus():
+            if self.spin_width.value() == 0:
+                QMessageBox.warning(
+                    self, 'Warning',
+                    'Window width should be larger than zero.')
+            elif self.spin_min.value() >= self.spin_max.value():
+                QMessageBox.warning(
+                    self, 'Warning',
+                    'Window max should be set larger than minimum.')
+            else:
+                super().accept()
+
+    def recalculate_others(self, sender='min'):
+        """Reset others based on input."""
+        self.blockSignals(True)
+        if self.positive_negative:
+            if sender == 'max':
+                self.spin_min.setValue(-self.spin_max.value())
+            elif sender == 'width':
+                self.spin_min.setValue(-self.spin_width.value()/2)
+                self.spin_max.setValue(self.spin_width.value()/2)
+        minval = self.spin_min.value()
+        maxval = self.spin_max.value()
+        width = self.spin_width.value()
+        center = self.spin_center.value()
+        if sender in ['min', 'max']:
+            self.spin_center.setValue(0.5*(minval + maxval))
+            self.spin_width.setValue(maxval-minval)
+        else:  # sender in ['center', 'width']:
+            self.spin_min.setValue(center - 0.5*width)
+            self.spin_max.setValue(center + 0.5*width)
+        self.blockSignals(False)
+
+    def get_min_max_lock(self):
+        """Get min max values an lock setting as tuple."""
+        return (
+            self.spin_min.value(),
+            self.spin_max.value(),
+            self.chk_lock.isChecked()
+            )
+
+
+class CmapSelectDialog(ImageQCDialog):
+    """Dialog to select matplotlib colormap."""
+
+    def __init__(self, current_cmap='gray'):
+        super().__init__()
+        self.setWindowTitle('Select colormap')
+        self.setMinimumHeight(300)
+        self.setMinimumWidth(300)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        self.cmaps = ['gray', 'inferno', 'hot', 'rainbow', 'viridis', 'RdBu']
+        self.list_cmaps = QComboBox()
+        self.list_cmaps.addItems(self.cmaps)
+        self.list_cmaps.setCurrentIndex(0)
+        self.list_cmaps.currentIndexChanged.connect(self.update_preview)
+        self.chk_reverse = QCheckBox('Reverse')
+        self.chk_reverse.clicked.connect(self.update_preview)
+        self.colorbar = uir.ColorBar()
+
+        vlo.addWidget(QLabel('Select colormap:'))
+        vlo.addWidget(self.list_cmaps)
+        vlo.addWidget(self.chk_reverse)
+        vlo.addWidget(self.colorbar)
+        hlo_buttons = QHBoxLayout()
+        vlo.addLayout(hlo_buttons)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vlo.addWidget(self.buttonBox)
+
+        self.update_preview()
+
+    def update_preview(self):
+        """Sort elements by name or date."""
+        cmap = self.get_cmap()
+        self.colorbar.colorbar_draw(cmap=cmap)
+
+    def get_cmap(self):
+        """Return selected indexes in list."""
+        cmap = self.list_cmaps.currentText()
+        if self.chk_reverse.isChecked():
+            cmap = cmap + '_r'
+        return cmap
 
 
 class QuickTestClipboardDialog(ImageQCDialog):
@@ -370,7 +809,8 @@ class QuickTestClipboardDialog(ImageQCDialog):
 class ResetAutoTemplateDialog(ImageQCDialog):
     """Dialog to move directories/files in input_path/Archive to input_path."""
 
-    def __init__(self, parent_widget, files=[], directories=[], template_name=''):
+    def __init__(self, parent_widget, files=[], directories=[], template_name='',
+                 QAP_Mammo=False):
         super().__init__()
         self.setWindowTitle(f'Reset Automation template {template_name}')
         self.setMinimumHeight(300)
@@ -379,7 +819,14 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         self.sort_mtime = None
         if len(files) > 0:
             self.list_elements = [file.name for file in files]
-            self.sort_mtime = np.argsort([file.stat().st_mtime for file in files])
+            if QAP_Mammo:
+                dates = []
+                for file in files:
+                    dd, mm, yyyy = read_GE_Mammo_date(file)
+                    dates.append(f'{yyyy}{mm}{dd}')
+                self.sort_mtime = np.argsort(dates)
+            else:
+                self.sort_mtime = np.argsort([file.stat().st_ctime for file in files])
         else:
             self.list_elements = [folder.name for folder in directories]
             files_or_folders = 'folders'
@@ -387,17 +834,24 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         vlo = QVBoxLayout()
         self.setLayout(vlo)
 
-        self.sort_by_name = True
-        self.txt_by_name_or_date = ['Sort by last modified date', 'Sort by name']
-        self.btn_by_name_or_date = QPushButton(self.txt_by_name_or_date[0])
+        self.sort_by_name = False if QAP_Mammo else True
+        self.txt_by_name_or_date = ['Sort by file creation date time', 'Sort by name']
+        self.btn_by_name_or_date = QPushButton(
+            self.txt_by_name_or_date[int(self.sort_by_name)])
         self.btn_by_name_or_date.clicked.connect(self.update_sort)
         self.list_file_or_dirs = QListWidget()
         self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)
-        self.list_file_or_dirs.addItems(self.list_elements)
+        if self.sort_by_name:
+            list_elements = copy.deepcopy(self.list_elements)
+        else:
+            list_elements = list(np.array(self.list_elements)[self.sort_mtime])
+        self.list_file_or_dirs.addItems(list_elements)
         self.list_file_or_dirs.setCurrentRow(len(self.list_elements) - 1)
 
         vlo.addWidget(QLabel(
-            'Move files out of Archive to regard these files as incoming.'))
+            'Select files to move out of Archive '))
+        vlo.addWidget(QLabel(
+            'to regard these files as incoming.'))
         vlo.addStretch()
         vlo.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
         vlo.addWidget(self.list_file_or_dirs)
@@ -464,3 +918,299 @@ class TextDisplay(ImageQCDialog):
         self.setWindowTitle(title)
         self.setMinimumWidth(min_width)
         self.setMinimumHeight(min_height)
+
+
+class ProjectionPlotDialog(ImageQCDialog):
+    """Dialog to generate MIP or similar with values plot above."""
+
+    def __init__(self, main):
+        super().__init__()
+        self.main = main
+        self.cmap = main.wid_image_display.canvas.ax.get_images()[0].cmap.name
+        self.setWindowTitle('Plot values on projection image')
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        self.canvas = ProjectionPlotCanvas(self)
+        self.canvas.setMinimumHeight(round(0.6*self.main.gui.panel_height))
+        self.canvas.setMinimumWidth(round(0.6*self.main.gui.panel_height))
+        self.tb_canvas = uir.ImageNavigationToolbar(self.canvas, self,
+                                                    remove_customize=True)
+
+        self.projections = ['Average intensity projection  ',
+                            'Maximum intensity projection  ']
+        self.list_projections = QComboBox()
+        self.list_projections.addItems(self.projections)
+        self.list_projections.setCurrentIndex(0)
+        self.list_projections.currentIndexChanged.connect(self.calculate_projection)
+        self.directions = ['front', 'side']
+        self.list_directions = QComboBox()
+        self.list_directions.addItems(self.directions)
+        self.list_directions.setCurrentIndex(0)
+        self.list_directions.currentIndexChanged.connect(self.calculate_projection)
+
+        self.headers = ['-- No results in table to plot --  ']
+        if self.main.results:
+            if self.main.current_test in self.main.results:
+                if self.main.results[self.main.current_test]['pr_image']:
+                    self.headers = self.main.results[self.main.current_test]['headers']
+                else:
+                    self.headers = ['-- Results pr image not available in table --']
+        self.list_headers = QComboBox()
+        self.list_headers.addItems(self.headers)
+        self.list_headers.setCurrentIndex(0)
+        self.list_headers.currentIndexChanged.connect(
+            lambda: self.update_plot_values(update_figure=True))
+
+        self.list_display_options = QComboBox()
+        self.list_display_options.addItems([
+            'projection + plot  ', 'projection only  ', 'plot only  '])
+        self.list_display_options.setCurrentIndex(0)
+        self.list_display_options.currentIndexChanged.connect(self.canvas.update_figure)
+        self.list_layout = QComboBox()
+        self.list_layout.addItems(['overlayed', 'horizontal'])
+        self.list_layout.setCurrentIndex(0)
+        self.list_layout.currentIndexChanged.connect(self.layout_changed)
+        self.spin_font_size = QSpinBox()
+        self.spin_font_size.setRange(5, 100)
+        self.spin_font_size.setValue(self.main.gui.annotations_font_size + 2)
+        self.spin_font_size.valueChanged.connect(self.canvas.update_figure)
+        self.chk_flip_ud = QCheckBox()
+        self.chk_flip_ud.toggled.connect(self.canvas.update_figure)
+        self.chk_flip_lr = QCheckBox()
+        self.chk_flip_lr.toggled.connect(self.canvas.update_figure)
+        self.spin_margin = QSpinBox()
+        self.spin_margin.setRange(0, 40)
+        self.spin_margin.setValue(20)
+        self.spin_margin.valueChanged.connect(self.canvas.update_figure)
+        self.spin_min = QDoubleSpinBox()
+        self.spin_min.valueChanged.connect(self.canvas.update_figure)
+        self.spin_max = QDoubleSpinBox()
+        self.spin_max.valueChanged.connect(self.canvas.update_figure)
+
+        hlo_selections = QHBoxLayout()
+        vlo_image = QVBoxLayout()
+        vlo.addLayout(hlo_selections)
+        vlo.addLayout(vlo_image)
+        flo = QFormLayout()
+        vlo_first_col = QVBoxLayout()
+        vlo_first_col.addLayout(flo)
+        hlo_selections.addLayout(vlo_first_col)
+        flo.addRow(QLabel('Select projection type:'), self.list_projections)
+        flo.addRow(QLabel('Select projection direction:'), self.list_directions)
+        flo.addRow(QLabel('Column to plot:'), self.list_headers)
+        hlo_min_max = QHBoxLayout()
+        vlo_first_col.addLayout(hlo_min_max)
+        hlo_min_max.addWidget(QLabel('Plot min/max:'))
+        hlo_min_max.addWidget(self.spin_min)
+        hlo_min_max.addWidget(QLabel('/'))
+        hlo_min_max.addWidget(self.spin_max)
+
+        flo2 = QFormLayout()
+        hlo_selections.addLayout(flo2)
+        flo2.addRow(QLabel('Display options:'), self.list_display_options)
+        flo2.addRow(QLabel('Layout:'), self.list_layout)
+        flo2.addRow(QLabel('Font size:'), self.spin_font_size)
+        flo2.addRow(QLabel('Left/right margin %:'), self.spin_margin)
+        flo3 = QFormLayout()
+        hlo_selections.addLayout(flo3)
+        flo3.addRow(QLabel('Flip cran/caud:'), self.chk_flip_ud)
+        flo3.addRow(QLabel('Flip left/right:'), self.chk_flip_lr)
+
+        vlo_image.addWidget(self.tb_canvas)
+        vlo_image.addWidget(self.canvas)
+
+        hlo_buttons = QHBoxLayout()
+        vlo.addLayout(hlo_buttons)
+        buttons = QDialogButtonBox.Close
+        buttonBox = QDialogButtonBox(buttons)
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        hlo_buttons.addWidget(buttonBox)
+
+        self.projection = None
+        self.z_values = None
+        self.z_label = ''
+        self.plot_values = None
+        self.projection_height = 1
+        self.projection_width = 1
+
+        QTimer.singleShot(300, lambda: self.calculate_projection())
+        # allow time to show dialog before updating list
+
+    def keyPressEvent(self, event):
+        """Avoid close dialog on enter in widgets."""
+        if event.key() == Qt.Key_Return:
+            pass
+        else:
+            super().keyPressEvent(event)
+
+    def reject(self):
+        """Reset font size when closing."""
+        plt.rcParams.update({'font.size': self.main.gui.annotations_font_size})
+        super(ProjectionPlotDialog, self).reject()
+
+    def layout_changed(self):
+        """Switch layout."""
+        self.blockSignals(True)
+        if 'overlay' in self.list_layout.currentText():
+            self.spin_margin.setValue(20)
+        else:
+            self.spin_margin.setValue(1)
+        self.blockSignals(False)
+        self.canvas.update_figure()
+
+    def update_plot_values(self, update_figure=False):
+        """Read selected result column from main results."""
+        results = self.main.results
+        test = self.main.current_test
+        self.plot_values = None
+        if test in results:
+            try:
+                if results[test]['pr_image']:
+                    col = self.list_headers.currentIndex()
+                    self.plot_values = [row[col] for row in results[test]['values']]
+            except TypeError:
+                pass
+
+        if self.plot_values:
+            minval = np.min(self.plot_values)
+            maxval = np.max(self.plot_values)
+            if maxval == minval:
+                maxval = minval + 1
+            diff = maxval - minval
+            self.blockSignals(True)
+            self.spin_min.setRange(minval - diff, maxval + diff)
+            self.spin_max.setRange(minval - diff, maxval + diff)
+            self.spin_min.setValue(minval - diff/10)
+            self.spin_max.setValue(maxval + diff/10)
+            if diff < 5:
+                self.spin_min.setDecimals(2)
+                self.spin_max.setDecimals(2)
+            else:
+                self.spin_min.setDecimals(0)
+                self.spin_max.setDecimals(0)
+            self.blockSignals(False)
+        if update_figure:
+            self.canvas.update_figure()
+
+    def calculate_projection(self):
+        """Calculate projection based on selections."""
+        max_progress = 100  # %
+        progress_modal = uir.ProgressModal(
+            "Calculating...", "Cancel",
+            0, max_progress, self, minimum_duration=0)
+        proj = self.list_projections.currentText()
+        projection_type = 'max'
+        if 'Average' in proj:
+            projection_type = 'mean'
+        marked_this = self.main.get_marked_imgs_current_test()
+
+        self.z_values = [i for i in range(len(self.main.imgs)) if i in marked_this]
+        self.z_label = 'image number'
+        self.projection, patient_position, errmsg = get_projection(
+            self.main.imgs, marked_this, self.main.tag_infos,
+            projection_type=projection_type,
+            direction=self.list_directions.currentText(), progress_modal=progress_modal)
+        progress_modal.setValue(max_progress)
+        if patient_position:
+            if patient_position[0:2] == 'HF':
+                self.chk_flip_ud.setChecked(True)
+
+        zpos_0 = self.main.imgs[marked_this[0]].zpos
+        pix_0 = self.main.imgs[marked_this[0]].pix[0]
+        sy, sx = self.projection.shape
+        self.projection_width = sx
+        self.projection_height = sy
+        if zpos_0:
+            zpos_1 = self.main.imgs[marked_this[1]].zpos
+            slice_increment = abs(zpos_1 - zpos_0)
+            self.projection_width = sx * pix_0
+            self.projection_height = sy * slice_increment
+        if errmsg:
+            QMessageBox.information(self, 'Failed generating projection', errmsg)
+            self.reject()
+        else:
+            self.canvas.update_figure()
+        self.main.stop_wait_cursor()
+
+
+class ProjectionPlotCanvas(FigureCanvasQTAgg):
+    """Canvas for display of projection and plot."""
+
+    def __init__(self, parent):
+        self.fig = matplotlib.figure.Figure(figsize=(8, 2))  #, constrained_layout=True)
+        self.parent = parent
+        FigureCanvasQTAgg.__init__(self, self.fig)
+
+    def update_figure(self):
+        """Refresh histogram."""
+        self.fig.clear()
+        margin = self.parent.spin_margin.value() / 100
+        self.fig.subplots_adjust(margin, .05, 1-margin, .95)
+        ratio = self.parent.projection_height / self.parent.projection_width
+        display = self.parent.list_display_options.currentText()
+        if 'projection' in display and 'plot' in display:
+            if self.parent.list_layout.currentText() == 'horizontal':
+                gs = self.fig.add_gridspec(nrows=1, ncols=2)
+                self.ax_img = self.fig.add_subplot(gs[0, 0])
+                self.ax_plot = self.fig.add_subplot(gs[0, 1], sharey=self.ax_img)
+            else:
+                self.ax_img = self.fig.add_subplot(111)
+                self.ax_plot = self.ax_img.twinx()
+        elif 'projection' in display:
+            self.ax_img = self.fig.add_subplot(111)
+        elif 'plot' in display:
+            self.ax_plot = self.fig.add_subplot(111)
+
+        img_h, img_w = self.parent.projection.shape
+        if 'projection' in display:
+            image = self.parent.projection
+            if self.parent.chk_flip_lr.isChecked():
+                image = np.fliplr(image)
+            if 'overlay' in self.parent.list_layout.currentText():
+                image = image.transpose()
+            self.ax_img.imshow(image, cmap=self.parent.cmap)
+            x0, x1 = self.ax_img.get_xlim()
+            y0, y1 = self.ax_img.get_ylim()
+            if self.parent.list_layout.currentText() == 'horizontal':
+                self.ax_img.set_aspect(float(ratio * abs((x1-x0)/(y1-y0))))
+            else:
+                self.ax_img.set_aspect(float(1./ratio * abs((x1-x0)/(y1-y0))))
+
+        if 'plot' in display and self.parent.main.results:
+            plt.rcParams.update({'font.size': self.parent.spin_font_size.value()})
+            if self.parent.plot_values is None:
+                self.parent.update_plot_values()
+
+            if self.parent.plot_values:
+                if 'overlay' in self.parent.list_layout.currentText():
+                    self.ax_plot.plot(
+                        self.parent.z_values, self.parent.plot_values, 'r')
+                    self.ax_plot.set_ylabel(self.parent.list_headers.currentText())
+                    self.ax_plot.set_ylim(
+                        self.parent.spin_min.value(), self.parent.spin_max.value())
+                else:
+                    self.ax_plot.plot(
+                        self.parent.plot_values, self.parent.z_values, 'r')
+                    if 'projection' in display:
+                        _, btm, _, height = self.ax_img.get_position().bounds
+                        left, _, width, _ = self.ax_plot.get_position().bounds
+                        self.ax_plot.set_position([left, btm, width, height])
+                    self.ax_plot.set_xlabel(self.parent.list_headers.currentText())
+                    self.ax_plot.set_xlim(
+                        self.parent.spin_min.value(), self.parent.spin_max.value())
+                if self.parent.chk_flip_ud.isChecked():
+                    if 'overlay' in self.parent.list_layout.currentText():
+                        self.ax_plot.invert_xaxis()
+                    else:
+                        self.ax_plot.invert_yaxis()
+        else:
+            if self.parent.chk_flip_ud.isChecked():
+                if 'overlay' in self.parent.list_layout.currentText():
+                    self.ax_img.invert_xaxis()
+                else:
+                    self.ax_img.invert_yaxis()
+        if hasattr(self, 'ax_img'):
+            self.ax_img.axis('off')
+        self.draw()

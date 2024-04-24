@@ -21,7 +21,6 @@ from imageQC.config.iQCconstants import QUICKTEST_OPTIONS
 import imageQC.scripts.mini_methods_format as mmf
 from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.config.config_classes import TagPatternFormat
-from imageQC.ui.ui_dialogs import TextDisplay
 # imageQC block end
 
 pydicom.config.future_behavior(True)
@@ -49,6 +48,7 @@ class DcmInfo():
     zpos: Optional[float] = None
     acq_date: str = ''
     studyUID: str = ''
+    artifacts: list = field(default_factory=list)  # simulate scripts/artifacts.py
 
 
 @dataclass
@@ -120,7 +120,7 @@ def read_dcm(file, stop_before_pixels=True):
 
 
 def read_dcm_info(filenames, GUI=True, tag_infos=[],
-                  tag_patterns_special={}, statusbar=None,
+                  tag_patterns_special={}, statusbar=None, progress_modal=None,
                   series_pattern=None):
     """Read Dicom header into DcmInfo(Gui) objects when opening files.
 
@@ -140,6 +140,8 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         for text display or annotation
     statusbar : StatusBar, optional
         for messages to screen
+    progress_modal : uir.ProgressModal, optional
+        for mesaages to screen and blocking actions, cancel option
     series_pattern : TagPatternFormat, optional
         used for ui/open_multi.py. Default is None.
 
@@ -155,10 +157,20 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
     list_of_DcmInfo = []
     ignored_files = []
     warnings = []
-
+    n_files = len(filenames)
     for fileno, file in enumerate(filenames):
         if statusbar is not None:
-            statusbar.showMessage(f'Reading file {fileno+1}/{len(filenames)}')
+            statusbar.showMessage(f'Reading file {fileno+1}/{n_files}')
+        if progress_modal is not None:
+            progress_modal.setValue(round(100*fileno/n_files))
+            progress_modal.setLabelText(f'Reading file {fileno+1}/{n_files}')
+            if progress_modal.wasCanceled():
+                list_of_DcmInfo = []
+                ignored_files = []
+                warnings = []
+                progress_modal.setValue(100)
+                break
+
         file_verified = True
         pyd, file_verified, errmsg = read_dcm(file)
         if file_verified:
@@ -710,11 +722,12 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
             if pixarr is not None:
                 npout = pixarr * slope + intercept
 
-        if len(npout.shape) == 3:
-            # rgb to grayscale NTSC formula
-            npout = (0.299 * npout[:, :, 0]
-                     + 0.587 * npout[:, :, 1]
-                     + 0.114 * npout[:, :, 2])
+        if npout is not None:
+            if len(npout.shape) == 3:
+                # rgb to grayscale NTSC formula
+                npout = (0.299 * npout[:, :, 0]
+                         + 0.587 * npout[:, :, 1]
+                         + 0.114 * npout[:, :, 2])
 
         if overlay is not None:
             if pixarr is not None:
@@ -728,7 +741,10 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
 
         orient = pyd.get('PatientPosition', '')
         if orient == 'FFS':
-            npout = np.fliplr(npout)
+            try:
+                npout = np.fliplr(npout)
+            except ValueError:
+                pass
 
         if len(tag_patterns) > 0 and tag_infos is not None:
             tag_strings = read_tag_patterns(
@@ -1164,6 +1180,7 @@ def dump_dicom(parent_widget, filename=''):
     if filename != '':
         pyd, _, errmsg = read_dcm(filename)
         if pyd:
+            from imageQC.ui.ui_dialogs import TextDisplay
             dlg = TextDisplay(
                 parent_widget, str(pyd), title=filename,
                 min_width=1000, min_height=800)
@@ -1272,3 +1289,74 @@ def sum_marked_images(img_infos, included_ids, tag_infos):
         summed_img = None
 
     return (summed_img, errmsg)
+
+
+def get_projection(img_infos, included_ids, tag_infos,
+                   projection_type='max', direction='front', progress_modal=None):
+    """Extract projection from tomographic images.
+
+    Parameters
+    ----------
+    img_infos :  list of DcmInfoGui
+    included_ids : list of int
+        image ids to include
+    tag_infos : list of TagInfos
+    projection_type : str, optional
+        'max', 'min' or 'mean'. The default is 'max'.
+    direction : str, optional
+        'front' or 'side'. The default is 'front'.
+    progress_modal : uir.ProgressModal
+
+    Returns
+    -------
+    projection : np.2darray
+        extracted projection from imgs
+    errmsg : str
+    """
+    projection = None
+    shape_first = None
+    shape_failed = []
+    errmsg = ''
+    np_method = getattr(np, projection_type, None)
+    axis = 0 if direction == 'front' else 1
+    n_img = len(img_infos)
+    patient_position = None
+    tag_patterns = [TagPatternFormat(list_tags=['PatientPosition'])]
+    for idx, img_info in enumerate(img_infos):
+        if idx in included_ids:
+            if progress_modal:
+                progress_modal.setValue(round(100*idx/n_img))
+                progress_modal.setLabelText(
+                    f'Getting data from image {idx}/{n_img}')
+                if progress_modal.wasCanceled():
+                    projection = None
+                    progress_modal.setValue(100)
+                    break
+            image, tags_ = get_img(
+                img_info.filepath,
+                frame_number=img_info.frame_number, tag_infos=tag_infos,
+                tag_patterns=tag_patterns
+                )
+            if not patient_position:
+                try:
+                    patient_position = tags_[0][0]
+                except IndexError:
+                    pass
+            profile = np_method(image, axis=axis)
+            if projection is None:
+                shape_first = image.shape
+                projection = [profile]
+            else:
+                if image.shape == shape_first:
+                    projection.append(profile)
+                else:
+                    shape_failed.append(idx)
+
+    if len(shape_failed) > 0:
+        errmsg = ('Could not generate projection due to different sizes. ' +
+                  f'Image number {shape_failed} did not match the first marked image.')
+        projection = None
+    else:
+        projection = np.array(projection)
+
+    return (projection, patient_position, errmsg)

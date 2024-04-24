@@ -574,14 +574,18 @@ class StackWidget(QWidget):
                                 ok_save.append(ok_save_this)
                         if len(ok_save) > 0:
                             if all(ok_save):
-                                dlg = messageboxes.MessageBoxWithDetails(
-                                    self, title='Updated related templates',
-                                    msg=('Related templates also updated. '
-                                         'See details to view changes performed'),
-                                    details=log, icon=QMessageBox.Information)
-                                dlg.exec()
+                                if log:
+                                    dlg = messageboxes.MessageBoxWithDetails(
+                                        self, title='Updated related templates',
+                                        msg=('Related templates also updated. '
+                                             'See details to view changes performed'),
+                                        details=log, icon=QMessageBox.Information)
+                                    dlg.exec()
                                 if self.fname in ['paramsets', 'quicktest_templates']:
                                     self.update_from_yaml()
+                                if self.fname == 'auto_vendor_templates':
+                                    if 'limits_and_plot_templates' in more_fnames:
+                                        self.fill_list_limits_and_plot()
                     self.status_label.setText(
                         f'Changes saved to {path}')
                     self.flag_edit(False)

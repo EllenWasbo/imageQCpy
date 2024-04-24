@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
 import matplotlib.pyplot as plt
 
 # imageQC block start
+from imageQC.ui import ui_main_methods
 from imageQC.ui import ui_main_left_side
 from imageQC.ui.ui_main_image_widgets import ImageDisplayWidget
 from imageQC.ui import ui_main_quicktest_paramset_select
@@ -32,11 +33,12 @@ from imageQC.ui import ui_main_test_tabs
 from imageQC.ui.ui_main_test_tabs_vendor import ParamsTabVendor
 from imageQC.ui import ui_main_result_tabs
 from imageQC.ui import rename_dicom
+from imageQC.ui import task_based_image_quality
+from imageQC.ui.settings import SettingsDialog
 from imageQC.ui import automation_wizard
-from imageQC.ui import settings
 from imageQC.ui import open_multi
 from imageQC.ui import open_automation
-from imageQC.ui.ui_dialogs import TextDisplay, AboutDialog
+from imageQC.ui.ui_dialogs import TextDisplay, AboutDialog, AddArtifactsDialog
 from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
@@ -48,8 +50,8 @@ from imageQC.config.iQCconstants import (
     )
 from imageQC.config import config_classes as cfc
 from imageQC.scripts import dcm
-from imageQC.scripts.calculate_roi import get_rois
 from imageQC.scripts.mini_methods import get_modality_index
+from imageQC.scripts.artifact import apply_artifacts
 # imageQC block end
 
 
@@ -77,6 +79,7 @@ class GuiVariables():
     annotations: bool = True
     annotations_line_thick: int = 3
     annotations_font_size: int = 14
+    show_axis: bool = False
 
 
 class MainWindow(QMainWindow):
@@ -102,6 +105,9 @@ class MainWindow(QMainWindow):
         self.current_test = QUICKTEST_OPTIONS['CT'][0]
         self.update_settings()  # sets self.tag_infos (and a lot more)
         plt.rcParams.update({'font.size': self.user_prefs.font_size})
+        plt.rcParams['axes.xmargin'] = 0
+        plt.rcParams['axes.ymargin'] = 0
+        plt.set_loglevel('WARNING')
 
         self.current_paramset = copy.deepcopy(self.paramsets[0])
         self.current_quicktest = cfc.QuickTestTemplate()
@@ -118,9 +124,9 @@ class MainWindow(QMainWindow):
         self.gui.annotations_line_thick = self.user_prefs.annotations_line_thick
         self.gui.annotations_font_size = self.user_prefs.annotations_font_size
 
+        self.progress_modal = None
         self.status_bar = StatusBar(self)
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage('Starting up', 1000)
 
         self.setWindowTitle('Image QC v ' + VERSION)
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
@@ -135,14 +141,14 @@ class MainWindow(QMainWindow):
         self.create_menu_toolBar()
         self.wid_image_display = ImageDisplayWidget(self)
         self.wid_dcm_header = ui_main_left_side.DicomHeaderWidget(self)
-        self.wid_window_level = ui_main_left_side.WindowLevelWidget(self)
+        self.wid_window_level = uir.WindowLevelWidget(self)
         self.wid_center = ui_main_left_side.CenterWidget(self)
         self.create_modality_selector()
         self.wid_quicktest = (
             ui_main_quicktest_paramset_select.SelectQuickTestWidget(self))
         self.wid_paramset = ui_main_quicktest_paramset_select.SelectParamsetWidget(self)
         self.create_result_tabs()
-        self.create_test_tabs()
+        self.create_test_tab_CT()
         # set main layout (left/right)
         bbox = QHBoxLayout()
         self.split_lft_rgt = QSplitter(Qt.Horizontal)
@@ -210,8 +216,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(scroll)
         self.reset_split_sizes()
 
+        QTimer.singleShot(1000, lambda: self.create_test_tabs_rest())
+        # allow time to show dialog before creating test stacks not to be visualized yet
         self.update_mode()
-
         if len(warnings) > 0:
             QTimer.singleShot(300, lambda: self.show_warnings(warnings))
 
@@ -238,7 +245,7 @@ class MainWindow(QMainWindow):
             self.wid_image_display.tool_sum.setIcon(QIcon(
                 f'{os.environ[ENV_ICON_PATH]}sigma.png'))
             self.tree_file_list.update_file_list()
-            self.wid_image_display.canvas.ax.cla()
+            self.wid_image_display.canvas.ax.clear()
             self.wid_image_display.canvas.ax.axis('off')
             self.wid_image_display.canvas.draw()
             self.refresh_results_display()
@@ -266,13 +273,15 @@ class MainWindow(QMainWindow):
                 filter="DICOM files (*.dcm *.IMA);;All files (*)")
             file_list = fnames[0]
         if len(file_list) > 0:
-            self.start_wait_cursor()
+            max_progress = 100  # %
+            progress_modal = uir.ProgressModal(
+                "Calculating...", "Cancel",
+                0, max_progress, self, minimum_duration=0)
             new_img_infos, ignored_files, warnings = dcm.read_dcm_info(
                 file_list, tag_infos=self.tag_infos,
                 tag_patterns_special=self.tag_patterns_special,
-                statusbar=self.status_bar)
-            self.stop_wait_cursor()
-            self.status_bar.showMessage('Finished reading image headers', 2000)
+                statusbar=self.status_bar, progress_modal=progress_modal)
+            progress_modal.setValue(max_progress)
             if ignored_files:
                 dlg = messageboxes.MessageBoxWithDetails(
                     self, title='Some files ignored',
@@ -294,8 +303,8 @@ class MainWindow(QMainWindow):
         dlg = open_multi.OpenMultiDialog(self)
         res = dlg.exec()
         if res:
-            if len(dlg.open_imgs) > 0:
-                self.update_on_new_images(dlg.open_imgs)
+            if len(dlg.wid.open_imgs) > 0:
+                self.update_on_new_images(dlg.wid.open_imgs)
 
     def add_dummy(self, n_dummies=1):
         """Add place-holder / dummy image when missing images for QuickTest temp."""
@@ -322,8 +331,8 @@ class MainWindow(QMainWindow):
             if self.current_modality != self.imgs[0].modality:
                 self.current_modality = self.imgs[0].modality
                 self.update_mode()
-            if self.wid_window_level.chk_wl_update.isChecked() is False:
-                self.wid_window_level.set_window_level('dcm', set_tools=True)
+            if self.wid_window_level.tb_wl.chk_wl_update.isChecked() is False:
+                self.wid_window_level.tb_wl.set_window_level('dcm', set_tools=True)
 
         if self.wid_quicktest.gb_quicktest.isChecked():
             self.wid_quicktest.set_current_template_to_imgs()
@@ -361,6 +370,7 @@ class MainWindow(QMainWindow):
     def update_active_img(self, current):
         """Overwrite pixmap in memory with new active image, refresh GUI."""
         if len(self.imgs) > 0:
+            self.tree_file_list.blockSignals(True)
             if current is not None:
                 self.gui.active_img_no = self.tree_file_list.indexOfTopLevelItem(
                     current)
@@ -368,7 +378,7 @@ class MainWindow(QMainWindow):
                 self.gui.active_img_no = -1 if len(self.imgs) == 0 else 0
             read_img = True
             if self.wid_image_display.tool_sum.isChecked():
-                marked_idxs = self.tree_file_list.get_marked_imgs_current_test()
+                marked_idxs = self.get_marked_imgs_current_test()
                 if self.gui.active_img_no in marked_idxs:
                     self.active_img = self.summed_img
                     read_img = False
@@ -378,6 +388,12 @@ class MainWindow(QMainWindow):
                     frame_number=self.imgs[self.gui.active_img_no].frame_number,
                     tag_infos=self.tag_infos)
             if self.active_img is not None:
+                try: 
+                    if len(self.imgs[self.gui.active_img_no].artifacts) > 0:
+                        self.active_img = apply_artifacts(
+                            self.active_img, self.imgs[self.gui.active_img_no])
+                except (TypeError, AttributeError, IndexError):
+                    pass
                 amin = round(np.amin(self.active_img))
                 amax = round(np.amax(self.active_img))
                 self.wid_window_level.min_wl.setRange(amin, amax)
@@ -395,6 +411,7 @@ class MainWindow(QMainWindow):
             self.refresh_img_display()
             self.refresh_results_display(update_table=False)
             self.refresh_selected_table_row()
+            self.tree_file_list.blockSignals(False)
 
     def update_summed_img(self, recalculate_sum=True):
         """Overwrite pixmap in memory with new summed image, refresh GUI."""
@@ -404,7 +421,7 @@ class MainWindow(QMainWindow):
                 self.status_bar.showMessage('Calculating sum of marked images...')
 
                 self.summed_img, errmsg = dcm.sum_marked_images(
-                    self.imgs, self.tree_file_list.get_marked_imgs_current_test(),
+                    self.imgs, self.get_marked_imgs_current_test(),
                     tag_infos=self.tag_infos)
                 self.stop_wait_cursor()
                 self.status_bar.showMessage('Finished summing marked images', 2000)
@@ -441,6 +458,12 @@ class MainWindow(QMainWindow):
         except IndexError:
             pass
 
+    def set_active_image_min_max(self, minval, maxval):
+        """Update window level."""
+        if self.active_img is not None:
+            self.wid_image_display.canvas.img.set_clim(vmin=minval, vmax=maxval)
+            self.wid_image_display.canvas.draw()
+
     def mode_changed(self):
         """Modality selection changed by user input, initiate update gui."""
         if self.wid_paramset.lbl_edit.text() == '*':
@@ -456,9 +479,9 @@ class MainWindow(QMainWindow):
             self.btns_mode.button(curr_mod_idx).setChecked(True)
 
         if self.btn_read_vendor_file.isChecked():
-            self.stack_test_tabs.setCurrentIndex(len(QUICKTEST_OPTIONS))
-            self.tab_vendor.update_table()
             self.current_test = 'vendor'
+            self.stack_test_tabs.setCurrentIndex(len(QUICKTEST_OPTIONS))  # last stack
+            self.tab_vendor.update_table()
         else:
             self.stack_test_tabs.setCurrentIndex(curr_mod_idx)
 
@@ -479,6 +502,7 @@ class MainWindow(QMainWindow):
             if self.wid_quicktest.gb_quicktest.isChecked():
                 self.current_quicktest = cfc.QuickTestTemplate()
                 self.refresh_img_display()
+            self.wid_paramset.flag_edit(False)
         self.gui.current_auto_template = ''
         self.wid_center.reset_delta()
         self.reset_results()
@@ -503,27 +527,17 @@ class MainWindow(QMainWindow):
                 if self.active_img is not None and refresh_display:
                     self.update_roi()
                     self.refresh_results_display()
+                self.wid_image_display.tool_rectangle.setChecked(
+                    self.current_test == 'Num')
         self.stop_wait_cursor()
 
+    def get_marked_imgs_current_test(self):
+        """Link here due to shared functionality with task_based."""
+        return self.tree_file_list.get_marked_imgs_current_test()
+
     def update_roi(self, clear_results_test=False):
-        """Recalculate ROI."""
-        errmsg = None
-        if self.active_img is not None:
-            self.start_wait_cursor()
-            self.status_bar.showMessage('Updating ROI...')
-            self.current_roi, errmsg = get_rois(
-                self.active_img,
-                self.gui.active_img_no, self)
-            self.status_bar.clearMessage()
-            self.stop_wait_cursor()
-        else:
-            self.current_roi = None
-        self.wid_image_display.canvas.roi_draw()
-        self.display_errmsg(errmsg)
-        if clear_results_test:
-            if self.current_test in [*self.results]:
-                self.results[self.current_test] = None
-                self.refresh_results_display()
+        """Recalculate ROIs."""
+        ui_main_methods.update_roi(self, clear_results_test=clear_results_test)
 
     def reset_results(self):
         """Clear results and update display."""
@@ -625,58 +639,10 @@ class MainWindow(QMainWindow):
         self.refresh_results_display()
 
     def refresh_results_display(self, update_table=True):
-        """Update GUI for test results when results or selections change."""
-        if self.current_test not in self.results:
-            # clear all
-            self.wid_res_tbl.result_table.clear()
-            self.wid_res_tbl_sup.result_table.clear()
-            self.wid_res_plot.plotcanvas.plot()
-            self.wid_res_image.canvas.result_image_draw()
-        else:
-            # update only active
-            wid = self.tab_results.currentWidget()
-            if isinstance(wid, ui_main_result_tabs.ResultTableWidget) and update_table:
-                if self.current_test == 'vendor':
-                    self.wid_res_tbl.result_table.fill_table(vendor=True)
-                else:
-                    try:
-                        self.wid_res_tbl.result_table.fill_table(
-                            col_labels=self.results[self.current_test]['headers'],
-                            values_rows=self.results[self.current_test]['values'],
-                            linked_image_list=self.results[
-                                self.current_test]['pr_image'],
-                            table_info=self.results[self.current_test]['values_info']
-                            )
-                    except (KeyError, TypeError, IndexError):
-                        self.wid_res_tbl.result_table.clear()
-                    try:
-                        self.wid_res_tbl_sup.result_table.fill_table(
-                            col_labels=self.results[self.current_test]['headers_sup'],
-                            values_rows=self.results[self.current_test]['values_sup'],
-                            linked_image_list=self.results[
-                                self.current_test]['pr_image'],
-                            table_info=self.results[
-                                self.current_test]['values_sup_info']
-                            )
-                    except (KeyError, TypeError, IndexError):
-                        self.wid_res_tbl_sup.result_table.clear()
-            elif isinstance(wid, ui_main_result_tabs.ResultPlotWidget):
-                self.wid_res_plot.plotcanvas.plot()
-            elif isinstance(wid, ui_main_result_tabs.ResultImageWidget):
-                self.wid_res_image.canvas.result_image_draw()
+        ui_main_methods.refresh_results_display(self, update_table=update_table)
 
     def refresh_img_display(self):
-        """Refresh image related gui."""
-        if self.active_img is not None:
-            self.current_roi = None
-            self.wid_image_display.canvas.img_draw()
-            self.wid_window_level.canvas.plot(self.active_img)
-            self.wid_dcm_header.refresh_img_info(
-                self.imgs[self.gui.active_img_no].info_list_general,
-                self.imgs[self.gui.active_img_no].info_list_modality)
-            self.update_roi()
-        else:
-            self.wid_image_display.canvas.img_is_missing()
+        ui_main_methods.refresh_img_display(self)
 
     def refresh_selected_table_row(self):
         """Set selected results table row to the same as image selected file."""
@@ -685,7 +651,7 @@ class MainWindow(QMainWindow):
                 if self.results[self.current_test]['pr_image']:
                     wid = self.tab_results.currentWidget()
                     if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
-                        marked_imgs = self.tree_file_list.get_marked_imgs_current_test()
+                        marked_imgs = self.get_marked_imgs_current_test()
                         if self.gui.active_img_no in marked_imgs:
                             idx = marked_imgs.index(self.gui.active_img_no)
                             self.wid_res_tbl.result_table.blockSignals(True)
@@ -759,6 +725,7 @@ class MainWindow(QMainWindow):
             [0, self.gui.panel_height])
         self.split_rgt_mid_btm.setSizes(
             [0, self.gui.panel_height])
+        self.wid_res_image.hide_window_level()
 
     def reset_maximize_results(self):
         """Set QSplitter to maximized results."""
@@ -768,6 +735,7 @@ class MainWindow(QMainWindow):
             [round(self.gui.panel_height*0.2), round(self.gui.panel_height*0.8)])
         self.split_rgt_mid_btm.setSizes(
             [round(self.gui.panel_height*0.4), round(self.gui.panel_height*0.4)])
+        self.wid_res_image.reset_split_sizes()
 
     def resize_main(self, new_resolution=False):
         """Reset geometry of MainWindow."""
@@ -821,9 +789,6 @@ class MainWindow(QMainWindow):
                 configuration folder for these settings.\n
                 Start the wizard again when the configuration folder is set.
                 ''')
-            dlg = settings.SettingsDialog(
-                self, initial_view='Config folder')
-            dlg.exec()
         else:
             self.wizard = automation_wizard.AutomationWizard(self)
             self.wizard.open()
@@ -858,6 +823,16 @@ class MainWindow(QMainWindow):
         dlg = rename_dicom.RenameDicomDialog(self)
         dlg.exec()
 
+    def run_task_based_auto(self):
+        """Start Task Based image quality analysis dialog."""
+        dlg = task_based_image_quality.TaskBasedImageQualityDialog(self)
+        dlg.exec()
+
+    def run_sim_artifact(self):
+        """Open dialog to simulate artifacts."""
+        dlg = AddArtifactsDialog(self)
+        dlg.exec()
+
     def run_settings(self, initial_view='', initial_template_label='',
                      paramset_output=False):
         """Display settings dialog."""
@@ -877,10 +852,11 @@ class MainWindow(QMainWindow):
                 proceed = False
         if proceed:
             if initial_view == '':
-                dlg = settings.SettingsDialog(self)
+                dlg = SettingsDialog(self)
             else:
-                dlg = settings.SettingsDialog(
+                dlg = SettingsDialog(
                     self, initial_view=initial_view,
+                    initial_modality=self.current_modality,
                     paramset_output=paramset_output,
                     initial_template_label=initial_template_label)
             dlg.exec()
@@ -912,12 +888,11 @@ class MainWindow(QMainWindow):
             self.wid_paramset.modality_dict = {
                 f'{self.current_modality}': self.paramsets}
             self.wid_paramset.fill_template_list(set_label=prev_label)
-
         except AttributeError:
             pass
 
         if after_edit_settings:
-            self.tab_nm.sni_correct.update_reference_images()
+            self.tab_nm.wid_ref_image.update_reference_images()
             self.update_paramset()  # update Num digit templates list
         else:
             print('imageQC is ready')
@@ -948,7 +923,7 @@ class MainWindow(QMainWindow):
             pass  # just to wait for user to close message
 
     def display_errmsg(self, errmsg):
-        """Display error ees in statusbar or as popup if long."""
+        """Display error in statusbar or as popup if long."""
         if errmsg is not None:
             if isinstance(errmsg, str):
                 self.status_bar.showMessage(errmsg, 2000, warning=True)
@@ -985,12 +960,14 @@ class MainWindow(QMainWindow):
 
     def stop_wait_cursor(self):
         """Return to normal mouse cursor after wait cursor."""
-        QApplication.restoreOverrideCursor()
+        while QApplication.overrideCursor() is not None:
+            QApplication.restoreOverrideCursor()
+        qApp.processEvents()
 
     def finish_cleanup(self):
         """Cleanup/save before exit."""
         proceed_to_close = True
-        if self.wid_paramset.lbl_edit.text() == '*':
+        if self.wid_paramset.lbl_edit.text() == '*' and self.developer_mode == False:
             proceed_to_close = messageboxes.proceed_question(
                 self,
                 f'Unsaved changes to {self.wid_paramset.fname}. Exit without saving?')
@@ -1151,12 +1128,18 @@ class MainWindow(QMainWindow):
             QIcon(f'{os.environ[ENV_ICON_PATH]}globe.png'),
             'Wiki ...', self)
         act_wiki.triggered.connect(self.wiki)
+        act_task_based_auto = QAction('CT task based image quality analysis...', self)
+        act_task_based_auto.triggered.connect(self.run_task_based_auto)
+        act_sim_artifact = QAction(
+            'Add/manage simulated artifact to image(s)...', self)
+        act_sim_artifact.triggered.connect(self.run_sim_artifact)
 
         # fill menus
         menu_file = QMenu('&File', self)
         menu_file.addActions([
             act_open, act_open_adv, act_read_header, act_open_auto, act_wizard_auto,
-            act_rename_dcm, act_close, act_close_all, act_quit])
+            act_rename_dcm, #act_task_based_auto,
+            act_sim_artifact, act_close, act_close_all, act_quit])
         menu_bar.addMenu(menu_file)
         menu_settings = QMenu('&Settings', self)
         menu_settings.addAction(act_settings)
@@ -1207,10 +1190,15 @@ class MainWindow(QMainWindow):
         self.btns_mode.button(idx).setChecked(True)
         self.gb_modality.setLayout(hlo)
 
-    def create_test_tabs(self):
-        """Initiate GUI for the stacked test tabs."""
+    def create_test_tab_CT(self):
+        """Initiate GUI for the stacked test tab CT."""
         self.stack_test_tabs = QStackedWidget()
         self.tab_ct = ui_main_test_tabs.ParamsTabCT(self)
+        self.stack_test_tabs.addWidget(self.tab_ct)
+
+    def create_test_tabs_rest(self):
+        """Initiate GUI for the stacked test tabs - not CT."""
+        self.start_wait_cursor()
         self.tab_xray = ui_main_test_tabs.ParamsTabXray(self)
         self.tab_mammo = ui_main_test_tabs.ParamsTabMammo(self)
         self.tab_nm = ui_main_test_tabs.ParamsTabNM(self)
@@ -1218,8 +1206,6 @@ class MainWindow(QMainWindow):
         self.tab_pet = ui_main_test_tabs.ParamsTabPET(self)
         self.tab_mr = ui_main_test_tabs.ParamsTabMR(self)
         self.tab_vendor = ParamsTabVendor(self)
-
-        self.stack_test_tabs.addWidget(self.tab_ct)
         self.stack_test_tabs.addWidget(self.tab_xray)
         self.stack_test_tabs.addWidget(self.tab_mammo)
         self.stack_test_tabs.addWidget(self.tab_nm)
@@ -1227,6 +1213,7 @@ class MainWindow(QMainWindow):
         self.stack_test_tabs.addWidget(self.tab_pet)
         self.stack_test_tabs.addWidget(self.tab_mr)
         self.stack_test_tabs.addWidget(self.tab_vendor)
+        self.stop_wait_cursor()
 
     def create_result_tabs(self):
         """Initiate GUI for the stacked result tabs."""

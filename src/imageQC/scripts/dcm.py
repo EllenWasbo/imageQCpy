@@ -1340,7 +1340,7 @@ def get_projection(img_infos, included_ids, tag_infos,
             if not patient_position:
                 try:
                     patient_position = tags_[0][0]
-                except IndexError:
+                except (IndexError, KeyError):
                     pass
             profile = np_method(image, axis=axis)
             if projection is None:

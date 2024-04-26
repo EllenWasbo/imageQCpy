@@ -2063,37 +2063,40 @@ class ResultPlotCanvas(PlotCanvas):
             self.ytitle = 'Pixel value'
 
             dot_colors = COLORS if len(idxs) > 0 else ['mediumseagreen']
-            for m_idx in idxs:
-                dd = details_dicts[m_idx]
-                for slino, yvals in enumerate(dd['sorted_pixels']):
-                    lbl = f'Sorted pixels {materials[m_idx]}' if slino == 0 \
-                        else '_nolegend_'
-                    self.curves.append({
-                        'label': lbl,
-                        'xvals': dd['sorted_pixels_x'],
-                        'yvals': yvals,
-                        'style': '.',
-                        'color': dot_colors[m_idx % len(dot_colors)],
-                        'markersize': 2.,
-                        'alpha': 0.5
-                         })
-
-                if 'interpolated_x' in dd and len(idxs) == 1:
-                    self.curves.append({
-                            'label': f'Interpolated {materials[m_idx]}',
-                            'xvals': dd['interpolated_x'],
-                            'yvals': dd['interpolated'],
-                            'style': '--',
-                            'color': COLORS[m_idx]
+            try:
+                for m_idx in idxs:
+                    dd = details_dicts[m_idx]
+                    for slino, yvals in enumerate(dd['sorted_pixels']):
+                        lbl = f'Sorted pixels {materials[m_idx]}' if slino == 0 \
+                            else '_nolegend_'
+                        self.curves.append({
+                            'label': lbl,
+                            'xvals': dd['sorted_pixels_x'],
+                            'yvals': yvals,
+                            'style': '.',
+                            'color': dot_colors[m_idx % len(dot_colors)],
+                            'markersize': 2.,
+                            'alpha': 0.5
                              })
 
-                if 'presmoothed' in dd and len(idxs) == 1:
-                    self.curves.append({
-                        'label': 'Presmoothed',
-                        'xvals': dd['interpolated_x'],
-                        'yvals': dd['presmoothed'],
-                        'style': '-b'
-                         })
+                    if 'interpolated_x' in dd and len(idxs) == 1:
+                        self.curves.append({
+                                'label': f'Interpolated {materials[m_idx]}',
+                                'xvals': dd['interpolated_x'],
+                                'yvals': dd['interpolated'],
+                                'style': '--',
+                                'color': COLORS[m_idx]
+                                 })
+
+                    if 'presmoothed' in dd and len(idxs) == 1:
+                        self.curves.append({
+                            'label': 'Presmoothed',
+                            'xvals': dd['interpolated_x'],
+                            'yvals': dd['presmoothed'],
+                            'style': '-b'
+                             })
+            except IndexError:
+                pass
 
         def prepare_plot_centered_profiles(idxs):
             m_idx = idxs[0]  # force only first

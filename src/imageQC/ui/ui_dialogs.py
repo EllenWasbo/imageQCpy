@@ -495,7 +495,7 @@ class AddArtifactsDialog(ImageQCDialog):
                     if ano == 0:
                         dataf = pd.DataFrame(asdict(artifact), index=[ano])
                     else:
-                        dataf = dataf.append(asdict(artifact), ignore_index=True)
+                        dataf.loc[len(dataf.index)] = asdict(artifact)
                 if dataf is not None:
                     text.append(dataf.to_string(index=False))
                 else:

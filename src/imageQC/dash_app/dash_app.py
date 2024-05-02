@@ -198,7 +198,8 @@ def get_data():
                             modality_dict[mod].append(temp_this)
                             n_processed_files += 1
 
-    print(f'Processed {n_processed_files} result files.                               ')
+    print(f'Processed {n_processed_files} result files.'
+          '                                                                          ')
 
     # remove empty modality from list dict
     len_temp_lists = [len(template_list)

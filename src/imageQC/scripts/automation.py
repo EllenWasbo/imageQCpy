@@ -713,6 +713,11 @@ def move_rename_file(filepath_orig, filepath_new):
     status = False
     errmsg = ''
     if os.path.exists(filepath_new):
+        parent_path = filepath_orig.parent
+        try:
+            filepath_orig.rename(parent_path / Path(filepath_new).name)
+        except:  # (FileExistsError and other?)
+            pass
         errmsg = f'Failed to move\n{filepath_orig}\nto {filepath_new}\nExists already.'
     else:
         try:

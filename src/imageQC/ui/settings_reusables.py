@@ -743,6 +743,7 @@ class ModTempSelector(QWidget):
             else:
                 idx = self.parent.current_labels.index(label)
             self.parent.get_data()  # if get_current_template exist
+
             if self.parent.grouped:
                 self.parent.templates[self.parent.current_modality][idx] = \
                     copy.deepcopy(self.parent.current_template)

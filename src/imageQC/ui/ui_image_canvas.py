@@ -312,7 +312,6 @@ class ImageCanvas(GenericImageCanvas):
 
     def remove_annotations(self):
         """Remove current annotations."""
-        print(f'Remove current len {len(self.contours)}')
         for contour in self.contours:
             try:
                 for coll in contour.collections:
@@ -321,7 +320,6 @@ class ImageCanvas(GenericImageCanvas):
                     except ValueError:
                         pass
             except (AttributeError, NotImplementedError):
-                print('Att or NotImp error')
                 pass
         self.contours = []
 

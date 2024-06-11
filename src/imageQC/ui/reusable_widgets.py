@@ -802,8 +802,14 @@ class ColorBar(FigureCanvasQTAgg):
         else:
             self.cmap = cmap
         if cmap:
-            _ = matplotlib.colorbar.ColorbarBase(
-                ax, cmap=matplotlib.pyplot.cm.get_cmap(cmap), orientation='horizontal')
+            try:
+                _ = matplotlib.colorbar.ColorbarBase(
+                    ax, cmap=matplotlib.pyplot.cm.get_cmap(cmap),
+                    orientation='horizontal')
+            except AttributeError:  # from matplotlib v 3.9.0
+                _ = matplotlib.colorbar.ColorbarBase(
+                    ax, cmap=matplotlib.pyplot.get_cmap(cmap),
+                    orientation='horizontal')
             if all([self.slider_min, self.slider_max]):
                 range_max = self.slider_max.maximum()
                 range_min = self.slider_min.minimum()

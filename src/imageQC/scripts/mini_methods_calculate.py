@@ -431,7 +431,7 @@ def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None, step_size
         profile values
     """
     # sort pixel values from center
-    dist_map = get_distance_map_point(array_2d.shape)
+    dist_map = get_distance_map_point(array_2d.shape, center_dx=-0.5, center_dy=-0.5)
     dists_flat = dist_map.flatten()
     sort_idxs = np.argsort(dists_flat)
     dists = pix * dists_flat[sort_idxs]

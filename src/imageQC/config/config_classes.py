@@ -512,6 +512,7 @@ class ParamSetNM(ParamSetCommon):
     sni_roi_size: int = 128  # number of pixels
     sni_roi_outside: int = 0  # alternatives ignore/move
     sni_sampling_frequency: float = 0.01
+    sni_min_frequency: float = 0.0
     sni_correct: bool = False
     sni_correct_pos_x: bool = False
     sni_correct_pos_y: bool = False

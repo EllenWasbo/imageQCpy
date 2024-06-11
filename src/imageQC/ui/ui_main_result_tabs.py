@@ -694,15 +694,18 @@ class ResultPlotCanvas(PlotCanvas):
                 xvals = img_nos
                 self.xtitle = 'Image number'
             self.ytitle = '% difference'
-            tolmax = {'label': 'tolerance max',
-                      'xvals': [min(xvals), max(xvals)],
-                      'yvals': [5, 5],
-                      'style': '--' + self.color_k}
-            tolmin = tolmax.copy()
-            tolmin['label'] = 'tolerance min'
-            tolmin['yvals'] = [-5, -5]
-            self.curves.append(tolmin)
-            self.curves.append(tolmax)
+            try:
+                tolmax = {'label': 'tolerance max',
+                          'xvals': [min(xvals), max(xvals)],
+                          'yvals': [5, 5],
+                          'style': '--' + self.color_k}
+                tolmin = tolmax.copy()
+                tolmin['label'] = 'tolerance min'
+                tolmin['yvals'] = [-5, -5]
+                self.curves.append(tolmin)
+                self.curves.append(tolmax)
+            except ValueError:
+                pass
             self.default_range_y = self.test_values_outside_yrange([-7, 7])
 
     def HUw(self):

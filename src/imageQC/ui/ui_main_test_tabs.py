@@ -2167,6 +2167,13 @@ class ParamsTabNM(ParamsTabCommon):
                         attribute='sni_sampling_frequency', update_roi=False,
                         clear_results=True))
 
+        self.sni_min_frequency = QDoubleSpinBox(
+            decimals=3, minimum=0.0, singleStep=0.005)
+        self.sni_min_frequency.valueChanged.connect(
+                    lambda: self.param_changed_from_gui(
+                        attribute='sni_min_frequency', update_roi=False,
+                        clear_results=True))
+
         self.sni_correct_pos_x = QCheckBox('x')
         self.sni_correct_pos_y = QCheckBox('y')
         self.sni_correct_radius_chk = QCheckBox('Lock source distance to')
@@ -2227,12 +2234,18 @@ class ParamsTabNM(ParamsTabCommon):
         hlo_outside.addWidget(self.sni_roi_outside_label)
         hlo_outside.addWidget(self.sni_roi_outside)
 
+        vlo_eye = QVBoxLayout()
         hlo_eye = QHBoxLayout()
         hlo_eye.addWidget(QLabel('V(r) = r<sup>1.3</sup> exp[-Cr<sup>2</sup> ]'))
         hlo_eye.addStretch()
         hlo_eye.addWidget(QLabel('C'))
         hlo_eye.addWidget(self.sni_eye_filter_c)
-        gb_eye_filter.setLayout(hlo_eye)
+        flo_eye = QFormLayout()
+        flo_eye.addRow(QLabel('Ignore frequencies lower than (mm-1)'),
+                       self.sni_min_frequency)
+        vlo_eye.addLayout(hlo_eye)
+        vlo_eye.addLayout(flo_eye)
+        gb_eye_filter.setLayout(vlo_eye)
         vlo_left.addWidget(gb_eye_filter)
         vlo_left.addWidget(self.sni_sum_first)
 

@@ -105,7 +105,7 @@ def read_dcm(file, stop_before_pixels=True):
     except pydicom.errors.InvalidDicomError:
         errmsg = f'InvalidDicomError {file}'
         is_image = False
-    except (FileNotFoundError, PermissionError) as err:
+    except (FileNotFoundError, PermissionError, OSError) as err:
         errmsg = f'Error reading {file} {str(err)}'
         is_image = False
     except AttributeError:
@@ -1060,7 +1060,7 @@ def find_all_valid_dcm_files(
                     except (
                             FileNotFoundError,
                             AttributeError,
-                            PermissionError) as error:
+                            PermissionError, OSError) as error:
                         print(f'{file}\n{str(error)}')
 
                     if progress_modal is not None:

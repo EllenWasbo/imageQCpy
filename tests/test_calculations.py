@@ -106,7 +106,7 @@ def test_CT_Rin():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(10*np.array(input_main.results['Rin']['values'][0]))
-    assert np.array_equal(values, np.array([-3., 4.]))
+    assert np.array_equal(values, np.array([-3., 3.]))
 
 
 def test_CT_Dim():
@@ -307,7 +307,7 @@ def test_CT_NPS():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(10*np.array(input_main.results['NPS']['values'][0]))
-    assert np.array_equal(values, np.array([3., 245., 463., 131.,  68.]))
+    assert np.array_equal(values, np.array([3., 252., 463., 131., 68.]))
 
 
 def test_Xray_NPS():

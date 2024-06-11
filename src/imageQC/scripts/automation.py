@@ -1220,7 +1220,7 @@ def append_auto_res(auto_template, headers, values, to_file=False):
             for row in print_list:
                 file.write('\t'.join(row)+'\n')
         status = True
-        print_list = [[]]
+        #print_list = [[]]
 
     return (status, print_list)
 
@@ -1257,7 +1257,7 @@ def append_auto_res_vendor(output_path, result_dict, to_file=False, decimal_mark
                     row, lock_format=True, decimal_mark=decimal_mark)
                 file.write('\t'.join(row_strings) + '\n')
         status = True
-        print_list = []
+        #print_list = []
 
     return (status, print_list)
 

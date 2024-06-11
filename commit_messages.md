@@ -1,3 +1,19 @@
+# v3.0.9
+_Jun 11, 2024_
+
+Dependancies:
+- Changes to dependancies as recommended due to security updates related to dash. If using the dashboard options, these upgrades are recommended.
+To upgrade werkzeug==3.0.3, also an upgrade of flask==3.0.3 was needed. Updated in requirements.txt/setup.cfg.
+
+Changes/fixes:
+- Test NM SNI: option to ignore low frequency by modifying the human visual response filter 
+- Method get_radial_profile corrected by half a pixel to reflect the center position of the pixels, not the corner of the pixels. This method is used when calculating the radial profiles of NPS, test Radial profile and SNI. The change might slightly affect the results of these tests.
+- Added tag 0008,0033 (Content Time) as alternative to AcquisitionTime if tag 0008,0032 is missing.
+
+Bugfixes:
+- handeled error when using matplotlib v3.9.0: AttributeError: module 'matplotlib.cm' has no attribute 'get_cmap'
+- sampling frequency of NPS for test SNI now responsive
+
 # v3.0.8
 _Apr 23, 2024_
 

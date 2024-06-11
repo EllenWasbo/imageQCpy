@@ -85,8 +85,8 @@ class SettingsDialog(ImageQCDialog):
             self.width1 = round(self.main.gui.panel_width*0.3)
             self.width2 = round(self.main.gui.panel_width*1.7)
         else:
-            self.width1 = width1
-            self.width2 = width2
+            self.width1 = round(width1)
+            self.width2 = round(width2)
             self.setWindowTitle('Import review - configuration settings')
 
         hlo = QHBoxLayout()

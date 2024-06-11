@@ -299,12 +299,13 @@ class ImageCanvas(GenericImageCanvas):
                     annot_text = self.main.imgs[
                         self.main.gui.active_img_no].annotation_list
                 except IndexError:
-                    pass
-            at = matplotlib.offsetbox.AnchoredText(
-                '\n'.join(annot_text),
-                prop=dict(size=self.main.gui.annotations_font_size, color='red'),
-                frameon=False, loc='upper left')
-            self.ax.add_artist(at)
+                    annot_text = ''
+            if annot_text:
+                at = matplotlib.offsetbox.AnchoredText(
+                    '\n'.join(annot_text),
+                    prop=dict(size=self.main.gui.annotations_font_size, color='red'),
+                    frameon=False, loc='upper left')
+                self.ax.add_artist(at)
             self.roi_draw()
         else:
             self.draw()

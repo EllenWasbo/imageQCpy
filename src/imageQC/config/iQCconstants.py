@@ -18,7 +18,7 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.8'
+VERSION = '3.0.9'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -229,7 +229,7 @@ HEADERS = {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y']
             },
-        'Rin': {'alt0': ['Min diff from trend (HU)', 'Max diff from trend (HU)']},
+        'Rin': {'alt0': ['Min diff from trend', 'Max diff from trend']},
         },
     'PET': {
         'ROI': {'alt0': roi_headers},

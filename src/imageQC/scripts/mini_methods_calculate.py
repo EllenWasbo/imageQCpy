@@ -346,11 +346,18 @@ def get_MTF_discrete(LSF, dx=1, padding_factor=1):
     return {'MTF_freq': freq, 'MTF': MTF}
 
 
-def get_2d_NPS(sub_image, pix):
+def get_2d_NPS(sub_image, pix, zero_padding=False):
     """Calculate fourier transform of 2d array."""
-    fourier = np.fft.fft2(sub_image)
+    if zero_padding:
+        fourier = np.fft.fft2(
+            np.pad(sub_image, (sub_image.shape, sub_image.shape), 'constant'))
+    else:
+        fourier = np.fft.fft2(sub_image)
     fourier = np.fft.fftshift(fourier)
-    factor = pix**2 / (sub_image.shape[0] * sub_image.shape[1])
+    if zero_padding:
+        factor = pix**2 / (3 * sub_image.shape[0] * 3 * sub_image.shape[1])
+    else:
+        factor = pix**2 / (sub_image.shape[0] * sub_image.shape[1])
     return factor * np.abs(fourier) ** 2
 
 
@@ -405,7 +412,8 @@ def get_NPSuv_profile(NPS_array, nlines=7, exclude_axis=True, pix=1., step_size=
     return (freq, u_profile, v_profile)
 
 
-def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None, step_size=1.):
+def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None,
+                       step_size=1., ignore_negative=False):
     """Calculate radial profile of image.
 
     Parameters
@@ -422,6 +430,8 @@ def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None, step_size
         dist scaled to same unit as pix
     step_size: float
         step size (sampling frequency) of profile
+    ignore_negative : bool
+        True = set negative values to zero. Default is False.
 
     Returns
     -------
@@ -453,6 +463,9 @@ def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None, step_size
 
     radial_profile_x, radial_profile = resample_by_binning(
         values, dists_cut, step_size, first_step=start_dist)
+
+    if ignore_negative:
+        radial_profile[radial_profile < 0] = 0
 
     return (radial_profile_x, radial_profile)
 
@@ -547,7 +560,7 @@ def center_xy_of_disc(matrix2d, threshold=None, roi=None, mode='mean', sigma=5.)
 
 
 def get_width_center_at_threshold(
-        profile, threshold, get_widest=False, force_above=False):
+        profile, threshold, get_widest=True, force_above=False):
     """Get width and center of largest group in profile above threshold.
 
     Parameters
@@ -576,55 +589,57 @@ def get_width_center_at_threshold(
         profile = np.array(profile)
 
     above = np.where(profile > threshold)
-    below = np.where(profile < threshold)
+    if np.ma.is_masked(profile):
+        below = np.ma.where(profile < threshold)
+    else:
+        below = np.where(profile < threshold)
 
     if len(above[0]) > 1 and len(below[0]) > 1:
-        if above[0][0] >= 1 or force_above:
+        if above[0][0] > below[0][0] or force_above:
             center_indexes = above[0]
         else:
             center_indexes = below[0]
 
-        if center_indexes[0] >= 1 and len(center_indexes) > 1:
-            if get_widest:
-                first = center_indexes[0]
-                last = center_indexes[-1]
-            else:
-                # find largest group, first/last index
-                grouped_indexes = [0]
-                for i in range(1, len(center_indexes)):
-                    if center_indexes[i] == center_indexes[i-1] + 1:
-                        grouped_indexes.append(grouped_indexes[-1])
-                    else:
-                        grouped_indexes.append(grouped_indexes[-1]+1)
-                group_start = []
-                group_size = []
-                for i in range(grouped_indexes[-1]+1):
-                    group_start.append(center_indexes[
-                        grouped_indexes.index(i)])
-                    group_size.append(grouped_indexes.count(i))
-                largest_group = group_size.index(max(group_size))
-                first = group_start[largest_group]
-                last = first + group_size[largest_group] - 1
+        if get_widest is False:
+            first = center_indexes[0]
+            last = center_indexes[-1]
+        else:
+            # find largest group, first/last index
+            grouped_indexes = [0]
+            for i in range(1, len(center_indexes)):
+                if center_indexes[i] == center_indexes[i-1] + 1:
+                    grouped_indexes.append(grouped_indexes[-1])
+                else:
+                    grouped_indexes.append(grouped_indexes[-1]+1)
+            group_start = []
+            group_size = []
+            for i in range(grouped_indexes[-1]+1):
+                group_start.append(center_indexes[
+                    grouped_indexes.index(i)])
+                group_size.append(grouped_indexes.count(i))
+            largest_group = group_size.index(max(group_size))
+            first = group_start[largest_group]
+            last = first + group_size[largest_group] - 1
 
-            if first == 0 or last == len(profile) - 1:
-                width = None
-                center = None
+        if first == 0 or last == len(profile) - 1:
+            width = None
+            center = None
+        else:
+            # interpolate to find more exact width and center
+            dy = profile[first] - threshold
+            if profile[first] != profile[first-1]:
+                dx = dy / (profile[first] - profile[first-1])
             else:
-                # interpolate to find more exact width and center
-                dy = profile[first] - threshold
-                if profile[first] != profile[first-1]:
-                    dx = dy / (profile[first] - profile[first-1])
-                else:
-                    dx = 0
-                x1 = first - dx
-                dy = profile[last] - threshold
-                if profile[last] != profile[last+1]:
-                    dx = dy / (profile[last] - profile[last+1])
-                else:
-                    dx = 0
-                x2 = last + dx
-                center = 0.5 * (x1+x2)
-                width = x2 - x1
+                dx = 0
+            x1 = first - dx
+            dy = profile[last] - threshold
+            if profile[last] != profile[last+1]:
+                dx = dy / (profile[last] - profile[last+1])
+            else:
+                dx = 0
+            x2 = last + dx
+            center = 0.5 * (x1+x2)
+            width = x2 - x1
 
     return (width, center)
 
@@ -662,13 +677,13 @@ def optimize_center(image, mask_outer=0, max_from_part=4):
             np.mean(prof_x[prof_x.size//max_from_part:-prof_x.size//max_from_part])
             + min(prof_x)
             ),
-        force_above=True)
+        get_widest=True, force_above=True)
     width_y, center_y = get_width_center_at_threshold(
         prof_y, 0.5 * (
             np.mean(prof_y[prof_y.size//max_from_part:-prof_y.size//max_from_part])
             + min(prof_y)
             ),
-        force_above=True)
+        get_widest=True, force_above=True)
     if width_x is not None and width_y is not None:
         center_x += mask_outer
         center_y += mask_outer
@@ -1006,7 +1021,7 @@ def resample_by_binning(input_y, input_x, step, bin_size=None,
         if values_this.size > 0:
             new_y.append(np.nanmean(values_this))
         else:
-            new_y.append(np.NaN)
+            new_y.append(np.nan)
         n_values_this.append(values_this.size)
     new_y = np.array(new_y)
 

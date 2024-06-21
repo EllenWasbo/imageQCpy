@@ -9,15 +9,17 @@ import os
 import copy
 from dataclasses import asdict
 import numpy as np
-import pandas as pd
+from pathlib import Path
 
+import yaml
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
     QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox, QListWidget,
-    QTextEdit, QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox, QFileDialog
+    QLineEdit, QTextEdit, QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox,
+    QWidget, QToolBar, QAction, QTabWidget, QFileDialog
     )
 
 import matplotlib
@@ -31,7 +33,8 @@ from imageQC.config.iQCconstants import (
 from imageQC.config.config_func import init_user_prefs
 from imageQC.ui import messageboxes
 from imageQC.ui import reusable_widgets as uir
-from imageQC.scripts.artifact import Artifact, add_artifact
+from imageQC.scripts.artifact import (
+    Artifact, add_artifact, edit_artifact_label, validate_new_artifact_label)
 from imageQC.scripts.dcm import get_projection
 from imageQC.scripts.read_vendor_QC_reports import read_GE_Mammo_date
 import imageQC.resources
@@ -360,6 +363,7 @@ class AddArtifactsDialog(ImageQCDialog):
     def __init__(self, main):
         super().__init__()
         self.main = main
+        self.edited = False  # True if unsaved changes
 
         self.setWindowTitle('Add simulated artifact')
         self.setMinimumHeight(300)
@@ -367,8 +371,27 @@ class AddArtifactsDialog(ImageQCDialog):
 
         vlo = QVBoxLayout()
         self.setLayout(vlo)
+
+        tab = QTabWidget()
+        wid_artifacts = QWidget()
+        wid_applied_artifacts = QWidget()
+
+        tab.addTab(wid_artifacts, 'Artifacts')
+        tab.addTab(wid_applied_artifacts, 'Applied artifacts')
+        vlo.addWidget(tab)
+
+        # Artifacts
+        vlo_a = QVBoxLayout()
+        wid_artifacts.setLayout(vlo_a)
         fLO = QFormLayout()
-        vlo.addLayout(fLO)
+        vlo_a.addLayout(fLO)
+        self.label = QComboBox()
+        self.label.setMinimumWidth(400)
+        self.update_labels()
+        self.label.currentIndexChanged.connect(self.label_changed)
+        fLO.addRow(QLabel('Select artifact'), self.label)
+        self.new_label = QLineEdit('')
+        fLO.addRow(QLabel('Label new artifact'), self.new_label)
         self.form = QComboBox()
         self.form.addItems(['circular', 'ring', 'rectangle'])
         self.form.setCurrentIndex(0)
@@ -376,61 +399,213 @@ class AddArtifactsDialog(ImageQCDialog):
         fLO.addRow(QLabel('Artifact form'), self.form)
         self.x_offset = QDoubleSpinBox(decimals=1)
         self.x_offset.setRange(-1000, 1000)
+        self.x_offset.valueChanged.connect(self.value_edited)
         self.y_offset = QDoubleSpinBox(decimals=1)
         self.y_offset.setRange(-1000, 1000)
+        self.y_offset.valueChanged.connect(self.value_edited)
         fLO.addRow(QLabel('Center offset x (mm)'), self.x_offset)
         fLO.addRow(QLabel('Center offset y (mm)'), self.y_offset)
         self.size_1 = QDoubleSpinBox(decimals=1)
         self.size_1.setRange(0, 1000)
+        self.size_1.valueChanged.connect(self.value_edited)
         self.size_1_txt = QLabel('')
         self.size_2 = QDoubleSpinBox(decimals=1)
         self.size_2.setRange(0, 1000)
+        self.size_2.valueChanged.connect(self.value_edited)
         self.size_2_txt = QLabel('')
         fLO.addRow(self.size_1_txt, self.size_1)
         fLO.addRow(self.size_2_txt, self.size_2)
         self.rotation = QDoubleSpinBox(decimals=1)
         self.rotation.setRange(-359.9, 359.9)
+        self.rotation.valueChanged.connect(self.value_edited)
         fLO.addRow(QLabel('Rotation (degrees)'), self.rotation)
         self.sigma = QDoubleSpinBox(decimals=2)
         self.sigma.setRange(0, 1000)
+        self.sigma.valueChanged.connect(self.value_edited)
         fLO.addRow(QLabel('Gaussian blur, sigma (mm)'), self.sigma)
         self.method = QComboBox()
-        self.method.addItems(['adding', 'multiplying'])
+        self.method.addItems(['adding', 'multiplying', 'adding poisson noise'])
+        self.method.currentIndexChanged.connect(self.update_method)
         fLO.addRow(QLabel('Apply artifact value by'), self.method)
         self.value = QDoubleSpinBox(decimals=3)
         self.value.setRange(-1000000, 1000000)
+        self.value.valueChanged.connect(self.value_edited)
         fLO.addRow(QLabel('Artifact value'), self.value)
+        self.lbl_edited = QLabel('')
 
-        btn_view = QPushButton('View list of current artifacts...')
-        btn_view.clicked.connect(self.view_artifacts)
-        vlo.addWidget(btn_view)
-        btn_copy = QPushButton('Copy current artifact to clipboard...')
-        btn_copy.clicked.connect(self.copy_artifact)
-        vlo.addWidget(btn_copy)
-        btn_load = QPushButton('Load artifact(s) from clipboard...')
-        btn_load.clicked.connect(self.load_artifact)
-        vlo.addWidget(btn_load)
-        btn_delete_all = QPushButton('Delete all artifacts')
-        vlo.addWidget(btn_delete_all)
-        btn_delete_all.clicked.connect(self.delete_all)
+        # buttons related to list of artifacts
+        toolbar_0 = QToolBar()
+        hlo_tb0 = QHBoxLayout()
+        vlo_a.addLayout(hlo_tb0)
+        hlo_tb0.addStretch()
+        hlo_tb0.addWidget(toolbar_0)
 
-        # add, overwrite, close
+        self.act_edit = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}ok_apply.png'),
+            'Apply changes to selected artifact', self)
+        self.act_edit.triggered.connect(self.edit)
+        self.act_edit.setEnabled(False)
+        act_add = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+            'Add artifact to list of available artifacts', self)
+        act_add.triggered.connect(self.add)
+        act_delete = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+            'Delete artifact from list of available artifacts '
+            '(and from images if applied)', self)
+        act_delete.triggered.connect(self.delete)
+        toolbar_0.addActions([self.act_edit, act_add, act_delete])
+
+        # Applied artifacts
+        vlo_aa = QVBoxLayout()
+        wid_applied_artifacts.setLayout(vlo_aa)
+        self.cbox_imgs = QComboBox()
+        self.cbox_imgs.addItems(self.get_img_names())
+        self.cbox_imgs.currentIndexChanged.connect(self.selected_image_changed)
+        self.list_artifacts = QListWidget()
+        vlo_aa.addWidget(QLabel('Image'))
+        vlo_aa.addWidget(self.cbox_imgs)
+        vlo_aa.addWidget(QLabel('Applied artifacts'))
+        hlo_aa = QHBoxLayout()
+        vlo_aa.addLayout(hlo_aa)
+        hlo_aa.addWidget(self.list_artifacts)
+        toolbar = QToolBar()
+        toolbar.setOrientation(Qt.Vertical)
+        hlo_aa.addWidget(toolbar)
+
+        act_clear = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}clear.png'),
+            'Clear artifacts from selected image', self)
+        act_clear.triggered.connect(self.image_delete_artifacts)
+        act_add = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+            'Add add artifact(s) to selected image', self)
+        act_add.triggered.connect(self.image_add_artifacts)
+        act_delete = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+            'Delete artifact from selected image', self)
+        act_delete.triggered.connect(lambda: self.image_delete_artifacts(selected=True))
+        toolbar.addActions([act_clear, act_add, act_delete])
+
+        toolbar_all = QToolBar()
+        toolbar_all.addWidget(QLabel('For all images: '))
+        vlo_aa.addWidget(toolbar_all)
+        act_clear_all = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}clear.png'),
+            'Clear all artifacts from all images', self)
+        act_clear_all.triggered.connect(
+            lambda: self.image_delete_artifacts(delete_all=True))
+        act_add_all = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+            'Add artifact(s) to all images', self)
+        act_add_all.triggered.connect(lambda: self.image_add_artifacts(add_all=True))
+        act_view_all = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}file.png'),
+            'View all artifacts applied to the images', self)
+        act_view_all.triggered.connect(self.view_all_applied_artifacts)
+        toolbar_all.addActions([act_clear_all, act_add_all, act_view_all])
+
+        toolbar_btm = QToolBar()
+        act_save_all = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'),
+            'Save artifacts, and optionally, how these are applied.', self)
+        act_save_all.triggered.connect(self.save_all)
+
+        act_import = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
+            'Import artifacts from file.', self)
+        act_import.triggered.connect(self.import_all)
+        toolbar_btm.addActions([act_save_all, act_import])
+
         hlo_buttons_btm = QHBoxLayout()
         vlo.addLayout(hlo_buttons_btm)
-        btn_add = QPushButton('Add')
-        hlo_buttons_btm.addWidget(btn_add)
-        btn_add.clicked.connect(self.add)
-        btn_overwrite = QPushButton('Overwrite')
-        btn_overwrite.clicked.connect(self.overwrite)
-        hlo_buttons_btm.addWidget(btn_overwrite)
+        hlo_buttons_btm.addWidget(toolbar_btm)
         btn_close = QPushButton('Close')
         btn_close.clicked.connect(self.reject)
         hlo_buttons_btm.addWidget(btn_close)
 
         self.update_form()
 
+    def get_img_names(self):
+        """Get names similar to the file list in main window."""
+        names = []
+        for idx, img in enumerate(self.main.imgs):
+            if img.filepath == '':
+                file_text = ' -- dummy -- '
+            else:
+                if self.main.cbox_file_list_display.currentIndex() == 0:
+                    file_text = img.filepath
+                else:
+                    file_text = ' '.join(img.file_list_strings)
+            names.append(f'{idx:03} {file_text}')
+        return names
+
+    def update_labels(self, set_text=''):
+        """Update list of used labels."""
+        used_labels = [x.label for x in self.main.artifacts]
+        used_labels.insert(0, '')
+        self.label.clear()
+        self.label.addItems(used_labels)
+        self.label.setCurrentText(set_text)
+
+    def main_refresh(self, reset_results=True, update_image=True):
+        """Reset results and/or update_image of main window."""
+        if reset_results:
+            self.main.results = {}
+            self.main.refresh_results_display()
+        if update_image:
+            self.main.update_active_img(
+                self.main.tree_file_list.topLevelItem(self.main.gui.active_img_no))
+            self.main.refresh_img_display()
+
+    def selected_image_changed(self):
+        """Update when selected image change."""
+        self.main.set_active_img(self.cbox_imgs.currentIndex())
+        self.update_applied()
+
+    def update_applied(self):
+        """Update lists of applied artifacts."""
+        sel_img = self.cbox_imgs.currentIndex()
+        self.list_artifacts.clear()
+        if self.main.imgs[sel_img].artifacts:
+            if len(self.main.imgs[sel_img].artifacts) > 0:
+                self.list_artifacts.addItems(self.main.imgs[sel_img].artifacts)
+        self.main_refresh()
+
+    def label_changed(self):
+        """Update values when artifact label selected."""
+        label = self.label.currentText()
+        if label == '':
+            artifact = Artifact()
+            self.act_edit.setEnabled(False)
+        else:
+            artifact = self.get_artifact_by_label(label)
+            self.act_edit.setEnabled(True)
+        self.new_label.setText('')
+        self.form.setCurrentText(artifact.form)
+        self.x_offset.setValue(artifact.x_offset)
+        self.y_offset.setValue(artifact.y_offset)
+        self.size_1.setValue(artifact.size_1)
+        self.size_2.setValue(artifact.size_2)
+        self.rotation.setValue(artifact.rotation)
+        self.sigma.setValue(artifact.sigma)
+        self.method.setCurrentText(artifact.method)
+        self.value.setValue(artifact.value)
+        self.edited = False
+
+    def get_artifact_by_label(self, label):
+        """Return artifact by label."""
+        available_labels = [x.label for x in self.main.artifacts]
+        if label in available_labels:
+            idx = available_labels.index(label)
+            artifact = self.main.artifacts[idx]
+        else:
+            artifact = Artifact()
+        return artifact
+
     def update_form(self):
         """Update ROI size descriptions when form changes."""
+        self.value_edited()
         form = self.form.currentText()
         if form == 'circular':
             self.size_1_txt.setText('Radius (mm)')
@@ -448,16 +623,26 @@ class AddArtifactsDialog(ImageQCDialog):
             self.size_2.setEnabled(True)
             self.rotation.setEnabled(True)
 
+    def update_method(self):
+        """Update available parameters when method changes."""
+        self.value_edited()
+        method = self.method.currentText()
+        if 'poisson' in method:
+            self.value.setEnabled(False)
+        else:
+            self.value.setEnabled(True)
+
     def get_artifact_object(self):
         """Get settings as artifact object."""
         obj = None
         errmsg = ''
         if self.size_2.value() == 0 and self.form.currentText() == 'rectangle':
             errmsg = 'ROI height cannot be zero.'
-        elif self.value.value() == 0:
+        elif self.value.value() == 0 and self.method.currentText() == 'adding':
             errmsg = 'Value of the artifact cannot be zero.'
         else:
             obj = Artifact(
+                label=self.new_label.text(),
                 form=self.form.currentText(),
                 x_offset=self.x_offset.value(),
                 y_offset=self.y_offset.value(),
@@ -472,101 +657,315 @@ class AddArtifactsDialog(ImageQCDialog):
             QMessageBox.warning(self, 'Warning', errmsg)
         return obj
 
-    def add(self):
-        """Add artifact."""
+    def value_edited(self, edited=True):
+        """Notify edited values."""
+        if edited:
+            self.edited = True
+            if self.label.currentText() != '':
+                self.lbl_edited.setText('* values changed')
+        else:
+            self.edited = False
+            self.lbl_edited.setText('')
+
+    def edit(self):
+        """Edit selected artifact."""
         artifact = self.get_artifact_object()
         if artifact:
-            add_artifact(artifact, self.main, overwrite=False)
+            old_label = self.label.currentText()
+            artifact.label = self.new_label.text()
+            new_label = validate_new_artifact_label(self.main, artifact)
+            if new_label is not None:
+                artifact.label = new_label
+                idx = self.label.currentIndex() - 1
+                self.main.artifacts[idx] = artifact
+                if old_label != new_label:
+                    self.update_labels(set_text=new_label)
+                    edit_artifact_label(old_label, new_label, self.main)
+                    self.main_refresh()
 
-    def overwrite(self):
-        """Overwrite artifact."""
-        artifact = self.get_artifact_object()
+    def add(self, artifact=None):
+        """Add artifact to list of artifacts."""
+        if artifact is None or artifact is False:
+            artifact = self.get_artifact_object()
         if artifact:
-            add_artifact(artifact, self.main, overwrite=True)
+            new_label = validate_new_artifact_label(self.main, artifact)
+            if new_label is None:
+                QMessageBox.warning(
+                    self, 'Label already exist',
+                    f'The artifact label {artifact.label} already exist. '
+                    'Failed to add.')
+            else:
+                artifact.label = new_label
+                self.main.artifacts.append(artifact)
+                self.update_labels(set_text=new_label)
 
-    def view_artifacts(self):
+    def delete(self):
+        """Delete selected artifact from available artifacts."""
+        idx = self.label.currentIndex() - 1
+        label = self.label.currentText()
+        if idx > -1:
+            res = messageboxes.QuestionBox(
+                self, title='Delete selected artifact',
+                msg=f'Delete selected artifact {label}',
+                yes_text='Yes', no_text='Cancel')
+            if res.exec() == 1:
+                self.main.artifacts.pop(idx)
+                edit_artifact_label(label, '', self.main)
+                self.update_labels()
+                self.update_applied()
+        else:
+            QMessageBox.warning(
+                self, 'No artifact selected',
+                'No artifact selected to delete.')
+
+    def image_delete_artifacts(self, selected=False, delete_all=False):
+        """Delete all or selected applied artifacts from selected or all images."""
+        if delete_all:
+            for img in self.main.imgs:
+                img.artifacts = None
+        else:
+            img_idx = self.cbox_imgs.currentIndex()
+            if selected:  # only selected artifact
+                sel = self.list_artifacts.selectedIndexes()
+                if len(sel) > 0:
+                    idx = sel[0].row()
+                    self.main.imgs[img_idx].artifacts.pop(idx)
+                else:
+                    QMessageBox.warning(
+                        self, 'No artifact selected',
+                        'No artifact selected to delete.')
+            else:  # clear artifacts from image
+                self.main.imgs[img_idx].artifacts = None
+        self.update_applied()
+
+    def image_add_artifacts(self, add_all=False):
+        """Apply artifacts to current image or all images."""
+        if len(self.main.imgs) == 0:
+            QMessageBox.information(self.main, 'No images loaded',
+                                    'No images loaded. Can not apply artifacts.')
+        else:
+            labels = [x.label for x in self.main.artifacts]
+            if len(labels) == 0:
+                QMessageBox.information(
+                    self.main, 'No artifacts available',
+                    'No artifacts available. Create artifacts in tab "Artifacts".')
+            else:
+                dlg = SelectTextsDialog(labels, title='Select artifacts',
+                                        select_info='Select artifacts')
+                if dlg.exec():
+                    selected_labels = dlg.get_checked_texts()
+                    if len(selected_labels) > 0:
+                        if add_all:
+                            apply_idxs = list(range(len(self.main.imgs)))
+                        else:
+                            apply_idxs = [self.cbox_imgs.currentIndex()]
+                        for label in selected_labels:
+                            add_artifact(label, apply_idxs, self.main)
+                        self.update_applied()
+
+    def view_all_applied_artifacts(self):
         """View currently applied artifacts as text."""
         text = []
         for idx, img in enumerate(self.main.imgs):
             if img.artifacts is not None:
-                text.append(f'Image {idx}')
-                dataf = None
-                for ano, artifact in enumerate(img.artifacts):
-                    if ano == 0:
-                        dataf = pd.DataFrame(asdict(artifact), index=[ano])
-                    else:
-                        dataf.loc[len(dataf.index)] = asdict(artifact)
-                if dataf is not None:
-                    text.append(dataf.to_string(index=False))
-                else:
-                    text.append('No added artifacts.')
+                text.append(f'Image {idx}:')
+                for lbl in img.artifacts:
+                    text.append('\t' + lbl)
         if len(text) == 0:
             QMessageBox.information(self, 'Information', 'Found no added artifacts.')
         else:
-            dlg = TextDisplay(self, '\n'.join(text), title='Current artifacts',
+            dlg = TextDisplay(self, '\n'.join(text), title='Current applied artifacts',
                               min_width=1100, min_height=500)
             dlg.exec()
 
-    def copy_artifact(self):
-        """Copy current artifact to clipboard."""
-        artifact = self.get_artifact_object()
-        if artifact:
-            dataf = pd.DataFrame(asdict(artifact), index=[0])
-            dataf.to_clipboard(index=False)
-            QMessageBox.information(
-                self, 'Information', 'Current artifact in clipboard.')
+    def save_all(self):
+        """Save artifacts and how these are applied to file."""
+        path = ''
 
-    def load_artifact(self):
-        """Load artifact from clipboard."""
-        dataf_split = {}
-        try:
-            dataf = pd.read_clipboard()
-            dataf_split = dataf.to_dict('split')
-        except pd.errors.ParserError as err:
-            QMessageBox.warning(
-                self, 'Validation failed',
-                f'Trouble validating input table: {err}')
-        if 'columns' in dataf_split:
-            keys = dataf_split['columns']
-        else:
-            keys = []
-        if len(set(keys).difference([*asdict(Artifact())])) == 0:
-            if len(dataf_split['data']) > 1:
-                quest = ('Found more than one artifact in the loaded values.')
-                res = messageboxes.QuestionBox(
-                    self, title='Load multiple artifacts', msg=quest,
-                    yes_text='Add/replace all to current image', no_text='Cancel')
-                if res.exec():
-                    self.main.imgs[self.main.gui.active_img_no].artifacts = None
-                    dataf_idx = dataf.to_dict('index')
-                    for key, artifact_dict in dataf_idx.items():
-                        add_artifact(
-                            Artifact(**artifact_dict), self.main, overwrite=False)
-            else:
-                values = dataf_split['data'][0]
-                dataf_dict = {keys[i]: values[i] for i in range(len(keys))}
-                self.form.setCurrentText(dataf_dict['form'])
-                self.x_offset.setValue(dataf_dict['x_offset'])
-                self.y_offset.setValue(dataf_dict['y_offset'])
-                self.size_1.setValue(dataf_dict['size_1'])
-                self.size_2.setValue(dataf_dict['size_2'])
-                self.rotation.setValue(dataf_dict['rotation'])
-                self.sigma.setValue(dataf_dict['sigma'])
-                self.method.setCurrentText(dataf_dict['method'])
-                self.value.setValue(dataf_dict['value'])
-        else:
-            QMessageBox.warning(
-                self, 'Validation failed',
-                'Unexpected keys in clipboard {keys} compared to expected '
-                f'{[*asdict(Artifact())]}')
+        def try_save(input_data):
+            status = False
+            try_again = False
+            try:
+                with open(path, 'w') as file:
+                    if isinstance(input_data, list):
+                        yaml.safe_dump_all(
+                            input_data, file, default_flow_style=None, sort_keys=False)
+                    else:
+                        yaml.safe_dump(
+                            input_data, file, default_flow_style=None, sort_keys=False)
+                status = True
+            except yaml.YAMLError:
+                # try once more with eval(str(input_data))
+                try_again = True
+            except IOError as io_error:
+                QMessageBox.warning(self, "Failed saving",
+                                    f'Failed saving to {path} {io_error}')
+            if try_again:
+                try:
+                    input_data = eval(str(input_data))
+                    with open(path, 'w') as file:
+                        if isinstance(input_data, list):
+                            yaml.safe_dump_all(
+                                input_data, file, default_flow_style=None,
+                                sort_keys=False)
+                        else:
+                            yaml.safe_dump(
+                                input_data, file, default_flow_style=None,
+                                sort_keys=False)
+                    status = True
+                except yaml.YAMLError as yaml_error:
+                    QMessageBox.warning(self, 'Failed saving',
+                                        f'Failed saving to {path} {yaml_error}')
+            return status
 
-    def delete_all(self):
-        """Remove all artifacts from imgs."""
-        for img in self.main.imgs:
-            img.artifacts = None
-        self.main.update_active_img(
-            self.main.tree_file_list.topLevelItem(self.main.gui.active_img_no))
-        self.main.refresh_img_display()
+        if self.main.artifacts:
+            fname = QFileDialog.getSaveFileName(
+                self, 'Save artifacts',
+                filter="YAML file (*.yaml)")
+            proceed = False
+            if fname[0] != '':
+                path = fname[0]
+                listofdict = [asdict(temp) for temp in self.main.artifacts]
+
+                status = False
+                try:
+                    with open(path, 'w') as file:
+                        yaml.safe_dump_all(
+                            listofdict, file, default_flow_style=None, sort_keys=False)
+                    status = True
+                except yaml.YAMLError:
+                    # try once more with eval(str(input_data))
+                    print('yamlError')
+                except IOError as io_error:
+                    QMessageBox.warning(self, "Failed saving",
+                                        f'Failed saving to {path} {io_error}')
+
+                if status:
+                    quest = ('Also save which artifact(s) are applied to the images?')
+                    res = messageboxes.QuestionBox(
+                        self, title='Save applied artifacts?', msg=quest,
+                        yes_text='Yes', no_text='No')
+                    if res.exec() == 1:
+                        pp = Path(path)
+                        path_applied = pp.parent / f'{pp.stem}_applied.yaml'
+                        fname = QFileDialog.getSaveFileName(
+                            self, 'Save applied artifacts', str(path_applied),
+                            filter="YAML file (*.yaml)")
+                        if fname[0] != '':
+                            path = fname[0]
+                            proceed = True
+                if proceed:
+                    with open(path, 'w') as file:
+                        nestedlist = [info.artifacts for info in self.main.imgs]
+                        yaml.safe_dump_all(nestedlist, file)
+        else:
+            QMessageBox.warning(self, 'Nothing to save',
+                                'No artifact to save.')
+
+    def import_all(self):
+        """Import saved artifacts."""
+        fname = QFileDialog.getOpenFileName(
+            self, 'Open saved artifacts',
+            filter="YAML file (*.yaml)")
+        any_imported = False
+        if fname[0] != '':
+            try:
+                new_labels = []
+                with open(fname[0], 'r') as file:
+                    docs = yaml.safe_load_all(file)
+                    for doc in docs:
+                        artifact_this = Artifact(**doc)
+                        new_label = validate_new_artifact_label(
+                            self.main, artifact_this)
+                        if new_label is None:
+                            artifact_this.label = artifact_this.label + '_'
+                        self.main.artifacts.append(artifact_this)
+                        new_labels.append(artifact_this.label)
+                if len(new_labels) > 0:
+                    self.update_labels(set_text=new_labels[0])
+                    any_imported = True
+                else:
+                    QMessageBox.warning(self, 'Failed loading',
+                                        f'Failed loading any artifacts from {fname[0]}')
+            except OSError as error:
+                QMessageBox.warning(self, 'Failed loading',
+                                    f'Failed loading {fname[0]}'
+                                    f'{str(error)}')
+
+        if self.main.artifacts and len(self.main.imgs) > 0:
+            quest = 'Load saved pattern of artifact(s) applied to the images?'
+            res = messageboxes.QuestionBox(
+                self, title='Load applied artifacts?', msg=quest,
+                yes_text='Yes', no_text='No')
+            if res.exec() == 1:
+                # any artifacts already applied?
+                already_applied = []
+                for idx, img in enumerate(self.main.imgs):
+                    if img.artifacts is not None:
+                        already_applied.extend(img.artifacts)
+                overwrite = True
+                if len(already_applied) > 0:
+                    quest = 'Applied artifacts already exist. Overwrite or add.'
+                    res = messageboxes.QuestionBox(
+                        self, title='Overwrite or add applied artifacts?', msg=quest,
+                        yes_text='Overwrite', no_text='Add')
+                    if res.exec() == 0:
+                        overwrite = False
+
+                if fname[0] != '':
+                    pp = Path(fname[0])
+                    path_applied = pp.parent / f'{pp.stem}_applied.yaml'
+                fname = QFileDialog.getOpenFileName(
+                    self, 'Load saved pattern of artifacts',
+                    str(path_applied), filter="YAML file (*.yaml)")
+                if fname[0] != '':
+                    warnings = []
+                    listoflists = []
+                    try:
+                        with open(fname[0], 'r') as file:
+                            docs = yaml.safe_load_all(file)
+                            listoflists = [doc for doc in docs]
+                    except OSError as error:
+                        warnings.append(f'Failed reading file {fname[0]}. {str(error)}')
+                    if len(listoflists) > 0:
+                        for idx, img_info in enumerate(self.main.imgs):
+                            try:
+                                if overwrite:
+                                    img_info.artifacts = listoflists[idx]
+                                else:
+                                    img_info.artifacts.append(listoflists[idx])
+                            except IndexError:
+                                warnings.append(
+                                    'Saved pattern of artifacts with more images than '
+                                    'currently loaded images. Pattern for missing '
+                                    'images ignored.')
+                                break
+                    # any saved pattern loadable?
+                    artifacts_available = [x.label for x in self.main.artifacts]
+                    del_labels = []
+                    for img_info in self.main.imgs:
+                        artifacts_this = img_info.artifacts
+                        for artifact_label in artifacts_this:
+                            if artifact_label not in artifacts_available:
+                                del_labels.append(artifact_label)
+                    del_labels = list(set(del_labels))
+                    if del_labels:
+                        warnings.append(
+                            'Saved pattern of artifacts contain artifact labels not'
+                            'currently loaded defined. These are ignored:\n'
+                            f'{del_labels}')
+                    for del_label in del_labels:
+                        edit_artifact_label(del_label, '', self.main)
+
+                    if len(warnings) > 0:
+                        dlg = messageboxes.MessageBoxWithDetails(
+                            self, title='Warnings',
+                            msg='Found issues when loading patter of artifacts',
+                            info='See details',
+                            icon=QMessageBox.Warning,
+                            details=warnings)
+                        dlg.exec()
+                    self.update_applied()
 
 
 class WindowLevelEditDialog(ImageQCDialog):
@@ -777,12 +1176,11 @@ class QuickTestClipboardDialog(ImageQCDialog):
         vlo_vals.addWidget(self.chk_include_headers)
 
         self.chk_transpose_table = uir.BoolSelect(
-            self, text_true='column', text_false='row (like if automation)')
+            self, text_true='column',
+            text_false='row (like if automation)',
+            text_label='Output values as')
         self.chk_transpose_table.setChecked(transpose_table)
-        hlo_transpose = QHBoxLayout()
-        hlo_transpose.addWidget(QLabel('Output values as'))
-        hlo_transpose.addWidget(self.chk_transpose_table)
-        vlo_vals.addLayout(hlo_transpose)
+        vlo_vals.addWidget(self.chk_transpose_table)
 
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
@@ -1139,7 +1537,7 @@ class ProjectionPlotCanvas(FigureCanvasQTAgg):
     """Canvas for display of projection and plot."""
 
     def __init__(self, parent):
-        self.fig = matplotlib.figure.Figure(figsize=(8, 2))  #, constrained_layout=True)
+        self.fig = matplotlib.figure.Figure(figsize=(8, 2))
         self.parent = parent
         FigureCanvasQTAgg.__init__(self, self.fig)
 

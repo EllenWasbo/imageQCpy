@@ -35,6 +35,7 @@ from imageQC.scripts.artifact import apply_artifacts
 
 warnings.filterwarnings(action='ignore', message='All-NaN slice encountered')
 
+
 @dataclass
 class Results:
     """Class holding results."""
@@ -335,8 +336,14 @@ def quicktest_output(input_main):
                             if len(sub.columns) == 1:
                                 headers_this = headers[sub.columns[0]]
                             else:
-                                headers_this = headers[0]
-                        headers_this = [headers_this]
+                                if len(headers) > 0:
+                                    headers_this = headers[0]
+                                else:
+                                    headers_this = None
+                        if headers_this:
+                            headers_this = [headers_this]
+                        else:
+                            headers_this = []
 
                     all_headers_this = []
                     if suffixes != []:
@@ -609,7 +616,8 @@ def calculate_qc(input_main, wid_auto=None,
                             )
                         try:
                             if len(input_main.imgs[i].artifacts) > 0:
-                                image = apply_artifacts(image, input_main.imgs[i])
+                                image = apply_artifacts(image, input_main.imgs[i],
+                                                        input_main.artifacts)
                         except (TypeError, AttributeError, IndexError):
                             pass
                         if len(tags) > 0:
@@ -660,7 +668,8 @@ def calculate_qc(input_main, wid_auto=None,
                             )
                         try:
                             if len(input_main.imgs[i].artifacts) > 0:
-                                image = apply_artifacts(image, input_main.imgs[i])
+                                image = apply_artifacts(image, input_main.imgs[i],
+                                                        input_main.artifacts)
                         except (TypeError, AttributeError, IndexError):
                             pass
                         if len(tags) > 0:
@@ -766,7 +775,7 @@ def calculate_qc(input_main, wid_auto=None,
 
             # post processing - where values depend on all images
             if modality == 'CT':
-                if 'Noi' in flattened_marked:
+                if 'Noi' in flattened_marked and 'Noi' in input_main.results:
                     try:
                         noise = [
                             row[1] for row in input_main.results['Noi']['values']]
@@ -1654,7 +1663,10 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def SNI():
-        alt = paramset.sni_type
+        alt = 0 if paramset.sni_type == 0 else 2
+        if paramset.sni_channels:
+            alt = alt + 1
+
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
         headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
         if image2d is None:
@@ -1855,7 +1867,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
     try:
         result = locals()[test_code]()
-    except KeyError:
+    except (KeyError, IndexError):
         result = None
 
     return result
@@ -2492,6 +2504,8 @@ def calculate_slicethickness(
             sli_signal_low_density = True
         elif paramset.sli_type == 3:
             details_dict['labels'] = ['line']
+        elif paramset.sli_type == 4:
+            details_dict['labels'] = ['upper', 'lower']
     else:  # MR
         details_dict['labels'] = ['upper', 'lower']
 
@@ -2532,11 +2546,11 @@ def calculate_slicethickness(
             details_dict['halfpeak'].append(halfmax + background)
 
         if modality == 'CT':
-            if paramset.sli_type in [0, 3]:  # wire ramp Catphan or Siemens
+            if paramset.sli_type in [0, 3, 4]:  # wire ramp Catphan or Siemens
                 width, center = mmcalc.get_width_center_at_threshold(
                     profile, halfmax, force_above=True)
                 if width is not None:
-                    slice_thickness = 0.42 * width * img_info.pix[0]  # 0.42*FWHM
+                    slice_thickness = paramset.sli_tan_a * width * img_info.pix[0]
                     if delta_xya[2] != 0:
                         slice_thickness = slice_thickness / np.cos(
                             np.deg2rad(delta_xya[2]))
@@ -2673,7 +2687,6 @@ def get_profile_sli(image, paramset, line, direction='h'):
     else:  # CT
         if paramset.sli_median_filter > 0:
             profile = sp.ndimage.median_filter(profile, size=paramset.sli_median_filter)
-
 
     return (profile, errmsg)
 
@@ -2851,8 +2864,8 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
             ignore_slices.reverse()
             for i in ignore_slices:
                 del matrix[i]
-                max_values_copy[i] = np.NaN
-                zpos_copy[i] = np.NaN
+                max_values_copy[i] = np.nan
+                zpos_copy[i] = np.nan
             common_details_dict['max_roi_used'] = max_values_copy
             common_details_dict['zpos_used'] = zpos_copy
             zpos_used = zpos_copy
@@ -3558,7 +3571,7 @@ def calculate_flatfield_mammo(image2d, mask_max, mask_outer, image_info, paramse
         for j, ystart in enumerate(ystarts):
             for i, xstart in enumerate(xstarts):
                 sub = deviating_pixels[ystart:ystart+roi_size_in_pix,
-                                   xstart:xstart+roi_size_in_pix]
+                                       xstart:xstart+roi_size_in_pix]
                 dev_pixel_clusters[j, i] = np.count_nonzero(sub)
 
     details = {'variances': variances, 'averages': masked_avgs, 'snrs': masked_snrs,
@@ -3851,7 +3864,7 @@ def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
             'values': [iu_ufov, du_ufov, iu_cfov, du_cfov]}
 
 
-def get_eye_filter(roi_size, pix, c, min_frequency=0.):
+def get_eye_filter(roi_size, pix, paramset):
     """Get eye filter V(r)=r^1.3*exp(-cr^2).
 
     Parameters
@@ -3860,12 +3873,7 @@ def get_eye_filter(roi_size, pix, c, min_frequency=0.):
         size of roi or image in pix
     pix : float
         mm pr pix in image
-    c : float
-        adjusted to have V(r) max 4 cy/degree
-            (Nelson et al uses c=28 = display size 65mm, viewing distance 1.5m)
-    min_frequency : float
-        Set filter to zero below min_frequency to ignore low frequencies.
-        Default is 0 (include all).
+    paramset : ParamSetNM
 
     Returns
     -------
@@ -3873,22 +3881,59 @@ def get_eye_filter(roi_size, pix, c, min_frequency=0.):
         filter 2d : np.ndarray quadratic with size roi_height
         curve: dict of r and V
     """
+    def tukey_filter_func(r, start_L_flat_ratio):
+        """Calulates Tukey filter.
+
+        Parameters
+        ----------
+        r : np.array
+            frequency values
+        start_L_tapered_ratio : tuple of floats
+            start = minimum_frequency
+            L = width (frequencies)
+            flat ratio = 1- tapered_ratio
+
+        Returns
+        -------
+        V : filter values
+        """
+        start, L, flat_ratio = start_L_flat_ratio
+        t = L * (1-flat_ratio)
+        V = np.ones(r.shape)
+        V[r < start + t/2] = 0.5 * (1 + np.cos(2 * np.pi/t * (
+            r[r < start + t/2] - start - t/2)))
+        V[r > L + start - t/2] = 0.5 * (1 + np.cos(2 * np.pi/t * (
+            r[r > L + start - t/2] - L - start + t/2)))
+        V[r < start] = 0
+        V[r > start + L] = 0
+        return V
+
     def eye_filter_func(r, c):
         return r**1.3 * np.exp(-c*r**2)
 
     freq = np.fft.fftfreq(roi_size, d=pix)
     freq = freq[:freq.size//2]  # from center
-    V = eye_filter_func(freq, c)
+    if paramset.sni_channels:
+        V = tukey_filter_func(freq, paramset.sni_channels_table[0])
+    else:
+        V = eye_filter_func(freq, paramset.sni_eye_filter_c)
     eye_filter_1d = {'r': freq, 'V': 1/np.max(V) * V}
+    if paramset.sni_channels:
+        V2 = tukey_filter_func(freq, paramset.sni_channels_table[1])
+        eye_filter_1d['V2'] = 1/np.max(V2) * V2
 
     unit = freq[1] - freq[0]
-    dists = mmcalc.get_distance_map_point((roi_size, roi_size))
-    eye_filter_2d = eye_filter_func(unit*dists, c)
+    dists = mmcalc.get_distance_map_point(
+        (roi_size, roi_size))
+    if paramset.sni_channels:
+        eye_filter_2d = tukey_filter_func(unit*dists, paramset.sni_channels_table[0])
+    else:
+        eye_filter_2d = eye_filter_func(unit*dists, paramset.sni_eye_filter_c)
     eye_filter_2d = 1/np.max(eye_filter_2d) * eye_filter_2d
-
-    if min_frequency > 0:
-        eye_filter_1d['V'][freq < min_frequency] = 0
-        eye_filter_2d[dists < min_frequency/unit] = 0
+    if paramset.sni_channels:
+        eye_filter_2d_2 = tukey_filter_func(
+            unit*dists, paramset.sni_channels_table[1])
+        eye_filter_2d = [eye_filter_2d, eye_filter_2d_2]
 
     return {'filter_2d': eye_filter_2d, 'curve': eye_filter_1d, 'unit': unit}
 
@@ -3924,7 +3969,7 @@ def get_SNI_ref_image(paramset, tag_infos):
 
 def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
                       pix=1., fit_dict=None, image_mean=0.,
-                      sampling_frequency=0.01):
+                      sampling_frequency=0.01, sni_dim=0):
     """Calculate SNI for one ROI.
 
     Parameters
@@ -3934,7 +3979,7 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         (corrected for point source curvature)
     roi_array : numpy.2darray
         2d mask for the current ROI
-    eye_filter : numpy.2darray
+    eye_filter : numpy.2darray or list of numpy.2darray
     unit : float
         unit of NPS and eye_filter
     pix : float
@@ -3944,6 +3989,8 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         average value within the large area
     sampling_frequency : float
         sampling frequency for radial profiles
+    sni_dim : int
+        options for sni calculations 0=2d NPS ratio, 1=radial profile ratio
 
     Returns
     -------
@@ -3961,7 +4008,7 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
     rows = np.max(roi_array_this, axis=1)
     cols = np.max(roi_array_this, axis=0)
     subarray = image2d[rows][:, cols]
-    line = subarray.shape[0] // 2  # position of 0 frequency (set to 0 to ignore)
+    line = subarray.shape[0] // 2  # position of 0 frequency
     rNPS_quantum_noise = None
     if fit_dict is None:  # uncorrected image
         NPS = mmcalc.get_2d_NPS(subarray, pix)
@@ -3973,6 +4020,7 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         """
         NPS[line, line] = 0
         NPS_struct = NPS - quantum_noise
+        NPS_struct[line, line] = 0
     else:
         if 'reference_image' in fit_dict:
             sub_estimated_noise = fit_dict['reference_image'][rows][:, cols]
@@ -3992,27 +4040,56 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         _, rNPS_quantum_noise = mmcalc.get_radial_profile(
             quantum_noise, pix=unit, step_size=sampling_frequency)
         NPS_struct = np.subtract(NPS, quantum_noise)
-    NPS_filt = NPS * eye_filter
-    NPS_struct_filt = NPS_struct * eye_filter
-    SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
+
+    rNPS_filt_2 = None
+    rNPS_struct_filt_2 = None
+    SNI_2 = None
+    if isinstance(eye_filter, list):
+        NPS_filt = NPS * eye_filter[0]
+        NPS_struct_filt = NPS_struct * eye_filter[0]
+        NPS_filt_2 = NPS * eye_filter[1]
+        NPS_struct_filt_2 = NPS_struct * eye_filter[1]
+        #SNI_2 = np.sum(NPS_struct_filt_2) / np.sum(NPS_filt_2)
+    else:
+        NPS_filt = NPS * eye_filter
+        NPS_struct_filt = NPS_struct * eye_filter
+    #SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
 
     # radial NPS curves
     freq, rNPS = mmcalc.get_radial_profile(
-        NPS, pix=unit, step_size=sampling_frequency)
+        NPS, pix=unit, step_size=sampling_frequency, ignore_negative=True)
     _, rNPS_filt = mmcalc.get_radial_profile(
-        NPS_filt, pix=unit, step_size=sampling_frequency)
+        NPS_filt, pix=unit, step_size=sampling_frequency, ignore_negative=True)
     _, rNPS_struct = mmcalc.get_radial_profile(
-        NPS_struct, pix=unit, step_size=sampling_frequency)
+        NPS_struct, pix=unit, step_size=sampling_frequency, ignore_negative=True)
     _, rNPS_struct_filt = mmcalc.get_radial_profile(
-        NPS_struct_filt, pix=unit, step_size=sampling_frequency)
+        NPS_struct_filt, pix=unit, step_size=sampling_frequency, ignore_negative=True)
+    #SNI = np.sum(rNPS_struct_filt) / np.sum(rNPS_filt)
+    if isinstance(eye_filter, list):
+        _, rNPS_filt_2 = mmcalc.get_radial_profile(
+            NPS_filt_2, pix=unit, step_size=sampling_frequency, ignore_negative=True)
+        _, rNPS_struct_filt_2 = mmcalc.get_radial_profile(
+            NPS_struct_filt_2, pix=unit, step_size=sampling_frequency,
+            ignore_negative=True)
+        #SNI_2 = np.sum(rNPS_struct_filt_2) / np.sum(rNPS_filt_2)
+
+    if sni_dim == 0:
+        SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
+        if isinstance(eye_filter, list):
+            SNI_2 = np.sum(NPS_struct_filt_2) / np.sum(NPS_filt_2)
+    else:
+        SNI = np.sum(rNPS_struct_filt) / np.sum(rNPS_filt)
+        if isinstance(eye_filter, list):
+            SNI_2 = np.sum(rNPS_struct_filt_2) / np.sum(rNPS_filt_2)
 
     details_dict_roi = {
         'NPS': NPS, 'quantum_noise': quantum_noise,
-        'freq': freq, 'rNPS': rNPS, 'rNPS_filt': rNPS_filt,
+        'freq': freq, 'rNPS': rNPS, 'rNPS_filt': rNPS_filt, 'rNPS_filt_2': rNPS_filt_2,
         'rNPS_struct': rNPS_struct, 'rNPS_struct_filt': rNPS_struct_filt,
+        'rNPS_struct_filt_2': rNPS_struct_filt_2,
         'rNPS_quantum_noise': rNPS_quantum_noise
         }
-    return (SNI, details_dict_roi)
+    return (SNI, SNI_2, details_dict_roi)
 
 
 def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
@@ -4022,7 +4099,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
     ----------
     image2d : numpy.ndarray
     roi_array : list of numpy.ndarray
-        list of 2d masks for all_rois, L1, L2, S1 ... S6
+        list of 2d masks for all_rois, full ROI, L1, L2, small ROIs
     image_info :  DcmInfo
         as defined in scripts/dcm.py
     paramset : cfc.ParamsetNM
@@ -4031,23 +4108,38 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
     Returns
     -------
     values : list of float
-        ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', .. 'SNI S6']
+        according to defined headers in config/iQCconstants.py HEADERS
     details_dict : dict
     errmsgs : list of str
     """
     values_sup = [None] * 3
     details_dict = {}
     SNI_values = []
+    SNI_values_2 = []
     errmsgs = []
 
-    # point source correction
     fit_dict = None
+    if reference_image is not None:
+        if reference_image.shape == image2d.shape:
+            fit_dict = {}
+            fit_dict['reference_image'] = reference_image
+            reference_image = None
+        else:
+            errmsgs.append('Reference image not same size as image to analyse. '
+                           'Quantum noise estimated from signal.')
+
+    # point source correction
     if paramset.sni_correct:
         lock_z = paramset.sni_radius if paramset.sni_lock_radius else None
         est_noise = False if reference_image is not None else True
 
+        if reference_image and paramset.sni_ref_image_fit:
+            fit_image = reference_image
+        else:
+            fit_image = image2d
+
         fit_dict, errmsg = get_corrections_point_source(
-            image2d, image_info, roi_array[0],
+            fit_image, image_info, roi_array[0],
             fit_x=paramset.sni_correct_pos_x,
             fit_y=paramset.sni_correct_pos_y,
             lock_z=lock_z,
@@ -4056,14 +4148,29 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         if errmsg is not None:
             errmsgs.append(errmsg)
         values_sup = [fit_dict['dx'], fit_dict['dy'], fit_dict['distance']]
-    if reference_image is not None:
-        if reference_image.shape == image2d.shape:
-            if fit_dict is None:
-                fit_dict = {}
-            fit_dict['reference_image'] = reference_image
-        else:
-            errmsgs.append('Reference image not same size as image to analyse. '
-                           'Quantum noise estimated.')
+
+    block_size = paramset.sni_scale_factor
+    if block_size > 1:
+        # skip pixels excess of size/block_size
+        sz_y, sz_x = image2d.shape
+        skip_y, skip_x = (sz_y % block_size, sz_x % block_size)
+        n_blocks_y, n_blocks_x = (sz_y // block_size, sz_x // block_size)
+        start_y, start_x = (skip_y // 2, skip_x // 2)
+        end_x = start_x + n_blocks_x * block_size
+        end_y = start_y + n_blocks_y * block_size
+        image2d = skimage.measure.block_reduce(
+            image2d[start_y:end_y, start_x:end_x], (block_size, block_size), np.sum)
+        for idx, arr in enumerate(roi_array):
+            reduced_roi = skimage.measure.block_reduce(
+                arr[start_y:end_y, start_x:end_x], (block_size, block_size), np.mean)
+            roi_array[idx] = np.where(reduced_roi > 0.5, True, False)
+        if fit_dict:
+            if 'reference_image' in fit_dict:
+                reference_image = skimage.measure.block_reduce(
+                    reference_image[start_y:end_y, start_x:end_x],
+                    (block_size, block_size), np.sum)
+                fit_dict['reference_image'] = reference_image
+
     if fit_dict is not None:
         details_dict = fit_dict
 
@@ -4075,38 +4182,68 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
     # large ROIs
     rows = np.max(roi_array[1], axis=1)
     eye_filter = get_eye_filter(
-        np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c,
-        min_frequency=paramset.sni_min_frequency)
+        np.count_nonzero(rows), image_info.pix[0], paramset)
     details_dict['eye_filter_large'] = eye_filter['curve']
     for i in [1, 2]:
-        SNI, details_dict_roi = calculate_SNI_ROI(
+        SNI, SNI_2, details_dict_roi = calculate_SNI_ROI(
             image2d, roi_array[i],
             eye_filter=eye_filter['filter_2d'], unit=eye_filter['unit'],
             pix=image_info.pix[0], fit_dict=fit_dict, image_mean=image_mean,
-            sampling_frequency=paramset.sni_sampling_frequency)
+            sampling_frequency=paramset.sni_sampling_frequency,
+            sni_dim=paramset.sni_ratio_dim)
         details_dict['pr_roi'].append(details_dict_roi)
         SNI_values.append(SNI)
-    values_sup.append('L1' if SNI_values[0] > SNI_values[1] else 'L2')
+        SNI_values_2.append(SNI_2)
+    largest_L = '-'
+    if SNI_values[0] > SNI_values[1]:
+        largest_L = 'L1'
+    elif SNI_values[0] < SNI_values[1]:
+        largest_L = 'L2'
+    if any(SNI_values_2):
+        if SNI_values_2[0] > SNI_values_2[1]:
+            largest_L = largest_L + ' / L1'
+        elif SNI_values_2[0] < SNI_values_2[1]:
+            largest_L = largest_L + ' / L2'
+        else:
+            largest_L + ' / -'
+    values_sup.append(largest_L)
 
     if paramset.sni_type == 0:
         # small ROIs
         rows = np.max(roi_array[3], axis=1)
         eye_filter = get_eye_filter(
-            np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c,
-            min_frequency=paramset.sni_min_frequency)
+            np.count_nonzero(rows), image_info.pix[0], paramset)
         details_dict['eye_filter_small'] = eye_filter['curve']
         for i in range(3, 9):
-            SNI, details_dict_roi = calculate_SNI_ROI(
+            SNI, SNI_2, details_dict_roi = calculate_SNI_ROI(
                 image2d, roi_array[i],
                 eye_filter['filter_2d'], unit=eye_filter['unit'],
                 pix=image_info.pix[0], fit_dict=fit_dict, image_mean=image_mean,
-                sampling_frequency=paramset.sni_sampling_frequency)
+                sampling_frequency=paramset.sni_sampling_frequency,
+                sni_dim=paramset.sni_ratio_dim)
             details_dict['pr_roi'].append(details_dict_roi)
             SNI_values.append(SNI)
+            SNI_values_2.append(SNI_2)
 
-        values = [np.max(SNI_values)] + SNI_values
+        if paramset.sni_channels:
+            values = (
+                SNI_values[0:2]
+                + [np.max(SNI_values[2:])] + [np.mean(SNI_values[2:])]
+                + SNI_values_2[0:2]
+                + [np.max(SNI_values_2[2:])] + [np.mean(SNI_values_2[2:])]
+                )
+        else:
+            values = [np.max(SNI_values)] + SNI_values
         maxno = SNI_values[2:].index(max(SNI_values[2:]))
-        values_sup.append(f'S{maxno+1}')
+        if any(SNI_values_2):
+            idx = SNI_values_2[2:].index(max(SNI_values_2[2:]))
+            maxno_2 = f' / S{idx+1}'
+        else:
+            maxno_2 = ''
+        values_sup.append(f'S{maxno+1}{maxno_2}')
+        details_dict['SNI_values'] = SNI_values
+        if paramset.sni_channels:
+            details_dict['SNI_values_2'] = SNI_values_2
     else:
         idx_roi_row_0 = 3
         try:
@@ -4115,34 +4252,41 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
             rows = np.max(roi_array[idx_roi_row_0 + 2][3], axis=1)  # central
             # TODO better catch - what if this also (not likely) is None?
         eye_filter = get_eye_filter(
-            np.count_nonzero(rows), image_info.pix[0], paramset.sni_eye_filter_c,
-            min_frequency=paramset.sni_min_frequency)
+            np.count_nonzero(rows), image_info.pix[0], paramset)
         details_dict['eye_filter_small'] = eye_filter['curve']
 
         if paramset.sni_type in [1, 2]:
             SNI_map = np.zeros(
                 (len(roi_array)-idx_roi_row_0, len(roi_array[idx_roi_row_0])))
+            SNI_map_2 = np.copy(SNI_map)
         else:  # 3 Siemens
             SNI_map = []
+            SNI_map_2 = []
         rNPS_filt_sum = None
         rNPS_struct_filt_sum = None
+        rNPS_filt_2_sum = None
+        rNPS_struct_filt_2_sum = None
         small_names = []
         for rowno, row in enumerate(roi_array[idx_roi_row_0:]):
             for colno, roi in enumerate(row):
                 small_names.append(f'r{rowno}_c{colno}')
                 if roi is not None:
-                    SNI, details_dict_roi = calculate_SNI_ROI(
+                    SNI, SNI_2, details_dict_roi = calculate_SNI_ROI(
                         image2d, roi,
                         eye_filter['filter_2d'], unit=eye_filter['unit'],
                         pix=image_info.pix[0], fit_dict=fit_dict,
                         image_mean=image_mean,
-                        sampling_frequency=paramset.sni_sampling_frequency)
+                        sampling_frequency=paramset.sni_sampling_frequency,
+                        sni_dim=paramset.sni_ratio_dim)
                     details_dict['pr_roi'].append(details_dict_roi)
                     if paramset.sni_type in [1, 2]:
                         SNI_map[rowno, colno] = SNI
+                        SNI_map_2[rowno, colno] = SNI_2
                     else:  # 3 Siemens
                         SNI_map.append(SNI)
+                        SNI_map_2.append(SNI_2)
                     SNI_values.append(SNI)
+                    SNI_values_2.append(SNI_2)
                     if rNPS_filt_sum is None:
                         rNPS_filt_sum = details_dict_roi['rNPS_filt']
                         rNPS_struct_filt_sum = details_dict_roi['rNPS_struct_filt']
@@ -4150,33 +4294,72 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                         rNPS_filt_sum = rNPS_filt_sum + details_dict_roi['rNPS_filt']
                         rNPS_struct_filt_sum = (
                             rNPS_struct_filt_sum + details_dict_roi['rNPS_struct_filt'])
+                    if paramset.sni_channels:
+                        if rNPS_filt_2_sum is None:
+                            rNPS_filt_2_sum = details_dict_roi['rNPS_filt_2']
+                            rNPS_struct_filt_2_sum = details_dict_roi['rNPS_struct_filt_2']
+                        else:
+                            rNPS_filt_2_sum = rNPS_filt_2_sum + details_dict_roi['rNPS_filt_2']
+                            rNPS_struct_filt_2_sum = (
+                                rNPS_struct_filt_2_sum + details_dict_roi['rNPS_struct_filt_2'])
                 else:
                     details_dict['pr_roi'].append(None)
                     SNI_values.append(np.nan)
+                    SNI_values_2.append(np.nan)
                     if paramset.sni_type == 3:  # always? if ignored
                         SNI_map.append(np.nan)
+                        SNI_map_2.append(np.nan)
+        values = []
+        max_nos = []
         if paramset.sni_type == 3:  # avoid np.nan for ignored
-            arr = np.array(SNI_map)
-            max_no = np.where(arr == np.max(arr[arr > -1]))
-            values = [
-                SNI_values[0], SNI_values[1],
-                np.max(arr[arr > -1]),
-                np.mean(arr[arr > -1]),
-                np.median(arr[arr > -1])]
+            if paramset.sni_channels:
+                arrs = [np.array(SNI_map), np.array(SNI_map_2)]
+                vals = [SNI_values, SNI_values_2]
+            else:
+                arrs = [np.array(SNI_map)]
+                vals = [SNI_values]
+            for idx, arr in enumerate(arrs):
+                max_no = np.where(arr == np.max(arr[arr > -1]))
+                max_nos.append(max_no[0][0])
+                values.extend([
+                    vals[idx][0], vals[idx][1],
+                    np.max(arr[arr > -1]),
+                    np.mean(arr[arr > -1])
+                    ])
+                if paramset.sni_channels is False:
+                    values.append(np.median(arr[arr > -1]))
         else:
-            SNI_small = SNI_values[2:]
-            max_no = np.where(SNI_small == np.max(SNI_small))
-            values = (
-                SNI_values[0:2]
-                + [np.max(SNI_map), np.mean(SNI_map), np.median(SNI_map)])
-        details_dict['roi_max_idx_small'] = max_no[0][0]
-        values_sup.append(small_names[details_dict['roi_max_idx_small']])
+            if paramset.sni_channels:
+                vals = [SNI_values, SNI_values_2]
+            else:
+                vals = [SNI_values]
+            for vals_this in vals:
+                SNI_small = vals_this[2:]
+                max_no = np.where(SNI_small == np.max(SNI_small))
+                max_nos.append(max_no[0][0])
+                values.extend(
+                    SNI_values[0:2]
+                    + [np.max(SNI_map), np.mean(SNI_map)])
+                if paramset.sni_channels is False:
+                    values.append(np.median(SNI_map))
+        details_dict['roi_max_idx_small'] = max_nos[0]
+        txt_small_max = small_names[max_nos[0]]
+        if paramset.sni_channels:
+            details_dict['roi_max_idx_small_2'] = max_nos[1]
+            txt_small_max = txt_small_max + ' / ' + small_names[max_nos[1]]
+        values_sup.append(txt_small_max)
 
         details_dict['avg_rNPS_filt_small'] = rNPS_filt_sum / len(SNI_values)
         details_dict['avg_rNPS_struct_filt_small'] = (
             rNPS_struct_filt_sum / len(SNI_values))
         details_dict['SNI_map'] = SNI_map
         details_dict['SNI_values'] = SNI_values
+        if paramset.sni_channels:
+            details_dict['avg_rNPS_filt_2_small'] = rNPS_filt_2_sum / len(SNI_values_2)
+            details_dict['avg_rNPS_struct_filt_2_small'] = (
+                rNPS_struct_filt_2_sum / len(SNI_values_2))
+            details_dict['SNI_map_2'] = SNI_map_2
+            details_dict['SNI_values_2'] = SNI_values_2
 
     return (values, values_sup, details_dict, errmsgs)
 

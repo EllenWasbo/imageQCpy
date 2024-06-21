@@ -1,3 +1,23 @@
+# v3.1.0
+_Jun 21, 2024_
+
+Dependancies:
+- avoided numpy > 2.0 newly released. Will need some validation and probably migration 
+
+Changes:
+- Dialog to add artifacts with improved functionalities, including option to save artifacts to file for reuse.
+- Added option to change angle of ramp for CT slice thickness if other phantoms used. Also added default settings for GE phantom with horizontal wire ramps (angle 45degrees).
+- NM SNI:
+ - Option to let SNI be ratio between integrals of 2d NPS or radial profiles, ignoring negative values. Significant difference and clearly more sensitive with latter testing with simulated artifacts.
+ - Option to choose whether point source correction with reference image should fit position to reference image or current image, avoiding artifacts to affect the fit.
+ - Option to design low/high filter instead of human visual filter. Experimental purpose.
+- Selected image index now displayed when working with QuickTest templates in the Settings manager (benefit if working with more than a few images).
+
+Bugfixes:
+- Some MR tests failed finding ROI if high signal at image borders. This resulted in program crash.
+- Some issues finding center of object within ROI fixed = improved/fixed CT MTF from circular edge with low contrast and finding phantom position for PET Recovery curves.
+- Avoiding crash when setting window level from active rectangle and rectangle dragged in other direction than top-right ot lower-left
+
 # v3.0.9
 _Jun 11, 2024_
 

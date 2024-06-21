@@ -18,7 +18,9 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-VERSION = '3.0.9'
+# A when major changes, B when new exe release (to come),
+#   C new python release (or small fix to exe)
+VERSION = '3.1.0'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -61,7 +63,8 @@ ALTERNATIVES = {
         'Sli': ['Wire ramp Catphan',
                 'Beaded ramp Catphan (helical)',
                 'Vertical beaded ramps GE phantom',
-                'Wire ramp Siemens'],
+                'Wire ramp Siemens',
+                'Horizontal wire ramps GE QA phantom'],
         'MTF': ['bead', 'wire', 'circular edge'],
         },
     'Xray': {
@@ -129,7 +132,8 @@ HEADERS = {
             'alt1': ['Nominal', 'H1', 'H2', 'V1', 'V2',
                      'inner V1', 'inner V2'],
             'alt2': ['Nominal', 'V1', 'V2'],
-            'alt3': ['Nominal', 'Measured']
+            'alt3': ['Nominal', 'Measured'],
+            'alt4': ['Nominal', 'H1', 'H2']
             },
         'MTF': {
             'alt0': ['MTFx 50%', 'MTFx 10%', 'MTFx 2%',
@@ -204,9 +208,11 @@ HEADERS = {
         'SNI': {
             'alt0': ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', 'SNI S2',
                      'SNI S3', 'SNI S4', 'SNI S5', 'SNI S6'],
-            'alt1': ['SNI L1', 'SNI L2', 'SNI S max', 'SNI S avg', 'SNI S median'],
+            'alt1': ['SNI L1 low', 'SNI L2 low', 'SNI S low max', 'SNI S low avg',
+                     'SNI L1 high', 'SNI L2 high', 'SNI S high max', 'SNI S high avg'],
             'alt2': ['SNI L1', 'SNI L2', 'SNI S max', 'SNI S avg', 'SNI S median'],
-            'alt3': ['SNI L1', 'SNI L2', 'SNI S max', 'SNI S avg', 'SNI S median'],
+            'alt3': ['SNI L1 low', 'SNI L2 low', 'SNI S low max', 'SNI S low avg',
+                     'SNI L1 high', 'SNI L2 high', 'SNI S high max', 'SNI S high avg'],
             },
         'Bar': {
             'alt0': ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',

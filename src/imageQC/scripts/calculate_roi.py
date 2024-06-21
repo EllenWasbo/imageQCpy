@@ -122,10 +122,10 @@ def get_rois(image, image_number, input_main):
                 img_shape, roi_width=w, roi_height=w,
                 offcenter_xy=off_xy) for off_xy in off_center_xys]
         elif input_main.current_modality == 'MR':
-            roi_this = get_roi_circle_MR(
+            roi_this, errmsg = get_roi_circle_MR(
                 image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
                 )
-        return roi_this
+        return (roi_this, errmsg)
 
     def Hom():  # Homogeneity
         roi_array = get_roi_hom(image_info, paramset, delta_xya=delta_xya,
@@ -515,7 +515,7 @@ def get_rois(image, image_number, input_main):
         return get_roi_SNI(image, image_info, paramset)
 
     def SNR():
-        central_ROI = get_roi_circle_MR(
+        central_ROI, errmsg = get_roi_circle_MR(
             image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
             )
         if paramset.snr_type == 1:  # singel image with background ROIs
@@ -538,7 +538,7 @@ def get_rois(image, image_number, input_main):
             roi_array = [central_ROI, bg_ROI]
         else:
             roi_array = central_ROI
-        return roi_array
+        return (roi_array, errmsg)
 
     def Spe():  # Speed WB NM
         roi_height_in_pix = 10. * paramset.spe_height / image_info.pix[0]
@@ -1324,77 +1324,87 @@ def get_roi_circle_MR(image, image_info, paramset, test_code, delta_xy):
     -------
     roi : ndarray
         2d array with type bool
+    errmsg : str or None
     """
     roi_array = None
+    errmsg = None
 
     mask_outer = 0
     if test_code == 'Geo':
         mask_outer = round(paramset.geo_mask_outer / image_info.pix[0])
 
-    res = mmcalc.optimize_center(image, mask_outer)
-    if res is not None:
-        center_x, center_y, width_x, width_y = res
+    res_center = mmcalc.optimize_center(image, mask_outer)
+    if res_center is not None:
+        center_x, center_y, width_x, width_y = res_center
+    else:
+        center_x = image.shape[1] // 2
+        center_y = image.shape[0] // 2
+        width_x = 10
+        width_y = 10
 
-        radius = -1
-        width = 0.5 * (width_x + width_y)
-        optimize_center = True
-        cut_top = 0
-        if test_code == 'SNR':
-            radius = 0.5 * width * np.sqrt(0.01 * paramset.snr_roi_percent)
-            cut_top = paramset.snr_roi_cut_top
-        elif test_code == 'PIU':
-            radius = 0.5 * width * np.sqrt(0.01 * paramset.snr_roi_percent)
-            cut_top = paramset.piu_roi_cut_top
-        elif test_code == 'Gho':
-            radius = paramset.gho_roi_central / image_info.pix[0]
-            optimize_center = paramset.gho_optimize_center
-            cut_top = paramset.gho_roi_cut_top
-        elif test_code == 'Geo':
-            radius = paramset.geo_actual_size / image_info.pix[0] / 2
-        if optimize_center:
-            delta_xy = (
-                center_x - 0.5*image_info.shape[1],
-                center_y - 0.5*image_info.shape[0]
-                )
-        roi_array = get_roi_circle(image_info.shape, delta_xy, radius)
-        if mask_outer > 0:
-            inside = np.full(image_info.shape, False)
-            inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
-            roi_array = [roi_array, inside]
+    radius = -1
+    width = 0.5 * (width_x + width_y)
+    optimize_center = True
+    cut_top = 0
+    if test_code == 'SNR':
+        radius = 0.5 * width * np.sqrt(0.01 * paramset.snr_roi_percent)
+        cut_top = paramset.snr_roi_cut_top
+    elif test_code == 'PIU':
+        radius = 0.5 * width * np.sqrt(0.01 * paramset.snr_roi_percent)
+        cut_top = paramset.piu_roi_cut_top
+    elif test_code == 'Gho':
+        radius = paramset.gho_roi_central / image_info.pix[0]
+        optimize_center = paramset.gho_optimize_center
+        cut_top = paramset.gho_roi_cut_top
+    elif test_code == 'Geo':
+        radius = paramset.geo_actual_size / image_info.pix[0] / 2
+    if optimize_center:
+        delta_xy = (
+            center_x - 0.5*image_info.shape[1],
+            center_y - 0.5*image_info.shape[0]
+            )
+        if res_center is None:
+            errmsg = ('Failed to find center and width of object in image.'
+                      'Image center and widht 10 pix is used.')
+    roi_array = get_roi_circle(image_info.shape, delta_xy, radius)
+    if mask_outer > 0:
+        inside = np.full(image_info.shape, False)
+        inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
+        roi_array = [roi_array, inside]
 
-        if cut_top > 0:
-            cut_top = cut_top / image_info.pix[1]
-            y_top = 0.5*image_info.shape[1] + delta_xy[1] - radius + cut_top
-            y_start = 0
-            y_stop = round(y_top)
-            roi_array[y_start:y_stop, :] = False
+    if cut_top > 0:
+        cut_top = cut_top / image_info.pix[1]
+        y_top = 0.5*image_info.shape[1] + delta_xy[1] - radius + cut_top
+        y_start = 0
+        y_stop = round(y_top)
+        roi_array[y_start:y_stop, :] = False
 
-        if test_code == 'Gho':  # add rectangular ROIs at borders
-            # rois: 'Center', 'top', 'bottom', 'left', 'right'
-            roi_array = [roi_array]
-            roi_w = round(paramset.gho_roi_w / image_info.pix[0])
-            roi_h = round(paramset.gho_roi_h / image_info.pix[0])
-            roi_d = round(paramset.gho_roi_dist / image_info.pix[0])
-            w = [roi_w, roi_w, roi_h, roi_h]
-            h = w[::-1]
-            delta = roi_h/2 + roi_d
-            offxy = [
-                (0, -(image_info.shape[1]/2 - delta)),
-                (0, image_info.shape[1]/2 - delta),
-                (-(image_info.shape[0]/2 - delta), 0),
-                (image_info.shape[0]/2 - delta, 0)
-                ]
+    if test_code == 'Gho':  # add rectangular ROIs at borders
+        # rois: 'Center', 'top', 'bottom', 'left', 'right'
+        roi_array = [roi_array]
+        roi_w = round(paramset.gho_roi_w / image_info.pix[0])
+        roi_h = round(paramset.gho_roi_h / image_info.pix[0])
+        roi_d = round(paramset.gho_roi_dist / image_info.pix[0])
+        w = [roi_w, roi_w, roi_h, roi_h]
+        h = w[::-1]
+        delta = roi_h/2 + roi_d
+        offxy = [
+            (0, -(image_info.shape[1]/2 - delta)),
+            (0, image_info.shape[1]/2 - delta),
+            (-(image_info.shape[0]/2 - delta), 0),
+            (image_info.shape[0]/2 - delta, 0)
+            ]
 
-            for i in range(4):
-                roi_array.append(
-                    get_roi_rectangle(
-                        image_info.shape,
-                        roi_width=w[i], roi_height=h[i],
-                        offcenter_xy=(round(offxy[i][0]), round(offxy[i][1]))
-                        )
+        for i in range(4):
+            roi_array.append(
+                get_roi_rectangle(
+                    image_info.shape,
+                    roi_width=w[i], roi_height=h[i],
+                    offcenter_xy=(round(offxy[i][0]), round(offxy[i][1]))
                     )
+                )
 
-    return roi_array
+    return (roi_array, errmsg)
 
 
 def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='CT'):
@@ -1458,7 +1468,7 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
 
     # Horizontal profiles CT
     if modality == 'CT':
-        if paramset.sli_type in [0, 1, 3]:  # Catphan wire or beaded, Siemens
+        if paramset.sli_type in [0, 1, 3, 4]:  # all except only vertical (GE beaded)
 
             # first horizontal line coordinates
             if dxya[2] == 0:
@@ -1473,7 +1483,7 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
                 y2 = center_y - dist*cos_rot - prof_half*sin_rot
             h_lines.append([round(y1), round(x1), round(y2), round(x2)])
 
-            if paramset.sli_type in [0, 1]:  # not Siemens
+            if paramset.sli_type in [0, 1, 4]:  # all with two horizontal
                 # second horizontal line coordinates
                 if dxya[2] == 0:
                     y1 = center_y + dist
@@ -1503,7 +1513,7 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
         # Vertical profiles
         if paramset.sli_type == 1:  # Catphan beaded helical
             dists = [dist, dist_b]
-        elif paramset.sli_type == 3:  # Siemens - no vertical
+        elif paramset.sli_type in [3, 4]:  # no vertical
             dists = []
         else:
             dists = [dist]

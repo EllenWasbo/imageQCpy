@@ -98,15 +98,6 @@ class ParamsTabCommon(QTabWidget):
     def flag_edit(self, indicate_change=True):
         """Add star after cbox_paramsets to indicate any change from saved."""
         self.main.wid_paramset.flag_edit(indicate_change)
-        
-        '''
-        if indicate_change:
-            self.main.wid_paramset.lbl_edit.setText('*')
-            self.main.wid_paramset.edited = True
-        else:
-            self.main.wid_paramset.lbl_edit.setText('')
-            self.main.wid_paramset.edited = False
-        '''
 
     def update_displayed_params(self):
         """Display parameters according to current_paramset of main."""
@@ -192,6 +183,8 @@ class ParamsTabCommon(QTabWidget):
                         self.roi_table_widget.setEnabled(False)
                     else:
                         self.roi_table_widget.setEnabled(True)
+                elif field.name == 'sni_channels_table':
+                    self.sni_channels_table_widget.update_table()
 
         if self.main.current_modality == 'Xray':
             self.update_NPS_independent_pixels()
@@ -319,6 +312,8 @@ class ParamsTabCommon(QTabWidget):
                     else:
                         self.roi_table_widget.setEnabled(True)
                         self.set_offset('roi_offset_xy', reset=True)
+                elif attribute == 'sni_channels':
+                    self.update_enabled()
                 if all([self.main.current_modality == 'Xray',
                         self.main.current_test == 'NPS']):
                     self.update_NPS_independent_pixels()
@@ -918,11 +913,12 @@ class ParamsTabCT(ParamsTabCommon):
         """Update plot options for slice thickness."""
         self.sli_plot.clear()
         items = ['all']
-        #self.sli_type.setEnabled(True)
+        tan_a = 0
         self.blockSignals(True)
         if self.sli_type.currentIndex() == 0:
             items.extend(['H1 upper', 'H2 lower', 'V1 left', 'V2 right'])
             dist = 38.
+            tan_a = 0.42
         elif self.sli_type.currentIndex() == 1:
             items.extend(['H1 upper', 'H2 lower',
                           'V1 left', 'V2 right', 'V1 inner', 'V2 inner'])
@@ -930,11 +926,17 @@ class ParamsTabCT(ParamsTabCommon):
         elif self.sli_type.currentIndex() == 2:
             items.extend(['V1 left', 'V2 right'])
             dist = 70.
-        else:
+        elif self.sli_type.currentIndex() == 3:
             dist = 0.
-            #self.sli_type.setEnabled(False)
+            tan_a = 0.42
+        else:  # == 4
+            items.extend(['H1 upper', 'H2 lower'])
+            dist = 60.
+            tan_a = 0.5
         self.main.current_paramset.sli_ramp_distance = dist
         self.sli_ramp_distance.setValue(dist)
+        self.sli_tan_a.setValue(tan_a)
+        self.sli_tan_a.setEnabled(tan_a > 0)
         self.blockSignals(False)
         self.sli_plot.addItems(items)
         self.param_changed_from_gui(attribute='sli_type')
@@ -999,6 +1001,9 @@ class ParamsTabCT(ParamsTabCommon):
         self.sli_ramp_distance = QDoubleSpinBox(decimals=1, minimum=0.)
         self.sli_ramp_distance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_ramp_distance'))
+        self.sli_tan_a = QDoubleSpinBox(decimals=2, minimum=0.)
+        self.sli_tan_a.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_tan_a'))
         self.sli_ramp_length = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.sli_ramp_length.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sli_ramp_length'))
@@ -1036,6 +1041,7 @@ class ParamsTabCT(ParamsTabCommon):
 
         flo1 = QFormLayout()
         flo1.addRow(QLabel('Center to ramp distance (mm)'), self.sli_ramp_distance)
+        flo1.addRow(QLabel('Tangens to ramp angle'), self.sli_tan_a)
         flo1.addRow(QLabel('Profile length (mm)'), self.sli_ramp_length)
         flo1.addRow(QLabel('Profile search margin (pix)'), self.sli_search_width)
         flo1.addRow(QLabel('Auto center'), self.sli_auto_center)
@@ -1671,16 +1677,17 @@ class ParamsTabMammo(ParamsTabCommon):
         flo.addRow(QLabel('     ROI size variance (mm)'), self.hom_roi_size_variance)
         flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
         flo.addRow(QLabel('Ignore outer mm'), self.hom_mask_outer_mm)
-        flo.addRow(QLabel('Ignore ROIs where more than (%) pixels masked'), self.hom_ignore_roi_percent)
+        flo.addRow(QLabel('Ignore ROIs where more than (%) pixels masked'),
+                   self.hom_ignore_roi_percent)
         self.tab_hom.hlo.addLayout(flo)
         self.tab_hom.hlo.addWidget(uir.VLine())
         vlo_right = QVBoxLayout()
         self.tab_hom.hlo.addLayout(vlo_right)
         flo_right = QFormLayout()
         flo_right.addRow(QLabel('Deviating pixels (% from average)'),
-                   self.hom_deviating_pixels)
+                         self.hom_deviating_pixels)
         flo_right.addRow(QLabel('Deviating ROIs (% from average)'),
-                   self.hom_deviating_rois)
+                         self.hom_deviating_rois)
         vlo_right.addLayout(flo_right)
         hlo_res_img = QHBoxLayout()
         hlo_res_img.addWidget(QLabel('Result image'))
@@ -1808,13 +1815,15 @@ class GroupBoxCorrectPointSource(QGroupBox):
 
 class WidgetReferenceImage(QWidget):
     """Widget in NM SNI holding reference images."""
+
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
         self.parent.sni_ref_image.currentIndexChanged.connect(
-            lambda: self.parent.param_changed_from_gui(attribute=f'sni_ref_image'))
+            lambda: self.parent.param_changed_from_gui(attribute='sni_ref_image'))
         self.ref_folder = Path(cff.get_config_folder()) / 'SNI_ref_images'
         self.update_reference_images()
+        vlo_ref_image = QVBoxLayout()
         hlo_ref_image = QHBoxLayout()
         hlo_ref_image.addWidget(QLabel('Ref. image (optional):'))
         hlo_ref_image.addWidget(self.parent.sni_ref_image)
@@ -1833,7 +1842,9 @@ class WidgetReferenceImage(QWidget):
         toolb = QToolBar()
         toolb.addActions([act_add, act_delete, act_info])
         hlo_ref_image.addWidget(toolb)
-        self.setLayout(hlo_ref_image)
+        vlo_ref_image.addLayout(hlo_ref_image)
+        vlo_ref_image.addWidget(self.parent.sni_ref_image_fit)
+        self.setLayout(vlo_ref_image)
 
     def update_reference_images(self, set_text=''):
         """Update reference images for NM SNI."""
@@ -1958,6 +1969,14 @@ class ParamsTabNM(ParamsTabCommon):
                     self.sni_roi_size.setVisible(True)
                     self.sni_roi_size.setEnabled(True)
                     self.sni_roi_ratio.setVisible(False)
+            if paramset.sni_channels:
+                self.sni_channels_table_widget.setVisible(True)
+                self.gb_eye_filter.setVisible(False)
+                self.sni_plot_low.setVisible(True)
+            else:
+                self.sni_channels_table_widget.setVisible(False)
+                self.gb_eye_filter.setVisible(True)
+                self.sni_plot_low.setVisible(False)
 
     def update_sni_display_options(self, attribute=''):
         """Update plot and result image options for SNI."""
@@ -1968,15 +1987,15 @@ class ParamsTabNM(ParamsTabCommon):
         if self.sni_type.currentIndex() == 0:
             items_plot = ['SNI values each ROI',
                           'SNI values all images',
-                          'NPS all ROIs + human visual filter',
-                          'Filtered NPS and NPS structure selected ROI']
+                          'NPS all ROIs + filter',
+                          'Filtered NPS and NPS structure, selected ROI']
             items_res_image = ['2d NPS for selected ROI']
         else:
             items_plot = [
                 'SNI values each ROI',
                 'SNI values all images',
                 'Filtered NPS and NPS structure max+avg (small ROIs)',
-                'Filtered NPS and NPS structure selected ROI']
+                'Filtered NPS and NPS structure, selected ROI']
             items_res_image = ['SNI values map', '2d NPS for selected ROI']
         if self.sni_type.currentIndex() == 3:
             self.sni_roi_outside.setVisible(True)
@@ -2003,12 +2022,15 @@ class ParamsTabNM(ParamsTabCommon):
             items = ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6']
         else:
             items = ['L1', 'L2']
-            for rowno, rois_row in enumerate(self.main.current_roi[3:]):
-                for colno, roi in enumerate(rois_row):
-                    name = f'r{rowno}_c{colno}'
-                    if roi is None:  # None if ignored
-                        name = name + ' (ignored)'
-                    items.append(name)
+            try:
+                for rowno, rois_row in enumerate(self.main.current_roi[3:]):
+                    for colno, roi in enumerate(rois_row):
+                        name = f'r{rowno}_c{colno}'
+                        if roi is None:  # None if ignored
+                            name = name + ' (ignored)'
+                        items.append(name)
+            except TypeError:
+                pass
         self.sni_selected_roi.addItems(items)
 
     def create_tab_uni(self):
@@ -2125,7 +2147,7 @@ class ParamsTabNM(ParamsTabCommon):
         Based on Nelson et al, J Nucl Med 2014; 55:169-174<br>
         SNI is a measure attempting to quantify the amount of structured noise in <br>
         the image. Noise Power Spectrum (NPS) is calculated for each ROI and the <br>
-        expected quantum noise NPS is subtracted. A human eye filter is applied.<br>
+        expected quantum noise NPS is subtracted. A frequency filter is applied.<br>
         <br>
         The original suggestion by Nelson et al (2014) was to use two large and 6<br>
         small ROIs. There are different options for the small ROIs.<br>
@@ -2142,6 +2164,11 @@ class ParamsTabNM(ParamsTabCommon):
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
         self.sni_area_ratio.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sni_area_ratio'))
+        self.sni_ratio_dim = QComboBox()
+        self.sni_ratio_dim.addItems(
+            ['2d NPS', 'radial NPS profile'])
+        self.sni_ratio_dim.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sni_ratio_dim'))
         self.sni_type = QComboBox()
         self.sni_type.addItems(ALTERNATIVES['NM']['SNI'])
         self.sni_type.currentIndexChanged.connect(
@@ -2159,6 +2186,10 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_roi_outside.currentIndexChanged.connect(
             lambda: self.update_sni_display_options(attribute='sni_roi_outside'))
         self.sni_roi_outside_label = QLabel('For ROIs partly outside large ROI')
+        self.sni_scale_factor = QDoubleSpinBox(
+            decimals=0, minimum=1, maximum=100, singleStep=1)
+        self.sni_scale_factor.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='sni_scale_factor'))
 
         self.sni_sampling_frequency = QDoubleSpinBox(
             decimals=3, minimum=0.001, singleStep=0.005)
@@ -2167,30 +2198,39 @@ class ParamsTabNM(ParamsTabCommon):
                         attribute='sni_sampling_frequency', update_roi=False,
                         clear_results=True))
 
-        self.sni_min_frequency = QDoubleSpinBox(
-            decimals=3, minimum=0.0, singleStep=0.005)
-        self.sni_min_frequency.valueChanged.connect(
-                    lambda: self.param_changed_from_gui(
-                        attribute='sni_min_frequency', update_roi=False,
-                        clear_results=True))
-
         self.sni_correct_pos_x = QCheckBox('x')
         self.sni_correct_pos_y = QCheckBox('y')
         self.sni_correct_radius_chk = QCheckBox('Lock source distance to')
         self.sni_correct_radius = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=5000, singleStep=0.1)
         self.sni_ref_image = QComboBox()
+        self.sni_ref_image_fit = QCheckBox(
+            'If point source correction, use reference image to correct.')
+        self.sni_ref_image_fit.toggled.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='sni_ref_image_fit', update_roi=False))
         self.wid_ref_image = WidgetReferenceImage(self)
         self.sni_correct = GroupBoxCorrectPointSource(
             self, testcode='sni',
             chk_pos_x=self.sni_correct_pos_x, chk_pos_y=self.sni_correct_pos_y,
             chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_correct_radius)
 
-        gb_eye_filter = QGroupBox('Human visual respose filter')
+        self.sni_channels = BoolSelectTests(
+            self, attribute='sni_channels',
+            text_true='Filter low/high channels',
+            text_false='Human visual response filter',
+            update_roi=False, clear_results=True, update_plot=False)
+
+        self.gb_eye_filter = QGroupBox('Human visual respose filter')
         self.sni_eye_filter_c = QDoubleSpinBox(
             decimals=0, minimum=0, maximum=1000, singleStep=1)
         self.sni_eye_filter_c.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='sni_eye_filter_c'))
+
+        self.sni_channels_table_widget = SimpleTableWidget(
+            self, 'sni_channels_table', ['Start frequency', 'Width', 'Flat top ratio'],
+            row_labels=['Low', 'High'],
+            min_vals=[0.0, None, 0.0], max_vals=[None, None, 1.0])
 
         self.sni_sum_first = QCheckBox('Sum marked images before analysing sum')
         self.sni_sum_first.toggled.connect(
@@ -2216,8 +2256,10 @@ class ParamsTabNM(ParamsTabCommon):
         flo = QFormLayout()
         flo.addRow(QLabel('Ratio of nonzero part of image to be analysed'),
                    self.sni_area_ratio)
-        flo.addRow(QLabel('NPS sampling frequency (mm-1)'),
-                   self.sni_sampling_frequency)
+        flo.addRow(QLabel('Calculate SNI from ratio of integrals'),
+                   self.sni_ratio_dim)
+        #TODO not ready: flo.addRow(QLabel('Merge NxN pixels before analysing, N = '),
+        #           self.sni_scale_factor)
         vlo_left.addLayout(flo)
 
         hlo_type = QHBoxLayout()
@@ -2240,28 +2282,32 @@ class ParamsTabNM(ParamsTabCommon):
         hlo_eye.addStretch()
         hlo_eye.addWidget(QLabel('C'))
         hlo_eye.addWidget(self.sni_eye_filter_c)
-        flo_eye = QFormLayout()
-        flo_eye.addRow(QLabel('Ignore frequencies lower than (mm-1)'),
-                       self.sni_min_frequency)
         vlo_eye.addLayout(hlo_eye)
-        vlo_eye.addLayout(flo_eye)
-        gb_eye_filter.setLayout(vlo_eye)
-        vlo_left.addWidget(gb_eye_filter)
+        self.gb_eye_filter.setLayout(vlo_eye)
+
+        vlo_left.addWidget(self.sni_channels)
+        vlo_left.addWidget(self.gb_eye_filter)
+        vlo_left.addWidget(self.sni_channels_table_widget)
         vlo_left.addWidget(self.sni_sum_first)
 
         vlo_right.addWidget(self.wid_ref_image)
         vlo_right.addWidget(self.sni_correct)
 
+        self.sni_plot_low = uir.BoolSelect(
+            self, text_true='low', text_false='high', text_label='Plot filter')
+        self.sni_plot_low.btn_true.toggled.connect(self.main.refresh_results_display)
+
         f_btm = QFormLayout()
         vlo_right.addLayout(f_btm)
-        f_btm.addRow(self.sni_show_labels, QLabel(''))
+        f_btm.addRow(self.sni_show_labels, self.sni_plot_low)
+        f_btm.addRow(QLabel('NPS sampling frequency (mm-1)'),
+                     self.sni_sampling_frequency)
         f_btm.addRow(QLabel('Plot'), self.sni_plot)
         f_btm.addRow(QLabel('Result image'), self.sni_result_image)
         hlo_selected_roi = QHBoxLayout()
         vlo_right.addLayout(hlo_selected_roi)
         hlo_selected_roi.addWidget(QLabel('Selected ROI for plot/image'))
         hlo_selected_roi.addWidget(self.sni_selected_roi)
-        #hlo_selected_roi.addWidget(self.sni_selected_roi_idx)
 
     def create_tab_mtf(self):
         """GUI of tab MTF."""
@@ -3144,6 +3190,93 @@ class BoolSelectTests(uir.BoolSelect):
                 update_results_table=self.update_results_table,
                 content=False)
             )
+
+
+class SimpleTableWidget(QTableWidget):
+    """Reusable table widget displaying a simple fixed size table of floats."""
+
+    def __init__(self, parent, table_attribute_name,
+                 column_labels, row_labels=None,
+                 min_vals=None, max_vals=None):
+        """Initiate SimpleTableWidget.
+
+        Parameters
+        ----------
+        parent : ParamsTab_
+        main : MainWindow
+        table_attribute_name : str
+            attribute name in main.current_paramset
+        column_labels : list of str
+        row_labels : list of str or None
+        min_vals : list of floats or None
+            minimum accepted value for each column (None if not set)
+        max_vals : list of floats or None
+            maximum accepted value for each column (None if not set)
+        """
+        super().__init__()
+        self.parent = parent
+        self.table_attribute_name = table_attribute_name
+        self.current_table = getattr(
+            self.parent.main.current_paramset, self.table_attribute_name, None)
+        self.column_labels = column_labels
+        self.row_labels = row_labels
+        self.min_vals = min_vals
+        self.max_vals = max_vals
+        self.cellChanged.connect(self.edit_current_table)
+        self.setColumnCount(len(self.column_labels))
+        self.setHorizontalHeaderLabels(self.column_labels)
+        if self.row_labels:
+            self.setRowCount(len(self.row_labels))
+            self.setVerticalHeaderLabels(self.row_labels)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        if self.row_labels is None:
+            self.verticalHeader().setVisible(False)
+        self.resizeRowsToContents()
+        self.update_table()
+
+    def edit_current_table(self, row, col):
+        """Update PositionTable when cell edited."""
+        val = self.item(row, col).text()
+        try:
+            val = float(val)
+        except ValueError:
+            val = 0
+
+        try:
+            if val < self.min_vals[col]:
+                val = self.min_vals[col]
+        except (TypeError, IndexError):
+            pass
+
+        try:
+            if val > self.max_vals[col]:
+                val = self.max_vals[col]
+        except (TypeError, IndexError):
+            pass
+
+        self.current_table[row][col] = val
+
+        self.parent.flag_edit(True)
+        setattr(self.parent.main.current_paramset, self.table_attribute_name,
+                self.current_table)
+        self.parent.clear_results_current_test()
+
+    def update_table(self):
+        """Populate table with current table."""
+        if self.current_table is None:  # not initiated yet
+            self.current_table = getattr(
+                self.parent.main.current_paramset, self.table_attribute_name, None)
+        else:
+            setattr(self.parent.main.current_paramset, self.table_attribute_name,
+                    self.current_table)
+        if self.current_table:
+            self.blockSignals(True)
+            for rowidx, row in enumerate(self.current_table):
+                for colidx, val in enumerate(row):
+                    twi = QTableWidgetItem(str(val))
+                    twi.setTextAlignment(4)
+                    self.setItem(rowidx, colidx, twi)
+            self.blockSignals(False)
 
 
 class PositionWidget(QWidget):

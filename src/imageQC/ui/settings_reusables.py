@@ -1018,6 +1018,7 @@ class QuickTestTreeView(QTreeView):
         self.setAlternatingRowColors(True)
         self.update_model()
         self.setModel(self.model)
+        self.selectionModel().currentChanged.connect(self.update_selimg)
 
     def update_model(self):
         """Set model headers based on current modality."""
@@ -1085,6 +1086,10 @@ class QuickTestTreeView(QTreeView):
         self.header().setStretchLastSection(False)
         self.model.endResetModel()
         self.setCurrentIndex(self.model.index(set_selected, 0))
+
+    def update_selimg(self):
+        """Update label showing which image number is selected."""
+        self.parent.lbl_selimg.setText(f'{self.currentIndex().row()}')
 
     def insert_empty_row(self):
         """Insert empty row after selected or at end."""

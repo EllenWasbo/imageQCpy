@@ -57,6 +57,7 @@
 		<file alias="moveTop.png">icons\moveTop.png</file>
 		<file alias="moveUp.png">icons\moveUp.png</file>
 		<file alias="ok.png">icons\ok.png</file>
+		<file alias="ok_apply.png">icons\ok_apply.png</file>
 		<file alias="open.png">icons\open.png</file>
 		<file alias="openMulti.png">icons\openMulti.png</file>
 		<file alias="play.png">icons\play.png</file>
@@ -138,6 +139,7 @@
 		<file alias="moveTop.png">icons\darkmode\moveTop.png</file>
 		<file alias="moveUp.png">icons\darkmode\moveUp.png</file>
 		<file alias="ok.png">icons\darkmode\ok.png</file>
+		<file alias="ok_apply.png">icons\darkmode\ok_apply.png</file>
 		<file alias="open.png">icons\darkmode\open.png</file>
 		<file alias="openMulti.png">icons\darkmode\openMulti.png</file>
 		<file alias="play.png">icons\darkmode\play.png</file>

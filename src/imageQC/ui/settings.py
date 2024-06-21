@@ -11,7 +11,6 @@ from pathlib import Path
 from time import ctime
 from dataclasses import dataclass, field
 import copy
-import numpy as np
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -20,7 +19,7 @@ from PyQt5.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QStackedWidget,
     QVBoxLayout, QHBoxLayout, QGroupBox, QToolBar,
     QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox,
-    QListWidget, QMessageBox, QDialogButtonBox, QFileDialog
+    QListWidget, QMessageBox, QFileDialog
     )
 
 # imageQC block start
@@ -1035,6 +1034,13 @@ class QuickTestTemplatesWidget(StackWidget):
 
         self.wid_test_table = QuickTestTreeView(self)
         vlo.addWidget(self.wid_test_table)
+
+        hlo_selimg = QHBoxLayout()
+        hlo_selimg.setAlignment(Qt.AlignLeft)
+        vlo.addLayout(hlo_selimg)
+        hlo_selimg.addWidget(QLabel('Selected image index: '))
+        self.lbl_selimg = QLabel('')
+        hlo_selimg.addWidget(self.lbl_selimg)
 
         hlo_nimgs = QHBoxLayout()
         hlo_nimgs.setAlignment(Qt.AlignLeft)

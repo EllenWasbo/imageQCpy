@@ -587,10 +587,9 @@ class ToolBarWindowLevel(QToolBar):
                 for patch in patches:
                     if patch.get_gid() == 'rectangle':
                         [x0, y0], [x1, y1] = patch.get_bbox().get_points()
-                        image_sub = image[
-                            int(y0) + 1:int(y1) + 1,
-                            int(x0) + 1:int(x1) + 1
-                            ]
+                        x_tuple = (int(min([x0, x1])), int(max([x0, x1])) + 1)
+                        y_tuple = (int(min([y0, y1])), int(max([y0, y1])) + 1)
+                        image_sub = image[y_tuple[0]:y_tuple[1], x_tuple[0]:x_tuple[1]]
                 if arg == 'min_max':
                     minval = np.amin(image_sub)
                     maxval = np.amax(image_sub)
@@ -706,16 +705,21 @@ class WindowLevelWidget(QGroupBox):
         minval : float
         maxval : float
         """
-        self.min_wl.setValue(round(minval * 10 ** self.decimals))
-        self.max_wl.setValue(round(maxval * 10 ** self.decimals))
-        formatstr = f'.{self.decimals}f'
-        self.lbl_min_wl.setText(f'{minval:{formatstr}}')
-        self.lbl_max_wl.setText(f'{maxval:{formatstr}}')
-        self.lbl_center.setText(f'{0.5*(minval+maxval):{formatstr}}')
-        self.lbl_width.setText(f'{(maxval-minval):{formatstr}}')
+        proceed = True
+        try:
+            self.min_wl.setValue(round(minval * 10 ** self.decimals))
+            self.max_wl.setValue(round(maxval * 10 ** self.decimals))
+        except ValueError:
+            proceed = False
+        if proceed:
+            formatstr = f'.{self.decimals}f'
+            self.lbl_min_wl.setText(f'{minval:{formatstr}}')
+            self.lbl_max_wl.setText(f'{maxval:{formatstr}}')
+            self.lbl_center.setText(f'{0.5*(minval+maxval):{formatstr}}')
+            self.lbl_width.setText(f'{(maxval-minval):{formatstr}}')
 
-        self.parent.set_active_image_min_max(minval, maxval)
-        self.colorbar.colorbar_draw(cmap=cmap)
+            self.parent.set_active_image_min_max(minval, maxval)
+            self.colorbar.colorbar_draw(cmap=cmap)
 
     def correct_window_level_sliders(self, sender='min'):
         """Make sure min_wl < max_wl after user input."""
@@ -909,7 +913,8 @@ class PushColorCell(QPushButton):
 class BoolSelect(QWidget):
     """Radiobutton group of two returning true/false as selected value."""
 
-    def __init__(self, parent, text_true='True', text_false='False'):
+    def __init__(self, parent, text_true='True', text_false='False',
+                 text_label=''):
         """Initialize BoolSelect.
 
         Parameters
@@ -920,6 +925,8 @@ class BoolSelect(QWidget):
             Text of true value
         text_false : str
             Text of false value
+        text_label : str
+            Text to show before radiobuttons
         """
         super().__init__()
         self.parent = parent
@@ -929,6 +936,8 @@ class BoolSelect(QWidget):
         self.btn_false = QRadioButton(text_false)
 
         hlo = QHBoxLayout()
+        if text_label:
+            hlo.addWidget(QLabel(text_label))
         group = QButtonGroup()
         group.setExclusive(True)
         group.addButton(self.btn_true)

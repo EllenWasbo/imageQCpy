@@ -236,6 +236,7 @@ class MainWindow(QMainWindow):
         """Set empty values at startup and when all images closed."""
         self.imgs = []
         self.results = {}
+        self.artifacts = []
         self.active_img = None  # np.array pixeldata for active image
         self.summed_img = None  # sum of marked images if activated
         self.average_img = False  # true if summed_img should be averaged
@@ -388,10 +389,11 @@ class MainWindow(QMainWindow):
                     frame_number=self.imgs[self.gui.active_img_no].frame_number,
                     tag_infos=self.tag_infos)
             if self.active_img is not None:
-                try: 
+                try:
                     if len(self.imgs[self.gui.active_img_no].artifacts) > 0:
                         self.active_img = apply_artifacts(
-                            self.active_img, self.imgs[self.gui.active_img_no])
+                            self.active_img, self.imgs[self.gui.active_img_no],
+                            self.artifacts)
                 except (TypeError, AttributeError, IndexError):
                     pass
                 amin = round(np.amin(self.active_img))

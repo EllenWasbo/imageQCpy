@@ -699,17 +699,17 @@ def test_PET_Rec():
     values = np.round(np.array(input_main.results['Rec']['details_dict']['values'][3]))
     assert np.array_equal(
         values,
-        np.array([10766., 14281., 15373., 15403., 16304., 16695.,  2133.]))
+        np.array([10766., 14281., 15373., 15403., 16304., 16695.,  2131.]))
     # max
     values = np.round(np.array(input_main.results['Rec']['details_dict']['values'][4]))
     assert np.array_equal(
         values,
-        np.array([14467., 19557., 21250., 20156., 20717., 20389.,  2133.]))
+        np.array([14467., 19557., 21250., 20156., 20717., 20389.,  2131.]))
     # peak
     values = np.round(np.array(input_main.results['Rec']['details_dict']['values'][5]))
     assert np.array_equal(
         values,
-        np.array([7867., 11378., 15615., 18612., 18994., 18938.,  2133.]))
+        np.array([7867., 11378., 15615., 18612., 18994., 18938.,  2131.]))
 
 
 def test_MR_SNR():

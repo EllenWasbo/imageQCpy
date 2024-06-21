@@ -397,6 +397,7 @@ class ParamSetCT(ParamSetCommon):
     sli_average_width: int = 1
     sli_median_filter: int = 0
     sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom, 3=Siemens phantom
+    sli_tan_a: float = 0.42  # tangens of ramp angle
     sli_auto_center: bool = False
     rin_sigma_image: float = 0.  # sigma for gaussfilter of image
     rin_sigma_profile: float = 0.  # sigma for gaussfilter of radial profile
@@ -512,7 +513,7 @@ class ParamSetNM(ParamSetCommon):
     sni_roi_size: int = 128  # number of pixels
     sni_roi_outside: int = 0  # alternatives ignore/move
     sni_sampling_frequency: float = 0.01
-    sni_min_frequency: float = 0.0
+    sni_ratio_dim: int = 0  # calculate ratio 2d integral (0) or radial profile (1)
     sni_correct: bool = False
     sni_correct_pos_x: bool = False
     sni_correct_pos_y: bool = False
@@ -520,7 +521,12 @@ class ParamSetNM(ParamSetCommon):
     sni_radius: float = 330.
     sni_sum_first: bool = False
     sni_eye_filter_c: float = 28.
+    sni_channels: bool = False   # use channels
+    sni_channels_table: list[float] = field(
+        default_factory=lambda: [[0.0, 0.15, 0.5], [0.1, 0.4, 0.5]])
+    sni_scale_factor: int = 1  # 1 = no scale, 2 = merge 2x2
     sni_ref_image: str = ''  # file name (without path and extension)
+    sni_ref_image_fit: bool = False  # True = curvature fit based on ref image
     mtf_type: int = 1  # [Point, line (default), Two lines, edge]
     mtf_roi_size_x: float = 50.
     mtf_roi_size_y: float = 50.
@@ -615,7 +621,7 @@ class ParamSetMR(ParamSetCommon):
     sli_background_width: float = 5.
     # sli_search_width: int = 0  # currently not in use
     sli_average_width: int = 0
-    sli_median_filter: int = 0  #currently not in use for MR, CT only
+    sli_median_filter: int = 0  # currently not in use for MR, CT only
     sli_dist_lower: float = -2.5
     sli_dist_upper: float = 2.5
     sli_optimize_center: bool = True

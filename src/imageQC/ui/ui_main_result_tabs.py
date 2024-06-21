@@ -1597,6 +1597,8 @@ class ResultPlotCanvas(PlotCanvas):
                     colors = ['c', 'r']
                 elif self.main.current_paramset.sli_type == 3:
                     colors = ['b']
+                elif self.main.current_paramset.sli_type == 4:
+                    colors = ['b', 'lime']
                 if self.main.tab_ct.sli_plot.currentIndex() == 0:  # plot all
                     l_idxs = list(np.arange(len(details_dict['profiles'])))
                 else:
@@ -1654,6 +1656,10 @@ class ResultPlotCanvas(PlotCanvas):
         imgno = self.main.gui.active_img_no
         if self.main.current_paramset.sni_sum_first:
             imgno = 0
+        show_filter_2 = False
+        if self.main.current_paramset.sni_channels:
+            if self.main.tab_nm.sni_plot_low.btn_false.isChecked():
+                show_filter_2 = True
         self.title = 'Calculations to get Structured Noise Index'
         self.ytitle = r'NPS ($\mathregular{mm^{2}}$)'
         self.xtitle = 'frequency (pr mm)'
@@ -1664,23 +1670,18 @@ class ResultPlotCanvas(PlotCanvas):
 
         def plot_SNI_values_bar():
             """Plot SNI values as columns pr ROI."""
-            if self.main.current_paramset.sni_type == 0:
-                try:
-                    self.bars.append({
-                        'names': roi_names,
-                        'values': self.main.results['SNI']['values'][imgno][1:]
-                        })
-                except KeyError:
-                    pass
-            else:
-                try:
+            try:
+                if show_filter_2:
+                    SNI_values = details_dict['SNI_values_2']
+                else:
                     SNI_values = details_dict['SNI_values']
-                    self.bars.append({'names': roi_names, 'values': SNI_values})
-                except KeyError:
-                    pass
-            self.title = 'Structured Noise Index for each ROI in selected image'
-            self.ytitle = 'SNI'
-            self.xtitle = 'ROI'
+            except KeyError:
+                SNI_values = []
+            if SNI_values:
+                self.bars.append({'names': roi_names, 'values': SNI_values})
+                self.title = 'Structured Noise Index for each ROI in selected image'
+                self.ytitle = 'SNI'
+                self.xtitle = 'ROI'
 
         def plot_SNI_values_line():
             """Plot SNI values as columns pr ROI."""
@@ -1724,7 +1725,8 @@ class ResultPlotCanvas(PlotCanvas):
             if proceed:
                 name = self.main.tab_nm.sni_selected_roi.currentText()
                 self.title = f'Filtered NPS and NPS structure for {name}'
-                yvals = details_dict_roi['rNPS_filt']
+                suffix_2 = '_2' if show_filter_2 else ''
+                yvals = details_dict_roi[f'rNPS_filt{suffix_2}']
                 xvals = details_dict_roi['freq']
                 self.curves.append(
                     {'label': 'NPS with eye filter',
@@ -1737,11 +1739,13 @@ class ResultPlotCanvas(PlotCanvas):
                      'style': ':b'})
                 self.curves.append(
                     {'label': 'NPS structured noise with eye filter',
-                     'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct_filt'],
+                     'xvals': xvals,
+                     'yvals': details_dict_roi[f'rNPS_struct_filt{suffix_2}'],
                      'style': '-r'})
                 self.curves.append(
                     {'label': 'NPS structured noise',
-                     'xvals': xvals, 'yvals': details_dict_roi['rNPS_struct'],
+                     'xvals': xvals,
+                     'yvals': details_dict_roi['rNPS_struct'],
                      'style': ':r'})
 
                 if isinstance(details_dict_roi['quantum_noise'], float):
@@ -1756,7 +1760,7 @@ class ResultPlotCanvas(PlotCanvas):
                          'xvals': xvals, 'yvals': yvals, 'style': ':' + self.color_k})
 
         def plot_all_NPS():
-            """Plot NPS for all ROIs + hum vis filter (normalized to NPS in max)."""
+            """Plot NPS for all ROIs + filter."""
             if self.main.current_paramset.sni_type == 0:
                 self.title = 'NPS all ROIs'
                 colors = ['red', 'blue', 'green', 'cyan'] + [self.color_k] * 4
@@ -1772,15 +1776,16 @@ class ResultPlotCanvas(PlotCanvas):
                          'xvals': xvals, 'yvals': yvals,
                          'color': colors[roi_no], 'style': styles[roi_no]})
 
-                eye_filter_curve = details_dict['eye_filter_large']
-                yvals = eye_filter_curve['V'] * np.median(details_dict[
+                filter_curve = details_dict['eye_filter_large']
+                suffix_2 = '_2' if show_filter_2 else ''
+                yvals = filter_curve[f'V{suffix_2}'] * np.median(details_dict[
                     'pr_roi'][0]['rNPS'])
                 self.curves.append(
-                    {'label': 'Visual filter',
-                     'xvals': eye_filter_curve['r'], 'yvals': yvals,
+                    {'label': 'Filter',
+                     'xvals': filter_curve['r'], 'yvals': yvals,
                      'color': self.color_darkgray, 'style': '-'})
                 self.default_range_x = [0, nyquist_freq]
-            else:  # currently not selectable option:
+            else:
                 for roi_no, dd in enumerate(details_dict['pr_roi']):
                     yvals = dd['rNPS']
                     if roi_no == 0:
@@ -1790,33 +1795,34 @@ class ResultPlotCanvas(PlotCanvas):
                         {'label': '_no_legend_',
                          'xvals': xvals, 'yvals': yvals})
                 for suf in ['large', 'small']:
-                    eye_filter_curve = details_dict['eye_filter_' + suf]
-                    yvals = eye_filter_curve['V'] * np.median(details_dict[
+                    filter_curve = details_dict['eye_filter_' + suf]
+                    yvals = filter_curve[f'V{suffix_2}'] * np.median(details_dict[
                         'pr_roi'][0]['rNPS'])
                     self.curves.append(
-                        {'label': 'Visual filter',
-                         'xvals': eye_filter_curve['r'], 'yvals': yvals,
+                        {'label': 'Filter',
+                         'xvals': filter_curve['r'], 'yvals': yvals,
                          'color': self.color_darkgray, 'style': '-'})
                 self.default_range_x = [0, nyquist_freq]
 
         def plot_filtered_max_avg():
+            suffix_2 = '_2' if show_filter_2 else ''
             xvals = details_dict['pr_roi'][0]['freq']
-            yvals = details_dict['avg_rNPS_filt_small']
+            yvals = details_dict[f'avg_rNPS_filt{suffix_2}_small']
             self.curves.append(
-                {'label': 'avg NPS with eye filter',
+                {'label': 'avg NPS with filter',
                  'xvals': xvals, 'yvals': yvals, 'style': '-b'})
-            yvals = details_dict['avg_rNPS_struct_filt_small']
+            yvals = details_dict[f'avg_rNPS_struct_filt{suffix_2}_small']
             self.curves.append(
-                {'label': 'avg structured NPS with eye filter',
+                {'label': 'avg structured NPS with filter',
                  'xvals': xvals, 'yvals': yvals, 'style': '-r'})
-            idx_max = details_dict['roi_max_idx_small']
-            yvals = details_dict['pr_roi'][idx_max + 2]['rNPS_filt']
+            idx_max = details_dict[f'roi_max_idx_small{suffix_2}']
+            yvals = details_dict['pr_roi'][idx_max + 2][f'rNPS_filt{suffix_2}']
             self.curves.append(
-                {'label': 'max NPS with eye filter',
+                {'label': 'max NPS with filter',
                  'xvals': xvals, 'yvals': yvals, 'style': ':b'})
-            yvals = details_dict['pr_roi'][idx_max]['rNPS_struct_filt']
+            yvals = details_dict['pr_roi'][idx_max + 2][f'rNPS_struct_filt{suffix_2}']
             self.curves.append(
-                {'label': 'max structured NPS with eye filter',
+                {'label': 'max structured NPS with filter',
                  'xvals': xvals, 'yvals': yvals, 'style': ':r'})
             name = roi_names[idx_max + 2]
             self.title = f'Filtered NPS and NPS structure for {name} (max) and avg'

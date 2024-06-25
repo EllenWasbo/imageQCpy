@@ -504,7 +504,7 @@ class ParamSetNM(ParamSetCommon):
     uni_correct_pos_x: bool = False
     uni_correct_pos_y: bool = False
     uni_lock_radius: bool = False
-    uni_radius: float = 330.
+    uni_radius: float = 0.1
     uni_sum_first: bool = False
     uni_scale_factor: int = 0  # 0 = Auto, 1= no scale, 2... = scale factor
     sni_area_ratio: float = 0.9
@@ -518,7 +518,7 @@ class ParamSetNM(ParamSetCommon):
     sni_correct_pos_x: bool = False
     sni_correct_pos_y: bool = False
     sni_lock_radius: bool = False
-    sni_radius: float = 330.
+    sni_radius: float = 0.1
     sni_sum_first: bool = False
     sni_eye_filter_c: float = 28.
     sni_channels: bool = False   # use channels

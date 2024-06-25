@@ -1,3 +1,16 @@
+#v3.1.1
+_Jul XX, 2024_
+
+Changes:
+- Added option to merge pixels before NM SNI calculations
+- Added option to simulate gamma camera point source as artifact
+
+Fixes:
+- Adding artifacts:
+ - Handeling adding noise when <=0 within noise shape (setting values to 1 if <=0 before adding noise).
+ - Better handeling artifact name when editing of settings. Keep autogenerating or keep manually edited.
+ 
+
 # v3.1.0
 _Jun 21, 2024_
 

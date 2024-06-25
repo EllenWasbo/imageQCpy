@@ -2053,12 +2053,15 @@ class ParamsTabNM(ParamsTabCommon):
         self.uni_correct_pos_x = QCheckBox('x')
         self.uni_correct_pos_y = QCheckBox('y')
         self.uni_correct_radius_chk = QCheckBox('Lock source distance to')
-        self.uni_correct_radius = QDoubleSpinBox(
+        self.uni_radius = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=5000, singleStep=0.1)
+        self.uni_radius.valueChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='uni_radius', update_roi=False))
         self.uni_correct = GroupBoxCorrectPointSource(
             self, testcode='uni',
             chk_pos_x=self.uni_correct_pos_x, chk_pos_y=self.uni_correct_pos_y,
-            chk_radius=self.uni_correct_radius_chk, wid_radius=self.uni_correct_radius)
+            chk_radius=self.uni_correct_radius_chk, wid_radius=self.uni_radius)
 
         self.uni_sum_first = QCheckBox('Sum marked images before analysing sum')
         self.uni_sum_first.toggled.connect(
@@ -2201,8 +2204,11 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_correct_pos_x = QCheckBox('x')
         self.sni_correct_pos_y = QCheckBox('y')
         self.sni_correct_radius_chk = QCheckBox('Lock source distance to')
-        self.sni_correct_radius = QDoubleSpinBox(
+        self.sni_radius = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=5000, singleStep=0.1)
+        self.sni_radius.valueChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='sni_radius', update_roi=False))
         self.sni_ref_image = QComboBox()
         self.sni_ref_image_fit = QCheckBox(
             'If point source correction, use reference image to correct.')
@@ -2213,7 +2219,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_correct = GroupBoxCorrectPointSource(
             self, testcode='sni',
             chk_pos_x=self.sni_correct_pos_x, chk_pos_y=self.sni_correct_pos_y,
-            chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_correct_radius)
+            chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_radius)
 
         self.sni_channels = BoolSelectTests(
             self, attribute='sni_channels',
@@ -2258,8 +2264,8 @@ class ParamsTabNM(ParamsTabCommon):
                    self.sni_area_ratio)
         flo.addRow(QLabel('Calculate SNI from ratio of integrals'),
                    self.sni_ratio_dim)
-        #TODO not ready: flo.addRow(QLabel('Merge NxN pixels before analysing, N = '),
-        #           self.sni_scale_factor)
+        flo.addRow(QLabel('Merge NxN pixels before analysing, N = '),
+                   self.sni_scale_factor)
         vlo_left.addLayout(flo)
 
         hlo_type = QHBoxLayout()

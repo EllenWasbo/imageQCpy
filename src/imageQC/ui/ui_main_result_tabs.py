@@ -1666,7 +1666,8 @@ class ResultPlotCanvas(PlotCanvas):
         details_dict = self.main.results['SNI']['details_dict'][imgno]
         cbx = self.main.tab_nm.sni_selected_roi
         roi_names = [cbx.itemText(i) for i in range(cbx.count())]
-        nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
+        nyquist_freq = 1/(
+            2.*self.main.imgs[imgno].pix[0]*self.main.current_paramset.sni_scale_factor)
 
         def plot_SNI_values_bar():
             """Plot SNI values as columns pr ROI."""

@@ -1034,7 +1034,7 @@ def generate_SNI_Siemens_image(SNI_values):
     return image
 
 
-def get_roi_SNI(image, image_info, paramset):
+def get_roi_SNI(image, image_info, paramset, block_size=1):
     """Generate roi_array for NM SNI test.
 
     Parameters
@@ -1044,6 +1044,8 @@ def get_roi_SNI(image, image_info, paramset):
         as defined in scripts/dcm.py
     paramset : ParamSetNM
         for given modality as defined in config/config_classes.py
+    block_size : int
+        used if merging pixels
 
     Returns
     -------
@@ -1125,7 +1127,7 @@ def get_roi_SNI(image, image_info, paramset):
         if paramset.sni_type == 1:
             roi_size = int(paramset.sni_roi_ratio * large_dim)
         else:
-            roi_size = paramset.sni_roi_size
+            roi_size = paramset.sni_roi_size // block_size
         if paramset.sni_type in [1, 2]:
             n_rois_x = width_x // (0.5 * roi_size) - 1
             n_rois_y = width_y // (0.5 * roi_size) - 1
@@ -1145,7 +1147,7 @@ def get_roi_SNI(image, image_info, paramset):
         else:  # sni_type 3 Siemens
             small_start_idx = 3
             dist = 76  # mm diameter PMTs = distance between centers
-            dist_pix = round(dist / image_info.pix[0])
+            dist_pix = round(dist / image_info.pix[0]*block_size)
             dy = round(dist_pix * np.sin(np.pi/3))  # hexagonal pattern
             radius = roi_size // 2
             dx7 = dist_pix * (np.arange(7) - 3)
@@ -1172,16 +1174,19 @@ def get_roi_SNI(image, image_info, paramset):
                         if paramset.sni_roi_outside == 0:  # ignore
                             roi_array[rowno + small_start_idx][colno] = None
                         elif paramset.sni_roi_outside == 1:  # move
-                            xshift = n_cols
-                            yshift = n_rows
-                            if colno > len(roi_row) // 2:
-                                xshift = - xshift
-                            if rowno < len(roi_array[small_start_idx:]) // 2:
-                                yshift = - yshift
-                            roi_array[rowno + 1][colno] = get_roi_circle(
-                                image.shape,
-                                (dxs[colno] + xshift, dys[rowno] + yshift),
-                                radius)
+                            if n_cols < roi_size // 2 and n_rows < roi_size // 2:
+                                xshift = n_cols
+                                yshift = n_rows
+                                if colno > len(roi_row) // 2:
+                                    xshift = - xshift
+                                if rowno < len(roi_array[small_start_idx:]) // 2:
+                                    yshift = - yshift
+                                roi_array[rowno + small_start_idx][colno] = get_roi_circle(
+                                    image.shape,
+                                    (dxs[colno] + xshift, dys[rowno] + yshift),
+                                    radius)
+                            else:  # ignore if > halv outside
+                                roi_array[rowno + small_start_idx][colno] = None
 
     return (roi_array, errmsg)
 

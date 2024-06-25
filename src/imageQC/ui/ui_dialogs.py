@@ -372,13 +372,13 @@ class AddArtifactsDialog(ImageQCDialog):
         vlo = QVBoxLayout()
         self.setLayout(vlo)
 
-        tab = QTabWidget()
+        self.tab = QTabWidget()
         wid_artifacts = QWidget()
         wid_applied_artifacts = QWidget()
 
-        tab.addTab(wid_artifacts, 'Artifacts')
-        tab.addTab(wid_applied_artifacts, 'Applied artifacts')
-        vlo.addWidget(tab)
+        self.tab.addTab(wid_artifacts, 'Artifacts')
+        self.tab.addTab(wid_applied_artifacts, 'Applied artifacts')
+        vlo.addWidget(self.tab)
 
         # Artifacts
         vlo_a = QVBoxLayout()
@@ -393,7 +393,7 @@ class AddArtifactsDialog(ImageQCDialog):
         self.new_label = QLineEdit('')
         fLO.addRow(QLabel('Label new artifact'), self.new_label)
         self.form = QComboBox()
-        self.form.addItems(['circular', 'ring', 'rectangle'])
+        self.form.addItems(['circle', 'ring', 'rectangle'])
         self.form.setCurrentIndex(0)
         self.form.currentIndexChanged.connect(self.update_form)
         fLO.addRow(QLabel('Artifact form'), self.form)
@@ -420,11 +420,14 @@ class AddArtifactsDialog(ImageQCDialog):
         self.rotation.valueChanged.connect(self.value_edited)
         fLO.addRow(QLabel('Rotation (degrees)'), self.rotation)
         self.sigma = QDoubleSpinBox(decimals=2)
-        self.sigma.setRange(0, 1000)
+        self.sigma.setRange(0, 5500)
         self.sigma.valueChanged.connect(self.value_edited)
-        fLO.addRow(QLabel('Gaussian blur, sigma (mm)'), self.sigma)
+        self.sigma_label = QLabel('Gaussian blur, sigma (mm)')
+        fLO.addRow(self.sigma_label, self.sigma)
         self.method = QComboBox()
-        self.method.addItems(['adding', 'multiplying', 'adding poisson noise'])
+        self.method.addItems(['adding', 'multiplying',
+                              'adding poisson noise',
+                              'adding gamma camera point source'])
         self.method.currentIndexChanged.connect(self.update_method)
         fLO.addRow(QLabel('Apply artifact value by'), self.method)
         self.value = QDoubleSpinBox(decimals=3)
@@ -607,7 +610,7 @@ class AddArtifactsDialog(ImageQCDialog):
         """Update ROI size descriptions when form changes."""
         self.value_edited()
         form = self.form.currentText()
-        if form == 'circular':
+        if form == 'circle':
             self.size_1_txt.setText('Radius (mm)')
             self.size_2_txt.setText('-')
             self.size_2.setEnabled(False)
@@ -631,6 +634,10 @@ class AddArtifactsDialog(ImageQCDialog):
             self.value.setEnabled(False)
         else:
             self.value.setEnabled(True)
+        if 'gamma camera' in method:
+            self.sigma_label.setText('Source distance (mm)')
+        else:
+            self.sigma_label.setText('Gaussian blur, sigma (mm)')
 
     def get_artifact_object(self):
         """Get settings as artifact object."""
@@ -672,8 +679,16 @@ class AddArtifactsDialog(ImageQCDialog):
         artifact = self.get_artifact_object()
         if artifact:
             old_label = self.label.currentText()
-            artifact.label = self.new_label.text()
-            new_label = validate_new_artifact_label(self.main, artifact)
+            if artifact.label == '':  # no new name given
+                artifact.label = old_label  # keep old label?
+            else:
+                # already used by another?
+                available_labels = [x.label for x in self.main.artifacts]
+                if (
+                        self.label.currentText() != artifact.label
+                        and artifact.label in available_labels):
+                    artifact.label = ''  # autogenerate, cannot use same as before
+            new_label = validate_new_artifact_label(self.main, artifact, edit=True)
             if new_label is not None:
                 artifact.label = new_label
                 idx = self.label.currentIndex() - 1
@@ -681,7 +696,8 @@ class AddArtifactsDialog(ImageQCDialog):
                 if old_label != new_label:
                     self.update_labels(set_text=new_label)
                     edit_artifact_label(old_label, new_label, self.main)
-                    self.main_refresh()
+                self.update_applied()
+                self.main_refresh()
 
     def add(self, artifact=None):
         """Add artifact to list of artifacts."""
@@ -867,10 +883,10 @@ class AddArtifactsDialog(ImageQCDialog):
         fname = QFileDialog.getOpenFileName(
             self, 'Open saved artifacts',
             filter="YAML file (*.yaml)")
-        any_imported = False
+        new_labels = []
+        path_applied = ''
         if fname[0] != '':
             try:
-                new_labels = []
                 with open(fname[0], 'r') as file:
                     docs = yaml.safe_load_all(file)
                     for doc in docs:
@@ -881,12 +897,15 @@ class AddArtifactsDialog(ImageQCDialog):
                             artifact_this.label = artifact_this.label + '_'
                         self.main.artifacts.append(artifact_this)
                         new_labels.append(artifact_this.label)
-                if len(new_labels) > 0:
-                    self.update_labels(set_text=new_labels[0])
-                    any_imported = True
-                else:
+                if len(new_labels) == 0:
                     QMessageBox.warning(self, 'Failed loading',
                                         f'Failed loading any artifacts from {fname[0]}')
+            except TypeError:
+                if self.tab.currentIndex() == 0:
+                    QMessageBox.warning(
+                        self, 'Failed loading',
+                        f'Failed loading any artifacts from {fname[0]}'
+                        'Selected file not expected format.')
             except OSError as error:
                 QMessageBox.warning(self, 'Failed loading',
                                     f'Failed loading {fname[0]}'
@@ -945,14 +964,15 @@ class AddArtifactsDialog(ImageQCDialog):
                     del_labels = []
                     for img_info in self.main.imgs:
                         artifacts_this = img_info.artifacts
-                        for artifact_label in artifacts_this:
-                            if artifact_label not in artifacts_available:
-                                del_labels.append(artifact_label)
+                        if artifacts_this:
+                            for artifact_label in artifacts_this:
+                                if artifact_label not in artifacts_available:
+                                    del_labels.append(artifact_label)
                     del_labels = list(set(del_labels))
                     if del_labels:
                         warnings.append(
                             'Saved pattern of artifacts contain artifact labels not'
-                            'currently loaded defined. These are ignored:\n'
+                            'currently loaded. These are ignored:\n'
                             f'{del_labels}')
                     for del_label in del_labels:
                         edit_artifact_label(del_label, '', self.main)
@@ -960,12 +980,14 @@ class AddArtifactsDialog(ImageQCDialog):
                     if len(warnings) > 0:
                         dlg = messageboxes.MessageBoxWithDetails(
                             self, title='Warnings',
-                            msg='Found issues when loading patter of artifacts',
+                            msg='Found issues when loading pattern of artifacts',
                             info='See details',
                             icon=QMessageBox.Warning,
                             details=warnings)
                         dlg.exec()
-                    self.update_applied()
+        if len(new_labels) > 0:
+            self.update_labels(set_text=new_labels[0])
+        self.update_applied()
 
 
 class WindowLevelEditDialog(ImageQCDialog):

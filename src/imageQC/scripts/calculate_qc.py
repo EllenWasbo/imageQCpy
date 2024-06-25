@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import qApp
 
 # imageQC block start
 from imageQC.scripts import dcm
-from imageQC.scripts.calculate_roi import (get_rois, get_roi_circle)
+from imageQC.scripts.calculate_roi import (get_rois, get_roi_circle, get_roi_SNI)
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
@@ -1805,12 +1805,11 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             errmsg = None
             values_sup = [None] * 3
             if paramset.uni_correct:
-                lock_z = paramset.uni_radius if paramset.uni_lock_radius else None
                 res, errmsg = get_corrections_point_source(
                     image2d, image_info, roi_array[0],
                     fit_x=paramset.uni_correct_pos_x,
                     fit_y=paramset.uni_correct_pos_y,
-                    lock_z=lock_z,
+                    lock_z=paramset.uni_lock_radius, guess_z=paramset.uni_radius,
                     correction_type='multiply'
                     )
                 image_input = res['corrected_image']
@@ -3591,7 +3590,7 @@ def calculate_flatfield_mammo(image2d, mask_max, mask_outer, image_info, paramse
 
 def get_corrections_point_source(
         image2d, img_info, roi_array,
-        fit_x=False, fit_y=False, lock_z=None,
+        fit_x=False, fit_y=False, lock_z=False, guess_z=0.1,
         correction_type='multiply', estimate_noise=False):
     """Estimate xyz of point source and generate correction matrix.
 
@@ -3607,8 +3606,11 @@ def get_corrections_point_source(
         Fit in x direction. The default is False.
     fit_y : bool, optional
         Fit in y direction. The default is False.
-    lock_z : float, optional
-        Use locked distance to source when fitting. The default is None.
+    lock_z : bool
+        Set distance to source = guess_z when fitting. The default is False.
+    guess_z : float
+        If guess_z = 0.1 = DICOM radius or 400.
+        If guess > 0.1 used as first approximation. Default is 0.1
     correction_type : str, optional
         'subtract' or 'multiply'. Default is 'multiply'
     estimate_noise : bool
@@ -3668,15 +3670,18 @@ def get_corrections_point_source(
     values = values_flat[sort_idxs]
     dists = dists_ufov_flat[sort_idxs]
 
-    if lock_z is None:
-        try:
-            nm_radius = img_info.nm_radius
-        except AttributeError:
-            nm_radius = 400
-        lock_radius = False
-    else:
-        nm_radius = lock_z
+    if lock_z:
+        nm_radius = guess_z
         lock_radius = True
+    else:
+        if guess_z <= 0.1:
+            try:
+                nm_radius = img_info.nm_radius
+            except AttributeError:
+                nm_radius = 400
+        else:
+            nm_radius = guess_z
+        lock_radius = False
 
     if nm_radius is None:
         errmsg = (
@@ -4049,11 +4054,9 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         NPS_struct_filt = NPS_struct * eye_filter[0]
         NPS_filt_2 = NPS * eye_filter[1]
         NPS_struct_filt_2 = NPS_struct * eye_filter[1]
-        #SNI_2 = np.sum(NPS_struct_filt_2) / np.sum(NPS_filt_2)
     else:
         NPS_filt = NPS * eye_filter
         NPS_struct_filt = NPS_struct * eye_filter
-    #SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
 
     # radial NPS curves
     freq, rNPS = mmcalc.get_radial_profile(
@@ -4064,19 +4067,25 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
         NPS_struct, pix=unit, step_size=sampling_frequency, ignore_negative=True)
     _, rNPS_struct_filt = mmcalc.get_radial_profile(
         NPS_struct_filt, pix=unit, step_size=sampling_frequency, ignore_negative=True)
-    #SNI = np.sum(rNPS_struct_filt) / np.sum(rNPS_filt)
     if isinstance(eye_filter, list):
         _, rNPS_filt_2 = mmcalc.get_radial_profile(
             NPS_filt_2, pix=unit, step_size=sampling_frequency, ignore_negative=True)
         _, rNPS_struct_filt_2 = mmcalc.get_radial_profile(
             NPS_struct_filt_2, pix=unit, step_size=sampling_frequency,
             ignore_negative=True)
-        #SNI_2 = np.sum(rNPS_struct_filt_2) / np.sum(rNPS_filt_2)
 
     if sni_dim == 0:
-        SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
+        ignore_negative = False  # ignore for testing - results show crappy data
+        if ignore_negative:
+            SNI = np.sum(NPS_struct_filt[NPS_struct_filt > 0]) / np.sum(NPS_filt)
+        else:
+            SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
         if isinstance(eye_filter, list):
-            SNI_2 = np.sum(NPS_struct_filt_2) / np.sum(NPS_filt_2)
+            if ignore_negative:
+                SNI_2 = np.sum(
+                    NPS_struct_filt_2[NPS_struct_filt_2 > 0]) / np.sum(NPS_filt_2)
+            else:
+                SNI_2 = np.sum(NPS_struct_filt_2) / np.sum(NPS_filt_2)
     else:
         SNI = np.sum(rNPS_struct_filt) / np.sum(rNPS_filt)
         if isinstance(eye_filter, list):
@@ -4130,7 +4139,6 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
 
     # point source correction
     if paramset.sni_correct:
-        lock_z = paramset.sni_radius if paramset.sni_lock_radius else None
         est_noise = False if reference_image is not None else True
 
         if reference_image and paramset.sni_ref_image_fit:
@@ -4142,7 +4150,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
             fit_image, image_info, roi_array[0],
             fit_x=paramset.sni_correct_pos_x,
             fit_y=paramset.sni_correct_pos_y,
-            lock_z=lock_z,
+            lock_z=paramset.sni_lock_radius, guess_z=paramset.sni_radius,
             correction_type='subtract', estimate_noise=est_noise
             )
         if errmsg is not None:
@@ -4160,16 +4168,21 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         end_y = start_y + n_blocks_y * block_size
         image2d = skimage.measure.block_reduce(
             image2d[start_y:end_y, start_x:end_x], (block_size, block_size), np.sum)
+        '''
         for idx, arr in enumerate(roi_array):
             reduced_roi = skimage.measure.block_reduce(
                 arr[start_y:end_y, start_x:end_x], (block_size, block_size), np.mean)
             roi_array[idx] = np.where(reduced_roi > 0.5, True, False)
+        '''
         if fit_dict:
             if 'reference_image' in fit_dict:
                 reference_image = skimage.measure.block_reduce(
                     reference_image[start_y:end_y, start_x:end_x],
                     (block_size, block_size), np.sum)
                 fit_dict['reference_image'] = reference_image
+        # recalculate rois (avoid block reduce on rois, might get non-quadratic)
+        roi_array, errmsg = get_roi_SNI(image2d, image_info, paramset,
+                                        block_size=block_size)
 
     if fit_dict is not None:
         details_dict = fit_dict
@@ -4182,13 +4195,13 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
     # large ROIs
     rows = np.max(roi_array[1], axis=1)
     eye_filter = get_eye_filter(
-        np.count_nonzero(rows), image_info.pix[0], paramset)
+        np.count_nonzero(rows), image_info.pix[0]*block_size, paramset)
     details_dict['eye_filter_large'] = eye_filter['curve']
     for i in [1, 2]:
         SNI, SNI_2, details_dict_roi = calculate_SNI_ROI(
             image2d, roi_array[i],
             eye_filter=eye_filter['filter_2d'], unit=eye_filter['unit'],
-            pix=image_info.pix[0], fit_dict=fit_dict, image_mean=image_mean,
+            pix=image_info.pix[0]*block_size, fit_dict=fit_dict, image_mean=image_mean,
             sampling_frequency=paramset.sni_sampling_frequency,
             sni_dim=paramset.sni_ratio_dim)
         details_dict['pr_roi'].append(details_dict_roi)
@@ -4212,13 +4225,13 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         # small ROIs
         rows = np.max(roi_array[3], axis=1)
         eye_filter = get_eye_filter(
-            np.count_nonzero(rows), image_info.pix[0], paramset)
+            np.count_nonzero(rows), image_info.pix[0]*block_size, paramset)
         details_dict['eye_filter_small'] = eye_filter['curve']
         for i in range(3, 9):
             SNI, SNI_2, details_dict_roi = calculate_SNI_ROI(
                 image2d, roi_array[i],
                 eye_filter['filter_2d'], unit=eye_filter['unit'],
-                pix=image_info.pix[0], fit_dict=fit_dict, image_mean=image_mean,
+                pix=image_info.pix[0]*block_size, fit_dict=fit_dict, image_mean=image_mean,
                 sampling_frequency=paramset.sni_sampling_frequency,
                 sni_dim=paramset.sni_ratio_dim)
             details_dict['pr_roi'].append(details_dict_roi)
@@ -4252,7 +4265,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
             rows = np.max(roi_array[idx_roi_row_0 + 2][3], axis=1)  # central
             # TODO better catch - what if this also (not likely) is None?
         eye_filter = get_eye_filter(
-            np.count_nonzero(rows), image_info.pix[0], paramset)
+            np.count_nonzero(rows), image_info.pix[0]*block_size, paramset)
         details_dict['eye_filter_small'] = eye_filter['curve']
 
         if paramset.sni_type in [1, 2]:
@@ -4274,7 +4287,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
                     SNI, SNI_2, details_dict_roi = calculate_SNI_ROI(
                         image2d, roi,
                         eye_filter['filter_2d'], unit=eye_filter['unit'],
-                        pix=image_info.pix[0], fit_dict=fit_dict,
+                        pix=image_info.pix[0]*block_size, fit_dict=fit_dict,
                         image_mean=image_mean,
                         sampling_frequency=paramset.sni_sampling_frequency,
                         sni_dim=paramset.sni_ratio_dim)

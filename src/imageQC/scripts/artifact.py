@@ -28,8 +28,10 @@ class Artifact:
     size_1: float = 0.  # mm circle = radius, ring=outer radius, rect x-size
     size_2: float = 0.  # mm ring = inner radius, rect y-size
     rotation: float = 0.  # rotation in degrees if rectangle
-    sigma: float = 0.  # sigma (mm) of guassian blur, distance if gamma camera point source
-    method: str = ''  # 'adding', 'multiplying', 'adding poisson noise', 'adding gamma camera point source'
+    sigma: float = 0.
+    # sigma (mm) of guassian blur, distance if gamma camera point source
+    method: str = ''
+    # 'adding','multiplying','adding poisson noise','adding gamma camera point source'
     value: float = 0.  # value to add or multiply with
 
 

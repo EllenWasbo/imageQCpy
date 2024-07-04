@@ -737,29 +737,29 @@ def calculate_qc(input_main, wid_auto=None,
                                             errmsgs.append(intro)
                                             errmsgs.append(result.errmsg)
 
-                            if test not in [*input_main.results]:
-                                # initiate results
-                                ''' NB if changing dict structure also update in:
-                                        input_main.results['DCM'] (below)
-                                        ui_main.update_results
-                                '''
-                                input_main.results[test] = {
-                                    'headers': result.headers,
-                                    'values': [[] for i in range(n_img)],
-                                    'alternative': result.alternative,
-                                    'headers_sup': result.headers_sup,
-                                    'values_sup': [[] for i in range(n_img)],
-                                    'details_dict': [{} for i in range(n_img)],
-                                    'pr_image': True,
-                                    'values_info': result.values_info,
-                                    'values_sup_info': result.values_sup_info
-                                    }
-                            input_main.results[
-                                test]['values'][i] = result.values
-                            input_main.results[
-                                test]['values_sup'][i] = result.values_sup
-                            input_main.results[
-                                test]['details_dict'][i] = result.details_dict
+                                if test not in [*input_main.results]:
+                                    # initiate results
+                                    ''' NB if changing dict structure also update in:
+                                            input_main.results['DCM'] (below)
+                                            ui_main.update_results
+                                    '''
+                                    input_main.results[test] = {
+                                        'headers': result.headers,
+                                        'values': [[] for i in range(n_img)],
+                                        'alternative': result.alternative,
+                                        'headers_sup': result.headers_sup,
+                                        'values_sup': [[] for i in range(n_img)],
+                                        'details_dict': [{} for i in range(n_img)],
+                                        'pr_image': True,
+                                        'values_info': result.values_info,
+                                        'values_sup_info': result.values_sup_info
+                                        }
+                                input_main.results[
+                                    test]['values'][i] = result.values
+                                input_main.results[
+                                    test]['values_sup'][i] = result.values_sup
+                                input_main.results[
+                                    test]['details_dict'][i] = result.details_dict
             if err_extra:
                 if extra_tag_list_compare is not None:
                     attr_list = []
@@ -4168,18 +4168,20 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         end_y = start_y + n_blocks_y * block_size
         image2d = skimage.measure.block_reduce(
             image2d[start_y:end_y, start_x:end_x], (block_size, block_size), np.sum)
-        '''
-        for idx, arr in enumerate(roi_array):
-            reduced_roi = skimage.measure.block_reduce(
-                arr[start_y:end_y, start_x:end_x], (block_size, block_size), np.mean)
-            roi_array[idx] = np.where(reduced_roi > 0.5, True, False)
-        '''
+
         if fit_dict:
             if 'reference_image' in fit_dict:
                 reference_image = skimage.measure.block_reduce(
                     reference_image[start_y:end_y, start_x:end_x],
                     (block_size, block_size), np.sum)
                 fit_dict['reference_image'] = reference_image
+            for key in ['estimated_noise_image', 'correction_matrix']:
+                if key in fit_dict:
+                    temp = skimage.measure.block_reduce(
+                        fit_dict[key][start_y:end_y, start_x:end_x],
+                        (block_size, block_size), np.sum)
+                    fit_dict[key] = temp
+
         # recalculate rois (avoid block reduce on rois, might get non-quadratic)
         roi_array, errmsg = get_roi_SNI(image2d, image_info, paramset,
                                         block_size=block_size)
@@ -4207,6 +4209,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         details_dict['pr_roi'].append(details_dict_roi)
         SNI_values.append(SNI)
         SNI_values_2.append(SNI_2)
+
     largest_L = '-'
     if SNI_values[0] > SNI_values[1]:
         largest_L = 'L1'

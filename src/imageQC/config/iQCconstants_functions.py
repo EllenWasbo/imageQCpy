@@ -167,6 +167,7 @@ def set_auto_common_default():
     return cfc.AutoCommon(filename_pattern=filename_pattern)
 
 
+'''Not in use Delete?
 def get_quicktest_output_default(modality):
     """Set default templates for QuickTest Output if no yaml file exist.
 
@@ -226,3 +227,4 @@ def get_quicktest_output_default(modality):
             }
 
     return tests
+'''

@@ -1772,7 +1772,7 @@ class ParamsTabMammo(ParamsTabCommon):
 class GroupBoxCorrectPointSource(QGroupBox):
     """Groupbox for correction of point source curvature."""
 
-    def __init__(self, parent, testcode='Uni',
+    def __init__(self, parent, testcode='uni',
                  chk_pos_x=None, chk_pos_y=None,
                  chk_radius=None, wid_radius=None):
         super().__init__('Correct for point source curvature')
@@ -2052,7 +2052,7 @@ class ParamsTabNM(ParamsTabCommon):
 
         self.uni_correct_pos_x = QCheckBox('x')
         self.uni_correct_pos_y = QCheckBox('y')
-        self.uni_correct_radius_chk = QCheckBox('Lock source distance to')
+        self.uni_lock_radius = QCheckBox('Lock source distance to')
         self.uni_radius = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=5000, singleStep=0.1)
         self.uni_radius.valueChanged.connect(
@@ -2061,7 +2061,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.uni_correct = GroupBoxCorrectPointSource(
             self, testcode='uni',
             chk_pos_x=self.uni_correct_pos_x, chk_pos_y=self.uni_correct_pos_y,
-            chk_radius=self.uni_correct_radius_chk, wid_radius=self.uni_radius)
+            chk_radius=self.uni_lock_radius, wid_radius=self.uni_radius)
 
         self.uni_sum_first = QCheckBox('Sum marked images before analysing sum')
         self.uni_sum_first.toggled.connect(
@@ -2203,7 +2203,7 @@ class ParamsTabNM(ParamsTabCommon):
 
         self.sni_correct_pos_x = QCheckBox('x')
         self.sni_correct_pos_y = QCheckBox('y')
-        self.sni_correct_radius_chk = QCheckBox('Lock source distance to')
+        self.sni_lock_radius = QCheckBox('Lock source distance to')
         self.sni_radius = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=5000, singleStep=0.1)
         self.sni_radius.valueChanged.connect(
@@ -2219,7 +2219,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_correct = GroupBoxCorrectPointSource(
             self, testcode='sni',
             chk_pos_x=self.sni_correct_pos_x, chk_pos_y=self.sni_correct_pos_y,
-            chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_radius)
+            chk_radius=self.sni_lock_radius, wid_radius=self.sni_radius)
 
         self.sni_channels = BoolSelectTests(
             self, attribute='sni_channels',
@@ -2250,8 +2250,7 @@ class ParamsTabNM(ParamsTabCommon):
             self.main.wid_res_plot.plotcanvas.plot)
         self.sni_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
-        self.sni_selected_roi.addItems(
-            ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])
+        self.sni_selected_roi.addItems(['L1', 'L2'])
         self.sni_selected_roi.currentIndexChanged.connect(
             self.main.refresh_results_display)
         self.sni_show_labels = QCheckBox('Show ROI labels in image')

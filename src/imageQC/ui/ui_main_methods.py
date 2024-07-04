@@ -36,6 +36,14 @@ def update_roi(main, clear_results_test=False):
     except AttributeError:
         pass
     main.display_errmsg(errmsg)
+
+    if main.current_test == 'SNI':
+        try:
+            if main.tab_nm.sni_selected_roi.count() == 2:
+                main.tab_nm.update_sni_roi_names()
+        except AttributeError:
+            pass
+
     if clear_results_test:
         if main.current_test in [*main.results]:
             main.results[main.current_test] = None

@@ -1147,7 +1147,7 @@ def get_roi_SNI(image, image_info, paramset, block_size=1):
         else:  # sni_type 3 Siemens
             small_start_idx = 3
             dist = 76  # mm diameter PMTs = distance between centers
-            dist_pix = round(dist / image_info.pix[0]*block_size)
+            dist_pix = round(dist / image_info.pix[0] / block_size)
             dy = round(dist_pix * np.sin(np.pi/3))  # hexagonal pattern
             radius = roi_size // 2
             dx7 = dist_pix * (np.arange(7) - 3)

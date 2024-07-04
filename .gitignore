@@ -7,6 +7,7 @@ __pycache__/
 .pytest_cache/
 *automation.log
 .pylintrc
+.coverage
 
 # Distribution / packaging
 .Python

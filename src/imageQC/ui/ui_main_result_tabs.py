@@ -411,8 +411,13 @@ class ResultPlotCanvas(PlotCanvas):
                         x_only_int = False
 
             if x_only_int:
-                self.ax.xaxis.set_major_locator(
-                    matplotlib.ticker.MaxNLocator(integer=True))
+                if 'xticks' in self.curves[0]:
+                    self.ax.set_xticks(self.curves[0]['xvals'])
+                    self.ax.set_xticklabels(self.curves[0]['xticks'], rotation=60,
+                                            ha='right', rotation_mode='anchor')
+                else:
+                    self.ax.xaxis.set_major_locator(
+                        matplotlib.ticker.MaxNLocator(integer=True))
             if len(self.curves) > 1:
                 self.ax.legend(loc=self.legend_location)
             if None not in self.default_range_x:
@@ -1684,7 +1689,29 @@ class ResultPlotCanvas(PlotCanvas):
                 self.ytitle = 'SNI'
                 self.xtitle = 'ROI'
 
-        def plot_SNI_values_line():
+        def plot_all_SNI_values():
+            """Plot SNI values for all images pr ROI."""
+            markers = ['.', 'o', 'v', 's', 'D', 'P']
+            idxs = [i for i in range(len(roi_names))]
+            for imgno, dd in enumerate(self.main.results['SNI']['details_dict']):
+                try:
+                    if show_filter_2:
+                        SNI_values = dd['SNI_values_2']
+                    else:
+                        SNI_values = dd['SNI_values']
+                except KeyError:
+                    SNI_values = []
+                if SNI_values:
+                    self.title = 'Structured Noise Index for each ROI in all images'
+                    self.ytitle = 'SNI'
+                    self.xtitle = 'ROI'
+                    c = COLORS[imgno % len(COLORS)]
+                    m = markers[imgno % len(markers)]
+                    self.curves.append(
+                        {'label': f'Img {imgno}', 'xvals': idxs, 'xticks': roi_names,
+                         'yvals': SNI_values, 'style': f'-{c}{m}'})
+
+        def plot_SNI_result_table():
             """Plot SNI values as columns pr ROI."""
             self.title = 'Structured Noise Index, values from result table'
             self.ytitle = 'SNI'
@@ -1875,7 +1902,10 @@ class ResultPlotCanvas(PlotCanvas):
         if 'SNI values each ROI' in sel_text:
             plot_SNI_values_bar()
         elif 'SNI values all images' in sel_text:
-            plot_SNI_values_line()
+            if self.main.current_paramset.sni_type == 3:
+                plot_all_SNI_values()
+            else:
+                plot_SNI_result_table()
         elif 'Filtered' in sel_text:
             if 'max' in sel_text:
                 plot_filtered_max_avg()

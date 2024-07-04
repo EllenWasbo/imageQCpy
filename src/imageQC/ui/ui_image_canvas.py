@@ -1076,11 +1076,16 @@ class ResultImageCanvas(GenericImageCanvas):
             elif 'SNI values map' in sel_txt:
                 self.title = 'SNI values map'
                 if 'SNI_map' in details_dict:
+                    show_filter_2 = False
+                    if self.main.current_paramset.sni_channels:
+                        if self.main.tab_nm.sni_plot_low.btn_false.isChecked():
+                            show_filter_2 = True
+                    suffix_2 = '_2' if show_filter_2 else ''
                     if self.main.current_paramset.sni_type == 3:  # Siemens
                         self.current_image = generate_SNI_Siemens_image(
-                            details_dict['SNI_map'])
+                            details_dict[f'SNI_map{suffix_2}'])
                     else:
-                        self.current_image = details_dict['SNI_map']
+                        self.current_image = details_dict[f'SNI_map{suffix_2}']
                     self.min_val = 0
                     max_in_res = np.max([
                         row for row in self.main.results['SNI']['values']

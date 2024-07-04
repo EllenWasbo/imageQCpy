@@ -10,6 +10,7 @@ import copy
 from dataclasses import asdict
 import numpy as np
 from pathlib import Path
+import pandas as pd
 
 import yaml
 from PyQt5.QtGui import QIcon, QPixmap
@@ -19,7 +20,7 @@ from PyQt5.QtWidgets import (
     QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
     QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox, QListWidget,
     QLineEdit, QTextEdit, QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox,
-    QWidget, QToolBar, QAction, QTabWidget, QFileDialog
+    QWidget, QToolBar, QAction, QTableWidget, QTableWidgetItem, QTabWidget, QFileDialog
     )
 
 import matplotlib
@@ -457,7 +458,11 @@ class AddArtifactsDialog(ImageQCDialog):
             'Delete artifact from list of available artifacts '
             '(and from images if applied)', self)
         act_delete.triggered.connect(self.delete)
-        toolbar_0.addActions([self.act_edit, act_add, act_delete])
+        act_view_all = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}file.png'),
+            'View all defined artifacts', self)
+        act_view_all.triggered.connect(self.view_all_artifacts)
+        toolbar_0.addActions([self.act_edit, act_add, act_delete, act_view_all])
 
         # Applied artifacts
         vlo_aa = QVBoxLayout()
@@ -502,11 +507,11 @@ class AddArtifactsDialog(ImageQCDialog):
             QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
             'Add artifact(s) to all images', self)
         act_add_all.triggered.connect(lambda: self.image_add_artifacts(add_all=True))
-        act_view_all = QAction(
+        act_view_all_applied = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}file.png'),
             'View all artifacts applied to the images', self)
-        act_view_all.triggered.connect(self.view_all_applied_artifacts)
-        toolbar_all.addActions([act_clear_all, act_add_all, act_view_all])
+        act_view_all_applied.triggered.connect(self.view_all_applied_artifacts)
+        toolbar_all.addActions([act_clear_all, act_add_all, act_view_all_applied])
 
         toolbar_btm = QToolBar()
         act_save_all = QAction(
@@ -570,10 +575,11 @@ class AddArtifactsDialog(ImageQCDialog):
         """Update lists of applied artifacts."""
         sel_img = self.cbox_imgs.currentIndex()
         self.list_artifacts.clear()
-        if self.main.imgs[sel_img].artifacts:
-            if len(self.main.imgs[sel_img].artifacts) > 0:
-                self.list_artifacts.addItems(self.main.imgs[sel_img].artifacts)
-        self.main_refresh()
+        if self.main.imgs:
+            if self.main.imgs[sel_img].artifacts:
+                if len(self.main.imgs[sel_img].artifacts) > 0:
+                    self.list_artifacts.addItems(self.main.imgs[sel_img].artifacts)
+            self.main_refresh()
 
     def label_changed(self):
         """Update values when artifact label selected."""
@@ -778,6 +784,16 @@ class AddArtifactsDialog(ImageQCDialog):
                         for label in selected_labels:
                             add_artifact(label, apply_idxs, self.main)
                         self.update_applied()
+
+    def view_all_artifacts(self):
+        """View currently defined artifacts."""
+        if len(self.main.artifacts) == 0:
+            QMessageBox.information(self, 'Information', 'Found no artifacts.')
+        else:
+            dlg = DataFrameDisplay(self, pd.DataFrame(self.main.artifacts),
+                              title='Currently defined artifacts',
+                              min_width=1100, min_height=500)
+            dlg.exec()
 
     def view_all_applied_artifacts(self):
         """View currently applied artifacts as text."""
@@ -1329,6 +1345,41 @@ class TextDisplay(ImageQCDialog):
         txtEdit.setMinimumWidth(min_width)
         txtEdit.setMinimumHeight(min_height)
         vlo.addWidget(txtEdit)
+        buttons = QDialogButtonBox.Close
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vlo.addWidget(self.buttonBox)
+
+        self.setWindowTitle(title)
+        self.setMinimumWidth(min_width)
+        self.setMinimumHeight(min_height)
+
+
+class DataFrameDisplay(ImageQCDialog):
+    """QDialog with QTextEdit.setPlainText to display text."""
+
+    def __init__(self, parent_widget, dataframe, title='',
+                 min_width=1000, min_height=1000):
+        super().__init__()
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        table = QTableWidget(self)
+        n_rows = len(dataframe)
+        n_cols = len([*dataframe])
+        table.setRowCount(n_rows)
+        table.setColumnCount(n_cols)
+        table.setHorizontalHeaderLabels([*dataframe])
+        table.verticalHeader().setVisible(False)
+        for c in range(n_cols):
+            for r in range(n_rows):
+                twi = QTableWidgetItem(str(dataframe.iat[r, c]))
+                if c > 0:
+                    twi.setTextAlignment(4)
+                table.setItem(r, c, twi)
+        table.resizeColumnsToContents()
+        table.resizeRowsToContents()
+        vlo.addWidget(table)
         buttons = QDialogButtonBox.Close
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)

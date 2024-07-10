@@ -2,8 +2,16 @@
 _Jul XX, 2024_
 
 Changes:
-- Added option to merge pixels before NM SNI calculations
+- When copying curves/plots to clipboard, curves sharing the same x-values
 - Added option to simulate gamma camera point source as artifact
+- Added option to merge pixels before NM SNI calculations
+- Alternative or dynamic headers of results tables:
+ - Added validation to output settings vs parameter settings
+- Output settings of parametersets more user friendly:
+ - When adding new settings - the alternative is set and locked to the one defined in the parameterset (more logical)
+ - When editing, the alternative is selectable (for flexibility with old settings)
+ - When changing parameters that might affect related output settings - a warning is given.
+ - Added to validation test in 'Verify config files ...' in Settings - Config folder
 
 Fixes:
 - Adding artifacts:

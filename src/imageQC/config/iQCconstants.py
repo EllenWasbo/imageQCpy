@@ -55,8 +55,13 @@ HALFLIFE = {'F18': 109.77}
 ALTERNATIVES_ROI = ['One ROI',
                     'ROIs from table, same shape',
                     'ROIs from table, rectangle defined per ROI']
-# dict: with lists defining the alternative methods/table displays
-#  if more than one option leading to different columns in table."""
+# dict:
+#   display text for alternative methods - linked to HEADERS(_SUB)
+#   if not 1-to-1 alternative text vs headers
+#        - specify in settings_reusables like for NM-SNI
+#   NB - to add verification output-settings vs paramset settings: add to
+#       ui_main_test_tabs.py / param_changed_from_gui (verify_output)
+#       config_func.py / get_test_alternative
 ALTERNATIVES = {
     'CT': {
         'ROI': ALTERNATIVES_ROI,
@@ -78,9 +83,11 @@ ALTERNATIVES = {
         },
     'NM': {
         'ROI': ALTERNATIVES_ROI,
-        'SNI': ['6 small ROIs', 'ROI grid, size by full ratio',
-                'ROI grid, size by number of pixels',
-                'ROIs matched Siemens gamma camera'],
+        'SNI': [
+            '6 small ROIs',
+            'ROI grid, size by full ratio',
+            'ROI grid, size by number of pixels',
+            'ROIs matched Siemens gamma camera'],
         'MTF': ['Point', 'One line source', 'Two perpendicular line sources', 'Edge']
         },
     'SPECT': {
@@ -111,15 +118,21 @@ CALCULATION_OPTIONS = ['=', 'min', 'max', 'mean', 'stdev', 'max abs', 'width (ma
 roi_headers = ['Average', 'Stdev']
 roi_headers_sup = ['Min', 'Max']
 
+# Headers of result table with optional alternatives.
+# Use altAll if all alternatives use same headers
+# Use alt0..N if each alterantive have their own headers
+# use {} if headers depend on other dynamic parameters (like for Num, CTn)
+# ROI also special dynamic case
+# Where headers depend on dynamic parameters - change also
+#   settings_reusables.py / QuickTestOutputSubDialog / update_data (on update_columns)
+#   ui_main_test_tabs.py / param_changed_from_gui (verify_output)
 HEADERS = {
     'CT': {
         'ROI': {'alt0': roi_headers},
         'Num': {},
         'Hom': {
-            'alt0': ['HU at12', 'HU at15', 'HU at18', 'HU at21', 'HU center',
-                     'diff at12', 'diff at15', 'diff at18', 'diff at21'],
-            'altSup': ['Stdev at12', 'Stdev at15', 'Stdev at18', 'Stdev at21',
-                       'Stdev Center']
+            'altAll': ['HU at12', 'HU at15', 'HU at18', 'HU at21', 'HU center',
+                       'diff at12', 'diff at15', 'diff at18', 'diff at21']
             },
         'Noi': {
             'alt0': ['CT number (HU)', 'Noise=Stdev (HU)',
@@ -205,7 +218,7 @@ HEADERS = {
         'ROI': {'alt0': roi_headers},
         'Num': {},
         'Uni': {'alt0': ['IU_UFOV %', 'DU_UFOV %', 'IU_CFOV %', 'DU_CFOV %']},
-        'SNI': {
+        'SNI': {  # NM differently than others - if changed be aware sni_alt parameter calculate_qc, ui_main_test_tabs and 'sni' in settings_reusables
             'alt0': ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', 'SNI S2',
                      'SNI S3', 'SNI S4', 'SNI S5', 'SNI S6'],
             'alt1': ['SNI L1 low', 'SNI L2 low', 'SNI S low max', 'SNI S low avg',
@@ -275,7 +288,7 @@ HEADERS = {
             'alt0': ['width_0', 'width_90', 'width_45', 'width_135',
                      'GD_0', 'GD_90', 'GD_45', 'GD_135']
             },
-        'Sli': {'alt0': ['Nominal (mm)', 'Measured (mm)', 'Diff (mm)', 'Diff (%)']},
+        'Sli': {'altAll': ['Nominal (mm)', 'Measured (mm)', 'Diff (mm)', 'Diff (%)']},
         'MTF': {'alt0': ['MTF 50%', 'MTF 10%', 'MTF 2%']}
         }
     }

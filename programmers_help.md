@@ -28,7 +28,7 @@ To be able to plot during pytest:
 
 ## When adding new testcode (analyse type)
 - add testcode (three letters at least first capital) in config/iQCconstants.py QUICKTEST_OPTIONS same order as tabs for the tests
-- add result table headers in config/iQCconstants.py HEADERS (and HEADERS_SUP if supplement data)
+- add result table headers in config/iQCconstants.py HEADERS (and HEADERS_SUP if supplement data) (and ALTERNATIVES if alternative headers)
 - add configurable parameters in config/config_classes.py ParamSet&lt;Modality&gt; (or ParamsetCommon if available to all paramsets)
 - add GUI in ui/ui_main_test_tabs.py TestTab&lt;Modality&gt; order of tabs should fit QUICKTEST_OPTIONS order
 	- self.&lt;same as paramname in ParamSet&gt; as gui element
@@ -39,6 +39,7 @@ To be able to plot during pytest:
 - add test calculations to calculate_qc
 - add test visualizations to plot canvas (ui/ui_main_result_tabs - ResultPlotCanvas)
 	- and optionally result image canvas (ui/ui_image_canvas - ResultImageCanvas)
+- if more ALTERNATIVES or dynamic HEADERS given in iQCconstants - note the comments above these parameters in iQCconstants.py
  
 ## When adding new types of templates (settings)
 - add to iQCconstants CONFIG_FNAMES

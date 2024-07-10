@@ -312,11 +312,36 @@ class ParamsTabCommon(QTabWidget):
                     else:
                         self.roi_table_widget.setEnabled(True)
                         self.set_offset('roi_offset_xy', reset=True)
-                elif attribute == 'sni_channels':
-                    self.update_enabled()
+                elif attribute in ['sni_type', 'sni_channels']:
+                    alt = 0 if self.main.current_paramset.sni_type == 0 else 2
+                    if self.main.current_paramset.sni_channels:
+                        alt = alt + 1
+                    self.main.current_paramset.sni_alt = alt
+                    if attribute == 'sni_channels':
+                        self.update_enabled()
                 if all([self.main.current_modality == 'Xray',
                         self.main.current_test == 'NPS']):
                     self.update_NPS_independent_pixels()
+
+                # changes that might affect output settings?
+                # - alternative or headers changed
+                log = []
+                if attribute in [
+                        'sli_type', 'mtf_type', 'rec_type', 'snr_type',
+                        'roi_use_table', 'hom_tab_alt', 'sni_alt']:
+                    _, log = cff.verify_output_alternative(
+                        self.main.current_paramset, testcode=self.main.current_test)
+                if log:
+                    msg = ('Output settings are defined for this parameterset. '
+                           'Changing this parameter will change the headers of '
+                           'the Result table. Consider updating the output settings.')
+                    dlg = messageboxes.MessageBoxWithDetails(
+                        self, title='Warnings',
+                        msg=msg,
+                        info='See details',
+                        icon=QMessageBox.Warning,
+                        details=log)
+                    dlg.exec()
 
     def clear_results_current_test(self):
         """Clear results of current test."""
@@ -2674,7 +2699,8 @@ class ParamsTabPET(ParamsTabCommon):
         self.rec_sphere_percent.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='rec_sphere_percent'))
         self.rec_table_widget = PositionWidget(
-                self, self.main, table_attribute_name='rec_table')
+                self, self.main, table_attribute_name='rec_table',
+                warn_output_add_delete=False)
         self.rec_plot = QComboBox()
         self.rec_plot.addItems(['Table values', 'z-profile slice selections'])
         self.rec_plot.currentIndexChanged.connect(
@@ -3284,11 +3310,46 @@ class SimpleTableWidget(QTableWidget):
             self.blockSignals(False)
 
 
+def get_defined_output_for_columns(widget, paramset, attribute):
+    """Get whether the test have an output defined in the paramset.
+
+    Warn if columns defined for the output. Ask to proceed.
+    Meant for dynamic tables.
+
+    Parameters
+    ----------
+    widget : QWidget
+        parent widget
+    paramset : ParamSetXX
+        as defined in config_classes.py
+    attribute : str
+        attribute name
+
+    Returns
+    -------
+    proceed : bool
+    """
+    proceed = True
+    log = []
+    for key, sublist in paramset.output.tests.items():
+        if key.lower() == attribute[:3]:
+            for subno, sub in enumerate(sublist):
+                if len(sub.columns) > 0:
+                    log.append(str(sub))
+
+    if len(log) > 0:
+        question = ('Found output settings for this test with defined columns. '
+                    'Changing columns may affect the output. Proceed?')
+        proceed = messageboxes.proceed_question(widget, question, detailed_text=log)
+
+    return proceed
+
+
 class PositionWidget(QWidget):
     """Reusable table widget to hold user defined roi positions."""
 
     def __init__(self, parent, main, table_attribute_name='', headers=None,
-                 use_rectangle=False):
+                 use_rectangle=False, warn_output_add_delete=True):
         """Initialize PositionWidget.
 
         Parameters
@@ -3309,6 +3370,7 @@ class PositionWidget(QWidget):
             'Set selected ROI = marked area']
         self.get_position_icons = ['selectArrow', 'rectangle_select']
         self.use_rectangle = use_rectangle
+        self.warn_output_add_delete = warn_output_add_delete
         self.parent = parent
         self.main = main
         if headers is None:
@@ -3386,14 +3448,19 @@ class PositionWidget(QWidget):
 
     def import_table(self):
         """Import contents to table from clipboard or from predefined."""
-        dlg = messageboxes.QuestionBox(
-            parent=self.main, title='Import table',
-            msg='Import table from...',
-            yes_text='Clipboard',
-            no_text='Predefined tables')
-        res = dlg.exec()
+        proceed = True
+        if self.warn_output_add_delete:
+            proceed = get_defined_output_for_columns(
+                self, self.main.current_paramset, self.table.table_attribute_name)
+        if proceed:
+            dlg = messageboxes.QuestionBox(
+                parent=self.main, title='Import table',
+                msg='Import table from...',
+                yes_text='Clipboard',
+                no_text='Predefined tables')
+            proceed = dlg.exec()
         input_table = None
-        if res:  # clipboard
+        if proceed:  # clipboard
             try:
                 dataf = pd.read_clipboard()
                 _, ncols = dataf.shape
@@ -3510,19 +3577,30 @@ class PositionWidget(QWidget):
             if self.main.active_img is not None:
                 self.get_pos_mouse()
             else:
-                self.table.current_table.add_pos(
-                    index=rowno, pos_x=0, pos_y=0)
-                self.parent.flag_edit(True)
-                self.table.update_table()
+                proceed = True
+                if self.warn_output_add_delete:
+                    proceed = get_defined_output_for_columns(
+                        self, self.main.current_paramset,
+                        self.table.table_attribute_name)
+                if proceed:
+                    self.table.current_table.add_pos(
+                        label=f'ROI {rowno}', index=rowno, pos_x=0, pos_y=0)
+                    self.parent.flag_edit(True)
+                    self.table.update_table()
 
     def delete_row(self):
         """Delete row from table."""
         sel = self.table.selectedIndexes()
         if len(sel) > 0:
-            rowno = sel[0].row()
-            self.table.current_table.delete_pos(rowno)
-            self.parent.flag_edit(True)
-            self.table.update_table()
+            proceed = True
+            if self.warn_output_add_delete:
+                proceed = get_defined_output_for_columns(
+                    self, self.main.current_paramset, self.table.table_attribute_name)
+            if proceed:
+                rowno = sel[0].row()
+                self.table.current_table.delete_pos(rowno)
+                self.parent.flag_edit(True)
+                self.table.update_table()
 
     def get_pos_mouse(self):
         """Get position from last mouseclick in i mage."""
@@ -3549,7 +3627,14 @@ class PositionWidget(QWidget):
                 self.table.current_table.pos_x[rowno] = dx
                 self.table.current_table.pos_y[rowno] = dy
             else:
-                self.table.current_table.add_pos(pos_x=dx, pos_y=dy)
+                proceed = True
+                if self.warn_output_add_delete:
+                    proceed = get_defined_output_for_columns(
+                        self, self.main.current_paramset,
+                        self.table.table_attribute_name)
+                if proceed:
+                    self.table.current_table.add_pos(
+                        label=f'ROI {rowno}', pos_x=dx, pos_y=dy)
             self.parent.flag_edit(True)
             self.table.update_table()
 
@@ -3588,7 +3673,14 @@ class PositionWidget(QWidget):
                     self.table.current_table.pos_x[rowno] = x_tuple
                     self.table.current_table.pos_y[rowno] = y_tuple
                 else:
-                    self.table.current_table.add_pos(pos_x=x_tuple, pos_y=y_tuple)
+                    proceed = True
+                    if self.warn_output_add_delete:
+                        proceed = get_defined_output_for_columns(
+                            self, self.main.current_paramset,
+                            self.table.table_attribute_name)
+                    if proceed:
+                        self.table.current_table.add_pos(
+                            label=f'ROI {rowno}', pos_x=x_tuple, pos_y=y_tuple)
                 self.parent.flag_edit(True)
                 self.table.update_table()
 
@@ -3750,14 +3842,17 @@ class CTnTableWidget(QWidget):  # TODO PositionWidget
 
     def import_table(self):
         """Import contents to table from clipboard or from predefined."""
-        dlg = messageboxes.QuestionBox(
-            parent=self.main, title='Import table',
-            msg='Import table from...',
-            yes_text='Clipboard',
-            no_text='Predefined tables')
-        res = dlg.exec()
+        proceed = get_defined_output_for_columns(
+            self, self.main.current_paramset, 'ctn_table')
+        if proceed:
+            dlg = messageboxes.QuestionBox(
+                parent=self.main, title='Import table',
+                msg='Import table from...',
+                yes_text='Clipboard',
+                no_text='Predefined tables')
+            proceed = dlg.exec()
         ctn_table = None
-        if res:
+        if proceed:
             dataf = pd.read_clipboard()
             nrows, ncols = dataf.shape
             if ncols != 6:
@@ -3847,18 +3942,24 @@ class CTnTableWidget(QWidget):  # TODO PositionWidget
             rowno = sel[0].row()
         else:
             rowno = self.table.rowCount()
-        self.main.current_paramset.ctn_table.add_pos(index=rowno)
-        self.parent.flag_edit(True)
-        self.table.update_table()
+        proceed = get_defined_output_for_columns(
+            self, self.main.current_paramset, 'ctn_table')
+        if proceed:
+            self.main.current_paramset.ctn_table.add_pos(label='undefined', index=rowno)
+            self.parent.flag_edit(True)
+            self.table.update_table()
 
     def delete_row(self):
         """Delete row from table."""
         sel = self.table.selectedIndexes()
         if len(sel) > 0:
-            rowno = sel[0].row()
-            self.main.current_paramset.ctn_table.delete_pos(rowno)
-            self.parent.flag_edit(True)
-            self.table.update_table()
+            proceed = get_defined_output_for_columns(
+                self, self.main.current_paramset, 'ctn_table')
+            if proceed:
+                rowno = sel[0].row()
+                self.main.current_paramset.ctn_table.delete_pos(rowno)
+                self.parent.flag_edit(True)
+                self.table.update_table()
 
     def rename_linearity_unit(self):
         """Rename column for linearity check."""

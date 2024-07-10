@@ -71,17 +71,19 @@ def extract_values(values, columns=[], calculation='='):
         else list or nested list as is for the columns
     """
     new_values = []
-    if columns == []:
-        columns = list(range(len(values)))
     if len(values) > 0:
         selected_values = []
         allvals = []
-        if isinstance(values[0], list):  # per group
+        if isinstance(values[0], list):
+            if columns == []:
+                columns = list(range(len(values[0])))
             for row in values:
                 row_vals = [row[col] for col in columns]
                 selected_values.append(row_vals)
                 allvals.extend(row_vals)
         else:
+            if columns == []:
+                columns = list(range(len(values)))
             vals = [values[col] for col in columns]
             selected_values = vals
             allvals = vals
@@ -1663,9 +1665,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def SNI():
-        alt = 0 if paramset.sni_type == 0 else 2
-        if paramset.sni_channels:
-            alt = alt + 1
+        alt = paramset.sni_alt  # set in ui_main_test_tabs, param_changed_from_gui
 
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
         headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
@@ -1708,8 +1708,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Sli():
+        alt = paramset.sli_type
         if modality == 'CT':
-            alt = paramset.sli_type
             headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
             if image2d is not None:
                 lines = roi_array
@@ -1729,7 +1729,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             else:
                 res = Results(headers=headers, alternative=alt)
         elif modality == 'MR':
-            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            headers = copy.deepcopy(HEADERS[modality][test_code]['altAll'])
             # ['Nominal (mm)', 'Slice thickness (mm)', 'Diff (mm)', 'Diff (%)']
             headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
             # FWHM1, FWHM2

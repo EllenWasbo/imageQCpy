@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "get_quicktest_output_default("
+search_string = "version_control"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

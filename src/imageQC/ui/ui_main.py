@@ -969,7 +969,7 @@ class MainWindow(QMainWindow):
     def finish_cleanup(self):
         """Cleanup/save before exit."""
         proceed_to_close = True
-        if self.wid_paramset.lbl_edit.text() == '*' and self.developer_mode == False:
+        if self.wid_paramset.lbl_edit.text() == '*' and self.developer_mode is False:
             proceed_to_close = messageboxes.proceed_question(
                 self,
                 f'Unsaved changes to {self.wid_paramset.fname}. Exit without saving?')

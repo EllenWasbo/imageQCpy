@@ -321,7 +321,7 @@ class QuickTestOutputSub:
     """Class for holding details for element of QuickTestOutputTemplates."""
 
     label: str = ''  # header_ prefix when header included
-    alternative: int = 0  # if supplement table starting with 10, -1 used for not defined
+    alternative: int = 0  # supplement table starting with 10, -1 used for not defined
     columns: list = field(default_factory=lambda: [])  # list of ints
     calculation: str = '='
     per_group: bool = False
@@ -396,7 +396,8 @@ class ParamSetCT(ParamSetCommon):
     sli_search_width: int = 10
     sli_average_width: int = 1
     sli_median_filter: int = 0
-    sli_type: int = 0  # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom, 3=Siemens phantom
+    sli_type: int = 0
+    # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom, 3=Siemens phantom
     sli_tan_a: float = 0.42  # tangens of ramp angle
     sli_auto_center: bool = False
     rin_sigma_image: float = 0.  # sigma for gaussfilter of image
@@ -527,6 +528,7 @@ class ParamSetNM(ParamSetCommon):
     sni_scale_factor: int = 1  # 1 = no scale, 2 = merge 2x2
     sni_ref_image: str = ''  # file name (without path and extension)
     sni_ref_image_fit: bool = False  # True = curvature fit based on ref image
+    sni_alt: int = 0  # alternative (HEADERS) - depende on _type and _channels
     mtf_type: int = 1  # [Point, line (default), Two lines, edge]
     mtf_roi_size_x: float = 50.
     mtf_roi_size_y: float = 50.

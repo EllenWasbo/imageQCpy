@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import QMessageBox, QFileDialog
 # imageQC block start
 from imageQC.config.iQCconstants import (
     USERNAME, APPDATA, TEMPDIR, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER,
-    CONFIG_FNAMES, USER_PREFS_FNAME, QUICKTEST_OPTIONS, VERSION
+    CONFIG_FNAMES, USER_PREFS_FNAME, QUICKTEST_OPTIONS, VERSION, ALTERNATIVES
     )
 import imageQC.config.config_classes as cfc
 from imageQC.ui import messageboxes
@@ -78,7 +78,12 @@ def calculate_version_difference(version_string, reference_version=None):
 
 
 def version_control(input_main):
-    """Compare version number of settings with current for updates."""
+    """Compare version number of settings with current for updates.
+
+    Parameters
+    ----------
+    input_main : MainWindow or InputMain
+    """
     _, _, last_mod = load_settings(fname='last_modified')
 
     # tag infos
@@ -245,7 +250,13 @@ def verify_config_folder(widget):
 
 
 def get_active_users():
-    """Get list of active usernames sharing the config folder."""
+    """Get list of active usernames sharing the config folder.
+
+    Returns
+    -------
+    active_users : dict
+        dict from active_users.yaml
+    """
     path = get_config_filename('active_users')
     active_users = {}
 
@@ -295,6 +306,13 @@ def remove_user_from_active_users():
 def init_user_prefs(path=APPDATA, config_folder=''):
     """Initiate empty local folder/file optionally with config_folder set.
 
+    Parameters
+    ----------
+    path : str
+        path to folder for saving user prefs
+    config_folder : str
+        path to config folder if specified
+
     Returns
     -------
     status: bool
@@ -343,6 +361,18 @@ def verify_input_dict(dict_input, default_object):
     """Verify input from yaml if config classes change on newer versions.
 
     Remove old keywords from input.
+
+    Parameters
+    ----------
+    dict_input : dict
+        dictionary to verify
+    default_object : object
+        object to compare attributes vs dict_input keys
+
+    Returns
+    -------
+    updated_dict : dict
+        updated input_dict with valid keys
     """
     default_dict = asdict(default_object)
     actual_keys = [*default_dict]
@@ -365,6 +395,8 @@ def save_user_prefs(userpref, parentwidget=None):
     Parameters
     ----------
     userpref : object of class UserPreferences
+    parentwidget : widget
+        parent for displaying messages
 
     Returns
     -------
@@ -564,6 +596,23 @@ def convert_OneDrive(path):
             if USERNAME != path_obj.parts[2]:
                 path = os.path.join(*path_obj.parts[:2], USERNAME, *path_obj.parts[3:])
     return path
+
+
+def get_modality_of_paramset(paramset):
+    """Get modality_string for a parameterset.
+
+    Parameters
+    ----------
+    paramset : object
+        ParamSet<mod> as defined in config_classes.py
+
+    Returns
+    -------
+    modality_string : str
+    """
+    class_name = type(paramset).__name__
+    modality_string = class_name.replace('ParamSet', '')
+    return modality_string
 
 
 def load_paramsets(fnames, path):
@@ -1318,8 +1367,19 @@ def verify_auto_templates(main):
     return (status, log)
 
 
-def verify_paramsets(main):
-    """Verify all digit templates in paramsets are defined."""
+def verify_digit_templates(main):
+    """Verify all digit templates in paramsets are defined.
+
+    Parameters
+    ----------
+    main : ImportMain
+        as defined in settings.py
+
+    Returns
+    -------
+    status : bool
+    log : list of str
+    """
     status = True
     log = []
     if hasattr(main, 'paramsets'):
@@ -1347,6 +1407,123 @@ def verify_paramsets(main):
                             log.append(
                                 f'{mod}: missing definition of {fname} {missing} '
                                 f'used in paramset(s) {used_in}')
+                        status = False
+
+    return (status, log)
+
+
+def get_test_alternative(paramset, testcode):
+    """Get current alternative for settings in paramset for a given testcode.
+
+    Parameters
+    ----------
+    paramset : object
+        ParamSet<mod> as defined in config_classes.py
+    testcode : str
+        three letter string representing the test
+
+    Returns
+    -------
+    alt : int or None
+        alternative number specified for testcode
+    """
+    alt = None
+    testcode = testcode.lower()
+    if testcode in ['sli', 'mtf', 'rec', 'snr']:
+        alt = getattr(paramset, f'{testcode}_type', None)
+    elif testcode == 'roi':
+        alt = getattr(paramset, 'roi_use_table', None)
+    elif testcode == 'hom':
+        alt = getattr(paramset, 'hom_tab_alt', None)
+    elif testcode == 'sni':
+        alt = paramset.sni_alt
+
+    return alt
+
+
+def verify_output_alternative(paramset, testcode=None):
+    """Verify that the alternative correspond for output and params of a paramset.
+
+    Parameters
+    ----------
+    paramset : ParamSetXX
+        as defined in config_classes
+    testcode : str, optional
+        Test for a spesific testcode or all if None. The default is None.
+
+    Returns
+    -------
+    status : bool
+        False if issues found
+    log : list of str
+        Warnings to display
+    """
+    log = []
+    for key, sublist in paramset.output.tests.items():
+        alt = None
+        proceed = True
+        if testcode:
+            if key.lower() != testcode.lower():
+                proceed = False
+        if proceed:
+            alt = get_test_alternative(paramset, key)
+            if alt is not None:
+                for subno, sub in enumerate(sublist):
+                    sub_alt = sub.alternative
+                    if sub.alternative > 9:
+                        sub_alt = sub.alternative - 10
+                    if sub_alt != alt:
+                        log.append(f'{key}: {sub}')
+                        mod = get_modality_of_paramset(paramset)
+                        try:
+                            alt_out = ALTERNATIVES[mod][key][sub_alt]
+                            alt_param = ALTERNATIVES[mod][key][alt]
+                            log.append(
+                                'Parameters used indicate alternative '
+                                f'{alt}: {alt_param}')
+                            log.append(
+                                'Output settings indicate alternative '
+                                f'{sub_alt}: {alt_out}')
+                        except (KeyError, IndexError):
+                            log.append(
+                                f'Parameters used indicate alternative {alt}')
+                            log.append(
+                                f'Output settings indicate alternative {sub_alt}')
+    status = False if len(log) > 0 else True
+
+    return (status, log)
+
+
+def verify_output_templates(paramset=None, main=None):
+    """Verify output template alternatives correspond to set alternatives.
+
+    Parameters
+    ----------
+    paramset : ParamSetXX, optional
+        if verifying one paramset only
+    main : ImportMain, optional
+        if verifying all paramsets. The default is None.
+
+    Returns
+    -------
+    status : bool
+        False if anything to warn about.
+    log : list of str
+        Warnings to display
+    """
+    status = True
+    log = []
+    if main is None:
+        if paramset is not None:
+            status, log = verify_output_alternative(paramset)
+    else:
+        if hasattr(main, 'paramsets'):
+            for mod, paramset_list in main.paramsets.items():
+                for this_paramset in paramset_list:
+                    status_this, log_this = verify_output_alternative(this_paramset)
+                    if status_this is False:
+                        log.append(f'Paramset {this_paramset.label}:')
+                        log.extend(log_this)
                         status = False
 
     return (status, log)

@@ -170,7 +170,7 @@ class SettingsDialog(ImageQCDialog):
                     and self.main.auto_templates == {}
                     and self.main.auto_vendor_templates == {}
                     ):
-                proceed = False  #TDDO add new settings - dash/limits here?
+                proceed = False  #TODO add new settings - dash/limits here?
         if proceed:
             add_widget(parent=self.item_shared_settings, snake='auto_info',
                        title='Automation',
@@ -771,8 +771,7 @@ class SharedSettingsWidget(StackWidget):
             'Import config from IDL version of ImageQC')
         btn_import_idl_config.clicked.connect(self.import_idl_config)
         btn_verify_config = QPushButton((
-            'Verify that the config files have the necessary connections defined'
-            ' (for troubleshooting)'))
+            'Verify config files (connections between related templates)'))
         btn_verify_config.clicked.connect(self.verify_config_files)
         self.vlo.addWidget(btn_locate_config)
         self.vlo.addWidget(btn_import)
@@ -895,11 +894,17 @@ class SharedSettingsWidget(StackWidget):
                 'Automation templates linked to undefined parameter sets or QuickTest '
                 'templates:')
             details.extend(log_au)
-        status_param, log_param = cff.verify_paramsets(all_temps)
-        if status_param is False:
+        status_param_dig, log_param_dig = cff.verify_digit_templates(all_temps)
+        if status_param_dig is False:
             details.append(
                 'Parameter sets linked to undefined Digit Templates')
-            details.extend(log_param)
+            details.extend(log_param_dig)
+        status_param_out, log_param_out = cff.verify_output_templates(
+            paramset=None, main=all_temps)
+        if status_param_out is False:
+            details.append(
+                'Parameterset output-settings warnings:')
+            details.extend(log_param_out)
         status_lim, log_lim = cff.verify_limits_used_with_auto(all_temps)
         if status_lim is False:
             details.extend(log_lim)

@@ -37,6 +37,7 @@ class LastModified:
     paramsets_SPECT: list = field(default_factory=list)
     paramsets_PET: list = field(default_factory=list)
     paramsets_MR: list = field(default_factory=list)
+    paramsets_SR: list = field(default_factory=list)
     quicktest_templates: list = field(default_factory=list)
     auto_common: list = field(default_factory=list)
     auto_templates: list = field(default_factory=list)
@@ -552,11 +553,12 @@ class ParamSetNM(ParamSetCommon):
 class ParamSetSPECT(ParamSetCommon):
     """Set of parameters regarding SPECT tests."""
 
-    mtf_type: int = 1  # 0=point, 1=line source
+    mtf_type: int = 1  # 0=point, 1=line source, 2=line source, sliding window
     mtf_roi_size: float = 25.
-    mtf_background_width: float = 5.  # used if point method
+    mtf_background_width: float = 5.
     mtf_line_tolerance: int = 10
     # ignore slices having max value differing more than % from mean of 3 highest max
+    mtf_sliding_window: int = 3  # number of slices to use if line sliding window
     mtf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
     mtf_plot: int = 2  # default plot 0=xyprofiles, 1=edge, 2=sorted, 3=LSF, 4=MTF
     mtf_cut_lsf: bool = False
@@ -595,7 +597,20 @@ class ParamSetPET(ParamSetCommon):
     rec_plot: int = 0  # 0 = rec max, 1 rec avg, 2 rec peak, 3 z-profile
     rec_earl: int = 1  # tolerances from 0 = None, 1 = EARL1, 2 = EARL2
     rec_background_volume: int = 9500
-
+    mtf_type: int = 2  # 0=point, 1=line source, 2=line source, sliding window
+    mtf_roi_size: float = 40.
+    mtf_background_width: float = 5.
+    mtf_line_tolerance: int = 90
+    # ignore slices having max value differing more than % from mean of 3 highest max
+    mtf_sliding_window: int = 5  # number of slices to use if line sliding window
+    mtf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
+    mtf_plot: int = 2  # default plot 0=xyprofiles, 1=edge, 2=sorted, 3=LSF, 4=MTF
+    mtf_cut_lsf: bool = False
+    mtf_cut_lsf_w: float = 3.  # lsf_w from halfmax x FWHM
+    mtf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
+    mtf_auto_center: bool = True
+    mtf_3d: bool = True  # not used yet - assumed 3d for line and circ. edge
+    mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
 
 @dataclass
 class ParamSetMR(ParamSetCommon):
@@ -642,6 +657,16 @@ class ParamSetMR(ParamSetCommon):
 
 
 @dataclass
+class ParamSetSR:
+    """Set of paramaters used for modality SR."""
+
+    label: str = ''
+    output: QuickTestOutputTemplate = field(
+        default_factory=QuickTestOutputTemplate)
+    dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
+
+
+@dataclass
 class ParamSet:
     """Collection of parametersets.
 
@@ -655,6 +680,7 @@ class ParamSet:
     SPECT: ParamSetSPECT = field(default_factory=ParamSetSPECT)
     PET: ParamSetPET = field(default_factory=ParamSetPET)
     MR: ParamSetMR = field(default_factory=ParamSetMR)
+    SR: ParamSetSR = field(default_factory=ParamSetSR)
 
 
 @dataclass
@@ -883,24 +909,30 @@ class LimitsAndPlotTemplate:
                 self.groups_hide.pop(idx)
                 self.groups_title.pop(idx)
 
-    def move_group(self, old_group_number=None, new_group_number=None):
+    def move_group(self, old_group_number, direction='up'):
         """Move group to new position (index).
 
         Parameters
         ----------
-        old_group_number : int, optional
-            Original group number. The default is None.
-        new_group_number : int, optional
-            New group index. The default is None.
+        old_group_number : int
+            Original group number.
+        direction : str
+            'up'=lower number or 'down'= higher number (vertical list)
         """
-        if old_group_number is None or new_group_number is None:
-            pass
-        else:
+        n_groups = len(self.groups)
+        proceed = True
+        if old_group_number == n_groups - 1 and direction == 'down':
+            proceed = False
+        if old_group_number == 0 and direction == 'up':
+            proceed = False
+        if proceed:
             group = self.groups.pop(old_group_number)
             limits = self.groups_limits.pop(old_group_number)
             ranges = self.groups_ranges.pop(old_group_number)
             hide = self.groups_hide.pop(old_group_number)
             title = self.groups_title.pop(old_group_number)
+            new_group_number = (old_group_number - 1 if direction == 'up'
+                                else old_group_number + 1)
             self.add_group(group=group, limits=limits, ranges=ranges,
                            hide=hide, title=title, index=new_group_number)
 

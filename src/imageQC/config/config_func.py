@@ -178,8 +178,11 @@ def version_control(input_main):
 
         if proceed:
             for paramset in paramset_mod:
-                if paramset.roi_use_table == 1:
-                    warnings.append(f'{mod}: {paramset.label}')
+                try:
+                    if paramset.roi_use_table == 1:
+                        warnings.append(f'{mod}: {paramset.label}')
+                except AttributeError:  # e.g. SR modality without ROI test
+                    pass
 
     if len(warnings) > 0:
         dlg = messageboxes.MessageBoxWithDetails(
@@ -433,7 +436,7 @@ def save_user_prefs(userpref, parentwidget=None):
 
 
 def load_user_prefs():
-    """Load yaml file.
+    """Load UserPreferences from yaml file.
 
     Returns
     -------
@@ -468,7 +471,7 @@ def load_user_prefs():
 
 
 def get_config_folder():
-    """Get config folder.
+    """Get config folder currently set.
 
     Returns
     -------
@@ -485,7 +488,7 @@ def get_config_folder():
 
 
 def get_config_filename(fname, force=False):
-    """Verify if yaml file exists.
+    """Verify if yaml file exists in config folder.
 
     Parameters
     ----------
@@ -514,7 +517,7 @@ def get_config_filename(fname, force=False):
 
 
 def load_default_dcm_test_tag_patterns():
-    """Load default TagPatterns format for exporting DCM data (test DCM).
+    """Load default TagPatternsFormat for exporting DCM data (test DCM).
 
     Returns
     -------
@@ -973,7 +976,6 @@ def check_save_conflict(fname, lastload):
 
 def update_last_modified(fname=''):
     """Update last_modified.yaml."""
-    # path = get_config_filename(fname, force=True)
     _, _, last_mod = load_settings(fname='last_modified')
     setattr(last_mod, fname, [USERNAME, time(), VERSION])
     _, _ = save_settings(last_mod, fname='last_modified')
@@ -1083,8 +1085,20 @@ def save_settings(settings, fname=''):
 
 
 def import_settings(import_main):
-    """Import config settings."""
+    """Verify config settings to import. Avoid equal template names.
+
+    Parameters
+    ----------
+    import_main : ImportMain
+        as defined in settings.py
+
+    Returns
+    -------
+    any_same_name : bool
+    """
     any_same_name = False
+
+    # tag_infos
     if import_main.tag_infos != []:
         fname = 'tag_infos'
         _, _, tag_infos = load_settings(fname=fname)
@@ -1106,6 +1120,7 @@ def import_settings(import_main):
         taginfos_reset_sort_index(tag_infos)
         _, _ = save_settings(tag_infos, fname=fname)
 
+    # templates using modality dictionary
     list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
                   if item['saved_as'] == 'modality_dict']
     list_dicts.append('paramsets')
@@ -1138,6 +1153,7 @@ def import_settings(import_main):
             if dict_string != 'paramsets':
                 _, _ = save_settings(temps, fname=dict_string)
 
+    # auto_common
     try:
         if import_main.auto_common.import_path != '':
             status, path = save_settings(import_main.auto_common, fname='auto_common')
@@ -1260,17 +1276,14 @@ def get_ref_label_used_in_auto_templates(auto_templates, ref_attr='paramset_labe
     Parameters
     ----------
     auto_templates : dict
-        key = modalitystring
-        value = AutoTemplate
+        key = modalitystring, value = AutoTemplate
     ref_attr : str
         'paramset_label' or 'quicktemp_label' or 'limits_and_plot_label'
 
     Returns
     -------
     templates_in_auto : dict
-        key = modalitystring
-        value = [[.label, auto_template.label],...]
-
+        key = modalitystring, value = [[.label, auto_template.label],...]
     """
     templates_in_auto = {}
     for mod in auto_templates:

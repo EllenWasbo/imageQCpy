@@ -62,7 +62,7 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         FigureCanvasQTAgg.__init__(self, self.fig)
         self.ax = self.fig.add_subplot(111)
         self.last_clicked_pos = (-1, -1)
-        self.profile_length = 20  # assume click drag > length in pix = draw profile
+        self.profile_length = 10  # assume click drag > length in pix = draw profile
         self.rectangle = patches.Rectangle((0, 0), 1, 1)
         self.current_image = None
 
@@ -207,18 +207,19 @@ class ImageCanvas(GenericImageCanvas):
         self.ax.clear()
         self.draw()
 
-    def img_draw(self, auto=False, window_level=[]):
+    def img_draw(self, auto=False, window_level=[], force_home=False):
         """Refresh image."""
         # keep previous zoom if same size image
         xlim = None
         ylim = None
-        try:
-            prev_img = self.ax.get_images()[0].get_array()
-            if prev_img.shape == self.main.active_img.shape:
-                xlim = self.ax.get_xlim()
-                ylim = self.ax.get_ylim()
-        except (AttributeError, IndexError):
-            pass
+        if force_home is False:
+            try:
+                prev_img = self.ax.get_images()[0].get_array()
+                if prev_img.shape == self.main.active_img.shape:
+                    xlim = self.ax.get_xlim()
+                    ylim = self.ax.get_ylim()
+            except (AttributeError, IndexError):
+                pass
         try:
             cmap = self.ax.get_images()[0].cmap.name
         except (AttributeError, IndexError):
@@ -516,7 +517,7 @@ class ImageCanvas(GenericImageCanvas):
     def MTF(self):
         """Draw MTF ROI."""
         if (
-                self.main.current_modality in ['CT', 'SPECT']
+                self.main.current_modality in ['CT', 'SPECT', 'PET']
                 and self.main.current_paramset.mtf_type in [0, 1]):
             # bead show background rim
             if self.main.current_roi[1].any():

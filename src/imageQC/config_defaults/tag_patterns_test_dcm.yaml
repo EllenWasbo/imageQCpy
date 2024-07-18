@@ -27,3 +27,7 @@ MR:
 - label: default
   list_tags: [ImagingFrequency, ReceiveCoilName, TransmitCoilName]
   list_format: ['', '', '']
+SR:
+- label: default
+  list_tags: []
+  list_format: []

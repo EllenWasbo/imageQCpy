@@ -1,6 +1,11 @@
 #v3.1.1
 _Jul XX, 2024_
 
+New functionalities:
+- Started to add option to read info from RDSR files. SR added as modality with DCM as only test. To be continued for reading out dose data.
+- SPECT/PET: Added same options for spatial resolution (MTF) for both modalities. (Used to be SPECT only). Added option to perform line source test with sliding window, listed results pr window (image group)
+to allow for more variation over the line source. Tested with Ge-68 line sources for Siemens PET. 
+
 Changes:
 - When copying curves/plots to clipboard, curves sharing the same x-values
 - Added option to simulate gamma camera point source as artifact
@@ -17,6 +22,9 @@ Fixes:
 - Adding artifacts:
  - Handeling adding noise when <=0 within noise shape (setting values to 1 if <=0 before adding noise).
  - Better handeling artifact name when editing of settings. Keep autogenerating or keep manually edited.
+- Fixed order error in Settings - LimitsAndPlotTemplates when editing templates.
+- In some combinations of actions (zoom and also maybe profile plot involved?) the image zoom have been unable to reset by the home button and also the refresh button. 
+ Another force reset attempt is added hopefully to be able to reset using the refresh button if this happens. So for not succeeded to reproduce the situation.
  
 
 # v3.1.0

@@ -869,8 +869,11 @@ class LimitsAndPlotContent(QWidget):
         if os.path.exists(self.txt_sample_file_path.text()):
             self.headers, self.first_values = get_headers_first_values_in_path(
                 self.txt_sample_file_path.text())
+            self.update_header_order()
             if len(self.headers) == 0:
                 headers_as_groups = True
+            else:
+                _ = self.update_header_order()
         elif self.txt_sample_file_path.text() == '':
             if self.parent.current_template is not None:
                 headers_as_groups = True
@@ -925,6 +928,7 @@ class LimitsAndPlotContent(QWidget):
         if len(self.headers) > 0:
             self.list_headers.addItems(self.headers)
             self.list_headers.setCurrentRow(set_selected_idx)
+            
         else:
             self.reset_data_display()
 
@@ -1023,16 +1027,15 @@ class LimitsAndPlotContent(QWidget):
             'up' or 'down. The default is 'up'.
         """
         sels = self.list_headers.selectedIndexes()
-        sel_row = sels[0].row()
-        selected_header = self.headers[sel_row]
-        self.group_numbers[sel_row]
-        val = -1 if direction == 'up' else 1
-        self.parent.current_template.move_group(
-            old_group_number=self.group_numbers[sel_row],
-            new_group_number=self.group_numbers[sel_row] + val)
-        _ = self.update_header_order()
-        self.update_data(set_selected_idx=self.headers.index(selected_header))
-        self.parent.flag_edit(True)
+        if len(sels) > 0:
+            _ = self.update_header_order()
+            sel_row = sels[0].row()
+            selected_header = self.headers[sel_row]
+            self.parent.current_template.move_group(
+                self.group_numbers[sel_row], direction)
+            _ = self.update_header_order()
+            self.update_data(set_selected_idx=self.headers.index(selected_header))
+            self.parent.flag_edit(True)
 
 
 class LimitsAndPlotEditDialog(ImageQCDialog):

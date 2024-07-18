@@ -150,6 +150,10 @@ def set_tag_patterns_special_default(quicktest_options, tag_infos):
         'SeriesDescription', 'SliceLocation']
     tag_patterns_special['MR'][2].list_format = [
         '', 'z=|:.1f|']
+    tag_patterns_special['SR'][2].list_tags = [
+        'SeriesDescription', 'ProtocolName']
+    tag_patterns_special['SR'][2].list_format = [
+        'SR: ||', '']
 
     return tag_patterns_special
 
@@ -166,65 +170,3 @@ def set_auto_common_default():
 
     return cfc.AutoCommon(filename_pattern=filename_pattern)
 
-
-'''Not in use Delete?
-def get_quicktest_output_default(modality):
-    """Set default templates for QuickTest Output if no yaml file exist.
-
-    On startup these are verified against available modalities and testcodes.
-    Modalities and tests not defined will have default settings as defined
-    in config_classes.
-
-    Return
-    ------
-    dict
-        dict for quicktest_output_template.tests
-    """
-    tests = {}
-    if modality == 'CT':
-        tests = {
-            'Hom': [
-                cfc.QuickTestOutputSub(label='Center_HU', columns=[4]),
-                cfc.QuickTestOutputSub(
-                    label='Min_diff_from_Center_HU',
-                    columns=[5, 6, 7, 8], calculation='min',
-                    per_group=True),
-                cfc.QuickTestOutputSub(
-                    label='Max_diff_from_Center_HU',
-                    columns=[5, 6, 7, 8], calculation='max',
-                    per_group=True)
-                ],
-            'Noi': [
-                cfc.QuickTestOutputSub(
-                    label='Max_noise', columns=[1], calculation='max', per_group=True)
-                ],
-            'Sli': [
-                cfc.QuickTestOutputSub(
-                    label='Avg_Slicethick', columns=[5], per_group=True),
-                cfc.QuickTestOutputSub(
-                    label='Avg_Slicethick_inner',
-                    alternative=1,
-                    columns=[1, 2, 3, 4], calculation='avg'),
-                cfc.QuickTestOutputSub(
-                    label='Avg_Slicethick_outer',
-                    alternative=1,
-                    columns=[5, 6], calculation='avg'),
-                cfc.QuickTestOutputSub(
-                    label='Avg_SlicethickGE',
-                    alternative=2,
-                    columns=[1, 2], calculation='avg')
-                ],
-            'MTF': [
-                cfc.QuickTestOutputSub(
-                    label='Avg_xy_MTF50', columns=[0, 3], calculation='avg'),
-                cfc.QuickTestOutputSub(
-                    label='Avg_xy_MTF10', columns=[1, 4], calculation='avg'),
-                cfc.QuickTestOutputSub(
-                    label='MTF50', alternative=1, columns=[0], per_group=True),
-                cfc.QuickTestOutputSub(
-                    label='MTF10', alternative=1, columns=[1], per_group=True),
-                ]
-            }
-
-    return tests
-'''

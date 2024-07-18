@@ -171,9 +171,9 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 progress_modal.setValue(100)
                 break
 
-        file_verified = True
-        pyd, file_verified, errmsg = read_dcm(file)
-        if file_verified:
+        is_image = True
+        pyd, is_image, errmsg = read_dcm(file)
+        if is_image:
             modalityDCM = pyd.get('Modality', '')
             mod = get_modality(modalityDCM)['key']
             frames = pyd.get('NumberOfFrames', None)
@@ -331,7 +331,24 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                         dcm_obj = DcmInfo(**attrib)
                     list_of_DcmInfo.append(dcm_obj)
         else:
-            ignored_files.append(file)
+            ignore = True
+            if pyd and GUI:
+                if pyd.get('Modality') == 'SR':
+                    ignore = False
+                    attrib = {
+                        'filepath': str(file),
+                        'modality': 'SR',
+                        'modalityDCM': 'SR',
+                        'studyUID': (pyd.get('StudyInstanceUID', ''))
+                        }
+                    attrib.update(get_dcm_gui_info_lists(
+                        pyd, tag_infos=tag_infos,
+                        tag_patterns_special=tag_patterns_special,
+                        modality='SR'))
+                    dcm_obj = DcmInfoGui(**attrib)
+                    list_of_DcmInfo.append(dcm_obj)
+            if ignore:
+                ignored_files.append(file)
 
     return (list_of_DcmInfo, ignored_files, warnings)
 
@@ -633,7 +650,8 @@ def get_modality(modalityStr):
         'NM': 'NM',
         'ST': 'SPECT',
         'PT': 'PET',
-        'MR': 'MR'
+        'MR': 'MR',
+        'SR': 'SR'
         }
     # TODO: add mammo (move modality MG)
     qtOptKey = variants.get(modalityStr, 'CT')

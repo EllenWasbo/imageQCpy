@@ -1057,6 +1057,30 @@ def get_min_max_pos_2d(image, roi_array):
         [max_idx[0][0], max_idx[1][0]]
         ]
 
+def get_offset_max_pos_2d(image, roi_array, pixelsize):
+    """Get offset (from image center) for max position, masked by ROI.
+
+    Parameters
+    ----------
+    image : np.array
+    roi_array : np.array
+        dtype bool
+    pixelsize : float
+
+    Returns
+    -------
+    dx_mm : float
+    dy_mm : float
+        offset from image center in mm for max in image
+    """
+    arr = np.ma.masked_array(image, mask=np.invert(roi_array))
+    max_idx = np.where(arr == np.max(arr))
+
+    dx_mm = pixelsize * (max_idx[1][0] - image.shape[1] // 2)
+    dy_mm = pixelsize * (max_idx[0][0] - image.shape[0] // 2)
+
+    return (dx_mm, dy_mm)
+
 
 def topolar(img, order=1):
     """

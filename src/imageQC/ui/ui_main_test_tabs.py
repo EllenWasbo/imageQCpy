@@ -72,15 +72,15 @@ class ParamsWidget(QWidget):
 class ParamsTabCommon(QTabWidget):
     """Superclass for modality specific tests."""
 
-    def __init__(self, parent, task_based=False):
+    def __init__(self, parent, remove_roi_num=False):
         """Initiate tabs for tests available to all modalities.
 
         Parameters
         ----------
         parent : MainWindow or InputMainAuto
             InputMainAuto used for task_based
-        task_based : bool, optional
-            Used for task_based_image_quality.py. The default is False.
+        remove_roi_num : bool, optional
+            True for task_based_image_quality.py and modality SR. The default is False.
         """
         super().__init__()
         self.main = parent
@@ -89,7 +89,7 @@ class ParamsTabCommon(QTabWidget):
 
         self.create_tab_dcm()
         self.addTab(self.tab_dcm, "DCM")
-        if task_based is False:
+        if remove_roi_num is False:
             self.create_tab_roi()
             self.create_tab_num()
             self.addTab(self.tab_roi, "ROI")
@@ -211,37 +211,10 @@ class ParamsTabCommon(QTabWidget):
                     self.roi_a.setEnabled(True)
         # continues in subclasses if needed
 
-    def make_param_odd_number(self, attribute='', update_roi=True,
-                              clear_results=True, update_plot=True,
-                              update_results_table=True, content=None):
-        """Make sure number is odd number. Used for integers."""
-        self.sender().blockSignals(True)
-        prev_value = getattr(self.main.current_paramset, attribute)
-        set_value = self.sender().value()
-        if set_value > prev_value:
-            max_val = self.sender().maximum()
-            if set_value >= max_val:
-                self.sender().setValue(max_val)
-            else:
-                new_val = 2 * (set_value // 2) + 1
-                self.sender().setValue(new_val)
-        else:
-            min_val = self.sender().minimum()
-            if set_value <= min_val:
-                self.sender().setValue(min_val)
-            else:
-                new_val = 2 * (set_value // 2) - 1
-                self.sender().setValue(new_val)
-        self.sender().blockSignals(False)
-        self.param_changed_from_gui(
-            attribute=attribute, update_roi=update_roi,
-            clear_results=clear_results, update_plot=update_plot,
-            update_results_table=update_results_table, content=content)
-
     def param_changed_from_gui(self, attribute='', update_roi=True,
                                clear_results=True, update_plot=True,
                                update_results_table=True, content=None,
-                               edit_ignore=False):
+                               edit_ignore=False, make_odd=False):
         """Update current_paramset with value from GUI.
 
         If changes found - update roi and delete results.
@@ -262,6 +235,8 @@ class ParamsTabCommon(QTabWidget):
             Preset content. Default is None
         edit_ignore : bool, optional
             Avoid setting flag_edit to True. Default is False.
+        make_odd : bool, optional
+            Force integer to be odd number. Default is False
         """
         if not self.flag_ignore_signals:
             if content is None:
@@ -272,6 +247,17 @@ class ParamsTabCommon(QTabWidget):
                     content = round(sender.value(), sender.decimals())
                     if sender.decimals() == 0:
                         content = int(content)
+                        if make_odd:
+                            if content % 2 == 0:
+                                prev_value = getattr(
+                                    self.main.current_paramset, attribute)
+                                if content > prev_value:  # increasing value
+                                    content += 1
+                                else:
+                                    content -= 1
+                                self.blockSignals(True)
+                                self.sender().setValue(content)
+                                self.blockSignals(False)
                 elif hasattr(sender, 'setText'):
                     content = sender.text()
                 elif hasattr(sender, 'setCurrentIndex'):  # QComboBox
@@ -620,6 +606,86 @@ class ParamsTabCommon(QTabWidget):
             lambda: self.param_changed_from_gui(attribute='mtf_plot',
                                                 update_roi=False,
                                                 clear_results=False))
+        
+    def create_tab_mtf_ct_spect_pet(self, modality='CT'):
+        """GUI of tab MTF - common to CT/SPECT/PET."""
+        self.mtf_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
+        self.mtf_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
+        self.mtf_background_width = QDoubleSpinBox(
+            decimals=1, minimum=0, maximum=1000, singleStep=0.1)
+        self.mtf_background_width.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_background_width'))
+        self.mtf_auto_center = QCheckBox('')
+        self.mtf_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
+
+        self.mtf_cut_lsf_w_fade = QDoubleSpinBox(
+            decimals=1, minimum=0, singleStep=0.1)
+        self.mtf_cut_lsf_w_fade.valueChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='mtf_cut_lsf_w_fade'))
+        self.mtf_type.addItems(ALTERNATIVES[modality]['MTF'])
+
+        plot_items = ['Centered xy profiles',
+                      'Sorted pixel values', 'LSF', 'MTF']
+        if modality in ['SPECT', 'PET']:
+            plot_items.append('Line source max z-profile')
+            self.mtf_line_tolerance = QDoubleSpinBox(
+                decimals=0, minimum=0.1, singleStep=1)
+            self.mtf_line_tolerance.valueChanged.connect(
+                lambda: self.param_changed_from_gui(
+                    attribute='mtf_line_tolerance'))
+            self.mtf_sliding_window = QDoubleSpinBox(
+                decimals=0, minimum=3, singleStep=1)
+            self.mtf_sliding_window.valueChanged.connect(
+                lambda: self.param_changed_from_gui(
+                    attribute='mtf_sliding_window', make_odd=True))
+        self.mtf_plot.addItems(plot_items)
+
+        if modality == 'CT':
+            self.mtf_cy_pr_mm = BoolSelectTests(
+                self, attribute='mtf_cy_pr_mm',
+                text_true='cy/mm', text_false='cy/cm',
+                update_roi=False, clear_results=False)
+            self.create_offset_widget('mtf')
+
+        vlo1 = QVBoxLayout()
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('MTF method'), self.mtf_type)
+        flo1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
+        txt = 'bead/wire' if modality == 'CT' else 'point/line'
+        flo1.addRow(
+            QLabel(f'Width of background ({txt})'), self.mtf_background_width)
+        flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
+        if modality in ['SPECT', 'PET']:
+            flo1.addRow(QLabel('Linesource max diff % from top N slices'),
+                        self.mtf_line_tolerance)
+            flo1.addRow(QLabel('N slices for tolerance and sliding window width'),
+                        self.mtf_sliding_window)
+        flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
+                    self.mtf_sampling_frequency)
+        vlo1.addLayout(flo1)
+        if modality == 'CT':
+            vlo1.addWidget(self.wid_mtf_offset)
+
+        self.tab_mtf.hlo.addLayout(vlo1)
+        self.tab_mtf.hlo.addWidget(uir.VLine())
+        vlo2 = QVBoxLayout()
+        flo2 = QFormLayout()
+        flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
+        flo2.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.mtf_cut_lsf_w)
+        flo2.addRow(
+            QLabel('    Fade out within n*FWHM, n='), self.mtf_cut_lsf_w_fade)
+        vlo2.addLayout(flo2)
+        flo3 = QFormLayout()
+        flo3.addRow(QLabel('Table results from'), self.mtf_gaussian)
+        if modality == 'CT':
+            flo3.addRow(QLabel('Table results as'), self.mtf_cy_pr_mm)
+        flo3.addRow(QLabel('Plot'), self.mtf_plot)
+        vlo2.addLayout(flo3)
+        self.tab_mtf.hlo.addLayout(vlo2)
 
     def create_tab_mtf_xray_mr(self):
         """GUI of tab MTF - common to Xray/Mammo and MR."""
@@ -866,9 +932,9 @@ class ParamsTabCT(ParamsTabCommon):
         parent : MainWindow or InputMainAuto
             InputMainAuto used for task_based
         task_based : bool, optional
-            Used for task_based_image_quality.py. The default is False.
+            True used for task_based_image_quality.py. The default is False.
         """
-        super().__init__(parent, task_based=task_based)
+        super().__init__(parent, remove_roi_num=task_based)
 
         if task_based:
             self.create_tab_ttf()
@@ -1216,60 +1282,7 @@ class ParamsTabCT(ParamsTabCommon):
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
-
-        self.mtf_roi_size = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
-        self.mtf_roi_size.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
-        self.mtf_background_width = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
-        self.mtf_background_width.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_background_width'))
-        self.mtf_auto_center = QCheckBox('')
-        self.mtf_auto_center.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
-        self.mtf_cut_lsf_w_fade = QDoubleSpinBox(
-            decimals=1, minimum=0, singleStep=0.1)
-        self.mtf_cut_lsf_w_fade.valueChanged.connect(
-            lambda: self.param_changed_from_gui(
-                attribute='mtf_cut_lsf_w_fade'))
-        self.mtf_type.addItems(ALTERNATIVES['CT']['MTF'])
-        self.mtf_plot.addItems(['Centered xy profiles',
-                                'Sorted pixel values', 'LSF', 'MTF'])
-
-        self.mtf_cy_pr_mm = BoolSelectTests(
-            self, attribute='mtf_cy_pr_mm',
-            text_true='cy/mm', text_false='cy/cm',
-            update_roi=False, clear_results=False)
-        self.create_offset_widget('mtf')
-
-        vlo1 = QVBoxLayout()
-        flo1 = QFormLayout()
-        flo1.addRow(QLabel('MTF method'), self.mtf_type)
-        flo1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
-        flo1.addRow(
-            QLabel('Width of background (bead/wire)'), self.mtf_background_width)
-        flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
-        flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
-                    self.mtf_sampling_frequency)
-        vlo1.addLayout(flo1)
-
-        vlo1.addWidget(self.wid_mtf_offset)
-        self.tab_mtf.hlo.addLayout(vlo1)
-        self.tab_mtf.hlo.addWidget(uir.VLine())
-        vlo2 = QVBoxLayout()
-        flo2 = QFormLayout()
-        flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
-        flo2.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.mtf_cut_lsf_w)
-        flo2.addRow(
-            QLabel('    Fade out within n*FWHM, n='), self.mtf_cut_lsf_w_fade)
-        vlo2.addLayout(flo2)
-        flo3 = QFormLayout()
-        flo3.addRow(QLabel('Table results from'), self.mtf_gaussian)
-        flo3.addRow(QLabel('Table results as'), self.mtf_cy_pr_mm)
-        flo3.addRow(QLabel('Plot'), self.mtf_plot)
-        vlo2.addLayout(flo3)
-        self.tab_mtf.hlo.addLayout(vlo2)
+        self.create_tab_mtf_ct_spect_pet(modality='CT')
 
     def create_tab_dim(self):
         """GUI of tab Dim. Test distance of rods in Catphan."""
@@ -2499,57 +2512,7 @@ class ParamsTabSPECT(ParamsTabCommon):
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
-
-        self.mtf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
-        self.mtf_roi_size.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
-        self.mtf_background_width = QDoubleSpinBox(
-            decimals=1, minimum=0, singleStep=0.1)
-        self.mtf_background_width.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_background_width'))
-        self.mtf_auto_center = QCheckBox('')
-        self.mtf_auto_center.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
-        self.mtf_line_tolerance = QDoubleSpinBox(decimals=0, minimum=0.1, singleStep=1)
-        self.mtf_line_tolerance.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_line_tolerance'))
-        self.mtf_cut_lsf_w_fade = QDoubleSpinBox(
-            decimals=1, minimum=0, singleStep=0.1)
-        self.mtf_cut_lsf_w_fade.valueChanged.connect(
-            lambda: self.param_changed_from_gui(
-                attribute='mtf_cut_lsf_w_fade'))
-        self.mtf_type.addItems(ALTERNATIVES['SPECT']['MTF'])
-        self.mtf_plot.addItems(['Centered xy profiles',
-                                'Sorted pixel values', 'LSF', 'MTF',
-                                'Line source max z-profile'])
-
-        vlo1 = QVBoxLayout()
-        flo1 = QFormLayout()
-        flo1.addRow(QLabel('MTF method'), self.mtf_type)
-        flo1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
-        flo1.addRow(
-            QLabel('Width of background (point/line)'), self.mtf_background_width)
-        flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
-        flo1.addRow(QLabel('Linesource max diff % from top 3'),
-                    self.mtf_line_tolerance)
-        flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
-                    self.mtf_sampling_frequency)
-        vlo1.addLayout(flo1)
-
-        self.tab_mtf.hlo.addLayout(vlo1)
-        self.tab_mtf.hlo.addWidget(uir.VLine())
-        vlo2 = QVBoxLayout()
-        flo2 = QFormLayout()
-        flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
-        flo2.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.mtf_cut_lsf_w)
-        flo2.addRow(
-            QLabel('    Fade out within n*FWHM, n='), self.mtf_cut_lsf_w_fade)
-        vlo2.addLayout(flo2)
-        flo3 = QFormLayout()
-        flo3.addRow(QLabel('Table results from'), self.mtf_gaussian)
-        flo3.addRow(QLabel('Plot'), self.mtf_plot)
-        vlo2.addLayout(flo3)
-        self.tab_mtf.hlo.addLayout(vlo2)
+        self.create_tab_mtf_ct_spect_pet(modality='SPECT')
 
 
 class ParamsTabPET(ParamsTabCommon):
@@ -2561,10 +2524,12 @@ class ParamsTabPET(ParamsTabCommon):
         self.create_tab_hom()
         self.create_tab_cro()
         self.create_tab_rec()
+        self.create_tab_mtf()
 
         self.addTab(self.tab_hom, "Homogeneity")
         self.addTab(self.tab_cro, "Cross Calibration")
         self.addTab(self.tab_rec, "Recovery Curve")
+        self.addTab(self.tab_mtf, "Spatial resolution")
 
         self.flag_ignore_signals = False
 
@@ -2806,6 +2771,11 @@ class ParamsTabPET(ParamsTabCommon):
         hlo_right.addLayout(flo_plot)
         hlo_right.addWidget(QLabel('EARL tolerances'))
         hlo_right.addWidget(self.rec_earl)
+
+    def create_tab_mtf(self):
+        """GUI of tab MTF."""
+        super().create_tab_mtf()
+        self.create_tab_mtf_ct_spect_pet(modality='PET')
 
     def get_Cro_activities(self):
         """Get override values for Cross calibration test."""
@@ -3174,6 +3144,15 @@ class ParamsTabMR(ParamsTabCommon):
         """GUI of tab MTF."""
         super().create_tab_mtf()
         self.create_tab_mtf_xray_mr()
+
+
+class ParamsTabSR(ParamsTabCommon):
+    """Tab for SR DICOM header extraction."""
+
+    def __init__(self, parent):
+        super().__init__(parent, remove_roi_num=True)
+
+        self.flag_ignore_signals = False
 
 
 class BoolSelectTests(uir.BoolSelect):

@@ -267,17 +267,19 @@ class SelectQuickTestWidget(SelectTemplateWidget):
             self.ask_to_save_changes(before_select_new=True)
 
         self.main.start_wait_cursor()
-        template_id = self.cbox_template.currentIndex()
-        if template_id == 0:
-            self.current_template = cfc.QuickTestTemplate()
-        else:
-            try:
-                self.current_template = copy.deepcopy(
-                    self.modality_dict[self.main.current_modality][template_id - 1])
-            except IndexError:
-                self.cbox_template.setCurrentIndex(0)
+        if self.main.current_modality != 'SR':
+            template_id = self.cbox_template.currentIndex()
+            if template_id == 0:
                 self.current_template = cfc.QuickTestTemplate()
-        self.set_current_template_to_imgs()
+            else:
+                try:
+                    self.current_template = copy.deepcopy(
+                        self.modality_dict[self.main.current_modality][template_id - 1])
+                except IndexError:
+                    self.cbox_template.setCurrentIndex(0)
+                    self.current_template = cfc.QuickTestTemplate()
+                    
+            self.set_current_template_to_imgs()
         self.main.tree_file_list.update_file_list()
         self.flag_edit(False)
         self.main.stop_wait_cursor()

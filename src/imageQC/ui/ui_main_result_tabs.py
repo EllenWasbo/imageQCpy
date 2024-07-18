@@ -1016,7 +1016,7 @@ class ResultPlotCanvas(PlotCanvas):
                 lsf_is_interp = False
                 try:
                     mtf_type = self.main.current_paramset.mtf_type
-                    if self.main.current_modality in ['CT', 'SPECT'] and mtf_type == 1:
+                    if self.main.current_modality in ['CT', 'SPECT', 'PET'] and mtf_type == 1:
                         self.ytitle = 'Summed pixel values'
                         xy_labels = True
                         lsf_is_interp = True
@@ -1124,7 +1124,7 @@ class ResultPlotCanvas(PlotCanvas):
             proceed = True
             if 'matrix' not in details_dicts[0]:
                 proceed = False
-            elif self.main.current_modality in ['CT', 'SPECT']:
+            elif self.main.current_modality in ['CT', 'SPECT', 'PET']:
                 if self.main.current_paramset.mtf_type == 1:
                     proceed = False
             elif self.main.current_modality == 'NM':

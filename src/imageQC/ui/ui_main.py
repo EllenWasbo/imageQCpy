@@ -1207,14 +1207,17 @@ class MainWindow(QMainWindow):
         self.tab_spect = ui_main_test_tabs.ParamsTabSPECT(self)
         self.tab_pet = ui_main_test_tabs.ParamsTabPET(self)
         self.tab_mr = ui_main_test_tabs.ParamsTabMR(self)
+        self.tab_sr = ui_main_test_tabs.ParamsTabSR(self)
         self.tab_vendor = ParamsTabVendor(self)
+        
         self.stack_test_tabs.addWidget(self.tab_xray)
         self.stack_test_tabs.addWidget(self.tab_mammo)
         self.stack_test_tabs.addWidget(self.tab_nm)
         self.stack_test_tabs.addWidget(self.tab_spect)
         self.stack_test_tabs.addWidget(self.tab_pet)
         self.stack_test_tabs.addWidget(self.tab_mr)
-        self.stack_test_tabs.addWidget(self.tab_vendor)
+        self.stack_test_tabs.addWidget(self.tab_sr)
+        self.stack_test_tabs.addWidget(self.tab_vendor)  
         self.stop_wait_cursor()
 
     def create_result_tabs(self):

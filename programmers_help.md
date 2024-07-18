@@ -16,15 +16,32 @@ using virt env later
 - python -m imageQC.imageQC # to run the program
 - python -m pytest tests\test_calculations.py # example to test
 
-To be able to plot during pytest:
+To be able to use breakpoints:
+- Find developer_mode in imageQC.py (currently at line 198) and set this variable from False to True.
+
+To be able to plot during pytest or breakpoints:
 - import matplotlib.pyplot as plt
-- plt.plot([x,y])
+- plt.plot([x,y]) or plt.imshow(some_array)
 - plt.pause(.1)
 
+## Help to find any text in code
+To easily find out where a method or class is used or if any breakpoints are left, one could use imageQCpy/helper_scripts/search_files.py.
+Edit the content of variable search_string and run the script. This will list all files and line numbers where the search_string is found within directory src.
+
 ## Update resources.py after changes
-- add to resouces.qrc if needed
+If adding icons or file-based default configuration settings, resources.qrc will have to be updated and a new resources.py need de be recreated.
+If adding icons, a dark-mode icon is also needed.
+
+- add file to folder icons or config_defaults and add file name to resouces.qrc
 - cd C:\...\imageQCpy\src\imageQC
 - pyrcc5 resources.qrc -o resources.py
+
+## Adding new modality
+- add modality to all relevant dictionaries in config/iQCconstants.py
+- add ParamSet<mod> in config/config_classes.py + add this to class ParamSet and add paramsets_<mod> in LastModified
+- add ParamsTab<mod> in ui/ui_main_test_tabs.py
+- add default DCM settings in config_defaults/tag_patterns_test_dcm.yaml (and re-run pyrcc5 as explained above)
+- consider adding variants to scripts/dcm.py - get_modality
 
 ## When adding new testcode (analyse type)
 - add testcode (three letters at least first capital) in config/iQCconstants.py QUICKTEST_OPTIONS same order as tabs for the tests
@@ -39,7 +56,7 @@ To be able to plot during pytest:
 - add test calculations to calculate_qc
 - add test visualizations to plot canvas (ui/ui_main_result_tabs - ResultPlotCanvas)
 	- and optionally result image canvas (ui/ui_image_canvas - ResultImageCanvas)
-- if more ALTERNATIVES or dynamic HEADERS given in iQCconstants - note the comments above these parameters in iQCconstants.py
+- if more ALTERNATIVES or dynamic HEADERS given in iQCconstants - note the comments above these parameters within iQCconstants.py
  
 ## When adding new types of templates (settings)
 - add to iQCconstants CONFIG_FNAMES

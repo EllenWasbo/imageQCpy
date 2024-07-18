@@ -46,8 +46,9 @@ QUICKTEST_OPTIONS = {
     'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'RLR', 'Gho', 'MTF', 'NPS'],
     'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
     'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Rin'],
-    'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec'],
-    'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF']}
+    'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec', 'MTF'],
+    'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF'],
+    'SR': ['DCM']}
 
 COLORS = ['r', 'b', 'g', 'y', 'c', 'm', 'skyblue', 'orange']
 
@@ -92,7 +93,7 @@ ALTERNATIVES = {
         },
     'SPECT': {
         'ROI': ALTERNATIVES_ROI,
-        'MTF': ['Point source', 'Line source']
+        'MTF': ['Point source', 'Line source', 'Line source, sliding window']
         },
     'PET': {
         'ROI': ALTERNATIVES_ROI,
@@ -102,6 +103,7 @@ ALTERNATIVES = {
                 'Bq/ml from images, average',
                 'Bq/ml from images, max',
                 'Bq/ml from images, peak'],
+        'MTF': ['Point source', 'Line source', 'Line source, sliding window']
         },
     'MR': {
         'ROI': ALTERNATIVES_ROI,
@@ -109,7 +111,8 @@ ALTERNATIVES = {
             'Noise from subtraction of two images (NEMA method 1)',
             'Noise from background ROIs per image (NEMA method 4)'],
         'Sli': ['Ramp', 'Wedge']
-        }
+        },
+    'SR': {}
     }
 
 CALCULATION_OPTIONS = ['=', 'min', 'max', 'mean', 'stdev', 'max abs', 'width (max-min)']
@@ -245,8 +248,7 @@ HEADERS = {
         'ROI': {'alt0': roi_headers},
         'Num': {},
         'MTF': {
-            'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y']
+            'altAll': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y']
             },
         'Rin': {'alt0': ['Min diff from trend', 'Max diff from trend']},
         },
@@ -272,7 +274,10 @@ HEADERS = {
             'alt3': [f'Avg {i+1}' for i in range(6)] + ['background'],
             'alt4': [f'Max {i+1}' for i in range(6)] + ['background'],
             'alt5': [f'Peak {i+1}' for i in range(6)] + ['background']
-            }
+            },
+        'MTF': {
+            'altAll': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y']
+            },
         },
     'MR': {
         'ROI': {'alt0': roi_headers},
@@ -290,7 +295,8 @@ HEADERS = {
             },
         'Sli': {'altAll': ['Nominal (mm)', 'Measured (mm)', 'Diff (mm)', 'Diff (%)']},
         'MTF': {'alt0': ['MTF 50%', 'MTF 10%', 'MTF 2%']}
-        }
+        },
+    'SR': {}
     }
 
 # all modalities should be present with at least {}
@@ -357,7 +363,9 @@ HEADERS_SUP = {
         'ROI': {'alt0': roi_headers_sup},
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y']
+            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
+            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y',
+                     'x offset (mm)', 'y offset (mm)']
             },
         },
     'PET':  {
@@ -365,6 +373,12 @@ HEADERS_SUP = {
         'Rec': {
             'alt0': ['Scan start (HHMMSS)', 'Spheres at scan start (Bq/mL)',
                      'Background at scan start (Bq/mL)'],
+            },
+        'MTF': {
+            'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
+            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
+            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y',
+                     'x offset (mm)', 'y offset (mm)']
             },
         },
     'MR': {
@@ -376,7 +390,8 @@ HEADERS_SUP = {
             },
         'Sli': {'altAll': ['FWHM upper (mm)', 'FWHM lower (mm)']},
         'MTF': {'alt0': ['A1', 'sigma1']}
-        }
+        },
+    'SR': {}
     }
 
 # should end with '(.suffix)' to get file_suffix
@@ -389,7 +404,8 @@ VENDOR_FILE_OPTIONS = {
     'PET': ['Siemens PET-CT DailyQC Reports (.pdf)',
             'Siemens PET-MR DailyQC Reports (.xml)'],
     'MR': ['Philips MR PIQT / SPT report (.pdf)',
-           'Philips MR ACR report (.pdf)']
+           'Philips MR ACR report (.pdf)'],
+    'SR': []
     }
 """dict: with lists defining modalities and their corresponding
 list of vendor file types to be read."""

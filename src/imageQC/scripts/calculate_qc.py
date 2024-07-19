@@ -4246,27 +4246,31 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_image):
         if reference_image.shape == image2d.shape:
             fit_dict = {}
             fit_dict['reference_image'] = reference_image
-            reference_image = None
         else:
             errmsgs.append('Reference image not same size as image to analyse. '
                            'Quantum noise estimated from signal.')
+            reference_image = None
 
     # point source correction
     if paramset.sni_correct:
-        est_noise = False if reference_image is not None else True
+        est_noise = True if reference_image is None else False
 
-        if reference_image and paramset.sni_ref_image_fit:
+        if reference_image is not None and paramset.sni_ref_image_fit:
             fit_image = reference_image
         else:
             fit_image = image2d
 
-        fit_dict, errmsg = get_corrections_point_source(
+        fit_dict_2, errmsg = get_corrections_point_source(
             fit_image, image_info, roi_array[0],
             fit_x=paramset.sni_correct_pos_x,
             fit_y=paramset.sni_correct_pos_y,
             lock_z=paramset.sni_lock_radius, guess_z=paramset.sni_radius,
             correction_type='subtract', estimate_noise=est_noise
             )
+        if fit_dict:
+            fit_dict.update(fit_dict_2)
+        else:
+            fit_dict = fit_dict_2
         if errmsg is not None:
             errmsgs.append(errmsg)
         values_sup = [fit_dict['dx'], fit_dict['dy'], fit_dict['distance']]

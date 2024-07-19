@@ -20,6 +20,7 @@ Changes:
  - Added to validation test in 'Verify config files ...' in Settings - Config folder
 
 Fixes:
+- NM test SNI: v3.1.0 lost connection to reference image, if used. Now restored.
 - Adding artifacts:
  - Handeling adding noise when <=0 within noise shape (setting values to 1 if <=0 before adding noise).
  - Better handeling artifact name when editing of settings. Keep autogenerating or keep manually edited.

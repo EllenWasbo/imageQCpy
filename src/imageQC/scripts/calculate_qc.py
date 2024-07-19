@@ -595,6 +595,7 @@ def calculate_qc(input_main, wid_auto=None,
                 progress_increment = round(
                     wid_auto.progress_modal.sub_interval / n_analyse)
 
+            cancelled = False
             for i in range(n_analyse):
                 if main_type in ['MainWindow', 'TaskBasedImageQualityDialog']:
                     try:
@@ -765,7 +766,14 @@ def calculate_qc(input_main, wid_auto=None,
                                     test]['values_sup'][i] = result.values_sup
                                 input_main.results[
                                     test]['details_dict'][i] = result.details_dict
-            if err_extra:
+                try:
+                    if input_main.progress_modal.wasCanceled():
+                        cancelled = True
+                        break
+                except AttributeError:
+                    pass
+
+            if err_extra and cancelled is False:
                 if extra_tag_list_compare is not None:
                     attr_list = []
                     for attr_no, attr in enumerate(extra_tag_pattern.list_tags):
@@ -779,7 +787,7 @@ def calculate_qc(input_main, wid_auto=None,
                     f'{attr_list}')
 
             # post processing - where values depend on all images
-            if modality == 'CT':
+            if modality == 'CT' and cancelled is False:
                 if 'Noi' in flattened_marked and 'Noi' in input_main.results:
                     try:
                         noise = [
@@ -800,7 +808,7 @@ def calculate_qc(input_main, wid_auto=None,
                     if 'MainWindow' in str(type(input_main)):
                         input_main.update_roi()
 
-            if any(marked_3d):
+            if any(marked_3d) and cancelled is False:
                 results_dict = calculate_3d(
                     matrix, marked_3d, input_main, extra_tag_list)
                 for test in results_dict:
@@ -815,7 +823,7 @@ def calculate_qc(input_main, wid_auto=None,
                     input_main.results[test] = asdict(results_dict[test])
 
             # For test DCM
-            if any(read_tags) and 'DCM' in flattened_marked:
+            if any(read_tags) and 'DCM' in flattened_marked and cancelled is False:
                 ignore_cols = []
                 for idx, val in enumerate(paramset.dcm_tagpattern.list_format):
                     if len(val) > 2:
@@ -2021,25 +2029,30 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     values_sup = []
                     for idx in images_to_test:
                         dd = details_dict[idx]
-                        try:
-                            values.append(
-                                dd[0][prefix + 'MTF_details']['values'])
-                        except TypeError:
-                            pass
-                        try:
-                            values_sup.append(
-                                list(dd[0]['gMTF_details']['LSF_fit_params']))
-                        except TypeError:
-                            pass
-                        try:  # x-dir, y-dir
-                            values[-1].extend(
-                                dd[1][prefix + 'MTF_details']['values'])
-                            values_sup[-1].extend(list(
-                                dd[1]['gMTF_details']['LSF_fit_params']))
-                        except (IndexError, KeyError, AttributeError):
-                            pass
-                        values_sup[-1].append(
-                            details_dict[-1]['offset_max'][idx])
+                        if dd:
+                            try:
+                                values.append(
+                                    dd[0][prefix + 'MTF_details']['values'])
+                            except TypeError:
+                                pass
+                            try:
+                                values_sup.append(
+                                    list(dd[0]['gMTF_details']['LSF_fit_params']))
+                            except TypeError:
+                                pass
+                            try:  # x-dir, y-dir
+                                values[-1].extend(
+                                    dd[1][prefix + 'MTF_details']['values'])
+                                values_sup[-1].extend(list(
+                                    dd[1]['gMTF_details']['LSF_fit_params']))
+                            except (IndexError, KeyError, AttributeError, TypeError):
+                                pass
+                            values_sup[-1].extend(list(offset_max[idx]))
+                        else:
+                            values.append([None] * len(headers))
+                            sup_this = [None] * len(headers_sup)
+                            sup_this[-2:] = list(offset_max[idx])
+                            values_sup.append(sup_this)
                 else:
                     try:
                         values = details_dict[0][prefix + 'MTF_details']['values']
@@ -2917,7 +2930,7 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
         tolerance = paramset.mtf_line_tolerance
         sort_idxs = np.argsort(max_values)
         max_n_highest = np.mean(
-            max_values[sort_idxs[-paramset.mtf_sliding_window:]])
+            max_values[sort_idxs[-3:]])
         diff = 100/max_n_highest * (np.array(max_values) - max_n_highest)
         idxs = np.where(np.abs(diff) > tolerance)
         ignore_slices = list(idxs[0])
@@ -2937,7 +2950,8 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
             max_values_copy = np.copy(max_values)
             ignore_slices.reverse()
             for i in ignore_slices:
-                del matrix[i]
+                if paramset.mtf_type == 1:  # not sliding window
+                    del matrix[i]
                 max_values_copy[i] = np.nan
                 zpos_copy[i] = np.nan
             common_details_dict['max_roi_used'] = max_values_copy

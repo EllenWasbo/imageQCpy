@@ -598,9 +598,9 @@ class ParamSetPET(ParamSetCommon):
     rec_earl: int = 1  # tolerances from 0 = None, 1 = EARL1, 2 = EARL2
     rec_background_volume: int = 9500
     mtf_type: int = 2  # 0=point, 1=line source, 2=line source, sliding window
-    mtf_roi_size: float = 40.
+    mtf_roi_size: float = 60.
     mtf_background_width: float = 5.
-    mtf_line_tolerance: int = 90
+    mtf_line_tolerance: int = 50
     # ignore slices having max value differing more than % from mean of 3 highest max
     mtf_sliding_window: int = 5  # number of slices to use if line sliding window
     mtf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT

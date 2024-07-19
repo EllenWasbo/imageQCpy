@@ -1211,41 +1211,80 @@ class ResultPlotCanvas(PlotCanvas):
                     '\n'.join(txt_info), loc='lower right')
                 self.ax.add_artist(at)
 
-        def prepare_plot_zprofile():
+        def prepare_plot_zprofile(sel_text):
+            common_details = self.main.results['MTF']['details_dict'][-1]
             self.xtitle = 'z position (mm)'
-            self.ytitle = 'Max pixel value in ROI'
-
-            if 'zpos_used' in details_dicts[-1]:
-                common_details = details_dicts[-1]
-                self.curves.append({
-                    'label': 'Max in marked images',
-                    'xvals': common_details['zpos_marked_images'],
-                    'yvals': common_details['max_roi_marked_images'],
-                    'style': '-b'})
-                self.curves.append({
-                    'label': 'Max in used images',
-                    'xvals': common_details['zpos_used'],
-                    'yvals': common_details['max_roi_used'],
-                    'style': '-r'})
+            if 'zpos_used' in common_details:
+                if sel_text == 'Line source max z-profile':
+                    self.ytitle = 'Max pixel value in ROI'
+                    self.curves.append({
+                        'label': 'Max in marked images',
+                        'xvals': common_details['zpos_marked_images'],
+                        'yvals': common_details['max_roi_marked_images'],
+                        'style': '-b'})
+                    self.curves.append({
+                        'label': 'Max in used images',
+                        'xvals': common_details['zpos_used'],
+                        'yvals': common_details['max_roi_used'],
+                        'style': '-r'})
+                elif sel_text == 'FWHM z-profile':
+                    if self.main.current_paramset.mtf_type == 2:
+                        self.ytitle = 'FWHM pr sliding window'
+                        yvals = [row[0] for row in self.main.results[self.main.current_test]['values']]
+                        self.curves.append({
+                            'label': 'FWHM x',
+                            'xvals': common_details['zpos_marked_images'],
+                            'yvals': yvals,
+                            'style': '-b'})
+                        yvals = [row[2] for row in self.main.results[self.main.current_test]['values']]
+                        self.curves.append({
+                            'label': 'FWHM y',
+                            'xvals': common_details['zpos_marked_images'],
+                            'yvals': yvals,
+                            'style': '-r'})
+                elif sel_text == 'Offset z-profile':
+                    if self.main.current_paramset.mtf_type == 2:
+                        self.ytitle = 'Offset pr image (mm from image center)'
+                        yvals = [row[-2] for row in self.main.results[self.main.current_test]['values_sup']]
+                        self.curves.append({
+                            'label': 'x',
+                            'xvals': common_details['zpos_marked_images'],
+                            'yvals': yvals,
+                            'style': '-b'})
+                        yvals = [row[-1] for row in self.main.results[self.main.current_test]['values_sup']]
+                        self.curves.append({
+                            'label': 'y',
+                            'xvals': common_details['zpos_marked_images'],
+                            'yvals': yvals,
+                            'style': '-r'})
 
         test_widget = self.main.stack_test_tabs.currentWidget()
         try:
             sel_text = test_widget.mtf_plot.currentText()
         except AttributeError:
             sel_text = ''
-        if sel_text == 'MTF':
-            prepare_plot_MTF()
-        elif sel_text == 'LSF':
-            prepare_plot_LSF()
-        elif sel_text == 'Sorted pixel values':
-            prepare_plot_sorted_pix()
-        elif sel_text == 'Centered xy profiles':
-            prepare_plot_centered_profiles()
-        elif sel_text in ['Edge position', 'Line fit']:
-            prepare_plot_edge_position()
-        elif 'z-profile' in sel_text:
-            prepare_plot_zprofile()
-        self.title = sel_text
+        try:
+            if sel_text == 'MTF':
+                prepare_plot_MTF()
+            elif sel_text == 'LSF':
+                prepare_plot_LSF()
+            elif sel_text == 'Sorted pixel values':
+                prepare_plot_sorted_pix()
+            elif sel_text == 'Centered xy profiles':
+                prepare_plot_centered_profiles()
+            elif sel_text in ['Edge position', 'Line fit']:
+                prepare_plot_edge_position()
+            elif 'z-profile' in sel_text:
+                prepare_plot_zprofile(sel_text)
+            self.title = sel_text
+        except (TypeError, IndexError) as err:
+            try:
+                if self.main.developer_mode:
+                    print(err)
+                else:
+                    pass
+            except AttributeError:
+                pass
 
     def NPS(self):
         """Prepare plot for test NPS."""

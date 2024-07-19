@@ -631,7 +631,10 @@ class ParamsTabCommon(QTabWidget):
         plot_items = ['Centered xy profiles',
                       'Sorted pixel values', 'LSF', 'MTF']
         if modality in ['SPECT', 'PET']:
-            plot_items.append('Line source max z-profile')
+            plot_items.extend(
+                ['Line source max z-profile',
+                 'Sliding window FWHM z-profile',
+                 'Sliding window x/y offset z-profile'])
             self.mtf_line_tolerance = QDoubleSpinBox(
                 decimals=0, minimum=0.1, singleStep=1)
             self.mtf_line_tolerance.valueChanged.connect(
@@ -660,9 +663,9 @@ class ParamsTabCommon(QTabWidget):
             QLabel(f'Width of background ({txt})'), self.mtf_background_width)
         flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
         if modality in ['SPECT', 'PET']:
-            flo1.addRow(QLabel('Linesource max diff % from top N slices'),
+            flo1.addRow(QLabel('Linesource: ignore slices with max diff % from top 3 slices'),
                         self.mtf_line_tolerance)
-            flo1.addRow(QLabel('N slices for tolerance and sliding window width'),
+            flo1.addRow(QLabel('Sliding window width (N slices)'),
                         self.mtf_sliding_window)
         flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
                     self.mtf_sampling_frequency)

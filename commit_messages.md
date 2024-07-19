@@ -3,11 +3,12 @@ _Jul XX, 2024_
 
 New functionalities:
 - Started to add option to read info from RDSR files. SR added as modality with DCM as only test. To be continued for reading out dose data.
-- SPECT/PET: Added same options for spatial resolution (MTF) for both modalities. (Used to be SPECT only). Added option to perform line source test with sliding window, listed results pr window (image group)
+Not finished:
+- PET: Added spatial resolution (MTF) similar to SPECT. Added option to perform line source test with sliding window, listed results pr window (image group)
 to allow for more variation over the line source. Tested with Ge-68 line sources for Siemens PET. 
 
 Changes:
-- When copying curves/plots to clipboard, curves sharing the same x-values
+- When copying curves/plots to clipboard, curves sharing the same x-values (i.e. one x-axis pr all curves in clipboard, not one pr curve)
 - Added option to simulate gamma camera point source as artifact
 - Added option to merge pixels before NM SNI calculations
 - Alternative or dynamic headers of results tables:

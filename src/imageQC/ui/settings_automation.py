@@ -738,18 +738,19 @@ class LimitsAndPlotContent(QWidget):
         orig_headers = copy.deepcopy(self.headers)
         orig_first_values = copy.deepcopy(self.first_values)
         ignored = []
-        self.headers = []
-        self.group_numbers = []
-        self.first_values = []
-        for idx, group in enumerate(self.parent.current_template.groups):
-            self.group_numbers.extend([idx] * len(group))
-            for header in group:
-                if header in orig_headers:
-                    self.headers.append(header)
-                    orig_idx = orig_headers.index(header)
-                    self.first_values.append(orig_first_values[orig_idx])
-                else:
-                    ignored.append((idx, header))
+        if self.parent.current_template:
+            self.headers = []
+            self.group_numbers = []
+            self.first_values = []
+            for idx, group in enumerate(self.parent.current_template.groups):
+                self.group_numbers.extend([idx] * len(group))
+                for header in group:
+                    if header in orig_headers:
+                        self.headers.append(header)
+                        orig_idx = orig_headers.index(header)
+                        self.first_values.append(orig_first_values[orig_idx])
+                    else:
+                        ignored.append((idx, header))
         return ignored
 
     def validate_headers(self):
@@ -875,9 +876,9 @@ class LimitsAndPlotContent(QWidget):
             else:
                 _ = self.update_header_order()
         elif self.txt_sample_file_path.text() == '':
-            if self.parent.current_template is not None:
-                headers_as_groups = True
-        if headers_as_groups:
+            headers_as_groups = True
+
+        if headers_as_groups and self.parent.current_template:
             self.headers = [
                 elem for sublist in self.parent.current_template.groups
                 for elem in sublist]
@@ -902,6 +903,7 @@ class LimitsAndPlotContent(QWidget):
                      self.parent.current_template is None]):
                 # startup with input template
                 self.set_template_from_label(label=self.initial_template_label)
+                self.update_header_order()
                 self.validate_headers()
             else:
                 if len(self.parent.current_template.groups) == 0:  # empty template
@@ -1616,7 +1618,8 @@ class AutoTempWidgetBasic(StackWidget):
     def edit_limits_and_plot(self, add=False):
         """Open dialog to edit limits and plot settings."""
         if os.path.exists(self.txt_output_path.text()):
-            dlg = LimitsAndPlotEditDialog(self, self.limits_and_plot_templates, add=add)
+            dlg = LimitsAndPlotEditDialog(
+                self, self.limits_and_plot_templates, add=add)
             res = dlg.exec()
             if res:
                 if dlg.edited:

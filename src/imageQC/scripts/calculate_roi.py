@@ -581,7 +581,7 @@ def get_rois(image, image_number, input_main):
                 roi_array, errmsg = res
             else:
                 roi_array = res
-        except (KeyError, AttributeError):
+        except (KeyError, AttributeError, IndexError):
             pass
 
     return (roi_array, errmsg)

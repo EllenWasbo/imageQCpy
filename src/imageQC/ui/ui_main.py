@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """User interface for main window of imageQC.
 
@@ -10,9 +9,9 @@ import copy
 from dataclasses import dataclass
 from time import time, ctime
 from pathlib import Path
+import webbrowser
 import numpy as np
 import pandas as pd
-import webbrowser
 
 from PyQt5.QtGui import QIcon, QScreen
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
@@ -403,7 +402,7 @@ class MainWindow(QMainWindow):
                 if len(np.shape(self.active_img)) == 2:
                     sz_acty, sz_actx = np.shape(self.active_img)
                 else:
-                    sz_acty, sz_actx, sz_actz = np.shape(self.active_img)
+                    sz_acty, sz_actx, _ = np.shape(self.active_img)
                 self.wid_center.val_delta_x.setRange(-sz_actx//2, sz_actx//2)
                 self.wid_center.val_delta_y.setRange(-sz_acty//2, sz_acty//2)
             self.wid_dcm_header.refresh_img_info(
@@ -453,7 +452,7 @@ class MainWindow(QMainWindow):
         self.summed_img = None
         self.average_img = False
         try:
-            self.active_img, tags = dcm.get_img(
+            self.active_img, _ = dcm.get_img(
                 self.imgs[self.gui.active_img_no].filepath,
                 frame_number=self.imgs[self.gui.active_img_no].frame_number,
                 tag_infos=self.tag_infos)
@@ -582,9 +581,9 @@ class MainWindow(QMainWindow):
                     marked_img_ids = [
                         i for i, im in enumerate(self.imgs) if im.marked]
                     if len(marked_img_ids) == 0:
-                        for i, im in enumerate(self.imgs):
+                        for i, img in enumerate(self.imgs):
                             if i < len(self.imgs) - n_added_imgs:
-                                im.marked = True
+                                img.marked = True
                             else:
                                 break
 
@@ -641,9 +640,11 @@ class MainWindow(QMainWindow):
         self.refresh_results_display()
 
     def refresh_results_display(self, update_table=True):
+        """Method in ui_main_methods.py."""
         ui_main_methods.refresh_results_display(self, update_table=update_table)
 
     def refresh_img_display(self):
+        """Method in ui_main_methods.py."""
         ui_main_methods.refresh_img_display(self)
 
     def refresh_selected_table_row(self):
@@ -1208,6 +1209,7 @@ class MainWindow(QMainWindow):
         self.tab_pet = ui_main_test_tabs.ParamsTabPET(self)
         self.tab_mr = ui_main_test_tabs.ParamsTabMR(self)
         self.tab_vendor = ParamsTabVendor(self)
+
         self.stack_test_tabs.addWidget(self.tab_xray)
         self.stack_test_tabs.addWidget(self.tab_mammo)
         self.stack_test_tabs.addWidget(self.tab_nm)

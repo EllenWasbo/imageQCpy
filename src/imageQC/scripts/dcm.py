@@ -151,12 +151,12 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         DcmInfo, DcmInfoGui or DcmInfoGroup objects
     ignored_files : list of str
         file_paths not accepted as dicom images
-    warnings : list of str
+    warnings_this : list of str
         warnings to display
     """
     list_of_DcmInfo = []
     ignored_files = []
-    warnings = []
+    warnings_this = []
     n_files = len(filenames)
     for fileno, file in enumerate(filenames):
         if statusbar is not None:
@@ -167,7 +167,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
             if progress_modal.wasCanceled():
                 list_of_DcmInfo = []
                 ignored_files = []
-                warnings = []
+                warnings_this = []
                 progress_modal.setValue(100)
                 break
 
@@ -204,7 +204,6 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
             elif isinstance(slice_thickness, list):
                 try:
                     attrib['slice_thickness'] = float(str(slice_thickness[1][0]))
-                    # TODO? not assume same
                 except ValueError:
                     pass
             if mod == 'NM':  # test if slicethickness - then SPECT
@@ -218,7 +217,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
 
             attrib['pix'] = [0, 0]
             if isinstance(pix, list):
-                pix = str(pix[1][0])  # TODO? not assume same
+                pix = str(pix[1][0])
             pix = pix[1:-1]
             pix = pix.split(',')
             if len(pix) == 2:
@@ -241,7 +240,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                 if any([x in serdescr for x in ignore_strings]):
                     pass
                 else:
-                    warnings.append(
+                    warnings_this.append(
                         f'Missing pixel spacing set to 1x1 mm for file {file}'
                         )
 
@@ -268,16 +267,16 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                             nm_radius = nm_radius.split(',')
 
             if GUI:
-                ww = pyd.get('WindowWidth', -1)
-                wc = pyd.get('WindowCenter', -1)
+                winw = pyd.get('WindowWidth', -1)
+                winc = pyd.get('WindowCenter', -1)
                 # seen issue with window width and window center
                 # listed as two identical values
-                if str(type(ww)) == "<class 'pydicom.multival.MultiValue'>":
-                    ww = int(ww[0])
-                if str(type(wc)) == "<class 'pydicom.multival.MultiValue'>":
-                    wc = int(wc[0])
-                attrib['window_width'] = ww
-                attrib['window_center'] = wc
+                if str(type(winw)) == "<class 'pydicom.multival.MultiValue'>":
+                    winw = int(winw[0])
+                if str(type(winc)) == "<class 'pydicom.multival.MultiValue'>":
+                    winc = int(winc[0])
+                attrib['window_width'] = winw
+                attrib['window_center'] = winc
 
             if frames is None:
                 if attrib['slice_thickness'] is not None:
@@ -333,7 +332,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
         else:
             ignored_files.append(file)
 
-    return (list_of_DcmInfo, ignored_files, warnings)
+    return (list_of_DcmInfo, ignored_files, warnings_this)
 
 
 def info_extract_frame(frame, info):
@@ -360,7 +359,6 @@ def info_extract_frame(frame, info):
                     try:
                         out_dict[key].append(
                             ''.join([tag[0], str(tag[1][frame]), tag[2]]))
-                        # TODO format for tag1....
                     except (IndexError, TypeError):
                         out_dict[key].append(
                             ''.join([tag[0], str(tag[1]), tag[2]]))
@@ -635,7 +633,6 @@ def get_modality(modalityStr):
         'PT': 'PET',
         'MR': 'MR'
         }
-    # TODO: add mammo (move modality MG)
     qtOptKey = variants.get(modalityStr, 'CT')
 
     return {'id': list(QUICKTEST_OPTIONS.keys()).index(qtOptKey),
@@ -768,15 +765,15 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count
                                 tag_strings[pidx][idx] = new_val
 
         if get_window_level:
-            ww = pyd.get('WindowWidth', -1)
-            wc = pyd.get('WindowCenter', -1)
+            winw = pyd.get('WindowWidth', -1)
+            winc = pyd.get('WindowCenter', -1)
             # seen issue with window width and window center
             # listed as two identical values
-            if str(type(ww)) == "<class 'pydicom.multival.MultiValue'>":
-                ww = int(ww[0])
-                if str(type(wc)) == "<class 'pydicom.multival.MultiValue'>":
-                    wc = int(wc[0])
-            tag_strings.append([wc - ww / 2, wc + ww / 2])
+            if str(type(winw)) == "<class 'pydicom.multival.MultiValue'>":
+                winw = int(winw[0])
+                if str(type(winc)) == "<class 'pydicom.multival.MultiValue'>":
+                    winc = int(winc[0])
+            tag_strings.append([winc - winw / 2, winc + winw / 2])
 
     return (npout, tag_strings)
 
@@ -801,7 +798,7 @@ def get_tags(filepath, frame_number=-1, tag_patterns=[], tag_infos=None):
     """
     tag_strings = []
     if len(tag_patterns) > 0 and tag_infos is not None:
-        pyd, _, errmsg = read_dcm(filepath)  # TODO show errormessage
+        pyd, _, _ = read_dcm(filepath)
         if pyd:
             tag_strings = read_tag_patterns(
                 pyd, tag_patterns, tag_infos, frame_number=frame_number)
@@ -933,8 +930,8 @@ def get_tag_data(pyd, tag_info=None):
     data_element = None
     if pyd is not None and tag_info is not None:
         seq = tag_info.sequence
-        gr = tag_info.tag[0]
-        el = tag_info.tag[1]
+        group = tag_info.tag[0]
+        elem = tag_info.tag[1]
         nframes = int(pyd.get('NumberOfFrames', -1))
 
         try:
@@ -948,7 +945,7 @@ def get_tag_data(pyd, tag_info=None):
                                 pyd, seq[0], element_number=frame_no)
                             for i in range(1, len(seq)):
                                 pyd_sub = get_element_in_sequence(pyd_sub, seq[i])
-                            data_element.append(pyd_sub[gr, el])
+                            data_element.append(pyd_sub[group, elem])
                     else:
                         pyd_sub_final = get_element_in_sequence(
                             pyd, seq[0], return_sequence=True)
@@ -968,15 +965,15 @@ def get_tag_data(pyd, tag_info=None):
                                 data_element = []
                                 for i in range(len(pyd_sub_final.value)):
                                     sub = pyd_sub_final[i]
-                                    data_element.append(sub[gr, el])
+                                    data_element.append(sub[group, elem])
                             else:
-                                data_element = pyd_sub[gr, el]
+                                data_element = pyd_sub[group, elem]
                         except AttributeError:
                             data_element = None
                     else:
-                        data_element = pyd_sub[gr, el]
+                        data_element = pyd_sub[group, elem]
             else:
-                data_element = pyd[gr, el]
+                data_element = pyd[group, elem]
         except (KeyError, IndexError, TypeError):
             data_element = None
 
@@ -1180,7 +1177,11 @@ def dump_dicom(parent_widget, filename=''):
     if filename != '':
         pyd, _, errmsg = read_dcm(filename)
         if pyd:
-            from imageQC.ui.ui_dialogs import TextDisplay
+            try:
+                from imageQC.ui.ui_dialogs import TextDisplay
+            except:
+                from ui.ui_dialogs import TextDisplay
+
             dlg = TextDisplay(
                 parent_widget, str(pyd), title=filename,
                 min_width=1000, min_height=800)
@@ -1271,7 +1272,7 @@ def sum_marked_images(img_infos, included_ids, tag_infos):
     errmsg = ''
     for idx, img_info in enumerate(img_infos):
         if idx in included_ids:
-            image, tags = get_img(
+            image, _ = get_img(
                 img_info.filepath,
                 frame_number=img_info.frame_number, tag_infos=tag_infos
                 )

@@ -13,7 +13,7 @@ from pathlib import Path
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QFormLayout, QGroupBox,
+    QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QFormLayout, QGroupBox,
     QPushButton, QLabel, QDoubleSpinBox, QCheckBox, QRadioButton, QButtonGroup,
     QComboBox, QAction, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
     QMessageBox, QInputDialog, QFileDialog, QDialogButtonBox, QHeaderView
@@ -32,6 +32,23 @@ from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.ui.ui_dialogs import ImageQCDialog
 # imageQC block end
 
+
+flatfield_info_txt = '''
+    Based on European guidelines for quality assurance in breast cancer screening
+    and diagnosis<br>
+    Fourth edition Supplements (2013)<br>
+    <br>
+    Variance matrix added as specified in the European guidelines.<br>
+    <br>
+    For Siemens equipment one courner may be filled with a high value and for <br>
+    Hologic equiment an upper and lower rim may be filled with a high value.<br>
+    Use the option to mask pixels with maximum value.
+
+    Increasing the limit for ignoring an ROI based on masked pixels from 0 % <br>
+    will cause the statistics of the unmasked pixels to be calculated.<br>
+    This limit cannot be set higher than 95% (i.e. accepting calculation of <br>
+    ROI statistics with as little as 5% of unmasked pixels left in an ROI).
+    '''
 
 class ParamsWidget(QWidget):
     """Generic super widget for test."""
@@ -72,15 +89,15 @@ class ParamsWidget(QWidget):
 class ParamsTabCommon(QTabWidget):
     """Superclass for modality specific tests."""
 
-    def __init__(self, parent, task_based=False):
+    def __init__(self, parent, remove_roi_num=False):
         """Initiate tabs for tests available to all modalities.
 
         Parameters
         ----------
         parent : MainWindow or InputMainAuto
             InputMainAuto used for task_based
-        task_based : bool, optional
-            Used for task_based_image_quality.py. The default is False.
+        remove_roi_num : bool, optional
+            True for task_based_image_quality.py and modality SR. The default is False.
         """
         super().__init__()
         self.main = parent
@@ -89,7 +106,7 @@ class ParamsTabCommon(QTabWidget):
 
         self.create_tab_dcm()
         self.addTab(self.tab_dcm, "DCM")
-        if task_based is False:
+        if remove_roi_num is False:
             self.create_tab_roi()
             self.create_tab_num()
             self.addTab(self.tab_roi, "ROI")
@@ -211,37 +228,10 @@ class ParamsTabCommon(QTabWidget):
                     self.roi_a.setEnabled(True)
         # continues in subclasses if needed
 
-    def make_param_odd_number(self, attribute='', update_roi=True,
-                              clear_results=True, update_plot=True,
-                              update_results_table=True, content=None):
-        """Make sure number is odd number. Used for integers."""
-        self.sender().blockSignals(True)
-        prev_value = getattr(self.main.current_paramset, attribute)
-        set_value = self.sender().value()
-        if set_value > prev_value:
-            max_val = self.sender().maximum()
-            if set_value >= max_val:
-                self.sender().setValue(max_val)
-            else:
-                new_val = 2 * (set_value // 2) + 1
-                self.sender().setValue(new_val)
-        else:
-            min_val = self.sender().minimum()
-            if set_value <= min_val:
-                self.sender().setValue(min_val)
-            else:
-                new_val = 2 * (set_value // 2) - 1
-                self.sender().setValue(new_val)
-        self.sender().blockSignals(False)
-        self.param_changed_from_gui(
-            attribute=attribute, update_roi=update_roi,
-            clear_results=clear_results, update_plot=update_plot,
-            update_results_table=update_results_table, content=content)
-
     def param_changed_from_gui(self, attribute='', update_roi=True,
                                clear_results=True, update_plot=True,
                                update_results_table=True, content=None,
-                               edit_ignore=False):
+                               edit_ignore=False, make_odd=False):
         """Update current_paramset with value from GUI.
 
         If changes found - update roi and delete results.
@@ -262,6 +252,8 @@ class ParamsTabCommon(QTabWidget):
             Preset content. Default is None
         edit_ignore : bool, optional
             Avoid setting flag_edit to True. Default is False.
+        make_odd : bool, optional
+            Force integer to be odd number. Default is False
         """
         if not self.flag_ignore_signals:
             if content is None:
@@ -272,6 +264,17 @@ class ParamsTabCommon(QTabWidget):
                     content = round(sender.value(), sender.decimals())
                     if sender.decimals() == 0:
                         content = int(content)
+                        if make_odd:
+                            if content % 2 == 0:
+                                prev_value = getattr(
+                                    self.main.current_paramset, attribute)
+                                if content > prev_value:  # increasing value
+                                    content += 1
+                                else:
+                                    content -= 1
+                                self.blockSignals(True)
+                                self.sender().setValue(content)
+                                self.blockSignals(False)
                 elif hasattr(sender, 'setText'):
                     content = sender.text()
                 elif hasattr(sender, 'setCurrentIndex'):  # QComboBox
@@ -312,11 +315,36 @@ class ParamsTabCommon(QTabWidget):
                     else:
                         self.roi_table_widget.setEnabled(True)
                         self.set_offset('roi_offset_xy', reset=True)
-                elif attribute == 'sni_channels':
-                    self.update_enabled()
+                elif attribute in ['sni_type', 'sni_channels']:
+                    alt = 0 if self.main.current_paramset.sni_type == 0 else 2
+                    if self.main.current_paramset.sni_channels:
+                        alt = alt + 1
+                    self.main.current_paramset.sni_alt = alt
+                    if attribute == 'sni_channels':
+                        self.update_enabled()
                 if all([self.main.current_modality == 'Xray',
                         self.main.current_test == 'NPS']):
                     self.update_NPS_independent_pixels()
+
+                # changes that might affect output settings?
+                # - alternative or headers changed
+                log = []
+                if attribute in [
+                        'sli_type', 'mtf_type', 'rec_type', 'snr_type',
+                        'roi_use_table', 'hom_tab_alt', 'sni_alt']:
+                    _, log = cff.verify_output_alternative(
+                        self.main.current_paramset, testcode=self.main.current_test)
+                if log:
+                    msg = ('Output settings are defined for this parameterset. '
+                           'Changing this parameter will change the headers of '
+                           'the Result table. Consider updating the output settings.')
+                    dlg = messageboxes.MessageBoxWithDetails(
+                        self, title='Warnings',
+                        msg=msg,
+                        info='See details',
+                        icon=QMessageBox.Warning,
+                        details=log)
+                    dlg.exec()
 
     def clear_results_current_test(self):
         """Clear results of current test."""
@@ -562,6 +590,122 @@ class ParamsTabCommon(QTabWidget):
         vlo_left.addLayout(flo1)
         self.tab_num.hlo.addWidget(self.num_table_widget)
 
+    def hom_get_coordinates(self):
+        """Add coordinates of deviating pixels to results."""
+        if 'Hom' in self.main.results:
+            try:
+                details_dict = self.main.results['Hom']['details_dict'][
+                    self.main.gui.active_img_no]
+            except (IndexError, KeyError):
+                details_dict = None
+            if details_dict:
+                if 'deviating_pixel_coordinates' not in details_dict:
+                    deviating_pixels = details_dict['deviating_pixels']
+                    coords = []
+                    idxs = np.where(deviating_pixels)
+                    try:
+                        ys = idxs[0]
+                        xs = idxs[1]
+                        coords = [(xs[i], ys[i]) for i in range(xs.size)]
+                        details_dict['deviating_pixel_coordinates'] = coords
+                    except IndexError:
+                        pass
+                else:
+                    coords = details_dict['deviating_pixel_coordinates']
+                if len(coords) == 0:
+                    QMessageBox.information(
+                        self, 'No deviating pixels found',
+                        'Found no deviating pixels for the current image.')
+                else:
+                    question = 'Copy list of coordinates to clipboard?'
+                    proceed = messageboxes.proceed_question(self, question)
+                    if proceed:
+                        df = pd.DataFrame(coords)
+                        df.columns = ['x', 'y']
+                        df.to_clipboard(index=False, excel=True)
+                        self.main.status_bar.showMessage('Values in clipboard', 2000)
+                self.main.refresh_results_display()
+            else:
+                QMessageBox.warning(
+                    self, 'Calculate homogeneity first',
+                    'Could not find results for current image. '
+                    'Calculate homogeneity first.')
+
+    def create_tab_hom_flatfield(self):
+        """GUI for Mammo flatfield test (Hom) available also for Xray."""
+
+        self.hom_roi_size_variance = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
+        self.hom_roi_size_variance.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_roi_size_variance'))
+        self.hom_variance = QCheckBox()
+        self.hom_variance.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_variance'))
+        self.hom_mask_max = QCheckBox()
+        self.hom_mask_max.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_mask_max'))
+        self.hom_mask_outer_mm = QDoubleSpinBox(
+            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
+        self.hom_mask_outer_mm.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_mask_outer_mm'))
+        self.hom_ignore_roi_percent = QDoubleSpinBox(
+            decimals=0, minimum=0., maximum=95, singleStep=1)
+        self.hom_ignore_roi_percent.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_ignore_roi_percent'))
+        self.hom_deviating_pixels = QDoubleSpinBox(
+            decimals=0, minimum=1, singleStep=1)
+        self.hom_deviating_pixels.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_deviating_pixels'))
+        self.hom_deviating_rois = QDoubleSpinBox(
+            decimals=0, minimum=1, singleStep=1)
+        self.hom_deviating_rois.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_deviating_rois'))
+
+        self.hom_result_image = QComboBox()
+        self.hom_result_image.addItems(
+            [
+                'Average pr ROI map',
+                'SNR pr ROI map',
+                'Variance pr ROI map',
+                'Average pr ROI (% difference from global average)',
+                'SNR pr ROI (% difference from global SNR)',
+                'Pixel values (% difference from global average)',
+                'Deviating ROIs',
+                'Deviating pixels',
+                '# deviating pixels pr ROI'
+             ])
+        self.hom_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+
+        self.flat_widget = QWidget()
+        hlo_flat_widget = QHBoxLayout()
+        self.flat_widget.setLayout(hlo_flat_widget)
+
+        flo = QFormLayout()
+        flo.addRow(QLabel('Calculate variance within each ROI'), self.hom_variance)
+        flo.addRow(QLabel('     ROI size variance (mm)'), self.hom_roi_size_variance)
+        flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
+        flo.addRow(QLabel('Ignore outer mm'), self.hom_mask_outer_mm)
+        flo.addRow(QLabel('Ignore ROIs where more than (%) pixels masked'),
+                   self.hom_ignore_roi_percent)
+        hlo_flat_widget.addLayout(flo)
+        hlo_flat_widget.addWidget(uir.VLine())
+        vlo_right = QVBoxLayout()
+        hlo_flat_widget.addLayout(vlo_right)
+        flo_right = QFormLayout()
+        flo_right.addRow(QLabel('Deviating pixels (% from average)'),
+                         self.hom_deviating_pixels)
+        flo_right.addRow(QLabel('Deviating ROIs (% from average)'),
+                         self.hom_deviating_rois)
+        vlo_right.addLayout(flo_right)
+        hlo_res_img = QHBoxLayout()
+        hlo_res_img.addWidget(QLabel('Result image'))
+        hlo_res_img.addWidget(self.hom_result_image)
+        vlo_right.addLayout(hlo_res_img)
+        btn_get_coord = QPushButton('Get coordinates of deviating pixels')
+        btn_get_coord.clicked.connect(self.hom_get_coordinates)
+        vlo_right.addWidget(btn_get_coord)
+
     def create_tab_mtf(self):
         """GUI of tab MTF - common settings here."""
         self.tab_mtf = ParamsWidget(self, run_txt='Calculate MTF')
@@ -595,6 +739,93 @@ class ParamsTabCommon(QTabWidget):
             lambda: self.param_changed_from_gui(attribute='mtf_plot',
                                                 update_roi=False,
                                                 clear_results=False))
+        
+    def create_tab_mtf_ct_spect_pet(self, modality='CT'):
+        """GUI of tab MTF - common to CT/SPECT/PET."""
+        self.mtf_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
+        self.mtf_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
+        self.mtf_background_width = QDoubleSpinBox(
+            decimals=1, minimum=0, maximum=1000, singleStep=0.1)
+        self.mtf_background_width.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_background_width'))
+        self.mtf_auto_center = QCheckBox('')
+        self.mtf_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
+
+        self.mtf_cut_lsf_w_fade = QDoubleSpinBox(
+            decimals=1, minimum=0, singleStep=0.1)
+        self.mtf_cut_lsf_w_fade.valueChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='mtf_cut_lsf_w_fade'))
+        self.mtf_type.addItems(ALTERNATIVES[modality]['MTF'])
+
+        plot_items = ['Centered xy profiles',
+                      'Sorted pixel values', 'LSF', 'MTF']
+        if modality in ['SPECT', 'PET']:
+            plot_items.extend(
+                ['Line source max z-profile',
+                 'Sliding window FWHM z-profile',
+                 'Sliding window x/y offset z-profile'])
+            self.mtf_line_tolerance = QDoubleSpinBox(
+                decimals=0, minimum=0.1, singleStep=1)
+            self.mtf_line_tolerance.valueChanged.connect(
+                lambda: self.param_changed_from_gui(
+                    attribute='mtf_line_tolerance'))
+            self.mtf_sliding_window = QDoubleSpinBox(
+                decimals=0, minimum=3, singleStep=1)
+            self.mtf_sliding_window.valueChanged.connect(
+                lambda: self.param_changed_from_gui(
+                    attribute='mtf_sliding_window', make_odd=True))
+        self.mtf_plot.addItems(plot_items)
+        if modality == 'PET':
+            self.blockSignals(True)
+            self.mtf_plot.setCurrentIndex(5)
+            self.blockSignals(False)
+
+        if modality == 'CT':
+            self.mtf_cy_pr_mm = BoolSelectTests(
+                self, attribute='mtf_cy_pr_mm',
+                text_true='cy/mm', text_false='cy/cm',
+                update_roi=False, clear_results=False)
+            self.create_offset_widget('mtf')
+
+        vlo1 = QVBoxLayout()
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('MTF method'), self.mtf_type)
+        flo1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
+        txt = 'bead/wire' if modality == 'CT' else 'point/line'
+        flo1.addRow(
+            QLabel(f'Width of background ({txt})'), self.mtf_background_width)
+        flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
+        if modality in ['SPECT', 'PET']:
+            flo1.addRow(QLabel('Linesource: ignore slices with max diff % from top 3 slices'),
+                        self.mtf_line_tolerance)
+            flo1.addRow(QLabel('Sliding window width (N slices)'),
+                        self.mtf_sliding_window)
+        flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
+                    self.mtf_sampling_frequency)
+        vlo1.addLayout(flo1)
+        if modality == 'CT':
+            vlo1.addWidget(self.wid_mtf_offset)
+
+        self.tab_mtf.hlo.addLayout(vlo1)
+        self.tab_mtf.hlo.addWidget(uir.VLine())
+        vlo2 = QVBoxLayout()
+        flo2 = QFormLayout()
+        flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
+        flo2.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.mtf_cut_lsf_w)
+        flo2.addRow(
+            QLabel('    Fade out within n*FWHM, n='), self.mtf_cut_lsf_w_fade)
+        vlo2.addLayout(flo2)
+        flo3 = QFormLayout()
+        flo3.addRow(QLabel('Table results from'), self.mtf_gaussian)
+        if modality == 'CT':
+            flo3.addRow(QLabel('Table results as'), self.mtf_cy_pr_mm)
+        flo3.addRow(QLabel('Plot'), self.mtf_plot)
+        vlo2.addLayout(flo3)
+        self.tab_mtf.hlo.addLayout(vlo2)
 
     def create_tab_mtf_xray_mr(self):
         """GUI of tab MTF - common to Xray/Mammo and MR."""
@@ -841,9 +1072,9 @@ class ParamsTabCT(ParamsTabCommon):
         parent : MainWindow or InputMainAuto
             InputMainAuto used for task_based
         task_based : bool, optional
-            Used for task_based_image_quality.py. The default is False.
+            True used for task_based_image_quality.py. The default is False.
         """
-        super().__init__(parent, task_based=task_based)
+        super().__init__(parent, remove_roi_num=task_based)
 
         if task_based:
             self.create_tab_ttf()
@@ -1191,60 +1422,7 @@ class ParamsTabCT(ParamsTabCommon):
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
-
-        self.mtf_roi_size = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
-        self.mtf_roi_size.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
-        self.mtf_background_width = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
-        self.mtf_background_width.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_background_width'))
-        self.mtf_auto_center = QCheckBox('')
-        self.mtf_auto_center.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
-        self.mtf_cut_lsf_w_fade = QDoubleSpinBox(
-            decimals=1, minimum=0, singleStep=0.1)
-        self.mtf_cut_lsf_w_fade.valueChanged.connect(
-            lambda: self.param_changed_from_gui(
-                attribute='mtf_cut_lsf_w_fade'))
-        self.mtf_type.addItems(ALTERNATIVES['CT']['MTF'])
-        self.mtf_plot.addItems(['Centered xy profiles',
-                                'Sorted pixel values', 'LSF', 'MTF'])
-
-        self.mtf_cy_pr_mm = BoolSelectTests(
-            self, attribute='mtf_cy_pr_mm',
-            text_true='cy/mm', text_false='cy/cm',
-            update_roi=False, clear_results=False)
-        self.create_offset_widget('mtf')
-
-        vlo1 = QVBoxLayout()
-        flo1 = QFormLayout()
-        flo1.addRow(QLabel('MTF method'), self.mtf_type)
-        flo1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
-        flo1.addRow(
-            QLabel('Width of background (bead/wire)'), self.mtf_background_width)
-        flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
-        flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
-                    self.mtf_sampling_frequency)
-        vlo1.addLayout(flo1)
-
-        vlo1.addWidget(self.wid_mtf_offset)
-        self.tab_mtf.hlo.addLayout(vlo1)
-        self.tab_mtf.hlo.addWidget(uir.VLine())
-        vlo2 = QVBoxLayout()
-        flo2 = QFormLayout()
-        flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
-        flo2.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.mtf_cut_lsf_w)
-        flo2.addRow(
-            QLabel('    Fade out within n*FWHM, n='), self.mtf_cut_lsf_w_fade)
-        vlo2.addLayout(flo2)
-        flo3 = QFormLayout()
-        flo3.addRow(QLabel('Table results from'), self.mtf_gaussian)
-        flo3.addRow(QLabel('Table results as'), self.mtf_cy_pr_mm)
-        flo3.addRow(QLabel('Plot'), self.mtf_plot)
-        vlo2.addLayout(flo3)
-        self.tab_mtf.hlo.addLayout(vlo2)
+        self.create_tab_mtf_ct_spect_pet(modality='CT')
 
     def create_tab_dim(self):
         """GUI of tab Dim. Test distance of rods in Catphan."""
@@ -1369,14 +1547,43 @@ class ParamsTabXray(ParamsTabCommon):
 
         self.flag_ignore_signals = False
 
+    def update_enabled(self):
+        """Update enabled/disabled features."""
+        super().update_enabled()
+        if self.main.current_modality == 'Xray':
+            paramset = self.main.current_paramset
+            if paramset.hom_tab_alt == 3:
+                self.hom_roi_size_label.setText('ROI size (mm)')
+                self.stack_hom.setCurrentIndex(1)
+            else:
+                self.hom_roi_size_label.setText('ROI radius (mm)')
+                self.stack_hom.setCurrentIndex(0)
+
     def create_tab_hom(self):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate homogeneity')
 
+        self.hom_tab_alt = QComboBox()
+        self.hom_tab_alt.addItems(ALTERNATIVES['Xray']['Hom'])
+        self.hom_tab_alt.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_tab_alt'))
+
         self.hom_roi_size = QDoubleSpinBox(
-            decimals=1, minimum=0.1, singleStep=0.1)
+            decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
+        self.hom_roi_size_label = QLabel('ROI radius (mm)')
+        self.tab_hom.hlo_top.addWidget(self.hom_roi_size_label)
+        self.tab_hom.hlo_top.addWidget(self.hom_roi_size)
+        self.tab_hom.hlo_top.addSpacing(20)
+        self.tab_hom.hlo_top.addWidget(QLabel('Method/output: '))
+        self.tab_hom.hlo_top.addWidget(self.hom_tab_alt)
+        info_txt = (
+            'Method with central + quadrants ROI adapted from IPEM Report 32<br><br>'
+            + 'Flat field test from Mammo:<br>'
+            + flatfield_info_txt)
+        self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
         self.hom_roi_rotation = QDoubleSpinBox(
             decimals=1, minimum=-359.9, maximum=359.9, singleStep=0.1)
         self.hom_roi_rotation.valueChanged.connect(
@@ -1386,34 +1593,28 @@ class ParamsTabXray(ParamsTabCommon):
         self.hom_roi_distance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_distance'))
 
-        self.tab_hom.vlo_top.addSpacing(50)
+        widget_hom_0 = QWidget()
+        vlo_hom_0 = QVBoxLayout()
+        widget_hom_0.setLayout(vlo_hom_0)
         flo = QFormLayout()
-        flo.addRow(QLabel('ROI radius (mm)'), self.hom_roi_size)
         flo.addRow(QLabel('Rotate ROI positions (deg)'), self.hom_roi_rotation)
         flo.addRow(QLabel('ROI distance (% from center)'), self.hom_roi_distance)
-        self.tab_hom.hlo.addLayout(flo)
-        alt_txt = [
-            'Avg and stdev for each ROI',
-            'Avg for each ROI + difference from average of all ROIs',
-            'Avg for each ROI + % difference from average of all ROIs'
-            ]
-        gb_alternative = QGroupBox('Output to table')
-        gb_alternative.setFont(uir.FontItalic())
-        self.hom_tab_alt = QButtonGroup()
-        lo_rb = QVBoxLayout()
-        for btn_no, txt in enumerate(alt_txt):
-            rbtn = QRadioButton(txt)
-            self.hom_tab_alt.addButton(rbtn, btn_no)
-            lo_rb.addWidget(rbtn)
-            rbtn.clicked.connect(self.hom_tab_alt_changed)
-        gb_alternative.setLayout(lo_rb)
-        self.tab_hom.hlo.addWidget(gb_alternative)
-
-        self.tab_hom.vlo.addWidget(uir.LabelItalic(
+        hlo_hom_0 = QHBoxLayout()
+        hlo_hom_0.addLayout(flo)
+        hlo_hom_0.addStretch()
+        vlo_hom_0.addLayout(hlo_hom_0)
+        vlo_hom_0.addWidget(uir.LabelItalic(
             'Same distance for all quadrants = % of shortest'
             'center-border distance.'))
-        self.tab_hom.vlo.addWidget(uir.LabelItalic(
+        vlo_hom_0.addWidget(uir.LabelItalic(
             'Leave distance empty to set ROIs at center of each qadrant.'))
+
+        self.create_tab_hom_flatfield()
+
+        self.stack_hom = QStackedWidget()
+        self.stack_hom.addWidget(widget_hom_0)
+        self.stack_hom.addWidget(self.flat_widget)
+        self.tab_hom.hlo.addWidget(self.stack_hom)
 
     def create_tab_noi(self):
         """GUI of tab Noise."""
@@ -1485,11 +1686,6 @@ class ParamsTabXray(ParamsTabCommon):
         self.tab_var.vlo.addLayout(hlo_roi_size)
         self.tab_var.vlo.addLayout(hlo_percent)
 
-    def hom_tab_alt_changed(self):
-        """Change alternative method (columns to display)."""
-        self.param_changed_from_gui(
-            attribute='hom_tab_alt', content=self.hom_tab_alt.checkedId())
-
 
 class ParamsTabMammo(ParamsTabCommon):
     """Copy for modality tests."""
@@ -1512,47 +1708,6 @@ class ParamsTabMammo(ParamsTabCommon):
         self.addTab(self.tab_nps, "NPS")
 
         self.flag_ignore_signals = False
-
-    def hom_get_coordinates(self):
-        """Add coordinates of deviating pixels to results."""
-        if 'Hom' in self.main.results:
-            try:
-                details_dict = self.main.results['Hom']['details_dict'][
-                    self.main.gui.active_img_no]
-            except (IndexError, KeyError):
-                details_dict = None
-            if details_dict:
-                if 'deviating_pixel_coordinates' not in details_dict:
-                    deviating_pixels = details_dict['deviating_pixels']
-                    coords = []
-                    idxs = np.where(deviating_pixels)
-                    try:
-                        ys = idxs[0]
-                        xs = idxs[1]
-                        coords = [(xs[i], ys[i]) for i in range(xs.size)]
-                        details_dict['deviating_pixel_coordinates'] = coords
-                    except IndexError:
-                        pass
-                else:
-                    coords = details_dict['deviating_pixel_coordinates']
-                if len(coords) == 0:
-                    QMessageBox.information(
-                        self, 'No deviating pixels found',
-                        'Found no deviating pixels for the current image.')
-                else:
-                    question = 'Copy list of coordinates to clipboard?'
-                    proceed = messageboxes.proceed_question(self, question)
-                    if proceed:
-                        df = pd.DataFrame(coords)
-                        df.columns = ['x', 'y']
-                        df.to_clipboard(index=False, excel=True)
-                        self.main.status_bar.showMessage('Values in clipboard', 2000)
-                self.main.refresh_results_display()
-            else:
-                QMessageBox.warning(
-                    self, 'Calculate homogeneity first',
-                    'Could not find results for current image. '
-                    'Calculate homogeneity first.')
 
     def create_tab_sdn(self):
         """GUI of tab SDNR."""
@@ -1606,96 +1761,18 @@ class ParamsTabMammo(ParamsTabCommon):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate Homogeneity')
 
-        info_txt = '''
-        Based on European guidelines for quality assurance in breast cancer screening
-        and diagnosis<br>
-        Fourth edition Supplements (2013)<br>
-        <br>
-        Variance matrix added as specified in the European guidelines.<br>
-        <br>
-        For Siemens equipment one courner may be filled with a high value and for <br>
-        Hologic equiment an upper and lower rim may be filled with a high value.<br>
-        Use the option to mask pixels with maximum value.
-
-        Increasing the limit for ignoring an ROI based on masked pixels from 0 % <br>
-        will cause the statistics of the unmasked pixels to be calculated.<br>
-        This limit cannot be set higher than 95% (i.e. accepting calculation of <br>
-        ROI statistics with as little as 5% of unmasked pixels left in an ROI).
-        '''
-        self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
-
         self.hom_roi_size = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
-        self.hom_roi_size_variance = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
-        self.hom_roi_size_variance.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_roi_size_variance'))
-        self.hom_variance = QCheckBox()
-        self.hom_variance.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_variance'))
-        self.hom_mask_max = QCheckBox()
-        self.hom_mask_max.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_mask_max'))
-        self.hom_mask_outer_mm = QDoubleSpinBox(
-            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
-        self.hom_mask_outer_mm.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_mask_outer_mm'))
-        self.hom_ignore_roi_percent = QDoubleSpinBox(
-            decimals=0, minimum=0., maximum=95, singleStep=1)
-        self.hom_ignore_roi_percent.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_ignore_roi_percent'))
-        self.hom_deviating_pixels = QDoubleSpinBox(
-            decimals=0, minimum=1, singleStep=1)
-        self.hom_deviating_pixels.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_deviating_pixels'))
-        self.hom_deviating_rois = QDoubleSpinBox(
-            decimals=0, minimum=1, singleStep=1)
-        self.hom_deviating_rois.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_deviating_rois'))
+        self.hom_roi_size_label = QLabel('ROI size (mm)')
+        self.tab_hom.hlo_top.addWidget(self.hom_roi_size_label)
+        self.tab_hom.hlo_top.addWidget(self.hom_roi_size)
+        self.tab_hom.hlo_top.addStretch()
+        self.tab_hom.hlo_top.addWidget(uir.InfoTool(flatfield_info_txt, parent=self.main))
 
-        self.hom_result_image = QComboBox()
-        self.hom_result_image.addItems(
-            [
-                'Average pr ROI map',
-                'SNR pr ROI map',
-                'Variance pr ROI map',
-                'Average pr ROI (% difference from global average)',
-                'SNR pr ROI (% difference from global SNR)',
-                'Pixel values (% difference from global average)',
-                'Deviating ROIs',
-                'Deviating pixels',
-                '# deviating pixels pr ROI'
-             ])
-        self.hom_result_image.currentIndexChanged.connect(
-            self.main.wid_res_image.canvas.result_image_draw)
-
-        flo = QFormLayout()
-        flo.addRow(QLabel('ROI size (mm)'), self.hom_roi_size)
-        flo.addRow(QLabel('Calculate variance within each ROI'), self.hom_variance)
-        flo.addRow(QLabel('     ROI size variance (mm)'), self.hom_roi_size_variance)
-        flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
-        flo.addRow(QLabel('Ignore outer mm'), self.hom_mask_outer_mm)
-        flo.addRow(QLabel('Ignore ROIs where more than (%) pixels masked'),
-                   self.hom_ignore_roi_percent)
-        self.tab_hom.hlo.addLayout(flo)
-        self.tab_hom.hlo.addWidget(uir.VLine())
-        vlo_right = QVBoxLayout()
-        self.tab_hom.hlo.addLayout(vlo_right)
-        flo_right = QFormLayout()
-        flo_right.addRow(QLabel('Deviating pixels (% from average)'),
-                         self.hom_deviating_pixels)
-        flo_right.addRow(QLabel('Deviating ROIs (% from average)'),
-                         self.hom_deviating_rois)
-        vlo_right.addLayout(flo_right)
-        hlo_res_img = QHBoxLayout()
-        hlo_res_img.addWidget(QLabel('Result image'))
-        hlo_res_img.addWidget(self.hom_result_image)
-        vlo_right.addLayout(hlo_res_img)
-        btn_get_coord = QPushButton('Get coordinates of deviating pixels')
-        btn_get_coord.clicked.connect(self.hom_get_coordinates)
-        vlo_right.addWidget(btn_get_coord)
+        self.create_tab_hom_flatfield()
+        self.tab_hom.hlo.addWidget(self.flat_widget)
 
     def create_tab_rlr(self):
         """GUI of tab ROI left/right."""
@@ -1772,7 +1849,7 @@ class ParamsTabMammo(ParamsTabCommon):
 class GroupBoxCorrectPointSource(QGroupBox):
     """Groupbox for correction of point source curvature."""
 
-    def __init__(self, parent, testcode='Uni',
+    def __init__(self, parent, testcode='uni',
                  chk_pos_x=None, chk_pos_y=None,
                  chk_radius=None, wid_radius=None):
         super().__init__('Correct for point source curvature')
@@ -2052,13 +2129,16 @@ class ParamsTabNM(ParamsTabCommon):
 
         self.uni_correct_pos_x = QCheckBox('x')
         self.uni_correct_pos_y = QCheckBox('y')
-        self.uni_correct_radius_chk = QCheckBox('Lock source distance to')
-        self.uni_correct_radius = QDoubleSpinBox(
+        self.uni_lock_radius = QCheckBox('Lock source distance to')
+        self.uni_radius = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=5000, singleStep=0.1)
+        self.uni_radius.valueChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='uni_radius', update_roi=False))
         self.uni_correct = GroupBoxCorrectPointSource(
             self, testcode='uni',
             chk_pos_x=self.uni_correct_pos_x, chk_pos_y=self.uni_correct_pos_y,
-            chk_radius=self.uni_correct_radius_chk, wid_radius=self.uni_correct_radius)
+            chk_radius=self.uni_lock_radius, wid_radius=self.uni_radius)
 
         self.uni_sum_first = QCheckBox('Sum marked images before analysing sum')
         self.uni_sum_first.toggled.connect(
@@ -2200,9 +2280,12 @@ class ParamsTabNM(ParamsTabCommon):
 
         self.sni_correct_pos_x = QCheckBox('x')
         self.sni_correct_pos_y = QCheckBox('y')
-        self.sni_correct_radius_chk = QCheckBox('Lock source distance to')
-        self.sni_correct_radius = QDoubleSpinBox(
+        self.sni_lock_radius = QCheckBox('Lock source distance to')
+        self.sni_radius = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=5000, singleStep=0.1)
+        self.sni_radius.valueChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='sni_radius', update_roi=False))
         self.sni_ref_image = QComboBox()
         self.sni_ref_image_fit = QCheckBox(
             'If point source correction, use reference image to correct.')
@@ -2213,7 +2296,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_correct = GroupBoxCorrectPointSource(
             self, testcode='sni',
             chk_pos_x=self.sni_correct_pos_x, chk_pos_y=self.sni_correct_pos_y,
-            chk_radius=self.sni_correct_radius_chk, wid_radius=self.sni_correct_radius)
+            chk_radius=self.sni_lock_radius, wid_radius=self.sni_radius)
 
         self.sni_channels = BoolSelectTests(
             self, attribute='sni_channels',
@@ -2244,8 +2327,7 @@ class ParamsTabNM(ParamsTabCommon):
             self.main.wid_res_plot.plotcanvas.plot)
         self.sni_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
-        self.sni_selected_roi.addItems(
-            ['L1', 'L2', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6'])
+        self.sni_selected_roi.addItems(['L1', 'L2'])
         self.sni_selected_roi.currentIndexChanged.connect(
             self.main.refresh_results_display)
         self.sni_show_labels = QCheckBox('Show ROI labels in image')
@@ -2258,8 +2340,8 @@ class ParamsTabNM(ParamsTabCommon):
                    self.sni_area_ratio)
         flo.addRow(QLabel('Calculate SNI from ratio of integrals'),
                    self.sni_ratio_dim)
-        #TODO not ready: flo.addRow(QLabel('Merge NxN pixels before analysing, N = '),
-        #           self.sni_scale_factor)
+        flo.addRow(QLabel('Merge NxN pixels before analysing, N = '),
+                   self.sni_scale_factor)
         vlo_left.addLayout(flo)
 
         hlo_type = QHBoxLayout()
@@ -2469,57 +2551,7 @@ class ParamsTabSPECT(ParamsTabCommon):
     def create_tab_mtf(self):
         """GUI of tab MTF."""
         super().create_tab_mtf()
-
-        self.mtf_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
-        self.mtf_roi_size.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_roi_size'))
-        self.mtf_background_width = QDoubleSpinBox(
-            decimals=1, minimum=0, singleStep=0.1)
-        self.mtf_background_width.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_background_width'))
-        self.mtf_auto_center = QCheckBox('')
-        self.mtf_auto_center.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
-        self.mtf_line_tolerance = QDoubleSpinBox(decimals=0, minimum=0.1, singleStep=1)
-        self.mtf_line_tolerance.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_line_tolerance'))
-        self.mtf_cut_lsf_w_fade = QDoubleSpinBox(
-            decimals=1, minimum=0, singleStep=0.1)
-        self.mtf_cut_lsf_w_fade.valueChanged.connect(
-            lambda: self.param_changed_from_gui(
-                attribute='mtf_cut_lsf_w_fade'))
-        self.mtf_type.addItems(ALTERNATIVES['SPECT']['MTF'])
-        self.mtf_plot.addItems(['Centered xy profiles',
-                                'Sorted pixel values', 'LSF', 'MTF',
-                                'Line source max z-profile'])
-
-        vlo1 = QVBoxLayout()
-        flo1 = QFormLayout()
-        flo1.addRow(QLabel('MTF method'), self.mtf_type)
-        flo1.addRow(QLabel('ROI radius (mm)'), self.mtf_roi_size)
-        flo1.addRow(
-            QLabel('Width of background (point/line)'), self.mtf_background_width)
-        flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
-        flo1.addRow(QLabel('Linesource max diff % from top 3'),
-                    self.mtf_line_tolerance)
-        flo1.addRow(QLabel('Sampling freq. gaussian (mm-1)'),
-                    self.mtf_sampling_frequency)
-        vlo1.addLayout(flo1)
-
-        self.tab_mtf.hlo.addLayout(vlo1)
-        self.tab_mtf.hlo.addWidget(uir.VLine())
-        vlo2 = QVBoxLayout()
-        flo2 = QFormLayout()
-        flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
-        flo2.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.mtf_cut_lsf_w)
-        flo2.addRow(
-            QLabel('    Fade out within n*FWHM, n='), self.mtf_cut_lsf_w_fade)
-        vlo2.addLayout(flo2)
-        flo3 = QFormLayout()
-        flo3.addRow(QLabel('Table results from'), self.mtf_gaussian)
-        flo3.addRow(QLabel('Plot'), self.mtf_plot)
-        vlo2.addLayout(flo3)
-        self.tab_mtf.hlo.addLayout(vlo2)
+        self.create_tab_mtf_ct_spect_pet(modality='SPECT')
 
 
 class ParamsTabPET(ParamsTabCommon):
@@ -2531,10 +2563,12 @@ class ParamsTabPET(ParamsTabCommon):
         self.create_tab_hom()
         self.create_tab_cro()
         self.create_tab_rec()
+        self.create_tab_mtf()
 
         self.addTab(self.tab_hom, "Homogeneity")
         self.addTab(self.tab_cro, "Cross Calibration")
         self.addTab(self.tab_rec, "Recovery Curve")
+        self.addTab(self.tab_mtf, "Spatial resolution")
 
         self.flag_ignore_signals = False
 
@@ -2669,7 +2703,8 @@ class ParamsTabPET(ParamsTabCommon):
         self.rec_sphere_percent.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='rec_sphere_percent'))
         self.rec_table_widget = PositionWidget(
-                self, self.main, table_attribute_name='rec_table')
+                self, self.main, table_attribute_name='rec_table',
+                warn_output_add_delete=False)
         self.rec_plot = QComboBox()
         self.rec_plot.addItems(['Table values', 'z-profile slice selections'])
         self.rec_plot.currentIndexChanged.connect(
@@ -2775,6 +2810,11 @@ class ParamsTabPET(ParamsTabCommon):
         hlo_right.addLayout(flo_plot)
         hlo_right.addWidget(QLabel('EARL tolerances'))
         hlo_right.addWidget(self.rec_earl)
+
+    def create_tab_mtf(self):
+        """GUI of tab MTF."""
+        super().create_tab_mtf()
+        self.create_tab_mtf_ct_spect_pet(modality='PET')
 
     def get_Cro_activities(self):
         """Get override values for Cross calibration test."""
@@ -3145,6 +3185,15 @@ class ParamsTabMR(ParamsTabCommon):
         self.create_tab_mtf_xray_mr()
 
 
+class ParamsTabSR(ParamsTabCommon):
+    """Tab for SR DICOM header extraction."""
+
+    def __init__(self, parent):
+        super().__init__(parent, remove_roi_num=True)
+
+        self.flag_ignore_signals = False
+
+
 class BoolSelectTests(uir.BoolSelect):
     """Radiobutton group of two returning true/false as selected value."""
 
@@ -3279,11 +3328,46 @@ class SimpleTableWidget(QTableWidget):
             self.blockSignals(False)
 
 
+def get_defined_output_for_columns(widget, paramset, attribute):
+    """Get whether the test have an output defined in the paramset.
+
+    Warn if columns defined for the output. Ask to proceed.
+    Meant for dynamic tables.
+
+    Parameters
+    ----------
+    widget : QWidget
+        parent widget
+    paramset : ParamSetXX
+        as defined in config_classes.py
+    attribute : str
+        attribute name
+
+    Returns
+    -------
+    proceed : bool
+    """
+    proceed = True
+    log = []
+    for key, sublist in paramset.output.tests.items():
+        if key.lower() == attribute[:3]:
+            for subno, sub in enumerate(sublist):
+                if len(sub.columns) > 0:
+                    log.append(str(sub))
+
+    if len(log) > 0:
+        question = ('Found output settings for this test with defined columns. '
+                    'Changing columns may affect the output. Proceed?')
+        proceed = messageboxes.proceed_question(widget, question, detailed_text=log)
+
+    return proceed
+
+
 class PositionWidget(QWidget):
     """Reusable table widget to hold user defined roi positions."""
 
     def __init__(self, parent, main, table_attribute_name='', headers=None,
-                 use_rectangle=False):
+                 use_rectangle=False, warn_output_add_delete=True):
         """Initialize PositionWidget.
 
         Parameters
@@ -3304,6 +3388,7 @@ class PositionWidget(QWidget):
             'Set selected ROI = marked area']
         self.get_position_icons = ['selectArrow', 'rectangle_select']
         self.use_rectangle = use_rectangle
+        self.warn_output_add_delete = warn_output_add_delete
         self.parent = parent
         self.main = main
         if headers is None:
@@ -3381,14 +3466,19 @@ class PositionWidget(QWidget):
 
     def import_table(self):
         """Import contents to table from clipboard or from predefined."""
-        dlg = messageboxes.QuestionBox(
-            parent=self.main, title='Import table',
-            msg='Import table from...',
-            yes_text='Clipboard',
-            no_text='Predefined tables')
-        res = dlg.exec()
+        proceed = True
+        if self.warn_output_add_delete:
+            proceed = get_defined_output_for_columns(
+                self, self.main.current_paramset, self.table.table_attribute_name)
+        if proceed:
+            dlg = messageboxes.QuestionBox(
+                parent=self.main, title='Import table',
+                msg='Import table from...',
+                yes_text='Clipboard',
+                no_text='Predefined tables')
+            proceed = dlg.exec()
         input_table = None
-        if res:  # clipboard
+        if proceed:  # clipboard
             try:
                 dataf = pd.read_clipboard()
                 _, ncols = dataf.shape
@@ -3505,19 +3595,30 @@ class PositionWidget(QWidget):
             if self.main.active_img is not None:
                 self.get_pos_mouse()
             else:
-                self.table.current_table.add_pos(
-                    index=rowno, pos_x=0, pos_y=0)
-                self.parent.flag_edit(True)
-                self.table.update_table()
+                proceed = True
+                if self.warn_output_add_delete:
+                    proceed = get_defined_output_for_columns(
+                        self, self.main.current_paramset,
+                        self.table.table_attribute_name)
+                if proceed:
+                    self.table.current_table.add_pos(
+                        label=f'ROI {rowno}', index=rowno, pos_x=0, pos_y=0)
+                    self.parent.flag_edit(True)
+                    self.table.update_table()
 
     def delete_row(self):
         """Delete row from table."""
         sel = self.table.selectedIndexes()
         if len(sel) > 0:
-            rowno = sel[0].row()
-            self.table.current_table.delete_pos(rowno)
-            self.parent.flag_edit(True)
-            self.table.update_table()
+            proceed = True
+            if self.warn_output_add_delete:
+                proceed = get_defined_output_for_columns(
+                    self, self.main.current_paramset, self.table.table_attribute_name)
+            if proceed:
+                rowno = sel[0].row()
+                self.table.current_table.delete_pos(rowno)
+                self.parent.flag_edit(True)
+                self.table.update_table()
 
     def get_pos_mouse(self):
         """Get position from last mouseclick in i mage."""
@@ -3544,7 +3645,14 @@ class PositionWidget(QWidget):
                 self.table.current_table.pos_x[rowno] = dx
                 self.table.current_table.pos_y[rowno] = dy
             else:
-                self.table.current_table.add_pos(pos_x=dx, pos_y=dy)
+                proceed = True
+                if self.warn_output_add_delete:
+                    proceed = get_defined_output_for_columns(
+                        self, self.main.current_paramset,
+                        self.table.table_attribute_name)
+                if proceed:
+                    self.table.current_table.add_pos(
+                        label=f'ROI {rowno}', pos_x=dx, pos_y=dy)
             self.parent.flag_edit(True)
             self.table.update_table()
 
@@ -3583,7 +3691,14 @@ class PositionWidget(QWidget):
                     self.table.current_table.pos_x[rowno] = x_tuple
                     self.table.current_table.pos_y[rowno] = y_tuple
                 else:
-                    self.table.current_table.add_pos(pos_x=x_tuple, pos_y=y_tuple)
+                    proceed = True
+                    if self.warn_output_add_delete:
+                        proceed = get_defined_output_for_columns(
+                            self, self.main.current_paramset,
+                            self.table.table_attribute_name)
+                    if proceed:
+                        self.table.current_table.add_pos(
+                            label=f'ROI {rowno}', pos_x=x_tuple, pos_y=y_tuple)
                 self.parent.flag_edit(True)
                 self.table.update_table()
 
@@ -3745,14 +3860,17 @@ class CTnTableWidget(QWidget):  # TODO PositionWidget
 
     def import_table(self):
         """Import contents to table from clipboard or from predefined."""
-        dlg = messageboxes.QuestionBox(
-            parent=self.main, title='Import table',
-            msg='Import table from...',
-            yes_text='Clipboard',
-            no_text='Predefined tables')
-        res = dlg.exec()
+        proceed = get_defined_output_for_columns(
+            self, self.main.current_paramset, 'ctn_table')
+        if proceed:
+            dlg = messageboxes.QuestionBox(
+                parent=self.main, title='Import table',
+                msg='Import table from...',
+                yes_text='Clipboard',
+                no_text='Predefined tables')
+            proceed = dlg.exec()
         ctn_table = None
-        if res:
+        if proceed:
             dataf = pd.read_clipboard()
             nrows, ncols = dataf.shape
             if ncols != 6:
@@ -3842,18 +3960,24 @@ class CTnTableWidget(QWidget):  # TODO PositionWidget
             rowno = sel[0].row()
         else:
             rowno = self.table.rowCount()
-        self.main.current_paramset.ctn_table.add_pos(index=rowno)
-        self.parent.flag_edit(True)
-        self.table.update_table()
+        proceed = get_defined_output_for_columns(
+            self, self.main.current_paramset, 'ctn_table')
+        if proceed:
+            self.main.current_paramset.ctn_table.add_pos(label='undefined', index=rowno)
+            self.parent.flag_edit(True)
+            self.table.update_table()
 
     def delete_row(self):
         """Delete row from table."""
         sel = self.table.selectedIndexes()
         if len(sel) > 0:
-            rowno = sel[0].row()
-            self.main.current_paramset.ctn_table.delete_pos(rowno)
-            self.parent.flag_edit(True)
-            self.table.update_table()
+            proceed = get_defined_output_for_columns(
+                self, self.main.current_paramset, 'ctn_table')
+            if proceed:
+                rowno = sel[0].row()
+                self.main.current_paramset.ctn_table.delete_pos(rowno)
+                self.parent.flag_edit(True)
+                self.table.update_table()
 
     def rename_linearity_unit(self):
         """Rename column for linearity check."""

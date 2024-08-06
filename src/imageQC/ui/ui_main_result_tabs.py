@@ -154,11 +154,6 @@ class ResultTable(QTableWidget):
                 if event == QKeySequence.Copy:
                     self.copy_selection()
                     return True
-            '''
-            elif event.type() == QEvent.ContextMenu:
-                print('event.type ctx')
-                self.generate_ctxmenu(event.pos())
-                pass'''
         return False
 
     def cell_selected(self):
@@ -411,8 +406,13 @@ class ResultPlotCanvas(PlotCanvas):
                         x_only_int = False
 
             if x_only_int:
-                self.ax.xaxis.set_major_locator(
-                    matplotlib.ticker.MaxNLocator(integer=True))
+                if 'xticks' in self.curves[0]:
+                    self.ax.set_xticks(self.curves[0]['xvals'])
+                    self.ax.set_xticklabels(self.curves[0]['xticks'], rotation=60,
+                                            ha='right', rotation_mode='anchor')
+                else:
+                    self.ax.xaxis.set_major_locator(
+                        matplotlib.ticker.MaxNLocator(integer=True))
             if len(self.curves) > 1:
                 self.ax.legend(loc=self.legend_location)
             if None not in self.default_range_x:
@@ -1011,7 +1011,7 @@ class ResultPlotCanvas(PlotCanvas):
                 lsf_is_interp = False
                 try:
                     mtf_type = self.main.current_paramset.mtf_type
-                    if self.main.current_modality in ['CT', 'SPECT'] and mtf_type == 1:
+                    if self.main.current_modality in ['CT', 'SPECT', 'PET'] and mtf_type == 1:
                         self.ytitle = 'Summed pixel values'
                         xy_labels = True
                         lsf_is_interp = True
@@ -1119,7 +1119,7 @@ class ResultPlotCanvas(PlotCanvas):
             proceed = True
             if 'matrix' not in details_dicts[0]:
                 proceed = False
-            elif self.main.current_modality in ['CT', 'SPECT']:
+            elif self.main.current_modality in ['CT', 'SPECT', 'PET']:
                 if self.main.current_paramset.mtf_type == 1:
                     proceed = False
             elif self.main.current_modality == 'NM':
@@ -1206,41 +1206,92 @@ class ResultPlotCanvas(PlotCanvas):
                     '\n'.join(txt_info), loc='lower right')
                 self.ax.add_artist(at)
 
-        def prepare_plot_zprofile():
+        def prepare_plot_zprofile(sel_text):
+            common_details = self.main.results['MTF']['details_dict'][-1]
             self.xtitle = 'z position (mm)'
-            self.ytitle = 'Max pixel value in ROI'
-
-            if 'zpos_used' in details_dicts[-1]:
-                common_details = details_dicts[-1]
-                self.curves.append({
-                    'label': 'Max in marked images',
-                    'xvals': common_details['zpos_marked_images'],
-                    'yvals': common_details['max_roi_marked_images'],
-                    'style': '-b'})
-                self.curves.append({
-                    'label': 'Max in used images',
-                    'xvals': common_details['zpos_used'],
-                    'yvals': common_details['max_roi_used'],
-                    'style': '-r'})
+            if 'zpos_used' in common_details:
+                if sel_text == 'Line source max z-profile':
+                    self.ytitle = 'Max pixel value in ROI'
+                    self.curves.append({
+                        'label': 'Max in marked images',
+                        'xvals': common_details['zpos_marked_images'],
+                        'yvals': common_details['max_roi_marked_images'],
+                        'style': '-b'})
+                    self.curves.append({
+                        'label': 'Max in used images',
+                        'xvals': common_details['zpos_used'],
+                        'yvals': common_details['max_roi_used'],
+                        'style': '-r'})
+                elif 'FWHM' in sel_text:
+                    if self.main.current_paramset.mtf_type == 2:
+                        self.ytitle = 'FWHM pr sliding window'
+                        yvals = [
+                            row[0] for row
+                            in self.main.results[self.main.current_test]['values']]
+                        if any(yvals):
+                            self.curves.append({
+                                'label': 'FWHM x',
+                                'xvals': common_details['zpos_marked_images'],
+                                'yvals': yvals,
+                                'style': '-b'})
+                        yvals = [
+                            row[2] for row
+                            in self.main.results[self.main.current_test]['values']]
+                        if any(yvals):
+                            self.curves.append({
+                                'label': 'FWHM y',
+                                'xvals': common_details['zpos_marked_images'],
+                                'yvals': yvals,
+                                'style': '-r'})
+                elif 'offset' in sel_text:
+                    if self.main.current_paramset.mtf_type == 2:
+                        self.ytitle = 'Offset pr image (mm from image center)'
+                        yvals = [
+                            row[-2] for row
+                            in self.main.results[self.main.current_test]['values_sup']]
+                        if any(yvals):
+                            self.curves.append({
+                                'label': 'x',
+                                'xvals': common_details['zpos_marked_images'],
+                                'yvals': yvals,
+                                'style': '-b'})
+                        yvals = [
+                            row[-1] for row
+                            in self.main.results[self.main.current_test]['values_sup']]
+                        if any(yvals):
+                            self.curves.append({
+                                'label': 'y',
+                                'xvals': common_details['zpos_marked_images'],
+                                'yvals': yvals,
+                                'style': '-r'})
 
         test_widget = self.main.stack_test_tabs.currentWidget()
         try:
             sel_text = test_widget.mtf_plot.currentText()
         except AttributeError:
             sel_text = ''
-        if sel_text == 'MTF':
-            prepare_plot_MTF()
-        elif sel_text == 'LSF':
-            prepare_plot_LSF()
-        elif sel_text == 'Sorted pixel values':
-            prepare_plot_sorted_pix()
-        elif sel_text == 'Centered xy profiles':
-            prepare_plot_centered_profiles()
-        elif sel_text in ['Edge position', 'Line fit']:
-            prepare_plot_edge_position()
-        elif 'z-profile' in sel_text:
-            prepare_plot_zprofile()
-        self.title = sel_text
+        try:
+            if sel_text == 'MTF':
+                prepare_plot_MTF()
+            elif sel_text == 'LSF':
+                prepare_plot_LSF()
+            elif sel_text == 'Sorted pixel values':
+                prepare_plot_sorted_pix()
+            elif sel_text == 'Centered xy profiles':
+                prepare_plot_centered_profiles()
+            elif sel_text in ['Edge position', 'Line fit']:
+                prepare_plot_edge_position()
+            elif 'z-profile' in sel_text:
+                prepare_plot_zprofile(sel_text)
+            self.title = sel_text
+        except (TypeError, IndexError) as err:
+            try:
+                if self.main.developer_mode:
+                    print(err)
+                else:
+                    pass
+            except AttributeError:
+                pass
 
     def NPS(self):
         """Prepare plot for test NPS."""
@@ -1666,7 +1717,8 @@ class ResultPlotCanvas(PlotCanvas):
         details_dict = self.main.results['SNI']['details_dict'][imgno]
         cbx = self.main.tab_nm.sni_selected_roi
         roi_names = [cbx.itemText(i) for i in range(cbx.count())]
-        nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
+        nyquist_freq = 1/(
+            2.*self.main.imgs[imgno].pix[0]*self.main.current_paramset.sni_scale_factor)
 
         def plot_SNI_values_bar():
             """Plot SNI values as columns pr ROI."""
@@ -1683,7 +1735,29 @@ class ResultPlotCanvas(PlotCanvas):
                 self.ytitle = 'SNI'
                 self.xtitle = 'ROI'
 
-        def plot_SNI_values_line():
+        def plot_all_SNI_values():
+            """Plot SNI values for all images pr ROI."""
+            markers = ['.', 'o', 'v', 's', 'D', 'P']
+            idxs = [i for i in range(len(roi_names))]
+            for imgno, dd in enumerate(self.main.results['SNI']['details_dict']):
+                try:
+                    if show_filter_2:
+                        SNI_values = dd['SNI_values_2']
+                    else:
+                        SNI_values = dd['SNI_values']
+                except KeyError:
+                    SNI_values = []
+                if SNI_values:
+                    self.title = 'Structured Noise Index for each ROI in all images'
+                    self.ytitle = 'SNI'
+                    self.xtitle = 'ROI'
+                    c = COLORS[imgno % len(COLORS)]
+                    m = markers[imgno % len(markers)]
+                    self.curves.append(
+                        {'label': f'Img {imgno}', 'xvals': idxs, 'xticks': roi_names,
+                         'yvals': SNI_values, 'style': f'-{c}{m}'})
+
+        def plot_SNI_result_table():
             """Plot SNI values as columns pr ROI."""
             self.title = 'Structured Noise Index, values from result table'
             self.ytitle = 'SNI'
@@ -1874,7 +1948,10 @@ class ResultPlotCanvas(PlotCanvas):
         if 'SNI values each ROI' in sel_text:
             plot_SNI_values_bar()
         elif 'SNI values all images' in sel_text:
-            plot_SNI_values_line()
+            if self.main.current_paramset.sni_type == 3:
+                plot_all_SNI_values()
+            else:
+                plot_SNI_result_table()
         elif 'Filtered' in sel_text:
             if 'max' in sel_text:
                 plot_filtered_max_avg()

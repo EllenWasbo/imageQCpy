@@ -970,7 +970,7 @@ class MainWindow(QMainWindow):
     def finish_cleanup(self):
         """Cleanup/save before exit."""
         proceed_to_close = True
-        if self.wid_paramset.lbl_edit.text() == '*' and self.developer_mode == False:
+        if self.wid_paramset.lbl_edit.text() == '*' and self.developer_mode is False:
             proceed_to_close = messageboxes.proceed_question(
                 self,
                 f'Unsaved changes to {self.wid_paramset.fname}. Exit without saving?')
@@ -1208,6 +1208,7 @@ class MainWindow(QMainWindow):
         self.tab_spect = ui_main_test_tabs.ParamsTabSPECT(self)
         self.tab_pet = ui_main_test_tabs.ParamsTabPET(self)
         self.tab_mr = ui_main_test_tabs.ParamsTabMR(self)
+        self.tab_sr = ui_main_test_tabs.ParamsTabSR(self)
         self.tab_vendor = ParamsTabVendor(self)
 
         self.stack_test_tabs.addWidget(self.tab_xray)
@@ -1216,6 +1217,7 @@ class MainWindow(QMainWindow):
         self.stack_test_tabs.addWidget(self.tab_spect)
         self.stack_test_tabs.addWidget(self.tab_pet)
         self.stack_test_tabs.addWidget(self.tab_mr)
+        self.stack_test_tabs.addWidget(self.tab_sr)
         self.stack_test_tabs.addWidget(self.tab_vendor)
         self.stop_wait_cursor()
 

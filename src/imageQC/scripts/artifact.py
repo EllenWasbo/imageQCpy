@@ -28,8 +28,10 @@ class Artifact:
     size_1: float = 0.  # mm circle = radius, ring=outer radius, rect x-size
     size_2: float = 0.  # mm ring = inner radius, rect y-size
     rotation: float = 0.  # rotation in degrees if rectangle
-    sigma: float = 0.  # sigma (mm) of guassian blur
-    method: str = ''  # add, multiply
+    sigma: float = 0.
+    # sigma (mm) of guassian blur, distance if gamma camera point source
+    method: str = ''
+    # 'adding','multiplying','adding poisson noise','adding gamma camera point source'
     value: float = 0.  # value to add or multiply with
 
 
@@ -63,7 +65,7 @@ def edit_artifact_label(old_label, new_label, main):
                             img.artifacts.pop(idx)
 
 
-def validate_new_artifact_label(main, artifact):
+def validate_new_artifact_label(main, artifact, edit=False):
     """Validate that a new label do not already exist or create new unique.
 
     Parameters
@@ -71,15 +73,22 @@ def validate_new_artifact_label(main, artifact):
     main : MainWindow
     artifact : Artifact
         with suggested .label. If label is '' autogenrated name.
+    edit : bool
+        True if artifact is edited, not new.
 
     Returns
     -------
     valid_label : str or None
         Return a valid label or None = suggest another name, never if suggested is ''.
     """
-    current_labels = [x.label for x in main.artifacts]
-
     suggested_label = artifact.label
+    current_labels = [x.label for x in main.artifacts]
+    if edit:
+        split_name = suggested_label.split()
+        if split_name[0] in ['circle', 'ring', 'rectangle']:
+            # assume auto generated, generate new
+            suggested_label = ''
+
     if suggested_label == '':
         suggested_label = (f'{artifact.form} x{artifact.x_offset:.0f} '
                            f'y{artifact.y_offset:.0f} s{artifact.size_1:.0f}')
@@ -88,9 +97,17 @@ def validate_new_artifact_label(main, artifact):
         if artifact.rotation != 0:
             suggested_label = f'{suggested_label} r{artifact.rotation:.0f}'
         if artifact.sigma != 0:
-            suggested_label = f'{suggested_label} sigma{artifact.sigma:.0f}'
-        suggested_label = f'{suggested_label} {artifact.method[0]}{artifact.value}'
-    if suggested_label in current_labels:
+            if 'gamma camera' in artifact.method:
+                suggested_label = f'{suggested_label} dist{artifact.sigma:.0f}'
+            else:
+                suggested_label = f'{suggested_label} sigma{artifact.sigma:.0f}'
+        if 'noise' in artifact.method:
+            suggested_label = suggested_label + 'add noise'
+        elif 'gamma camera' in artifact.method:
+            suggested_label = f'{suggested_label} point source max{artifact.value}'
+        else:
+            suggested_label = f'{suggested_label} {artifact.method[0]}{artifact.value}'
+    if suggested_label in current_labels and edit is False:
         already_startwith = [
             label for label in current_labels if label.startswith(suggested_label)]
         suggested_label = f'{suggested_label}_{len(already_startwith):03}'
@@ -131,8 +148,8 @@ def apply_artifacts(image, image_info, artifacts):
                         [artifact.x_offset, artifact.y_offset]) / image_info.pix[0])
 
                 # form options defined in ui_dialogs.py
-                # self.form.addItems('circular', 'ring', 'rectangle')
-                if artifact.form in ['circular', 'ring']:
+                # self.form.addItems('circle', 'ring', 'rectangle')
+                if artifact.form in ['circle', 'ring']:
                     roi_size_pix = artifact.size_1 / image_info.pix[0]
                     if roi_size_pix > 0:
                         roi_array = get_roi_circle(image.shape, off_xy, roi_size_pix)
@@ -166,13 +183,24 @@ def apply_artifacts(image, image_info, artifacts):
 
                     # method options defined in ui_dialogs.py
                     # self.method.addItems(['adding', 'multiplying'])
-                    if artifact.method.startswith('adding'):
+                    if artifact.method.startswith('add'):
                         if sigma > 0:
-                            artifact_array = ndimage.gaussian_filter(
-                                artifact_array, sigma=sigma)
+                            if 'gamma camera' not in artifact.method:
+                                artifact_array = ndimage.gaussian_filter(
+                                    artifact_array, sigma=sigma)
+                            else:
+                                dist_map_pix = mmcalc.get_distance_map_point(
+                                    image.shape,
+                                    center_dx=off_xy[0], center_dy=off_xy[1])
+                                dist_map_mm = image_info.pix[0] * dist_map_pix
+                                arr = mmcalc.point_source_func(
+                                    dist_map_mm, 1., artifact.sigma)
+                                artifact_array = artifact_array * arr/np.max(arr)
                         if 'noise' in artifact.method:
                             rng = np.random.default_rng()
-                            image = rng.poisson(image)
+                            vals_in = image[artifact_array == 1]
+                            vals_in[vals_in <= 0] = 1
+                            image[artifact_array == 1] = rng.poisson(vals_in)
                         else:
                             image = image + artifact_array*artifact.value
                     else:  # multiplying

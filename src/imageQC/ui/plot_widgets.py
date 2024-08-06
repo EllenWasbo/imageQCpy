@@ -7,6 +7,7 @@ Basic classes for plot in ImageQC.
 """
 import os
 
+import numpy as np
 import pandas as pd
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -66,13 +67,29 @@ class PlotWidget(QWidget):
         decimal_mark = self.main.current_paramset.output.decimal_mark
         headers = []
         values = []
+        last_xvalues = None
         for curve in self.plotcanvas.curves:
             if 'tolerance' not in curve['label'] and 'nolegend' not in curve['label']:
-                xvalues = val_2_str(curve['xvals'], decimal_mark=decimal_mark)
+                if 'xticks' in curve:
+                    xvalues = curve['xticks']
+                else:
+                    xvalues = val_2_str(curve['xvals'], decimal_mark=decimal_mark)
                 yvalues = val_2_str(curve['yvals'], decimal_mark=decimal_mark)
-                values.append(xvalues)
+                if last_xvalues is not None:
+                    np_xvalues = np.array(xvalues)
+                    try:
+                        if (np_xvalues == last_xvalues).all():
+                            xvalues = None
+                        else:
+                            last_xvalues = np_xvalues
+                    except ValueError:
+                        last_xvalues = np_xvalues
+                else:
+                    last_xvalues = np.array(xvalues)
+                if xvalues is not None:
+                    values.append(xvalues)
+                    headers.append(self.plotcanvas.xtitle)
                 values.append(yvalues)
-                headers.append(f'{curve["label"]}_{self.plotcanvas.xtitle}')
                 headers.append(curve['label'])
         if len(values) == 0:
             for bar_values in self.plotcanvas.bars:

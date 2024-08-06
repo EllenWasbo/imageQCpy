@@ -62,7 +62,7 @@ class GenericImageCanvas(FigureCanvasQTAgg):
         FigureCanvasQTAgg.__init__(self, self.fig)
         self.ax = self.fig.add_subplot(111)
         self.last_clicked_pos = (-1, -1)
-        self.profile_length = 20  # assume click drag > length in pix = draw profile
+        self.profile_length = 10  # assume click drag > length in pix = draw profile
         self.rectangle = patches.Rectangle((0, 0), 1, 1)
         self.current_image = None
 
@@ -207,18 +207,19 @@ class ImageCanvas(GenericImageCanvas):
         self.ax.clear()
         self.draw()
 
-    def img_draw(self, auto=False, window_level=[]):
+    def img_draw(self, auto=False, window_level=[], force_home=False):
         """Refresh image."""
         # keep previous zoom if same size image
         xlim = None
         ylim = None
-        try:
-            prev_img = self.ax.get_images()[0].get_array()
-            if prev_img.shape == self.main.active_img.shape:
-                xlim = self.ax.get_xlim()
-                ylim = self.ax.get_ylim()
-        except (AttributeError, IndexError):
-            pass
+        if force_home is False:
+            try:
+                prev_img = self.ax.get_images()[0].get_array()
+                if prev_img.shape == self.main.active_img.shape:
+                    xlim = self.ax.get_xlim()
+                    ylim = self.ax.get_ylim()
+            except (AttributeError, IndexError):
+                pass
         try:
             cmap = self.ax.get_images()[0].cmap.name
         except (AttributeError, IndexError):
@@ -497,7 +498,14 @@ class ImageCanvas(GenericImageCanvas):
 
     def Hom(self):
         """Draw Hom ROI."""
+        flatfield = False
         if self.main.current_modality == 'Mammo':
+            flatfield = True
+        elif self.main.current_modality == 'Xray':
+            if self.main.current_paramset.hom_tab_alt == 3:
+                flatfield = True
+
+        if flatfield:
             self.add_contours_to_all_rois(colors=['blue', 'blue'], roi_indexes=[0, 1])
             if self.main.current_paramset.hom_mask_max:
                 self.add_contours_to_all_rois(
@@ -516,7 +524,7 @@ class ImageCanvas(GenericImageCanvas):
     def MTF(self):
         """Draw MTF ROI."""
         if (
-                self.main.current_modality in ['CT', 'SPECT']
+                self.main.current_modality in ['CT', 'SPECT', 'PET']
                 and self.main.current_paramset.mtf_type in [0, 1]):
             # bead show background rim
             if self.main.current_roi[1].any():
@@ -928,7 +936,14 @@ class ResultImageCanvas(GenericImageCanvas):
                         decimals=self.parent.wid_window_level.decimals)
                 except ValueError:
                     pass
+
+            flatfield = False
             if self.main.current_modality == 'Mammo':
+                flatfield = True
+            elif self.main.current_modality == 'Xray':
+                if self.main.current_paramset.hom_tab_alt == 3:
+                    flatfield = True
+            if flatfield:
                 if 'Hom' in self.main.results and self.main.current_test == 'Hom':
                     if self.current_image.shape == self.main.active_img.shape:
                         try:
@@ -960,7 +975,14 @@ class ResultImageCanvas(GenericImageCanvas):
 
     def Hom(self):
         """Prepare images of Mammo-Homogeneity."""
+        flatfield = False
         if self.main.current_modality == 'Mammo':
+            flatfield = True
+        elif self.main.current_modality == 'Xray':
+            if self.main.current_paramset.hom_tab_alt == 3:
+                flatfield = True
+
+        if flatfield:
             self.cmap = 'viridis'
             try:
                 details_dict = self.main.results['Hom']['details_dict'][
@@ -968,7 +990,10 @@ class ResultImageCanvas(GenericImageCanvas):
             except (IndexError, KeyError):
                 details_dict = None
             if details_dict:
-                sel_txt = self.main.tab_mammo.hom_result_image.currentText()
+                if self.main.current_modality == 'Mammo':
+                    sel_txt = self.main.tab_mammo.hom_result_image.currentText()
+                else:
+                    sel_txt = self.main.tab_xray.hom_result_image.currentText()
                 self.title = sel_txt
                 try:
                     if sel_txt == 'Average pr ROI map':
@@ -1076,11 +1101,16 @@ class ResultImageCanvas(GenericImageCanvas):
             elif 'SNI values map' in sel_txt:
                 self.title = 'SNI values map'
                 if 'SNI_map' in details_dict:
+                    show_filter_2 = False
+                    if self.main.current_paramset.sni_channels:
+                        if self.main.tab_nm.sni_plot_low.btn_false.isChecked():
+                            show_filter_2 = True
+                    suffix_2 = '_2' if show_filter_2 else ''
                     if self.main.current_paramset.sni_type == 3:  # Siemens
                         self.current_image = generate_SNI_Siemens_image(
-                            details_dict['SNI_map'])
+                            details_dict[f'SNI_map{suffix_2}'])
                     else:
-                        self.current_image = details_dict['SNI_map']
+                        self.current_image = details_dict[f'SNI_map{suffix_2}']
                     self.min_val = 0
                     max_in_res = np.max([
                         row for row in self.main.results['SNI']['values']

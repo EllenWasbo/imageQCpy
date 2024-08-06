@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QMessageBox, QLabel, QPushButton
 
 
 def proceed_question(widget, question,
-                     msg_width=500, detailed_text='', info_text=''):
+                     msg_width=500, detailed_text=None, info_text=''):
     """Ask a question whether to proceed with some process.
 
     Parameters
@@ -22,7 +22,7 @@ def proceed_question(widget, question,
     question : str
     msg_width : int
         label width in pixels. Default is 500.
-    detailed_text : str
+    detailed_text : str or list of str
         add detailed text if not empty string. Default is empty string.
     info_text : str
         subtext after question. Default is empty string.
@@ -41,7 +41,9 @@ def proceed_question(widget, question,
         parent=widget
         )
     msg_box.setDefaultButton(QMessageBox.No)
-    if detailed_text != '':
+    if detailed_text is not None:
+        if isinstance(detailed_text, list):
+            detailed_text = '\n'.join(detailed_text)
         msg_box.setDetailedText(detailed_text)
     if info_text != '':
         msg_box.setInformativeText(info_text)

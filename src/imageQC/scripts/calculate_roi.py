@@ -128,10 +128,14 @@ def get_rois(image, image_number, input_main):
         return (roi_this, errmsg)
 
     def Hom():  # Homogeneity
-        roi_array = get_roi_hom(image_info, paramset, delta_xya=delta_xya,
-                                modality=input_main.current_modality)
-
+        flatfield = False
         if input_main.current_modality == 'Mammo':
+            flatfield = True
+        elif input_main.current_modality == 'Xray':
+            if paramset.hom_tab_alt == 3:
+                flatfield = True
+        if flatfield:
+            roi_array = get_roi_hom_flatfield(image_info, paramset)
             roi_mask = np.full(image_info.shape[0:2], False)
             if paramset.hom_mask_max:
                 roi_mask[image == np.max(image)] = True
@@ -142,6 +146,9 @@ def get_rois(image, image_number, input_main):
                 if n_pix > 0:
                     roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
             roi_array.append(roi_mask_outer)
+        else:
+            roi_array = get_roi_hom(image_info, paramset, delta_xya=delta_xya,
+                                    modality=input_main.current_modality)
 
         return roi_array
 
@@ -163,9 +170,10 @@ def get_rois(image, image_number, input_main):
         except AttributeError:
             pass
 
-        if input_main.current_modality in ['CT', 'SPECT']:
+        if input_main.current_modality in ['CT', 'SPECT', 'PET']:
             roi_size_in_pix = paramset.mtf_roi_size / image_info.pix[0]
 
+            bg_rim = True
             if paramset.mtf_type == 0:  # bead / point source
                 if paramset.mtf_auto_center:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
@@ -183,19 +191,21 @@ def get_rois(image, image_number, input_main):
                     yxmax = get_max_pos_yx(filt_img)
                     off_center_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
 
-                if paramset.mtf_type == 1:  # wire / line
+                if paramset.mtf_type == 2 and input_main.current_modality == 'CT':
+                    # circular edge
+                    roi_this = get_roi_circle(
+                        img_shape, off_center_xy, roi_size_in_pix)
+                    bg_rim = False
+                else:  # wire/line
                     roi_this = [[], []]
                     roi_this[0] = get_roi_rectangle(
                         img_shape,
                         roi_width=2*roi_size_in_pix + 1,
                         roi_height=2*roi_size_in_pix + 1,
                         offcenter_xy=off_center_xy)
-                elif paramset.mtf_type == 2:  # circular edge
-                    roi_this = get_roi_circle(
-                        img_shape, off_center_xy, roi_size_in_pix)
 
             # outer background rim
-            if paramset.mtf_type in [0, 1]:  # bead/wire or point/line
+            if bg_rim:  # bead/wire or point/line
                 bg_width_in_pix = paramset.mtf_background_width // image_info.pix[0]
                 background_outer = get_roi_rectangle(
                     img_shape,
@@ -578,7 +588,7 @@ def get_rois(image, image_number, input_main):
                 roi_array, errmsg = res
             else:
                 roi_array = res
-        except (KeyError, AttributeError):
+        except (KeyError, AttributeError, IndexError):
             pass
 
     return (roi_array, errmsg)
@@ -817,18 +827,35 @@ def get_roi_hom(image_info,
         for i in range(5):
             roi_array.append(get_roi_circle(
                 image_info.shape, tuple(off_centers[i]), roi_size_in_pix))
-    elif modality == 'Mammo':
-        roi_small = get_roi_rectangle(
-            image_info.shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
-        roi_var_in_pix = paramset.hom_roi_size_variance / image_info.pix[0]
-        roi_variance = get_roi_rectangle(
-            image_info.shape, roi_width=roi_var_in_pix, roi_height=roi_var_in_pix)
-        roi_array = [roi_small, roi_variance]
     else:
         roi_array = None
 
     return roi_array
 
+def get_roi_hom_flatfield(image_info, paramset):
+    """Calculate roi array when flatfield test Hom.
+
+    Parameters
+    ----------
+    image_info : DcmInfo
+        as defined in scripts/dcm.py
+    paramset : ParamSetXX
+        ParamSet for given modality as defined in config/config_classes.py
+
+    Returns
+    -------
+    roi_all : list of np.array
+    """
+    roi_size_in_pix = paramset.hom_roi_size / image_info.pix[0]
+
+    roi_small = get_roi_rectangle(
+        image_info.shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
+    roi_var_in_pix = paramset.hom_roi_size_variance / image_info.pix[0]
+    roi_variance = get_roi_rectangle(
+        image_info.shape, roi_width=roi_var_in_pix, roi_height=roi_var_in_pix)
+    roi_array = [roi_small, roi_variance]
+
+    return roi_array
 
 def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
     """Calculate roi array with center roi and periferral rois.
@@ -1034,7 +1061,7 @@ def generate_SNI_Siemens_image(SNI_values):
     return image
 
 
-def get_roi_SNI(image, image_info, paramset):
+def get_roi_SNI(image, image_info, paramset, block_size=1):
     """Generate roi_array for NM SNI test.
 
     Parameters
@@ -1044,6 +1071,8 @@ def get_roi_SNI(image, image_info, paramset):
         as defined in scripts/dcm.py
     paramset : ParamSetNM
         for given modality as defined in config/config_classes.py
+    block_size : int
+        used if merging pixels
 
     Returns
     -------
@@ -1125,7 +1154,7 @@ def get_roi_SNI(image, image_info, paramset):
         if paramset.sni_type == 1:
             roi_size = int(paramset.sni_roi_ratio * large_dim)
         else:
-            roi_size = paramset.sni_roi_size
+            roi_size = paramset.sni_roi_size // block_size
         if paramset.sni_type in [1, 2]:
             n_rois_x = width_x // (0.5 * roi_size) - 1
             n_rois_y = width_y // (0.5 * roi_size) - 1
@@ -1145,7 +1174,7 @@ def get_roi_SNI(image, image_info, paramset):
         else:  # sni_type 3 Siemens
             small_start_idx = 3
             dist = 76  # mm diameter PMTs = distance between centers
-            dist_pix = round(dist / image_info.pix[0])
+            dist_pix = round(dist / image_info.pix[0] / block_size)
             dy = round(dist_pix * np.sin(np.pi/3))  # hexagonal pattern
             radius = roi_size // 2
             dx7 = dist_pix * (np.arange(7) - 3)
@@ -1172,16 +1201,19 @@ def get_roi_SNI(image, image_info, paramset):
                         if paramset.sni_roi_outside == 0:  # ignore
                             roi_array[rowno + small_start_idx][colno] = None
                         elif paramset.sni_roi_outside == 1:  # move
-                            xshift = n_cols
-                            yshift = n_rows
-                            if colno > len(roi_row) // 2:
-                                xshift = - xshift
-                            if rowno < len(roi_array[small_start_idx:]) // 2:
-                                yshift = - yshift
-                            roi_array[rowno + 1][colno] = get_roi_circle(
-                                image.shape,
-                                (dxs[colno] + xshift, dys[rowno] + yshift),
-                                radius)
+                            if n_cols < roi_size // 2 and n_rows < roi_size // 2:
+                                xshift = n_cols
+                                yshift = n_rows
+                                if colno > len(roi_row) // 2:
+                                    xshift = - xshift
+                                if rowno < len(roi_array[small_start_idx:]) // 2:
+                                    yshift = - yshift
+                                roi_array[rowno + small_start_idx][colno] = get_roi_circle(
+                                    image.shape,
+                                    (dxs[colno] + xshift, dys[rowno] + yshift),
+                                    radius)
+                            else:  # ignore if > halv outside
+                                roi_array[rowno + small_start_idx][colno] = None
 
     return (roi_array, errmsg)
 

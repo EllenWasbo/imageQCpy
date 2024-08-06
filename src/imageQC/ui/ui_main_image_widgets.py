@@ -207,7 +207,8 @@ class ImageDisplayWidget(GenericImageWidget):
             act_redraw = QAction(
                 QIcon(f'{os.environ[ENV_ICON_PATH]}refresh.png'),
                 'Force refresh on image if hiccups', self)
-            act_redraw.triggered.connect(self.main.refresh_img_display)
+            act_redraw.triggered.connect(
+                lambda: self.main.refresh_img_display(force_home=True))
             self.tool_sum = QToolButton()
             self.tool_sum.setToolTip(
                 'Toggle to display sum of marked images, press again to display average.')

@@ -69,11 +69,9 @@ class StackWidget(QWidget):
         try:
             self.import_review_mode = self.dlg_settings.import_review_mode
             self.save_blocked = self.dlg_settings.main.save_blocked
-            #self.developer_mode = self.dlg_settings.main.developer_mode
         except AttributeError:
             self.import_review_mode = False
             self.save_blocked = False
-            #self.developer_mode = True  #TODO sure?
         try:
             self.current_modality = self.dlg_settings.initial_modality
         except AttributeError:
@@ -1413,8 +1411,8 @@ class QuickTestOutputSubDialog(ImageQCDialog):
 
         Parameters
         ----------
-        paramset : dict
-            paramsets
+        paramset : object
+            Paramset<mod> as defined in config_classes.py
         qt_output_sub : object, optional
             input QuickTestOutputSub. The default is None.
         modality : str, optional
@@ -1509,13 +1507,20 @@ class QuickTestOutputSubDialog(ImageQCDialog):
         update_calculations : bool, optional
             Update list of calculation options. The default is True.
         first : bool, optional
-            First time update. The default is False.
+            First time update = when dialog box pops up. The default is False.
         """
         testcode = self.cbox_testcode.currentText()
 
-        if update_alternatives:  # fill text in alternatives cbox
+        if update_alternatives:  # fill text in alternatives cbox, set default if locked
             try:
-                alts = ALTERNATIVES[self.modality][testcode]
+                if testcode == 'SNI':
+                    alts = [
+                        '6 small ROI',
+                        '6 small ROI low/high channel',
+                        'grid/Siemens',
+                        'grid/Siemens low/high channel']
+                else:
+                    alts = ALTERNATIVES[self.modality][testcode]
             except KeyError:
                 alts = ['-']
 
@@ -1528,6 +1533,11 @@ class QuickTestOutputSubDialog(ImageQCDialog):
             else:  # supplement table
                 self.cbox_alternatives.setCurrentIndex(
                     self.qt_output_sub.alternative - 10)
+            if self.cbox_alternatives.isEnabled() is False:
+                # add mode, set to default according to parameters in set
+                alt = cff.get_test_alternative(self.paramset, testcode)
+                if alt is not None:
+                    self.cbox_alternatives.setCurrentIndex(alt)
             self.cbox_alternatives.blockSignals(False)
         if update_columns:  # fill text in columns
             cols = []
@@ -1553,8 +1563,10 @@ class QuickTestOutputSubDialog(ImageQCDialog):
                         cols = self.paramset.ctn_table.labels
                     elif testcode == 'Num':
                         cols = self.paramset.num_table.labels
-                    elif testcode == 'ROI':
+                    elif testcode == 'ROI':  # alt > 0, table
                         cols = self.paramset.roi_table.labels
+                    elif 'altAll' in HEADERS[self.modality][testcode]:
+                        cols = HEADERS[self.modality][testcode]['altAll']
             self.list_columns.clear()
             if len(cols) > 0:
                 self.list_columns.addItems(cols)
@@ -1579,6 +1591,8 @@ class QuickTestOutputSubDialog(ImageQCDialog):
         if first:
             self.chk_per_group.setChecked(self.qt_output_sub.per_group)
             self.txt_header.setText(self.qt_output_sub.label)
+            if self.cbox_testcode.isEnabled():  # add, not edit mode - alternatives lock
+                self.cbox_alternatives.setEnabled(False)
 
     def update_suggested_header(self):
         """Suggest header text."""

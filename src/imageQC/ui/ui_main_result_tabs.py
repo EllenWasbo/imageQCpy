@@ -154,11 +154,6 @@ class ResultTable(QTableWidget):
                 if event == QKeySequence.Copy:
                     self.copy_selection()
                     return True
-            '''
-            elif event.type() == QEvent.ContextMenu:
-                print('event.type ctx')
-                self.generate_ctxmenu(event.pos())
-                pass'''
         return False
 
     def cell_selected(self):
@@ -1227,36 +1222,48 @@ class ResultPlotCanvas(PlotCanvas):
                         'xvals': common_details['zpos_used'],
                         'yvals': common_details['max_roi_used'],
                         'style': '-r'})
-                elif sel_text == 'FWHM z-profile':
+                elif 'FWHM' in sel_text:
                     if self.main.current_paramset.mtf_type == 2:
                         self.ytitle = 'FWHM pr sliding window'
-                        yvals = [row[0] for row in self.main.results[self.main.current_test]['values']]
-                        self.curves.append({
-                            'label': 'FWHM x',
-                            'xvals': common_details['zpos_marked_images'],
-                            'yvals': yvals,
-                            'style': '-b'})
-                        yvals = [row[2] for row in self.main.results[self.main.current_test]['values']]
-                        self.curves.append({
-                            'label': 'FWHM y',
-                            'xvals': common_details['zpos_marked_images'],
-                            'yvals': yvals,
-                            'style': '-r'})
-                elif sel_text == 'Offset z-profile':
+                        yvals = [
+                            row[0] for row
+                            in self.main.results[self.main.current_test]['values']]
+                        if any(yvals):
+                            self.curves.append({
+                                'label': 'FWHM x',
+                                'xvals': common_details['zpos_marked_images'],
+                                'yvals': yvals,
+                                'style': '-b'})
+                        yvals = [
+                            row[2] for row
+                            in self.main.results[self.main.current_test]['values']]
+                        if any(yvals):
+                            self.curves.append({
+                                'label': 'FWHM y',
+                                'xvals': common_details['zpos_marked_images'],
+                                'yvals': yvals,
+                                'style': '-r'})
+                elif 'offset' in sel_text:
                     if self.main.current_paramset.mtf_type == 2:
                         self.ytitle = 'Offset pr image (mm from image center)'
-                        yvals = [row[-2] for row in self.main.results[self.main.current_test]['values_sup']]
-                        self.curves.append({
-                            'label': 'x',
-                            'xvals': common_details['zpos_marked_images'],
-                            'yvals': yvals,
-                            'style': '-b'})
-                        yvals = [row[-1] for row in self.main.results[self.main.current_test]['values_sup']]
-                        self.curves.append({
-                            'label': 'y',
-                            'xvals': common_details['zpos_marked_images'],
-                            'yvals': yvals,
-                            'style': '-r'})
+                        yvals = [
+                            row[-2] for row
+                            in self.main.results[self.main.current_test]['values_sup']]
+                        if any(yvals):
+                            self.curves.append({
+                                'label': 'x',
+                                'xvals': common_details['zpos_marked_images'],
+                                'yvals': yvals,
+                                'style': '-b'})
+                        yvals = [
+                            row[-1] for row
+                            in self.main.results[self.main.current_test]['values_sup']]
+                        if any(yvals):
+                            self.curves.append({
+                                'label': 'y',
+                                'xvals': common_details['zpos_marked_images'],
+                                'yvals': yvals,
+                                'style': '-r'})
 
         test_widget = self.main.stack_test_tabs.currentWidget()
         try:

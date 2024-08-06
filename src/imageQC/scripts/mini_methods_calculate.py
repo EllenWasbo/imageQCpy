@@ -640,6 +640,10 @@ def get_width_center_at_threshold(
             x2 = last + dx
             center = 0.5 * (x1+x2)
             width = x2 - x1
+    elif len(above[0]) == 1 and len(below[0]) > 2:
+        center = above[0][0]
+    elif len(below[0]) == 1 and len(above[0]) > 2:
+        center = below[0][0]
 
     return (width, center)
 

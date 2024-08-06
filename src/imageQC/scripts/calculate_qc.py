@@ -1179,6 +1179,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 avgs.append(np.mean(arr))
                 stds.append(np.std(arr))
 
+        flatfield = False
         if modality == 'CT':
             headers = copy.deepcopy(HEADERS[modality][test_code]['altAll'])
             headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
@@ -1191,9 +1192,12 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         elif modality == 'Xray':
             alt = paramset.hom_tab_alt
             headers = copy.deepcopy(HEADERS[modality][test_code]['alt'+str(alt)])
+            headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt'+str(alt)])
             if image2d is not None:
                 if alt == 0:
                     values = avgs + stds
+                elif alt == 3:
+                    flatfield = True
                 else:
                     avg_all = np.sum(avgs) / len(avgs)
                     diffs = [(avg - avg_all) for avg in avgs]
@@ -1206,6 +1210,16 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         elif modality == 'Mammo':
             headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
             headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
+            flatfield = True
+
+        elif modality == 'PET':
+            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+            if image2d is not None:
+                avg = sum(avgs) / len(avgs)
+                diffs = [100.*(avgs[i] - avg)/avg for i in range(5)]
+                values = avgs + diffs
+
+        if flatfield:
             if image2d is not None:
                 details = calculate_flatfield_mammo(
                     image2d, roi_array[-2], roi_array[-1], image_info, paramset)
@@ -1235,13 +1249,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         headers=headers, values=values,
                         headers_sup=headers_sup, values_sup=values_sup,
                         details_dict=details)
-
-        elif modality == 'PET':
-            headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-            if image2d is not None:
-                avg = sum(avgs) / len(avgs)
-                diffs = [100.*(avgs[i] - avg)/avg for i in range(5)]
-                values = avgs + diffs
 
         if res is None:
             res = Results(headers=headers, values=values,
@@ -2987,9 +2994,10 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
                         matrix_xz = np.sum(matrix_this, axis=axis)
                         details_dict_this, errmsg_this = calculate_MTF_2d_line_edge(
                             matrix_xz, pix, paramset, mode='line',
-                            vertical_positions_mm=vert_pos)
+                            vertical_positions_mm=vert_pos, recalculate_halfmax=True)
                         details_img.append(details_dict_this)
-                        errmsg.append(errmsg_this)
+                        if errmsg_this:
+                            errmsg.append(f'Center slice number {zz}, axis {i}: {errmsg_this}')
                     details_dict.append(details_img)
             details_dict.extend([None] * n_margin)
 
@@ -2999,7 +3007,8 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
 
 
 def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
-                               pr_roi=False, vertical_positions_mm=None):
+                               pr_roi=False, vertical_positions_mm=None,
+                               recalculate_halfmax=False):
     """Calculate MTF from straight line.
 
     Parameters
@@ -3017,6 +3026,8 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
     vertical_positions_mm : list of float, optional
         if vertical pix size != pix and possiby irregular. Default is None
         list of y pix positions in mm
+    recalculate_halfmax: bool
+        Option to allow for recalculating halfmax when finding line position. Default is False.
 
     Returns
     -------
@@ -3069,7 +3080,11 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                 edge_pos.append(res[0])
         else:
             for i in range(sub.shape[0]):
-                _, center = mmcalc.get_width_center_at_threshold(sub[i, :], halfmax)
+                if recalculate_halfmax:
+                    halfmax_this = 0.5 * (np.max(sub[i, :]) + np.min(sub[i, :]))
+                    _, center = mmcalc.get_width_center_at_threshold(sub[i, :], halfmax_this)
+                else:
+                    _, center = mmcalc.get_width_center_at_threshold(sub[i, :], halfmax)
                 edge_pos.append(center)
         proceed = True
         ys = np.arange(sub.shape[0])
@@ -3088,7 +3103,7 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                 ys = [y for i, y in enumerate(list(ys)) if i not in idx_None]
             if errmsg == []:
                 errmsg.append(
-                    '{txt_mode} position not found for full ROI. Parts of ROI ignored.')
+                    f'{txt_mode} position not found for full ROI. Parts of ROI ignored.')
         return (edge_pos, x, ys, proceed)
 
     for m in range(len(matrix)):

@@ -13,7 +13,7 @@ from pathlib import Path
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QFormLayout, QGroupBox,
+    QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QFormLayout, QGroupBox,
     QPushButton, QLabel, QDoubleSpinBox, QCheckBox, QRadioButton, QButtonGroup,
     QComboBox, QAction, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
     QMessageBox, QInputDialog, QFileDialog, QDialogButtonBox, QHeaderView
@@ -32,6 +32,23 @@ from imageQC.scripts.mini_methods import get_all_matches
 from imageQC.ui.ui_dialogs import ImageQCDialog
 # imageQC block end
 
+
+flatfield_info_txt = '''
+    Based on European guidelines for quality assurance in breast cancer screening
+    and diagnosis<br>
+    Fourth edition Supplements (2013)<br>
+    <br>
+    Variance matrix added as specified in the European guidelines.<br>
+    <br>
+    For Siemens equipment one courner may be filled with a high value and for <br>
+    Hologic equiment an upper and lower rim may be filled with a high value.<br>
+    Use the option to mask pixels with maximum value.
+
+    Increasing the limit for ignoring an ROI based on masked pixels from 0 % <br>
+    will cause the statistics of the unmasked pixels to be calculated.<br>
+    This limit cannot be set higher than 95% (i.e. accepting calculation of <br>
+    ROI statistics with as little as 5% of unmasked pixels left in an ROI).
+    '''
 
 class ParamsWidget(QWidget):
     """Generic super widget for test."""
@@ -573,6 +590,122 @@ class ParamsTabCommon(QTabWidget):
         vlo_left.addLayout(flo1)
         self.tab_num.hlo.addWidget(self.num_table_widget)
 
+    def hom_get_coordinates(self):
+        """Add coordinates of deviating pixels to results."""
+        if 'Hom' in self.main.results:
+            try:
+                details_dict = self.main.results['Hom']['details_dict'][
+                    self.main.gui.active_img_no]
+            except (IndexError, KeyError):
+                details_dict = None
+            if details_dict:
+                if 'deviating_pixel_coordinates' not in details_dict:
+                    deviating_pixels = details_dict['deviating_pixels']
+                    coords = []
+                    idxs = np.where(deviating_pixels)
+                    try:
+                        ys = idxs[0]
+                        xs = idxs[1]
+                        coords = [(xs[i], ys[i]) for i in range(xs.size)]
+                        details_dict['deviating_pixel_coordinates'] = coords
+                    except IndexError:
+                        pass
+                else:
+                    coords = details_dict['deviating_pixel_coordinates']
+                if len(coords) == 0:
+                    QMessageBox.information(
+                        self, 'No deviating pixels found',
+                        'Found no deviating pixels for the current image.')
+                else:
+                    question = 'Copy list of coordinates to clipboard?'
+                    proceed = messageboxes.proceed_question(self, question)
+                    if proceed:
+                        df = pd.DataFrame(coords)
+                        df.columns = ['x', 'y']
+                        df.to_clipboard(index=False, excel=True)
+                        self.main.status_bar.showMessage('Values in clipboard', 2000)
+                self.main.refresh_results_display()
+            else:
+                QMessageBox.warning(
+                    self, 'Calculate homogeneity first',
+                    'Could not find results for current image. '
+                    'Calculate homogeneity first.')
+
+    def create_tab_hom_flatfield(self):
+        """GUI for Mammo flatfield test (Hom) available also for Xray."""
+
+        self.hom_roi_size_variance = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
+        self.hom_roi_size_variance.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_roi_size_variance'))
+        self.hom_variance = QCheckBox()
+        self.hom_variance.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_variance'))
+        self.hom_mask_max = QCheckBox()
+        self.hom_mask_max.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_mask_max'))
+        self.hom_mask_outer_mm = QDoubleSpinBox(
+            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
+        self.hom_mask_outer_mm.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_mask_outer_mm'))
+        self.hom_ignore_roi_percent = QDoubleSpinBox(
+            decimals=0, minimum=0., maximum=95, singleStep=1)
+        self.hom_ignore_roi_percent.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_ignore_roi_percent'))
+        self.hom_deviating_pixels = QDoubleSpinBox(
+            decimals=0, minimum=1, singleStep=1)
+        self.hom_deviating_pixels.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_deviating_pixels'))
+        self.hom_deviating_rois = QDoubleSpinBox(
+            decimals=0, minimum=1, singleStep=1)
+        self.hom_deviating_rois.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_deviating_rois'))
+
+        self.hom_result_image = QComboBox()
+        self.hom_result_image.addItems(
+            [
+                'Average pr ROI map',
+                'SNR pr ROI map',
+                'Variance pr ROI map',
+                'Average pr ROI (% difference from global average)',
+                'SNR pr ROI (% difference from global SNR)',
+                'Pixel values (% difference from global average)',
+                'Deviating ROIs',
+                'Deviating pixels',
+                '# deviating pixels pr ROI'
+             ])
+        self.hom_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+
+        self.flat_widget = QWidget()
+        hlo_flat_widget = QHBoxLayout()
+        self.flat_widget.setLayout(hlo_flat_widget)
+
+        flo = QFormLayout()
+        flo.addRow(QLabel('Calculate variance within each ROI'), self.hom_variance)
+        flo.addRow(QLabel('     ROI size variance (mm)'), self.hom_roi_size_variance)
+        flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
+        flo.addRow(QLabel('Ignore outer mm'), self.hom_mask_outer_mm)
+        flo.addRow(QLabel('Ignore ROIs where more than (%) pixels masked'),
+                   self.hom_ignore_roi_percent)
+        hlo_flat_widget.addLayout(flo)
+        hlo_flat_widget.addWidget(uir.VLine())
+        vlo_right = QVBoxLayout()
+        hlo_flat_widget.addLayout(vlo_right)
+        flo_right = QFormLayout()
+        flo_right.addRow(QLabel('Deviating pixels (% from average)'),
+                         self.hom_deviating_pixels)
+        flo_right.addRow(QLabel('Deviating ROIs (% from average)'),
+                         self.hom_deviating_rois)
+        vlo_right.addLayout(flo_right)
+        hlo_res_img = QHBoxLayout()
+        hlo_res_img.addWidget(QLabel('Result image'))
+        hlo_res_img.addWidget(self.hom_result_image)
+        vlo_right.addLayout(hlo_res_img)
+        btn_get_coord = QPushButton('Get coordinates of deviating pixels')
+        btn_get_coord.clicked.connect(self.hom_get_coordinates)
+        vlo_right.addWidget(btn_get_coord)
+
     def create_tab_mtf(self):
         """GUI of tab MTF - common settings here."""
         self.tab_mtf = ParamsWidget(self, run_txt='Calculate MTF')
@@ -646,6 +779,10 @@ class ParamsTabCommon(QTabWidget):
                 lambda: self.param_changed_from_gui(
                     attribute='mtf_sliding_window', make_odd=True))
         self.mtf_plot.addItems(plot_items)
+        if modality == 'PET':
+            self.blockSignals(True)
+            self.mtf_plot.setCurrentIndex(5)
+            self.blockSignals(False)
 
         if modality == 'CT':
             self.mtf_cy_pr_mm = BoolSelectTests(
@@ -1410,14 +1547,43 @@ class ParamsTabXray(ParamsTabCommon):
 
         self.flag_ignore_signals = False
 
+    def update_enabled(self):
+        """Update enabled/disabled features."""
+        super().update_enabled()
+        if self.main.current_modality == 'Xray':
+            paramset = self.main.current_paramset
+            if paramset.hom_tab_alt == 3:
+                self.hom_roi_size_label.setText('ROI size (mm)')
+                self.stack_hom.setCurrentIndex(1)
+            else:
+                self.hom_roi_size_label.setText('ROI radius (mm)')
+                self.stack_hom.setCurrentIndex(0)
+
     def create_tab_hom(self):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate homogeneity')
 
+        self.hom_tab_alt = QComboBox()
+        self.hom_tab_alt.addItems(ALTERNATIVES['Xray']['Hom'])
+        self.hom_tab_alt.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_tab_alt'))
+
         self.hom_roi_size = QDoubleSpinBox(
-            decimals=1, minimum=0.1, singleStep=0.1)
+            decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
+        self.hom_roi_size_label = QLabel('ROI radius (mm)')
+        self.tab_hom.hlo_top.addWidget(self.hom_roi_size_label)
+        self.tab_hom.hlo_top.addWidget(self.hom_roi_size)
+        self.tab_hom.hlo_top.addSpacing(20)
+        self.tab_hom.hlo_top.addWidget(QLabel('Method/output: '))
+        self.tab_hom.hlo_top.addWidget(self.hom_tab_alt)
+        info_txt = (
+            'Method with central + quadrants ROI adapted from IPEM Report 32<br><br>'
+            + 'Flat field test from Mammo:<br>'
+            + flatfield_info_txt)
+        self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
         self.hom_roi_rotation = QDoubleSpinBox(
             decimals=1, minimum=-359.9, maximum=359.9, singleStep=0.1)
         self.hom_roi_rotation.valueChanged.connect(
@@ -1427,34 +1593,28 @@ class ParamsTabXray(ParamsTabCommon):
         self.hom_roi_distance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_distance'))
 
-        self.tab_hom.vlo_top.addSpacing(50)
+        widget_hom_0 = QWidget()
+        vlo_hom_0 = QVBoxLayout()
+        widget_hom_0.setLayout(vlo_hom_0)
         flo = QFormLayout()
-        flo.addRow(QLabel('ROI radius (mm)'), self.hom_roi_size)
         flo.addRow(QLabel('Rotate ROI positions (deg)'), self.hom_roi_rotation)
         flo.addRow(QLabel('ROI distance (% from center)'), self.hom_roi_distance)
-        self.tab_hom.hlo.addLayout(flo)
-        alt_txt = [
-            'Avg and stdev for each ROI',
-            'Avg for each ROI + difference from average of all ROIs',
-            'Avg for each ROI + % difference from average of all ROIs'
-            ]
-        gb_alternative = QGroupBox('Output to table')
-        gb_alternative.setFont(uir.FontItalic())
-        self.hom_tab_alt = QButtonGroup()
-        lo_rb = QVBoxLayout()
-        for btn_no, txt in enumerate(alt_txt):
-            rbtn = QRadioButton(txt)
-            self.hom_tab_alt.addButton(rbtn, btn_no)
-            lo_rb.addWidget(rbtn)
-            rbtn.clicked.connect(self.hom_tab_alt_changed)
-        gb_alternative.setLayout(lo_rb)
-        self.tab_hom.hlo.addWidget(gb_alternative)
-
-        self.tab_hom.vlo.addWidget(uir.LabelItalic(
+        hlo_hom_0 = QHBoxLayout()
+        hlo_hom_0.addLayout(flo)
+        hlo_hom_0.addStretch()
+        vlo_hom_0.addLayout(hlo_hom_0)
+        vlo_hom_0.addWidget(uir.LabelItalic(
             'Same distance for all quadrants = % of shortest'
             'center-border distance.'))
-        self.tab_hom.vlo.addWidget(uir.LabelItalic(
+        vlo_hom_0.addWidget(uir.LabelItalic(
             'Leave distance empty to set ROIs at center of each qadrant.'))
+
+        self.create_tab_hom_flatfield()
+
+        self.stack_hom = QStackedWidget()
+        self.stack_hom.addWidget(widget_hom_0)
+        self.stack_hom.addWidget(self.flat_widget)
+        self.tab_hom.hlo.addWidget(self.stack_hom)
 
     def create_tab_noi(self):
         """GUI of tab Noise."""
@@ -1526,11 +1686,6 @@ class ParamsTabXray(ParamsTabCommon):
         self.tab_var.vlo.addLayout(hlo_roi_size)
         self.tab_var.vlo.addLayout(hlo_percent)
 
-    def hom_tab_alt_changed(self):
-        """Change alternative method (columns to display)."""
-        self.param_changed_from_gui(
-            attribute='hom_tab_alt', content=self.hom_tab_alt.checkedId())
-
 
 class ParamsTabMammo(ParamsTabCommon):
     """Copy for modality tests."""
@@ -1553,47 +1708,6 @@ class ParamsTabMammo(ParamsTabCommon):
         self.addTab(self.tab_nps, "NPS")
 
         self.flag_ignore_signals = False
-
-    def hom_get_coordinates(self):
-        """Add coordinates of deviating pixels to results."""
-        if 'Hom' in self.main.results:
-            try:
-                details_dict = self.main.results['Hom']['details_dict'][
-                    self.main.gui.active_img_no]
-            except (IndexError, KeyError):
-                details_dict = None
-            if details_dict:
-                if 'deviating_pixel_coordinates' not in details_dict:
-                    deviating_pixels = details_dict['deviating_pixels']
-                    coords = []
-                    idxs = np.where(deviating_pixels)
-                    try:
-                        ys = idxs[0]
-                        xs = idxs[1]
-                        coords = [(xs[i], ys[i]) for i in range(xs.size)]
-                        details_dict['deviating_pixel_coordinates'] = coords
-                    except IndexError:
-                        pass
-                else:
-                    coords = details_dict['deviating_pixel_coordinates']
-                if len(coords) == 0:
-                    QMessageBox.information(
-                        self, 'No deviating pixels found',
-                        'Found no deviating pixels for the current image.')
-                else:
-                    question = 'Copy list of coordinates to clipboard?'
-                    proceed = messageboxes.proceed_question(self, question)
-                    if proceed:
-                        df = pd.DataFrame(coords)
-                        df.columns = ['x', 'y']
-                        df.to_clipboard(index=False, excel=True)
-                        self.main.status_bar.showMessage('Values in clipboard', 2000)
-                self.main.refresh_results_display()
-            else:
-                QMessageBox.warning(
-                    self, 'Calculate homogeneity first',
-                    'Could not find results for current image. '
-                    'Calculate homogeneity first.')
 
     def create_tab_sdn(self):
         """GUI of tab SDNR."""
@@ -1647,96 +1761,18 @@ class ParamsTabMammo(ParamsTabCommon):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate Homogeneity')
 
-        info_txt = '''
-        Based on European guidelines for quality assurance in breast cancer screening
-        and diagnosis<br>
-        Fourth edition Supplements (2013)<br>
-        <br>
-        Variance matrix added as specified in the European guidelines.<br>
-        <br>
-        For Siemens equipment one courner may be filled with a high value and for <br>
-        Hologic equiment an upper and lower rim may be filled with a high value.<br>
-        Use the option to mask pixels with maximum value.
-
-        Increasing the limit for ignoring an ROI based on masked pixels from 0 % <br>
-        will cause the statistics of the unmasked pixels to be calculated.<br>
-        This limit cannot be set higher than 95% (i.e. accepting calculation of <br>
-        ROI statistics with as little as 5% of unmasked pixels left in an ROI).
-        '''
-        self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
-
         self.hom_roi_size = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
-        self.hom_roi_size_variance = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
-        self.hom_roi_size_variance.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_roi_size_variance'))
-        self.hom_variance = QCheckBox()
-        self.hom_variance.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_variance'))
-        self.hom_mask_max = QCheckBox()
-        self.hom_mask_max.toggled.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_mask_max'))
-        self.hom_mask_outer_mm = QDoubleSpinBox(
-            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
-        self.hom_mask_outer_mm.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_mask_outer_mm'))
-        self.hom_ignore_roi_percent = QDoubleSpinBox(
-            decimals=0, minimum=0., maximum=95, singleStep=1)
-        self.hom_ignore_roi_percent.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_ignore_roi_percent'))
-        self.hom_deviating_pixels = QDoubleSpinBox(
-            decimals=0, minimum=1, singleStep=1)
-        self.hom_deviating_pixels.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_deviating_pixels'))
-        self.hom_deviating_rois = QDoubleSpinBox(
-            decimals=0, minimum=1, singleStep=1)
-        self.hom_deviating_rois.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_deviating_rois'))
+        self.hom_roi_size_label = QLabel('ROI size (mm)')
+        self.tab_hom.hlo_top.addWidget(self.hom_roi_size_label)
+        self.tab_hom.hlo_top.addWidget(self.hom_roi_size)
+        self.tab_hom.hlo_top.addStretch()
+        self.tab_hom.hlo_top.addWidget(uir.InfoTool(flatfield_info_txt, parent=self.main))
 
-        self.hom_result_image = QComboBox()
-        self.hom_result_image.addItems(
-            [
-                'Average pr ROI map',
-                'SNR pr ROI map',
-                'Variance pr ROI map',
-                'Average pr ROI (% difference from global average)',
-                'SNR pr ROI (% difference from global SNR)',
-                'Pixel values (% difference from global average)',
-                'Deviating ROIs',
-                'Deviating pixels',
-                '# deviating pixels pr ROI'
-             ])
-        self.hom_result_image.currentIndexChanged.connect(
-            self.main.wid_res_image.canvas.result_image_draw)
-
-        flo = QFormLayout()
-        flo.addRow(QLabel('ROI size (mm)'), self.hom_roi_size)
-        flo.addRow(QLabel('Calculate variance within each ROI'), self.hom_variance)
-        flo.addRow(QLabel('     ROI size variance (mm)'), self.hom_roi_size_variance)
-        flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
-        flo.addRow(QLabel('Ignore outer mm'), self.hom_mask_outer_mm)
-        flo.addRow(QLabel('Ignore ROIs where more than (%) pixels masked'),
-                   self.hom_ignore_roi_percent)
-        self.tab_hom.hlo.addLayout(flo)
-        self.tab_hom.hlo.addWidget(uir.VLine())
-        vlo_right = QVBoxLayout()
-        self.tab_hom.hlo.addLayout(vlo_right)
-        flo_right = QFormLayout()
-        flo_right.addRow(QLabel('Deviating pixels (% from average)'),
-                         self.hom_deviating_pixels)
-        flo_right.addRow(QLabel('Deviating ROIs (% from average)'),
-                         self.hom_deviating_rois)
-        vlo_right.addLayout(flo_right)
-        hlo_res_img = QHBoxLayout()
-        hlo_res_img.addWidget(QLabel('Result image'))
-        hlo_res_img.addWidget(self.hom_result_image)
-        vlo_right.addLayout(hlo_res_img)
-        btn_get_coord = QPushButton('Get coordinates of deviating pixels')
-        btn_get_coord.clicked.connect(self.hom_get_coordinates)
-        vlo_right.addWidget(btn_get_coord)
+        self.create_tab_hom_flatfield()
+        self.tab_hom.hlo.addWidget(self.flat_widget)
 
     def create_tab_rlr(self):
         """GUI of tab ROI left/right."""

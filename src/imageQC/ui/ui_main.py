@@ -1217,7 +1217,7 @@ class MainWindow(QMainWindow):
         self.stack_test_tabs.addWidget(self.tab_pet)
         self.stack_test_tabs.addWidget(self.tab_mr)
         self.stack_test_tabs.addWidget(self.tab_sr)
-        self.stack_test_tabs.addWidget(self.tab_vendor)  
+        self.stack_test_tabs.addWidget(self.tab_vendor)
         self.stop_wait_cursor()
 
     def create_result_tabs(self):

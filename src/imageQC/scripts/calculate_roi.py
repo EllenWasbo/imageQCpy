@@ -128,10 +128,14 @@ def get_rois(image, image_number, input_main):
         return (roi_this, errmsg)
 
     def Hom():  # Homogeneity
-        roi_array = get_roi_hom(image_info, paramset, delta_xya=delta_xya,
-                                modality=input_main.current_modality)
-
+        flatfield = False
         if input_main.current_modality == 'Mammo':
+            flatfield = True
+        elif input_main.current_modality == 'Xray':
+            if paramset.hom_tab_alt == 3:
+                flatfield = True
+        if flatfield:
+            roi_array = get_roi_hom_flatfield(image_info, paramset)
             roi_mask = np.full(image_info.shape[0:2], False)
             if paramset.hom_mask_max:
                 roi_mask[image == np.max(image)] = True
@@ -142,6 +146,9 @@ def get_rois(image, image_number, input_main):
                 if n_pix > 0:
                     roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
             roi_array.append(roi_mask_outer)
+        else:
+            roi_array = get_roi_hom(image_info, paramset, delta_xya=delta_xya,
+                                    modality=input_main.current_modality)
 
         return roi_array
 
@@ -820,18 +827,35 @@ def get_roi_hom(image_info,
         for i in range(5):
             roi_array.append(get_roi_circle(
                 image_info.shape, tuple(off_centers[i]), roi_size_in_pix))
-    elif modality == 'Mammo':
-        roi_small = get_roi_rectangle(
-            image_info.shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
-        roi_var_in_pix = paramset.hom_roi_size_variance / image_info.pix[0]
-        roi_variance = get_roi_rectangle(
-            image_info.shape, roi_width=roi_var_in_pix, roi_height=roi_var_in_pix)
-        roi_array = [roi_small, roi_variance]
     else:
         roi_array = None
 
     return roi_array
 
+def get_roi_hom_flatfield(image_info, paramset):
+    """Calculate roi array when flatfield test Hom.
+
+    Parameters
+    ----------
+    image_info : DcmInfo
+        as defined in scripts/dcm.py
+    paramset : ParamSetXX
+        ParamSet for given modality as defined in config/config_classes.py
+
+    Returns
+    -------
+    roi_all : list of np.array
+    """
+    roi_size_in_pix = paramset.hom_roi_size / image_info.pix[0]
+
+    roi_small = get_roi_rectangle(
+        image_info.shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
+    roi_var_in_pix = paramset.hom_roi_size_variance / image_info.pix[0]
+    roi_variance = get_roi_rectangle(
+        image_info.shape, roi_width=roi_var_in_pix, roi_height=roi_var_in_pix)
+    roi_array = [roi_small, roi_variance]
+
+    return roi_array
 
 def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
     """Calculate roi array with center roi and periferral rois.

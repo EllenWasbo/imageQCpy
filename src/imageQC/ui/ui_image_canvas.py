@@ -498,7 +498,14 @@ class ImageCanvas(GenericImageCanvas):
 
     def Hom(self):
         """Draw Hom ROI."""
+        flatfield = False
         if self.main.current_modality == 'Mammo':
+            flatfield = True
+        elif self.main.current_modality == 'Xray':
+            if self.main.current_paramset.hom_tab_alt == 3:
+                flatfield = True
+
+        if flatfield:
             self.add_contours_to_all_rois(colors=['blue', 'blue'], roi_indexes=[0, 1])
             if self.main.current_paramset.hom_mask_max:
                 self.add_contours_to_all_rois(
@@ -929,7 +936,14 @@ class ResultImageCanvas(GenericImageCanvas):
                         decimals=self.parent.wid_window_level.decimals)
                 except ValueError:
                     pass
+
+            flatfield = False
             if self.main.current_modality == 'Mammo':
+                flatfield = True
+            elif self.main.current_modality == 'Xray':
+                if self.main.current_paramset.hom_tab_alt == 3:
+                    flatfield = True
+            if flatfield:
                 if 'Hom' in self.main.results and self.main.current_test == 'Hom':
                     if self.current_image.shape == self.main.active_img.shape:
                         try:
@@ -961,7 +975,14 @@ class ResultImageCanvas(GenericImageCanvas):
 
     def Hom(self):
         """Prepare images of Mammo-Homogeneity."""
+        flatfield = False
         if self.main.current_modality == 'Mammo':
+            flatfield = True
+        elif self.main.current_modality == 'Xray':
+            if self.main.current_paramset.hom_tab_alt == 3:
+                flatfield = True
+
+        if flatfield:
             self.cmap = 'viridis'
             try:
                 details_dict = self.main.results['Hom']['details_dict'][
@@ -969,7 +990,10 @@ class ResultImageCanvas(GenericImageCanvas):
             except (IndexError, KeyError):
                 details_dict = None
             if details_dict:
-                sel_txt = self.main.tab_mammo.hom_result_image.currentText()
+                if self.main.current_modality == 'Mammo':
+                    sel_txt = self.main.tab_mammo.hom_result_image.currentText()
+                else:
+                    sel_txt = self.main.tab_xray.hom_result_image.currentText()
                 self.title = sel_txt
                 try:
                     if sel_txt == 'Average pr ROI map':

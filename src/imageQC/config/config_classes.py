@@ -424,7 +424,14 @@ class ParamSetXray(ParamSetCommon):
     # % of shortes center to edge distance, if zero = center of quadrants
     hom_roi_rotation: float = 0.
     # if non-zero - same distance to center for all (half if distance is zero)
-    hom_tab_alt: int = 0  # alternatives for what to calculate in table
+    hom_tab_alt: int = 0  # alternatives TODO change variablename to hom_type
+    hom_variance: bool = False
+    hom_roi_size_variance: float = 2.
+    hom_mask_max: bool = False
+    hom_mask_outer_mm: float = 0.
+    hom_ignore_roi_percent: int = 0
+    hom_deviating_pixels: float = 20.
+    hom_deviating_rois: float = 15.
     noi_percent: int = 90
     mtf_roi_size_x: int = 20.
     mtf_roi_size_y: int = 50.
@@ -600,7 +607,7 @@ class ParamSetPET(ParamSetCommon):
     mtf_type: int = 2  # 0=point, 1=line source, 2=line source, sliding window
     mtf_roi_size: float = 60.
     mtf_background_width: float = 5.
-    mtf_line_tolerance: int = 50
+    mtf_line_tolerance: int = 30
     # ignore slices having max value differing more than % from mean of 3 highest max
     mtf_sliding_window: int = 5  # number of slices to use if line sliding window
     mtf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT

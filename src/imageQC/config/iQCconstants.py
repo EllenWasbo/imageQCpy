@@ -75,9 +75,11 @@ ALTERNATIVES = {
         },
     'Xray': {
         'ROI': ALTERNATIVES_ROI,
-        'Hom': ['Avg and stdev for each ROI',
-                'Avg for each ROI + difference from avg of all',
-                'Avg for each ROI + % difference from avg of all']
+        'Hom': ['Central + quadrants ROI, avg and stdev for each ROI',
+                'Central + quadrants ROI, avg + difference from overall average',
+                'Central + quadrants ROI, avg + % difference from overall average',
+                'Flat field test from Mammo'],
+        # 'AAPM recommendations?'
         },
     'Mammo': {
        'ROI': ALTERNATIVES_ROI,
@@ -180,7 +182,10 @@ HEADERS = {
                      'ROI4 - avg'],
             'alt2': ['Center', 'ROI1 UL', 'ROI2 LL', 'ROI3 UR', 'ROI4 LR',
                      'C - avg %', 'ROI1 - avg %', 'ROI2 - avg %',
-                     'ROI3 - avg %', 'ROI4 - avg %']
+                     'ROI3 - avg %', 'ROI4 - avg %'],
+            'alt3': ['Avg', 'Avg SNR', 'n ROIs',
+                     'Deviating avgs', 'Deviating SNRs', 'Deviating ROIs',
+                     '% dev ROIs', 'Deviating pixels', '% dev pixels']
             },
         'Noi': {'alt0': ['Avg pixel value', 'Noise=Stdev']},
         'MTF': {
@@ -326,6 +331,12 @@ HEADERS_SUP = {
         },
     'Xray': {
         'ROI': {'alt0': roi_headers_sup},
+        'Hom': {
+            'alt0': [], 'alt1': [], 'alt2': [],
+            'alt3': ['Min pixel', 'Max pixel', 'Min Avg', 'Max Avg',
+                 'Min SNR', 'Max SNR', 'n ROIs x', 'n ROIs y',
+                 'n masked ROIs', 'n masked pixels']
+            },
         'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2']}
         },
     'Mammo': {

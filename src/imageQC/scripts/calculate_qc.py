@@ -1954,16 +1954,28 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 res = Results(headers=headers, headers_sup=headers_sup)
             else:
                 details_dict = {}
-                sum_image = matrix[images_to_test[0]]
-                if len(images_to_test) > 1:
-                    for imgNo in images_to_test[1:]:
-                        sum_image = np.add(sum_image, matrix[imgNo])
-                roi_array, errmsg = get_rois(
-                    sum_image, images_to_test[0], input_main)
-                if paramset.mtf_type == 2 and modality == 'CT':
+                if alt == 4:
+                    roi_array, errmsg = get_rois(
+                        matrix[images_to_test[0]], images_to_test[0], input_main)
+                else:
+                    sum_image = matrix[images_to_test[0]]
+                    if len(images_to_test) > 1:
+                        for imgNo in images_to_test[1:]:
+                            sum_image = np.add(sum_image, matrix[imgNo])
+                    roi_array, errmsg = get_rois(
+                        sum_image, images_to_test[0], input_main)
+                if alt == 2 and modality == 'CT':
+                    roi_array_inner = roi_array
+                elif alt == 4:
                     roi_array_inner = roi_array
                 else:
                     roi_array_inner = roi_array[0]
+
+                background_subtract = False
+                if modality == 'CT' and paramset.mtf_type == 1:
+                    background_subtract = True
+                elif modality in ['PET', 'SPECT'] and paramset.mtf_type < 3:
+                    background_subtract = True
 
                 rows = np.max(roi_array_inner, axis=1)
                 cols = np.max(roi_array_inner, axis=0)
@@ -1971,7 +1983,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 for sli in matrix:
                     if sli is not None:
                         this_sub = sli[rows][:, cols]
-                        if paramset.mtf_type == 1:  # background subtract
+                        if background_subtract:
                             arr = np.ma.masked_array(
                                 sli, mask=np.invert(roi_array[1]))
                             this_sub = this_sub - np.mean(arr)
@@ -1980,7 +1992,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         sub.append(None)
 
                 pr_image = False
-                if paramset.mtf_type == 1:  # wire
+                if paramset.mtf_type == 1:  # wire/line
                     if len(images_to_test) > 2:
                         details_dict, errmsg = calculate_MTF_3d_line(
                             sub, roi_array_inner[rows][:, cols], images_to_test,
@@ -2011,15 +2023,26 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                             details_dict, errmsg = calculate_MTF_3d_line(
                                 sub, roi_array_inner[rows][:, cols], images_to_test,
                                 img_infos, paramset)
-
                         else:
                             errmsg = 'At least 3 images required for MTF wire/line in 3d'
+                elif paramset.mtf_type >= 3:  # z-resolution
+                    pr_image = False
+                    if len(images_to_test) > 4:
+                        if paramset.mtf_type == 3:  # line
+                            details_dict, errmsg = calculate_MTF_3d_line(
+                                sub, roi_array_inner[rows][:, cols], images_to_test,
+                                img_infos, paramset)
+                        elif paramset.mtf_type == 4:  # edge
+                            details_dict, errmsg = calculate_MTF_3d_z_edge(
+                                sub, roi_array_inner[rows][:, cols], images_to_test,
+                                img_infos, paramset)
+                    else:
+                        errmsg = 'At least 5 images required for z-resolution'
 
                 values = None
                 values_sup = None
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
                 if pr_image:
-                    # paramset.mtf_type == 2 and modality in ['SPECT', 'PET']:
                     offset_max = []
                     pix = img_infos[images_to_test[0]].pix[0]
                     for sli in matrix:
@@ -2063,20 +2086,22 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 else:
                     try:
                         values = details_dict[0][prefix + 'MTF_details']['values']
-                    except TypeError:
+                    except (TypeError, KeyError):
                         pass
                     try:
                         values_sup = list(details_dict[0][
                             'gMTF_details']['LSF_fit_params'])
-                    except TypeError:
+                    except (TypeError, KeyError):
                         pass
-                    try:  # x-dir, y-dir
+                    try:  # x-dir, y-dir or  2 lines
                         values.extend(
                             details_dict[1][prefix + 'MTF_details']['values'])
                         values_sup.extend(list(
                             details_dict[1]['gMTF_details']['LSF_fit_params']))
                     except (IndexError, KeyError, AttributeError):
-                        pass
+                        if paramset.mtf_type == 3 and values:
+                            values.extend([None] * len(values))
+                            values_sup.extend([None] * len(values_sup))
                     values=[values]
                     values_sup=[values_sup]
 
@@ -2907,7 +2932,7 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
     Parameters
     ----------
     matrix : numpy.2darray or list of numpy.array
-        list of 2d part of slice limited to disc (or None if ignored slice)
+        list of 2d part of slice limited ROI
     roi : numpy.2darray of bool
         2d part of larger roi
     images_to_test : list of int
@@ -2933,16 +2958,17 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
     common_details_dict['zpos_marked_images'] = zpos
 
     ignore_slices = []
-    try:  # ignore slices with max outside tolerance
-        tolerance = paramset.mtf_line_tolerance
-        sort_idxs = np.argsort(max_values)
-        max_n_highest = np.mean(
-            max_values[sort_idxs[-3:]])
-        diff = 100/max_n_highest * (np.array(max_values) - max_n_highest)
-        idxs = np.where(np.abs(diff) > tolerance)
-        ignore_slices = list(idxs[0])
-    except AttributeError:
-        pass
+    if paramset.mtf_type < 3:  # not performed for z-resolution
+        try:  # ignore slices with max outside tolerance
+            tolerance = paramset.mtf_line_tolerance
+            sort_idxs = np.argsort(max_values)
+            max_n_highest = np.mean(
+                max_values[sort_idxs[-3:]])
+            diff = 100/max_n_highest * (np.array(max_values) - max_n_highest)
+            idxs = np.where(np.abs(diff) > tolerance)
+            ignore_slices = list(idxs[0])
+        except AttributeError:
+            pass
 
     proceed = True
     zpos_used = None
@@ -2975,10 +3001,10 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
 
                 details_dict_this, errmsg_this = calculate_MTF_2d_line_edge(
                     matrix_xz, pix, paramset, mode='line',
-                    vertical_positions_mm=zpos_used)
+                    vertical_positions_mm=zpos_used, rotate='no')
                 details_dict.append(details_dict_this)
                 errmsg.append(errmsg_this)
-        else:  # sliding window
+        elif paramset.mtf_type == 2:  # sliding window
             n_slices = paramset.mtf_sliding_window
             n_margin = n_slices // 2
             details_dict = [None] * n_margin
@@ -2994,12 +3020,80 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
                         matrix_xz = np.sum(matrix_this, axis=axis)
                         details_dict_this, errmsg_this = calculate_MTF_2d_line_edge(
                             matrix_xz, pix, paramset, mode='line',
-                            vertical_positions_mm=vert_pos, recalculate_halfmax=True)
+                            vertical_positions_mm=vert_pos, recalculate_halfmax=True,
+                            rotate='no')
                         details_img.append(details_dict_this)
                         if errmsg_this:
                             errmsg.append(f'Center slice number {zz}, axis {i}: {errmsg_this}')
                     details_dict.append(details_img)
             details_dict.extend([None] * n_margin)
+        elif paramset.mtf_type == 3:  # z-resolution line
+            halfmax = 0.5 * (np.max(max_values) + np.min(max_values))
+            above_halfmax = np.where(max_values > halfmax)
+            groups = np.diff(above_halfmax)
+            start_group2 = np.where(groups[0] > 1)
+            n_groups = 0
+            idxs = [None, None]  # first slice of groups
+            idxs_end = [None, None]  # last slice of groups
+
+            z_diffs = np.diff(zpos)
+            z_dist = z_diffs[0]
+            if np.min(z_diffs) < np.max(z_diffs):
+                errmsg.append('NB: z-increment differ for the slices. Could cause erroneous results.')
+
+            margin = paramset.mtf_roi_size // z_dist
+            if margin < 2:
+                errmsg.append(
+                    'ROI radius used to select images. Set > 2 * slice thickness.')
+            else:
+                if len(start_group2[0]) == 1:
+                    n_groups = 2
+                    halfmax_end_group1 = above_halfmax[0][start_group2[0][0]]
+                    mid_slice_1 = (
+                        above_halfmax[0][0] + halfmax_end_group1) // 2
+                    halfmax_start_group2 = above_halfmax[0][start_group2[0][0] + 1]
+                    mid_slice_2 = (
+                        halfmax_start_group2 + above_halfmax[0][-1]) // 2
+                    idxs[0] = int(max([0, mid_slice_1 - margin]))
+                    idxs_end[0] = int(min([mid_slice_1 + margin, halfmax_start_group2 - 1]))
+                    idxs[1] = int(max([halfmax_end_group1 + 1, mid_slice_2 - margin]))
+                    idxs_end[1] = int(min([mid_slice_2 + margin, len(matrix)]))
+                elif len(start_group2[0]) == 0:
+                    n_groups = 1
+                    mid_slice = (
+                        above_halfmax[0][-1] + above_halfmax[0][0]) // 2
+                    idxs[0] = int(max([0, mid_slice - margin]))
+                    idxs_end[0] = int(min([mid_slice + margin, len(matrix)]))
+
+                empty = np.full(max_values.shape, np.nan)
+                common_details_dict['max_roi_used'] = np.copy(empty)
+                common_details_dict['zpos_used'] = np.copy(empty)
+                if n_groups == 2:
+                    common_details_dict['max_roi_used_2'] = np.copy(empty)
+                    common_details_dict['zpos_used_2'] = np.copy(empty)
+
+                for group in range(n_groups):
+                    suffix = ''
+                    if group == 1:
+                        suffix = '_2'
+                    common_details_dict[f'max_roi_used{suffix}'][
+                        idxs[group] : idxs_end[group]] = max_values[
+                            idxs[group] : idxs_end[group]]
+                    common_details_dict[f'zpos_used{suffix}'][
+                        idxs[group] : idxs_end[group]] = zpos[
+                            idxs[group] : idxs_end[group]]
+                    matrix_this = matrix[idxs[group] : idxs_end[group]]
+                    matrix_xz = np.sum(matrix_this, axis=1)  # assume line in ~x dir 
+                    # TODO allow also vertical line
+
+                    # rotate matrix and use slice_thick as pix and xrange as vertical range
+                    xpos = np.arange(matrix_xz.shape[1]) * pix
+                    matrix_zx = np.rot90(matrix_xz)
+                    details_dict_this, errmsg_this = calculate_MTF_2d_line_edge(
+                        matrix_zx, z_dist, paramset, mode='line',
+                        vertical_positions_mm=xpos, rotate='no')
+                    details_dict.append(details_dict_this)
+                    errmsg.append(errmsg_this)
 
     details_dict.append(common_details_dict)
 
@@ -3008,6 +3102,7 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
 
 def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                                pr_roi=False, vertical_positions_mm=None,
+                               rotate='auto',
                                recalculate_halfmax=False):
     """Calculate MTF from straight line.
 
@@ -3026,6 +3121,9 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
     vertical_positions_mm : list of float, optional
         if vertical pix size != pix and possiby irregular. Default is None
         list of y pix positions in mm
+    rotate: str
+        auto to auto-detect direction
+        no/yes to avoid/force matrix rotiation (ensure vertical)
     recalculate_halfmax: bool
         Option to allow for recalculating halfmax when finding line position. Default is False.
 
@@ -3056,15 +3154,23 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
             y1 = np.mean(sub[:2, :])
             y2 = np.mean(sub[-2:, :])
             diff_y = abs(y1 - y2)
+            halfmax = 0.5 * (x1 + x2)
             if diff_x < diff_y:
+                if rotate == 'auto':
+                    sub = np.rot90(sub)
+                    halfmax = 0.5 * (y1 + y2)
+            if rotate == 'yes':
                 sub = np.rot90(sub)
                 halfmax = 0.5 * (y1 + y2)
-            else:
-                halfmax = 0.5 * (x1 + x2)
         else:  # line
             prof_y = np.sum(sub, axis=1)
             prof_x = np.sum(sub, axis=0)
-            if np.max(prof_y) > np.max(prof_x):
+            range_y = np.max(prof_y) - np.min(prof_y)
+            range_x = np.max(prof_x) - np.min(prof_x)
+            if range_y > range_x:
+                if rotate == 'auto':
+                    sub = np.rot90(sub)
+            if rotate == 'yes':
                 sub = np.rot90(sub)
             halfmax = 0.5 * (np.max(sub) + np.min(sub))
         return (sub, halfmax)
@@ -3428,6 +3534,180 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset, images_to_test):
 
     return (details_dict, errmsg)
 
+
+def calculate_MTF_3d_z_edge(matrix, roi, images_to_test, image_infos, paramset):
+    """Calculate MTF from edge ~parallel to slices.
+
+    Parameters
+    ----------
+    matrix : numpy.2darray or list of numpy.array
+        list of 2d part of slice limited by ROI
+    roi : numpy.2darray of bool
+        2d part of larger roi
+    images_to_test : list of int
+        image numbers to test
+    image_infos : list of DcmInfo
+        DcmInfo as defined in scripts/dcm.py
+    paramset : ParamSetXX
+        depending on modality
+
+    Returns
+    -------
+    details_dict: list of dict
+        x_dir, y_dir, common_details
+    errmsg : list of str
+    """
+    details_dict = []
+    common_details_dict = {}
+    errmsg = []
+    matrix = [sli for sli in matrix if sli is not None]
+    zpos = np.array([image_infos[sli].zpos for sli in images_to_test])
+    avg_values = np.array([np.mean(sli) for sli in matrix])
+    common_details_dict['max_roi_marked_images'] = avg_values
+    common_details_dict['zpos_marked_images'] = zpos
+
+    pix = image_infos[images_to_test[0]].pix[0]
+    z_diffs = np.diff(zpos)
+    z_dist = z_diffs[0]
+    if np.min(z_diffs) < np.max(z_diffs):
+        errmsg.append('NB: z-increment differ for the slices. Could cause erroneous results.')
+
+    halfmax = 0.5 * (np.max(avg_values) + np.min(avg_values))
+    above_halfmax = np.where(avg_values > halfmax)
+    margin = paramset.mtf_roi_size // z_dist
+
+    proceed = False
+    if margin < 2:
+        errmsg.append(
+            'ROI radius used to select images. Set > 2 * slice thickness.')
+    else:
+        diff = np.diff(avg_values)
+        if np.abs(np.min(diff)) > np.abs(np.max(diff)):  # high values first
+            mid_slice = above_halfmax[0][-1]
+        else:
+            mid_slice = above_halfmax[0][0]
+        idx_start = int(max([0, mid_slice - margin]))
+        idx_end = int(min([mid_slice + margin, len(matrix)]))
+
+        if idx_end - idx_start > 5:
+            proceed = True
+        else:
+            errmsg.append(
+                'Failed to find edge in z-direction with reasonable margin.')
+
+    if proceed:
+        empty = np.full(avg_values.shape, np.nan)
+        common_details_dict['max_roi_used'] = np.copy(empty)
+        common_details_dict['zpos_used'] = np.copy(empty)
+        common_details_dict['max_roi_used'][
+            idx_start : idx_end] = avg_values[idx_start : idx_end]
+        zpos_used = zpos[idx_start : idx_end]
+        common_details_dict['zpos_used'][
+                idx_start : idx_end] = zpos_used
+        matrix_this = matrix[idx_start : idx_end]
+
+        sz_y, sz_x = matrix_this[0].shape
+        edge_pos = np.full(matrix_this[0].shape, np.nan)
+
+        sub = np.array(matrix_this)
+        for i in range(sz_x):
+            for j in range(sz_y):
+                # TODO make polyfit_2d ignore nan #if roi[j, i]:
+                smoothed = sp.ndimage.gaussian_filter1d(
+                    sub[:, j, i], sigma=3)
+                res = mmcalc.get_curve_values(
+                    zpos_used, smoothed, [halfmax])
+                edge_pos[j, i] = res[0]
+        fit = mmcalc.polyfit_2d(edge_pos, max_order=1)
+        abcd = mmcalc.get_plane_from_3_points(
+            (fit[0, 0], 0, 0),
+            (fit[-1, 0], pix*(sz_y-1), 0),
+            (fit[0, -1], 0, pix*(sz_x-1))
+            )
+        coords = np.meshgrid(
+            zpos_used, pix * np.arange(sz_y), pix * np.arange(sz_x),
+            indexing='ij')
+        # display fit plane Z = (d - a*X - b*Y) / c
+        dist_matrix = mmcalc.get_distance_3d_plane(coords, abcd)
+
+        dists_flat = dist_matrix.flatten()
+        sort_idxs = np.argsort(dists_flat)
+        dists = dists_flat[sort_idxs]
+        values = sub.flatten()
+        values = values[sort_idxs]
+
+        step_size = .1 * z_dist
+        new_x, new_y = mmcalc.resample_by_binning(
+            input_y=values, input_x=dists, first_step=np.min(dists),
+            step=step_size)
+        sigma_f = 5.
+        LSF, LSF_no_filt, ESF_filtered = mmcalc.ESF_to_LSF(
+            new_y, prefilter_sigma=sigma_f)
+
+        width, center = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/2)
+        if width is not None:
+            # Discrete MTF
+            fade_lsf_fwhm = 0
+            cw = 0
+            cwf = 0
+            cut_lsf = paramset.mtf_cut_lsf
+            cut_lsf_fwhm = paramset.mtf_cut_lsf_w
+            fade_lsf_fwhm = paramset.mtf_cut_lsf_w_fade
+            if cut_lsf:
+                LSF_no_filt, cw, cwf = mmcalc.cut_and_fade_LSF(
+                    LSF_no_filt, center=center, fwhm=width,
+                    cut_width=cut_lsf_fwhm, fade_width=fade_lsf_fwhm)
+            dMTF_details = mmcalc.get_MTF_discrete(LSF_no_filt, dx=step_size)
+            dMTF_details['cut_width'] = cw * step_size
+            dMTF_details['cut_width_fade'] = cwf * step_size
+
+            LSF_x = step_size * (np.arange(LSF.size) - center)
+
+            gMTF_details, err = mmcalc.get_MTF_gauss(
+                LSF, dx=step_size, prefilter_sigma=sigma_f*step_size, gaussfit='double')
+
+            if err is not None:
+                errmsg.append(err)
+            else:
+                if isinstance(paramset, cfc.ParamSetCT):
+                    gMTF_details['values'] = mmcalc.get_curve_values(
+                        gMTF_details['MTF_freq'], gMTF_details['MTF'],
+                        [0.5, 0.1, 0.02])
+                else:  # SPECT or PET
+                    fwtm, _ = mmcalc.get_width_center_at_threshold(
+                        LSF, np.max(LSF)/10)
+                    if width is not None:
+                        width = width * step_size
+                    if fwtm is not None:
+                        fwtm = fwtm * step_size
+                    gMTF_details['values'] = [width, fwtm]
+
+            if isinstance(paramset, cfc.ParamSetCT):
+                dMTF_details['values'] = mmcalc.get_curve_values(
+                    dMTF_details['MTF_freq'], dMTF_details['MTF'],
+                    [0.5, 0.1, 0.02],
+                    force_first_below=True)
+            else:  # SPECT or PET
+                fwtm, _ = mmcalc.get_width_center_at_threshold(
+                    LSF, np.max(LSF)/10)
+                if width is not None:
+                    width = width * step_size
+                if fwtm is not None:
+                    fwtm = fwtm * step_size
+                dMTF_details['values'] = [width, fwtm]
+
+            details_dict = [{
+                'matrix': matrix,
+                'LSF_x': LSF_x, 'LSF': LSF_no_filt,
+                'sigma_prefilter': sigma_f*step_size,
+                'sorted_pixels_x': dists, 'sorted_pixels': values,
+                'interpolated_x': new_x, 'interpolated': new_y,
+                'presmoothed': ESF_filtered,
+                'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details}]
+
+    details_dict.append(common_details_dict)
+
+    return (details_dict, errmsg)
 
 def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
     """Calculate NPS for each roi in array.

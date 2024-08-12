@@ -41,6 +41,7 @@ If adding icons, a dark-mode icon is also needed.
 - add ParamSet<mod> in config/config_classes.py + add this to class ParamSet and add paramsets_<mod> in LastModified
 - add ParamsTab<mod> in ui/ui_main_test_tabs.py
 - add default DCM settings in config_defaults/tag_patterns_test_dcm.yaml (and re-run pyrcc5 as explained above)
+- add Modality to dash_app (table_overview)
 - consider adding variants to scripts/dcm.py - get_modality
 
 ## When adding new testcode (analyse type)

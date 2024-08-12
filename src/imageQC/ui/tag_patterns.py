@@ -32,7 +32,7 @@ class TagPatternTree(QWidget):
     """Widget for tag pattern and toolbar used in TagPatternWidget."""
 
     def __init__(self, parent, title='Tag pattern', typestr='sort',
-                 list_number=1, editable=True):
+                 list_number=1, editable=True, import_any=False):
         super().__init__()
         self.parent = parent
         self.parentabove = self.parent.parent
@@ -110,12 +110,19 @@ class TagPatternTree(QWidget):
                 QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
                 'Delete selected tag(s) from pattern', self)
             act_delete.triggered.connect(self.delete)
+            if import_any:
+                act_import = QAction(
+                    QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
+                    'Import tag pattern', self)
+                act_import.triggered.connect(self.import_tag_pattern)
             if self.typestr == 'sort':
                 toolb.addActions([act_sort, act_up, act_down, act_delete])
             elif self.typestr == 'none':
                 toolb.addActions([act_up, act_down, act_delete])
             else:
                 toolb.addActions([act_format_out, act_up, act_down, act_delete])
+            if import_any:
+                toolb.addAction(act_import)
             self.hlo.addWidget(toolb)
 
     def push_tag(self):
@@ -301,6 +308,23 @@ class TagPatternTree(QWidget):
             except AttributeError:
                 pass
 
+    def import_tag_pattern(self):
+        """Import tag pattern from TagPattern Format."""
+        _, _, all_temps = cff.load_settings(fname='tag_patterns_format')
+        mods = [key for key, val in all_temps.items() if val[0].label != '']
+        if len(mods) > 0:
+            dlg = TagPatternImportDialog(mods, all_temps)
+            res = dlg.exec()
+            if res:
+                sel_pattern = dlg.get_pattern()
+                if sel_pattern is not None:
+                    self.parentabove.current_template = sel_pattern
+                    self.update_data()
+        else:
+            QMessageBox.warning(
+                self, 'No templates to load',
+                'Found no defined Tag Pattern - Format. Define these in settings.')
+
     def update_data(self, set_selected=0):
         """Update table_pattern with data from current_template."""
         self.table_pattern.clear()
@@ -402,17 +426,20 @@ class TagPatternWidget(QWidget):
         vlo_pattern = QVBoxLayout()
         hlo.addLayout(vlo_pattern)
 
+        import_any = False
         if self.rename_pattern:
             tit = 'Subfolder rename pattern'
         elif self.open_files_pattern:
-            tit = 'Series indicator(s)'
+            tit = 'Tag pattern to define groups'
+            import_any=True
         else:
             tit = 'Tag pattern'
 
         self.wid_pattern = TagPatternTree(
-            self, title=tit, typestr=self.typestr, editable=editable)
+            self, title=tit, typestr=self.typestr, editable=editable,
+            import_any=import_any)
         vlo_pattern.addWidget(self.wid_pattern)
-        if self.rename_pattern or self.open_files_pattern:
+        if self.rename_pattern:  #TODO or self.open_files_pattern:
             if editable:
                 vlo_pattern.setSpacing(5)
             else:
@@ -862,3 +889,78 @@ class TagPatternTreeTestDCM(TagPatternTree):
         if current is not None:
             self.current_select = self.table_pattern.indexOfTopLevelItem(current)
             self.main.refresh_results_display(update_table=False)
+
+
+class TagPatternImportDialog(ImageQCDialog):
+    """Dialog for importing TagPatternFormat."""
+
+    def __init__(self, mods, templates):
+        super().__init__()
+        self.templates = templates
+
+        self.setWindowTitle('Import Tag Pattern')
+
+        self.current_modality = ''
+        self.current_template = None
+
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        hlo_mod = QHBoxLayout()
+        vlo.addLayout(hlo_mod)
+        hlo_mod.addWidget(QLabel('Select modality:'))
+        self.cbox_modlist = QComboBox()
+        self.cbox_modlist.setFixedWidth(200)
+        self.cbox_modlist.addItems(mods)
+        self.cbox_modlist.currentIndexChanged.connect(self.update_templist)
+        hlo_mod.addWidget(self.cbox_modlist)
+        hlo_temps = QHBoxLayout()
+        vlo.addLayout(hlo_temps)
+        hlo_temps.addWidget(QLabel('Select template:'))
+        self.cbox_templist = QComboBox()
+        self.cbox_templist.setFixedWidth(200)
+        self.cbox_templist.activated.connect(self.update_displayed_template)
+        hlo_temps.addWidget(self.cbox_templist)
+
+        self.table_pattern = QTreeWidget()
+        self.table_pattern.setColumnCount(2)
+        self.table_pattern.setColumnWidth(0, 200)
+        self.table_pattern.setColumnWidth(1, 200)
+        self.table_pattern.setHeaderLabels(['Tag', 'Format'])
+
+        vlo.addWidget(self.table_pattern)
+        self.table_pattern.setRootIsDecorated(False)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vlo.addWidget(self.buttonBox)
+
+        self.update_templist()
+
+    def get_pattern(self):
+        """Get TagPattern from calling widget."""
+        return self.current_template
+
+    def update_templist(self):
+        """Update available list of templates."""
+        self.current_modality = self.cbox_modlist.currentText()
+        temp_labels = [
+            temp.label for temp in self.templates[self.current_modality]]
+        self.cbox_templist.clear()
+        self.cbox_templist.addItems(temp_labels)
+        self.cbox_templist.setCurrentIndex(0)
+        self.update_displayed_template()
+
+    def update_displayed_template(self):
+        """Update display of selected template."""
+        self.table_pattern.clear()
+        sel_idx = self.cbox_templist.currentIndex()
+        self.current_template = self.templates[self.current_modality][sel_idx]
+        list_tags = self.current_template.list_tags
+        if len(list_tags) > 0:
+            for rowno, tagname in enumerate(list_tags):
+                infotext = self.current_template.list_format[rowno]
+                row_strings = [tagname, infotext]
+                item = QTreeWidgetItem(row_strings)
+                self.table_pattern.addTopLevelItem(item)

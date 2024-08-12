@@ -1140,9 +1140,15 @@ def run_template_vendor(auto_template, modality,
                         new_val = curr_val + int(100/len(files))
                         parent_widget.progress_modal.setValue(new_val)
                 res = read_vendor_QC_reports.read_vendor_template(auto_template, file)
+                proceed = True
                 if res is None:
                     log.append(f'\t Found no expected content in {file}')
+                    proceed = False
                 else:
+                    if res['status'] is False:
+                        log.append(f'\t {res["errmmsg"]} {file}')
+                        proceed = False
+                if proceed:
                     status, print_array = append_auto_res_vendor(
                         auto_template.path_output,
                         res, to_file=write_ok, decimal_mark=decimal_mark

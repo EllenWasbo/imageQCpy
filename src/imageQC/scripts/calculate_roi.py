@@ -187,16 +187,42 @@ def get_rois(image, image_number, input_main):
                     offcenter_xy=off_center_xy)
             else:  # circular edge / wire or cylinder source / line source
                 if paramset.mtf_auto_center:
-                    filt_img = ndimage.gaussian_filter(image, sigma=5)
+                    sigma = 5
+                    if paramset.mtf_type == 2 and input_main.current_modality == 'CT':
+                        summed_img = image
+                    else:
+                        if 'MainWindow' in str(type(input_main)):
+                            if input_main.summed_img is None:  # avoid each time active slice changes
+                                input_main.summed_img, _ = dcm.sum_marked_images(
+                                    input_main.imgs,
+                                    input_main.tree_file_list.get_marked_imgs_current_test(),
+                                    tag_infos=input_main.tag_infos
+                                    )
+                            summed_img = input_main.summed_img
+                        else:
+                            summed_img = image
+                        if paramset.mtf_type == 3:  # line z-res
+                            sigma = 100
+                        elif paramset.mtf_type == 4:  # cylinder z res
+                            sigma = 100
+
+                    filt_img = ndimage.gaussian_filter(summed_img, sigma=sigma)
                     yxmax = get_max_pos_yx(filt_img)
-                    off_center_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
+                    off_center_xy = np.array(yxmax) - 0.5 * np.array(summed_img.shape)
 
                 if paramset.mtf_type == 2 and input_main.current_modality == 'CT':
                     # circular edge
                     roi_this = get_roi_circle(
                         img_shape, off_center_xy, roi_size_in_pix)
                     bg_rim = False
-                else:  # wire/line
+                elif paramset.mtf_type == 4:  # z res cylinder
+                    roi_this = get_roi_rectangle(
+                        img_shape,
+                        roi_width=2*roi_size_in_pix + 1,
+                        roi_height=2*roi_size_in_pix + 1,
+                        offcenter_xy=off_center_xy)
+                    bg_rim = False
+                else:  # wire/line or z-res cylinder
                     roi_this = [[], []]
                     roi_this[0] = get_roi_rectangle(
                         img_shape,

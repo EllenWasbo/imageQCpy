@@ -1,3 +1,16 @@
+#v3.1.2
+_xxx _xx, 2024_
+
+New functionalities:
+- CT/SPECT/PET: Option to calculate z-resolution from wire/linesource (in ~x direction) and from oblique edge in z-direction
+- In the Advanced open files - dialog: option to import saved Tag Pattern - Format for grouping images.
+
+Changes:
+- Changes to calculations of MTF from line source: more robust on how to interpret the direction of the source 
+
+Fixes:
+- Avoiding crash and output to automation results when CT Siemens constancy file content is shorter than useful content.
+
 #v3.1.1
 _Aug _07, 2024_
 

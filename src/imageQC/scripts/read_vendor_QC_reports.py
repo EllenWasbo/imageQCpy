@@ -1507,56 +1507,62 @@ def read_Siemens_CT_QC(txt):
             match_str = search_strings['tube_assembly']+'*'
             serial_tube_A = '-'
             serial_tube_B = '-'
-            rownos = [
-                index for index in range(50)
-                if fnmatch(txt[index], match_str)]
-            if len(rownos) > 0:
-                split_txt = txt[rownos[0]].split(' ')
-                if len(split_txt) >= 4:
-                    serial_tube_A = split_txt[-2]
-                else:
-                    serial_tube_A = def_err_text
-                    errmsg = def_err_msg
-                if len(rownos) > 1:
-                    split_txt = txt[rownos[1]].split(' ')
-                    if len(split_txt) >= 4:
-                        serial_tube_B = split_txt[-2]
-                    else:
-                        serial_tube_B = def_err_text
-                        errmsg = def_err_msg
-
-            # get tester_name
-            tester_name = ''
-            match_str = search_strings['tester_name']+'*'
-            rownos = [
-                index for index in range(50)
-                if fnmatch(txt[index], match_str)]
-            if len(rownos) > 0:
-                split_txt = txt[rownos[0]].split(search_strings['customer'])
-                split_txt = split_txt[0].split()
-                tester_name = ' '.join(
-                    split_txt[len(search_strings['tester_name'].split()):])
-
-            # get product_name
-            product_name = ''
-            search_txt = search_strings['product_name'][0:max_short_txt]
-            if search_txt in short_txt:
-                rowno = short_txt.index(search_txt)
-                split_txt = txt[rowno].split(search_strings['customer'])
-                if len(split_txt) == 1:
-                    split_txt = txt[rowno].split(search_strings['zipcode'])
-                    if len(split_txt) == 1:
-                        split_txt = txt[rowno].split(search_strings['street'])
-                split_txt = split_txt[0].split()
-                product_name = ' '.join(
-                    split_txt[len(search_strings['product_name'].split()):])
-
-            if file_type == 'Intevo':
+            if len(txt) < 51:
                 proceed = False
-                info = [date, tester_name, product_name,
-                        serial_number, serial_tube_A]
-                data = read_Siemens_CT_QC_Intevo(
-                    txt, type_str, search_strings, info, errmsg)
+                data = {'status': False,
+                        'errmsg': 'Content of file is too short',
+                        'values': [], 'headers': []}
+            else:
+                rownos = [
+                    index for index in range(50)
+                    if fnmatch(txt[index], match_str)]
+                if len(rownos) > 0:
+                    split_txt = txt[rownos[0]].split(' ')
+                    if len(split_txt) >= 4:
+                        serial_tube_A = split_txt[-2]
+                    else:
+                        serial_tube_A = def_err_text
+                        errmsg = def_err_msg
+                    if len(rownos) > 1:
+                        split_txt = txt[rownos[1]].split(' ')
+                        if len(split_txt) >= 4:
+                            serial_tube_B = split_txt[-2]
+                        else:
+                            serial_tube_B = def_err_text
+                            errmsg = def_err_msg
+    
+                # get tester_name
+                tester_name = ''
+                match_str = search_strings['tester_name']+'*'
+                rownos = [
+                    index for index in range(50)
+                    if fnmatch(txt[index], match_str)]
+                if len(rownos) > 0:
+                    split_txt = txt[rownos[0]].split(search_strings['customer'])
+                    split_txt = split_txt[0].split()
+                    tester_name = ' '.join(
+                        split_txt[len(search_strings['tester_name'].split()):])
+    
+                # get product_name
+                product_name = ''
+                search_txt = search_strings['product_name'][0:max_short_txt]
+                if search_txt in short_txt:
+                    rowno = short_txt.index(search_txt)
+                    split_txt = txt[rowno].split(search_strings['customer'])
+                    if len(split_txt) == 1:
+                        split_txt = txt[rowno].split(search_strings['zipcode'])
+                        if len(split_txt) == 1:
+                            split_txt = txt[rowno].split(search_strings['street'])
+                    split_txt = split_txt[0].split()
+                    product_name = ' '.join(
+                        split_txt[len(search_strings['product_name'].split()):])
+    
+                if file_type == 'Intevo':
+                    proceed = False
+                    info = [date, tester_name, product_name,
+                            serial_number, serial_tube_A]
+                    data = read_Siemens_CT_QC_Intevo(
+                        txt, type_str, search_strings, info, errmsg)
 
         if proceed:
             status = True

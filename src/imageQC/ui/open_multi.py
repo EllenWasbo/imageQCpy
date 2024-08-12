@@ -85,8 +85,9 @@ class OpenMultiWidget(QWidget):
         self.imgs = []
         self.open_imgs = []
         self.current_template = input_template
-        self.wid_series_pattern = TagPatternWidget(self, typestr='format',
-                                                   lock_on_general=lock_on_general)
+        self.wid_series_pattern = TagPatternWidget(
+            self, typestr='format', lock_on_general=lock_on_general,
+            open_files_pattern=True)
         self.tag_infos = self.main.tag_infos
 
         modality = ''
@@ -220,6 +221,10 @@ class OpenMultiWidget(QWidget):
             'Add images to list using pattern >>')
         btn_push_pattern.clicked.connect(self.push_pattern)
         vlo_gb.addWidget(btn_push_pattern)
+        vlo_images.addWidget(uir.LabelItalic(
+            'Images listed according to found modality'))
+        vlo_images.addWidget(uir.LabelItalic(' and corresponding '
+            'Special tag patterns - File list display'))
 
         vlo_push = QVBoxLayout()
         hlo_lists.addLayout(vlo_push)

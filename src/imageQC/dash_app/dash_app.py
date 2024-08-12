@@ -86,15 +86,19 @@ def get_data():
         for mod, template_list in template.items():
             param_labels = []
             decimarks = []
+            lim_labels = []
             if mod not in [*modality_dict]:
                 modality_dict[mod] = []
-            lim_labels = [lim.label for lim in lim_plots[mod]]
-            if auto_no == 0:
-                param_labels = [paramset.label for paramset in paramsets[mod]]
-                decimarks = [paramset.output.decimal_mark
-                             for paramset in paramsets[mod]]
-            else:
-                decimarks = [paramsets[mod][0].output.decimal_mark]
+            try:
+                lim_labels = [lim.label for lim in lim_plots[mod]]
+                if auto_no == 0:
+                    param_labels = [paramset.label for paramset in paramsets[mod]]
+                    decimarks = [paramset.output.decimal_mark
+                                 for paramset in paramsets[mod]]
+                else:
+                    decimarks = [paramsets[mod][0].output.decimal_mark]
+            except KeyError:
+                pass
             for temp in template_list:
                 if all([
                         temp.label != '',
@@ -314,6 +318,7 @@ def run_dash_app(dash_settings=None):
             dbc.Row([
                 dbc.Col(table_overview('CT')),
                 dbc.Col(table_overview('Xray')),
+                dbc.Col(table_overview('Mammo')),
                 dbc.Col([
                     dbc.Row(table_overview('NM')),
                     dbc.Row(table_overview('SPECT')),

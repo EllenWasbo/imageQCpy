@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when major changes, B when new exe release (to come),
 #   C new python release (or small fix to exe)
-VERSION = '3.1.1'
+VERSION = '3.1.2'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -71,7 +71,8 @@ ALTERNATIVES = {
                 'Vertical beaded ramps GE phantom',
                 'Wire ramp Siemens',
                 'Horizontal wire ramps GE QA phantom'],
-        'MTF': ['bead', 'wire', 'circular edge'],
+        'MTF': ['bead', 'wire', 'circular edge',
+                'z-resolution, wire', 'z-resolution, edge'],
         },
     'Xray': {
         'ROI': ALTERNATIVES_ROI,
@@ -95,7 +96,8 @@ ALTERNATIVES = {
         },
     'SPECT': {
         'ROI': ALTERNATIVES_ROI,
-        'MTF': ['Point source', 'Line source', 'Line source, sliding window']
+        'MTF': ['Point source', 'Line source', 'Line source, sliding window',
+                'z-resolution, line source(s)', 'z-resolution, edge']
         },
     'PET': {
         'ROI': ALTERNATIVES_ROI,
@@ -105,7 +107,8 @@ ALTERNATIVES = {
                 'Bq/ml from images, average',
                 'Bq/ml from images, max',
                 'Bq/ml from images, peak'],
-        'MTF': ['Point source', 'Line source', 'Line source, sliding window']
+        'MTF': ['Point source', 'Line source', 'Line source, sliding window',
+                'z-resolution, line source(s)', 'z-resolution, edge']
         },
     'MR': {
         'ROI': ALTERNATIVES_ROI,
@@ -158,7 +161,10 @@ HEADERS = {
                      'MTFy 50%', 'MTFy 10%', 'MTFy 2%'],
             'alt1': ['MTFx 50%', 'MTFx 10%', 'MTFx 2%',
                      'MTFy 50%', 'MTFy 10%', 'MTFy 2%'],
-            'alt2': ['MTF 50%', 'MTF 10%', 'MTF 2%']
+            'alt2': ['MTF 50%', 'MTF 10%', 'MTF 2%'],
+            'alt3': ['MTFz 50% line1', 'MTFz 10% line1', 'MTFz 2% line1',
+                     'MTFz 50% line2', 'MTFz 10% line2', 'MTFz 2% line2'],
+            'alt4': ['MTFz 50%', 'MTFz 10%', 'MTFz 2%'],
             },
         'TTF': {
             'alt0': ['Material', 'MTF 50%', 'MTF 10%', 'MTF 2%'],
@@ -253,7 +259,11 @@ HEADERS = {
         'ROI': {'alt0': roi_headers},
         'Num': {},
         'MTF': {
-            'altAll': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y']
+            'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt2': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt3': ['FWHM z line1', 'FWTM z line1', 'FWHM z line2', 'FWTM z line2'],
+            'alt4': ['FWHM z', 'FWTM z']
             },
         'Rin': {'alt0': ['Min diff from trend', 'Max diff from trend']},
         },
@@ -281,7 +291,11 @@ HEADERS = {
             'alt5': [f'Peak {i+1}' for i in range(6)] + ['background']
             },
         'MTF': {
-            'altAll': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y']
+            'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt2': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt3': ['FWHM z line1', 'FWTM z line1', 'FWHM z line2', 'FWTM z line2'],
+            'alt4': ['FWHM z', 'FWTM z']
             },
         },
     'MR': {
@@ -323,7 +337,10 @@ HEADERS_SUP = {
                      'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
             'alt1': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
                      'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
-            'alt2': ['A1', 'sigma1', 'A2', 'sigma2']
+            'alt2': ['A1', 'sigma1', 'A2', 'sigma2'],
+            'alt3': ['A1 line1', 'sigma1 line1', 'A2 line1', 'sigma2 line1',
+                     'A1 line2', 'sigma1 line2', 'A2 line2', 'sigma2 line2'],
+            'alt4': ['A1', 'sigma1', 'A2', 'sigma2'],
             },
         'Dim': {
             'alt0': ['Upper', 'Lower', 'Left', 'Right', 'Diagonal 1', 'Diagonal 2']
@@ -376,7 +393,9 @@ HEADERS_SUP = {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y',
-                     'x offset (mm)', 'y offset (mm)']
+                     'x offset (mm)', 'y offset (mm)'],
+            'alt3': ['A line1', 'sigma line1', 'A line2', 'sigma line2'],
+            'alt4': ['A', 'sigma']
             },
         },
     'PET':  {
@@ -389,7 +408,9 @@ HEADERS_SUP = {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y',
-                     'x offset (mm)', 'y offset (mm)']
+                     'x offset (mm)', 'y offset (mm)'],
+            'alt3': ['A line1', 'sigma line1', 'A line2', 'sigma line2'],
+            'alt4': ['A', 'sigma']
             },
         },
     'MR': {

@@ -769,6 +769,10 @@ class ResultPlotCanvas(PlotCanvas):
                 infotext = ['gaussian', 'discrete']
                 prefix = ['g', 'd']
                 suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
+                if (
+                        self.main.current_paramset.mtf_type == 3
+                        and self.main.current_modality in ['CT', 'SPECT', 'PET']):
+                    suffix = [' line 1', ' line 2']
                 for ddno in range(2):
                     try:
                         dd = details_dicts[ddno]
@@ -865,6 +869,10 @@ class ResultPlotCanvas(PlotCanvas):
 
             linestyles = ['-', '--']
             suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
+            if (
+                    self.main.current_paramset.mtf_type == 3
+                    and self.main.current_modality in ['CT', 'SPECT', 'PET']):
+                suffix = [' line 1', ' line 2']
             lbl_prefilter = ''
             prefilter = False
             if 'sigma_prefilter' in details_dicts[0]:
@@ -1008,13 +1016,22 @@ class ResultPlotCanvas(PlotCanvas):
                 self.xtitle = 'pos (mm)'
                 self.ytitle = 'Pixel value'
                 xy_labels = False
+                line_labels = False
                 lsf_is_interp = False
                 try:
                     mtf_type = self.main.current_paramset.mtf_type
-                    if self.main.current_modality in ['CT', 'SPECT', 'PET'] and mtf_type == 1:
-                        self.ytitle = 'Summed pixel values'
-                        xy_labels = True
-                        lsf_is_interp = True
+                    if self.main.current_modality in ['CT', 'SPECT', 'PET']:
+                        if mtf_type >= 1:
+                            self.ytitle = 'Summed pixel values'
+                            xy_labels = True
+                            lsf_is_interp = True
+                            if mtf_type == 2 and self.main.current_modality == 'CT':
+                                self.ytitle = 'Pixel value'
+                                xy_labels = False
+                            elif mtf_type == 3:
+                                self.ytitle = 'Summed pixel values from front'
+                                line_labels = True
+                                xy_labels = False
                 except AttributeError:
                     pass
                 if len(sorted_pixels) == 0:
@@ -1036,6 +1053,8 @@ class ResultPlotCanvas(PlotCanvas):
                              'mediumseagreen', 'paleturquoise']  # matching r,b,g,c
                 if xy_labels:
                     suffix = [' x', ' y']
+                elif line_labels:
+                    suffix = [' line1', ' line2']
                 else:
                     suffix = [f' {x}' for x in range(len(sorted_pixels))]
                 for no, yvals in enumerate(sorted_pixels):
@@ -1106,21 +1125,28 @@ class ResultPlotCanvas(PlotCanvas):
                                  })
 
                 if lsf_is_interp:
-                    for no in range(len(details_dicts)):
-                        if 'LSF' in details_dicts[no]:
-                            self.curves.append({
-                                'label': f'Interpolated{suffix[no]}',
-                                'xvals': details_dicts[no]['LSF_x'],
-                                'yvals': details_dicts[no]['LSF'],
-                                'style': f'-{colors[no]}'
-                                 })
+                    proceed = True
+                    if self.main.current_paramset.mtf_type == 4:
+                        proceed = False
+                    elif self.main.current_paramset.mtf_type == 2:
+                        if self.main.current_modality == 'CT':
+                            proceed = False
+                    if proceed:
+                        for no in range(len(details_dicts)):
+                            if 'LSF' in details_dicts[no]:
+                                self.curves.append({
+                                    'label': f'Interpolated{suffix[no]}',
+                                    'xvals': details_dicts[no]['LSF_x'],
+                                    'yvals': details_dicts[no]['LSF'],
+                                    'style': f'-{colors[no]}'
+                                     })
 
         def prepare_plot_centered_profiles():
             proceed = True
             if 'matrix' not in details_dicts[0]:
                 proceed = False
             elif self.main.current_modality in ['CT', 'SPECT', 'PET']:
-                if self.main.current_paramset.mtf_type == 1:
+                if self.main.current_paramset.mtf_type in [1, 4]:
                     proceed = False
             elif self.main.current_modality == 'NM':
                 if self.main.current_paramset.mtf_type > 0:
@@ -1208,20 +1234,38 @@ class ResultPlotCanvas(PlotCanvas):
 
         def prepare_plot_zprofile(sel_text):
             common_details = self.main.results['MTF']['details_dict'][-1]
-            self.xtitle = 'z position (mm)'
-            if 'zpos_used' in common_details:
-                if sel_text == 'Line source max z-profile':
-                    self.ytitle = 'Max pixel value in ROI'
+            proceed = True if 'zpos_used' in common_details else False
+            if 'average' in sel_text:
+                if self.main.current_paramset.mtf_type != 4:
+                    proceed = False
+            elif 'ax ' in sel_text:  # max / Max
+                if self.main.current_paramset.mtf_type == 4:
+                    proceed = False
+
+            if proceed:
+                self.xtitle = 'z position (mm)'
+                if 'ax z-profile' in sel_text or 'average z-profile' in sel_text:
+                    word = 'Average' if 'average' in sel_text else 'Max'
+                    self.ytitle = f'{word} pixel value in ROI'
                     self.curves.append({
-                        'label': 'Max in marked images',
+                        'label': f'{word} in marked images',
                         'xvals': common_details['zpos_marked_images'],
                         'yvals': common_details['max_roi_marked_images'],
                         'style': '-b'})
-                    self.curves.append({
-                        'label': 'Max in used images',
-                        'xvals': common_details['zpos_used'],
-                        'yvals': common_details['max_roi_used'],
-                        'style': '-r'})
+                    if 'max_roi_used' in common_details:
+                        self.curves.append({
+                            'label': f'{word} in used images',
+                            'xvals': common_details['zpos_used'],
+                            'yvals': common_details['max_roi_used'],
+                            'style': '-r'})
+                    else:
+                        self.curves[-1]['-style'] = '-r'  # all used
+                    if 'max_roi_used_2' in common_details:
+                        self.curves.append({
+                            'label': 'Max in used images 2',
+                            'xvals': common_details['zpos_used_2'],
+                            'yvals': common_details['max_roi_used_2'],
+                            'style': '-c'})
                 elif 'FWHM' in sel_text:
                     if self.main.current_paramset.mtf_type == 2:
                         self.ytitle = 'FWHM pr sliding window'

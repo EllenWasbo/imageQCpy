@@ -1033,7 +1033,10 @@ def resample_by_binning(input_y, input_x, step, bin_size=None,
         return np.isnan(y), lambda z: z.nonzero()[0]
 
     nans, x = nan_helper(new_y)
-    new_y[nans] = np.interp(x(nans), x(~nans), new_y[~nans])
+    try:
+        new_y[nans] = np.interp(x(nans), x(~nans), new_y[~nans])
+    except ValueError:
+        new_y = []
 
     return (new_x, new_y)
 
@@ -1177,3 +1180,61 @@ def masked_convolve2d(in1, in2, correct_missing=True, norm=True,
         con /= np.sum(in2)
 
     return np.ma.array(con, mask=mask)
+
+
+def get_plane_from_3_points(zyx1, zyx2, zyx3):
+    """Find equation of plane from three points zyx.
+
+    adapted from https://www.geeksforgeeks.org/program-to-find-equation-of-a-plane-passing-through-3-points/
+
+    Parameters
+    ----------
+    zyx11 : tuple of floats
+        x, y, z coordinats of point 1
+    zyx12 : tuple of floats
+    zyx13 : tuple of floats
+
+    Returns
+    -------
+    abcd : tuple of floats
+        representing ax + by + cz = d
+    """
+    z1, y1, x1 = zyx1
+    z2, y2, x2 = zyx2
+    z3, y3, x3 = zyx3
+    a1 = x2 - x1
+    b1 = y2 - y1
+    c1 = z2 - z1
+    a2 = x3 - x1
+    b2 = y3 - y1
+    c2 = z3 - z1
+    a = b1 * c2 - b2 * c1
+    b = a2 * c1 - a1 * c2
+    c = a1 * b2 - b1 * a2
+    d = (a * x1 + b * y1 + c * z1)
+
+    return (a, b, c, d)
+
+
+def get_distance_3d_plane(coords, abcd):
+    """Find shortest distance for all points to a plane in a matrix.
+
+    Plane defined as ax + by + cz = d
+    From https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_plane
+
+    Parameters
+    ----------
+    coords : meshgrid (Z, Y, Z)
+    abcd : tuple of floats
+        Plane parameters ax + by + cz = d
+
+    Returns
+    -------
+    dist_matrix : np.array
+        3d matrix with distances to plane ax + by + cz = d
+    """
+    Z, Y, X = coords
+    a, b, c, d = abcd
+    factor = 1 / np.sqrt(a**2 + b**2 + c**2)
+    dist_matrix = factor * (a * X + b * Y + c * Z - d)
+    return dist_matrix

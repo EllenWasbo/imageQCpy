@@ -365,7 +365,8 @@ class ParamSetCT(ParamSetCommon):
     hom_roi_rotation: float = 0.
     noi_roi_size: float = 55.
     huw_roi_size: float = 55.
-    mtf_type: int = 2  # 0=bead, 1=wire, 2=circular edge
+    mtf_type: int = 2
+    # 0=bead, 1=wire, 2=circular edge, 3=zres wire, 4=zres edge
     mtf_roi_size: float = 11.
     mtf_background_width: float = 1.  # used if bead method
     mtf_plot: int = 3  # default plot 0=xyprofiles, 1=sorted, 2=LSF, 3=MTF
@@ -560,7 +561,8 @@ class ParamSetNM(ParamSetCommon):
 class ParamSetSPECT(ParamSetCommon):
     """Set of parameters regarding SPECT tests."""
 
-    mtf_type: int = 1  # 0=point, 1=line source, 2=line source, sliding window
+    mtf_type: int = 1
+    # 0=point, 1=line, 2=line sliding window,, 3=z-res line, 4=zres edge
     mtf_roi_size: float = 25.
     mtf_background_width: float = 5.
     mtf_line_tolerance: int = 10
@@ -604,7 +606,8 @@ class ParamSetPET(ParamSetCommon):
     rec_plot: int = 0  # 0 = rec max, 1 rec avg, 2 rec peak, 3 z-profile
     rec_earl: int = 1  # tolerances from 0 = None, 1 = EARL1, 2 = EARL2
     rec_background_volume: int = 9500
-    mtf_type: int = 2  # 0=point, 1=line source, 2=line source, sliding window
+    mtf_type: int = 2
+    # 0=point, 1=line, 2=line sliding window,, 3=z-res line, 4=zres edge
     mtf_roi_size: float = 60.
     mtf_background_width: float = 5.
     mtf_line_tolerance: int = 30

@@ -13,8 +13,8 @@ from pathlib import Path
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QFormLayout, QGroupBox,
-    QPushButton, QLabel, QDoubleSpinBox, QCheckBox, QRadioButton, QButtonGroup,
+    QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
+    QFormLayout, QGroupBox, QPushButton, QLabel, QDoubleSpinBox, QCheckBox,
     QComboBox, QAction, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
     QMessageBox, QInputDialog, QFileDialog, QDialogButtonBox, QHeaderView
     )
@@ -227,6 +227,59 @@ class ParamsTabCommon(QTabWidget):
                 else:
                     self.roi_a.setEnabled(True)
         # continues in subclasses if needed
+
+    def update_mtf_options(self):
+        """Update options when mtf type changes."""
+        modality = self.main.current_modality
+        mtf_type = self.mtf_type.currentIndex()
+        if modality in ['CT', 'SPECT', 'PET']:
+            self.mtf_plot.clear()
+            plot_items = ['Centered xy profiles', 'Sorted pixel values',
+                          'LSF', 'MTF']
+            if mtf_type == 0:
+                plot_items.pop(1)
+            else:
+                if mtf_type == 2 and modality == 'CT':
+                    pass
+                else:
+                    plot_items.pop(0)
+            if modality in ['SPECT', 'PET']:
+                if mtf_type == 4:
+                    plot_items.append('Line source average z-profile')
+                    self.mtf_background_width.setEnabled(False)
+                else:
+                    if mtf_type > 0:
+                        plot_items.append('Line source max z-profile')
+                    self.mtf_background_width.setEnabled(True)
+                if mtf_type == 2:
+                    self.mtf_sliding_window.setEnabled(True)
+                    plot_items.extend(
+                        ['Sliding window FWHM z-profile',
+                         'Sliding window x/y offset z-profile'])
+                else:
+                    self.mtf_sliding_window.setEnabled(False)
+                if mtf_type in [1, 2]:
+                    self.mtf_line_tolerance.setEnabled(True)
+                else:
+                    self.mtf_line_tolerance.setEnabled(False)
+            elif modality == 'CT':
+                if mtf_type == 4:
+                    plot_items.append('ROI average z-profile')
+                    self.mtf_background_width.setEnabled(False)
+                else:
+                    if mtf_type == 2:
+                        self.mtf_background_width.setEnabled(False)
+                    elif mtf_type:
+                        self.mtf_background_width.setEnabled(True)
+                        #if mtf_type > 0:
+                        #    plot_items.append('ROI max z-profile')
+            self.mtf_plot.addItems(plot_items)
+            if modality in ['SPECT', 'PET']:
+                if mtf_type == 2:
+                    self.blockSignals(True)
+                    self.mtf_plot.setCurrentIndex(5)  # FWHM
+                    self.blockSignals(False)
+        self.param_changed_from_gui(attribute='mtf_type')
 
     def param_changed_from_gui(self, attribute='', update_roi=True,
                                clear_results=True, update_plot=True,
@@ -706,13 +759,14 @@ class ParamsTabCommon(QTabWidget):
         btn_get_coord.clicked.connect(self.hom_get_coordinates)
         vlo_right.addWidget(btn_get_coord)
 
-    def create_tab_mtf(self):
+    def create_tab_mtf(self, avoid_mtf_type_connect=False):
         """GUI of tab MTF - common settings here."""
         self.tab_mtf = ParamsWidget(self, run_txt='Calculate MTF')
 
         self.mtf_type = QComboBox()
-        self.mtf_type.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='mtf_type'))
+        if avoid_mtf_type_connect is False:
+            self.mtf_type.currentIndexChanged.connect(
+                lambda: self.param_changed_from_gui(attribute='mtf_type'))
 
         self.mtf_sampling_frequency = QDoubleSpinBox(
             decimals=3, minimum=0.001, singleStep=0.001)
@@ -760,14 +814,9 @@ class ParamsTabCommon(QTabWidget):
             lambda: self.param_changed_from_gui(
                 attribute='mtf_cut_lsf_w_fade'))
         self.mtf_type.addItems(ALTERNATIVES[modality]['MTF'])
+        self.mtf_type.currentIndexChanged.connect(self.update_mtf_options)
 
-        plot_items = ['Centered xy profiles',
-                      'Sorted pixel values', 'LSF', 'MTF']
         if modality in ['SPECT', 'PET']:
-            plot_items.extend(
-                ['Line source max z-profile',
-                 'Sliding window FWHM z-profile',
-                 'Sliding window x/y offset z-profile'])
             self.mtf_line_tolerance = QDoubleSpinBox(
                 decimals=0, minimum=0.1, singleStep=1)
             self.mtf_line_tolerance.valueChanged.connect(
@@ -778,11 +827,7 @@ class ParamsTabCommon(QTabWidget):
             self.mtf_sliding_window.valueChanged.connect(
                 lambda: self.param_changed_from_gui(
                     attribute='mtf_sliding_window', make_odd=True))
-        self.mtf_plot.addItems(plot_items)
-        if modality == 'PET':
-            self.blockSignals(True)
-            self.mtf_plot.setCurrentIndex(5)
-            self.blockSignals(False)
+        self.update_mtf_options()
 
         if modality == 'CT':
             self.mtf_cy_pr_mm = BoolSelectTests(
@@ -1421,7 +1466,7 @@ class ParamsTabCT(ParamsTabCommon):
 
     def create_tab_mtf(self):
         """GUI of tab MTF."""
-        super().create_tab_mtf()
+        super().create_tab_mtf(avoid_mtf_type_connect=True)
         self.create_tab_mtf_ct_spect_pet(modality='CT')
 
     def create_tab_dim(self):
@@ -2550,7 +2595,7 @@ class ParamsTabSPECT(ParamsTabCommon):
 
     def create_tab_mtf(self):
         """GUI of tab MTF."""
-        super().create_tab_mtf()
+        super().create_tab_mtf(avoid_mtf_type_connect=True)
         self.create_tab_mtf_ct_spect_pet(modality='SPECT')
 
 
@@ -2813,7 +2858,7 @@ class ParamsTabPET(ParamsTabCommon):
 
     def create_tab_mtf(self):
         """GUI of tab MTF."""
-        super().create_tab_mtf()
+        super().create_tab_mtf(avoid_mtf_type_connect=True)
         self.create_tab_mtf_ct_spect_pet(modality='PET')
 
     def get_Cro_activities(self):

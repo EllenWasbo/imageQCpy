@@ -23,6 +23,7 @@ from imageQC.config.iQCconstants import (
     )
 # imageQC block end
 
+#Test af ny branch for at se om det virker
 
 def prepare_debug():
     """Set a tracepoint in PDB that works with Qt."""

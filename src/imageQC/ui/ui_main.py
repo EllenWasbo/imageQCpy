@@ -50,7 +50,7 @@ from imageQC.config.iQCconstants import (
 from imageQC.config import config_classes as cfc
 from imageQC.scripts import dcm
 from imageQC.scripts.mini_methods import get_modality_index
-from imageQC.scripts.artifact import apply_artifacts
+from imageQC.scripts.artifact import apply_artifacts, generate_artifacts_3d
 # imageQC block end
 
 
@@ -236,6 +236,7 @@ class MainWindow(QMainWindow):
         self.imgs = []
         self.results = {}
         self.artifacts = []
+        self.artifacts_3d = []
         self.active_img = None  # np.array pixeldata for active image
         self.summed_img = None  # sum of marked images if activated
         self.average_img = False  # true if summed_img should be averaged
@@ -315,6 +316,7 @@ class MainWindow(QMainWindow):
 
     def update_on_new_images(self, new_img_info_list, append=False):
         """Update GUI on new images."""
+        self.artifacts_3d = []
         n_img_before = len(self.imgs)
         if self.chk_append.isChecked():
             append = True
@@ -388,17 +390,25 @@ class MainWindow(QMainWindow):
                     frame_number=self.imgs[self.gui.active_img_no].frame_number,
                     tag_infos=self.tag_infos)
             if self.active_img is not None:
+                # apply artifacts if any
                 try:
+                    type_3ds = [artifact.type_3d for artifact in self.artifacts]
+                    if any(type_3ds) and len(self.artifacts_3d) == 0:
+                        self.artifacts_3d = generate_artifacts_3d(
+                            self.imgs, self.artifacts)
                     if len(self.imgs[self.gui.active_img_no].artifacts) > 0:
                         self.active_img = apply_artifacts(
                             self.active_img, self.imgs[self.gui.active_img_no],
-                            self.artifacts)
+                            self.artifacts,
+                            self.artifacts_3d, self.gui.active_img_no)
                 except (TypeError, AttributeError, IndexError):
                     pass
-                amin = round(np.amin(self.active_img))
-                amax = round(np.amax(self.active_img))
-                self.wid_window_level.min_wl.setRange(amin, amax)
-                self.wid_window_level.max_wl.setRange(amin, amax)
+                if not self.wid_window_level.tb_wl.chk_wl_update.isChecked():
+                    amin = round(np.amin(self.active_img))
+                    amax = round(np.amax(self.active_img))
+                    self.wid_window_level.min_wl.setRange(amin, amax)
+                    self.wid_window_level.max_wl.setRange(amin, amax)
+                    print(f'update active img amin, amax {amin}, {amax}')
                 if len(np.shape(self.active_img)) == 2:
                     sz_acty, sz_actx = np.shape(self.active_img)
                 else:
@@ -435,8 +445,8 @@ class MainWindow(QMainWindow):
                     self.active_img = self.summed_img * (1./len(marked))
                 else:
                     self.active_img = self.summed_img
-                amin = np.amin(self.active_img)
-                amax = np.amax(self.active_img)
+                amin = round(np.amin(self.active_img))
+                amax = round(np.amax(self.active_img))
                 self.wid_window_level.min_wl.setRange(amin, amax)
                 self.wid_window_level.max_wl.setRange(amin, amax)
                 self.refresh_img_display()

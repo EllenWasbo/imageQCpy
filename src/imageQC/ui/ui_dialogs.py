@@ -17,10 +17,11 @@ from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
-    QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QMessageBox,
-    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox, QListWidget,
-    QLineEdit, QTextEdit, QPushButton, QLabel, QRadioButton, QCheckBox, QComboBox,
-    QWidget, QToolBar, QAction, QTableWidget, QTableWidgetItem, QTabWidget, QFileDialog
+    QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox,
+    QLineEdit, QTextEdit, QPushButton, QLabel, QRadioButton, QCheckBox,
+    QComboBox, QListWidget, QWidget, QToolBar, QAction,
+    QTableWidget, QTableWidgetItem, QTabWidget, QMessageBox, QFileDialog
     )
 
 import matplotlib
@@ -35,7 +36,8 @@ from imageQC.config.config_func import init_user_prefs
 from imageQC.ui import messageboxes
 from imageQC.ui import reusable_widgets as uir
 from imageQC.scripts.artifact import (
-    Artifact, add_artifact, edit_artifact_label, validate_new_artifact_label)
+    Artifact, add_artifact, edit_artifact_label, validate_new_artifact_label,
+    update_artifact_3d)
 from imageQC.scripts.dcm import get_projection
 from imageQC.scripts.read_vendor_QC_reports import read_GE_Mammo_date
 import imageQC.resources
@@ -362,6 +364,8 @@ class AddArtifactsDialog(ImageQCDialog):
     """Dialog to add simulated artifacts to images."""
 
     def __init__(self, main):
+        self.forms_2d = ['circle', 'ring', 'rectangle']
+        self.forms_3d = ['sphere', 'cylinder', 'rectangular prism']
         super().__init__()
         self.main = main
         self.edited = False  # True if unsaved changes
@@ -394,7 +398,8 @@ class AddArtifactsDialog(ImageQCDialog):
         self.new_label = QLineEdit('')
         fLO.addRow(QLabel('Label new artifact'), self.new_label)
         self.form = QComboBox()
-        self.form.addItems(['circle', 'ring', 'rectangle'])
+        self.form.addItems(self.forms_2d)
+        self.form.addItems(self.forms_3d)
         self.form.setCurrentIndex(0)
         self.form.currentIndexChanged.connect(self.update_form)
         fLO.addRow(QLabel('Artifact form'), self.form)
@@ -404,8 +409,12 @@ class AddArtifactsDialog(ImageQCDialog):
         self.y_offset = QDoubleSpinBox(decimals=1)
         self.y_offset.setRange(-1000, 1000)
         self.y_offset.valueChanged.connect(self.value_edited)
+        self.z_offset = QDoubleSpinBox(decimals=1)
+        self.z_offset.setRange(-1000, 1000)
+        self.z_offset.valueChanged.connect(self.value_edited)
         fLO.addRow(QLabel('Center offset x (mm)'), self.x_offset)
         fLO.addRow(QLabel('Center offset y (mm)'), self.y_offset)
+        fLO.addRow(QLabel('Center offset z (mm)'), self.z_offset)
         self.size_1 = QDoubleSpinBox(decimals=1)
         self.size_1.setRange(0, 1000)
         self.size_1.valueChanged.connect(self.value_edited)
@@ -414,12 +423,25 @@ class AddArtifactsDialog(ImageQCDialog):
         self.size_2.setRange(0, 1000)
         self.size_2.valueChanged.connect(self.value_edited)
         self.size_2_txt = QLabel('')
+        self.size_3 = QDoubleSpinBox(decimals=1)
+        self.size_3.setRange(0, 1000)
+        self.size_3.valueChanged.connect(self.value_edited)
+        self.size_3_txt = QLabel('')
         fLO.addRow(self.size_1_txt, self.size_1)
         fLO.addRow(self.size_2_txt, self.size_2)
+        fLO.addRow(self.size_3_txt, self.size_3)
         self.rotation = QDoubleSpinBox(decimals=1)
         self.rotation.setRange(-359.9, 359.9)
         self.rotation.valueChanged.connect(self.value_edited)
+        self.rotation_1 = QDoubleSpinBox(decimals=1)
+        self.rotation_1.setRange(-359.9, 359.9)
+        self.rotation_1.valueChanged.connect(self.value_edited)
+        self.rotation_2 = QDoubleSpinBox(decimals=1)
+        self.rotation_2.setRange(-359.9, 359.9)
+        self.rotation_2.valueChanged.connect(self.value_edited)
         fLO.addRow(QLabel('Rotation (degrees)'), self.rotation)
+        fLO.addRow(QLabel('Rotation (degrees) x'), self.rotation_1)
+        fLO.addRow(QLabel('Rotation (degrees) y'), self.rotation_2)
         self.sigma = QDoubleSpinBox(decimals=2)
         self.sigma.setRange(0, 5500)
         self.sigma.valueChanged.connect(self.value_edited)
@@ -513,6 +535,10 @@ class AddArtifactsDialog(ImageQCDialog):
         act_view_all_applied.triggered.connect(self.view_all_applied_artifacts)
         toolbar_all.addActions([act_clear_all, act_add_all, act_view_all_applied])
 
+        btn_empty = QPushButton('Start with empty image(s)')
+        vlo_aa.addWidget(btn_empty)
+        btn_empty.clicked.connect(self.start_with_empty)
+
         toolbar_btm = QToolBar()
         act_save_all = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}save.png'),
@@ -576,6 +602,9 @@ class AddArtifactsDialog(ImageQCDialog):
         sel_img = self.cbox_imgs.currentIndex()
         self.list_artifacts.clear()
         if self.main.imgs:
+            if self.main.wid_window_level.tb_wl.get_window_level_mode() == 'dcm':
+                self.main.wid_window_level.tb_wl.set_window_level(
+                    'min_max', set_tools=True)
             if self.main.imgs[sel_img].artifacts:
                 if len(self.main.imgs[sel_img].artifacts) > 0:
                     self.list_artifacts.addItems(self.main.imgs[sel_img].artifacts)
@@ -594,9 +623,13 @@ class AddArtifactsDialog(ImageQCDialog):
         self.form.setCurrentText(artifact.form)
         self.x_offset.setValue(artifact.x_offset)
         self.y_offset.setValue(artifact.y_offset)
+        self.z_offset.setValue(artifact.z_offset)
         self.size_1.setValue(artifact.size_1)
         self.size_2.setValue(artifact.size_2)
+        self.size_3.setValue(artifact.size_3)
         self.rotation.setValue(artifact.rotation)
+        self.rotation_1.setValue(artifact.rotation_1)
+        self.rotation_2.setValue(artifact.rotation_2)
         self.sigma.setValue(artifact.sigma)
         self.method.setCurrentText(artifact.method)
         self.value.setValue(artifact.value)
@@ -616,7 +649,7 @@ class AddArtifactsDialog(ImageQCDialog):
         """Update ROI size descriptions when form changes."""
         self.value_edited()
         form = self.form.currentText()
-        if form == 'circle':
+        if form in ['circle', 'sphere', 'cylinder']:
             self.size_1_txt.setText('Radius (mm)')
             self.size_2_txt.setText('-')
             self.size_2.setEnabled(False)
@@ -631,6 +664,20 @@ class AddArtifactsDialog(ImageQCDialog):
             self.size_2_txt.setText('Height (mm)')
             self.size_2.setEnabled(True)
             self.rotation.setEnabled(True)
+        if form in ['sphere', 'rectangular prism']:
+            self.z_offset.setEnabled(True)
+        else:
+            self.z_offset.setEnabled(False)
+        if form in ['rectangular prism', 'cylinder']:
+            self.size_3_txt.setText('Depth (mm)')
+            self.size_3.setEnabled(True)
+            self.rotation_1.setEnabled(True)
+            self.rotation_2.setEnabled(True)
+        else:
+            self.size_3_txt.setText('-')
+            self.size_3.setEnabled(False)
+            self.rotation_1.setEnabled(False)
+            self.rotation_2.setEnabled(False)
 
     def update_method(self):
         """Update available parameters when method changes."""
@@ -659,13 +706,19 @@ class AddArtifactsDialog(ImageQCDialog):
                 form=self.form.currentText(),
                 x_offset=self.x_offset.value(),
                 y_offset=self.y_offset.value(),
+                z_offset=self.z_offset.value(),
                 size_1=self.size_1.value(),
                 size_2=self.size_2.value(),
+                size_3=self.size_3.value(),
                 rotation=self.rotation.value(),
+                rotation_1=self.rotation_1.value(),
+                rotation_2=self.rotation_2.value(),
                 sigma=self.sigma.value(),
                 method=self.method.currentText(),
                 value=self.value.value()
                 )
+            if obj.form in self.forms_3d:
+                obj.type_3d = True
         if errmsg:
             QMessageBox.warning(self, 'Warning', errmsg)
         return obj
@@ -696,6 +749,10 @@ class AddArtifactsDialog(ImageQCDialog):
                     artifact.label = ''  # autogenerate, cannot use same as before
             new_label = validate_new_artifact_label(self.main, artifact, edit=True)
             if new_label is not None:
+                if artifact.type_3d:
+                    self.artifacts_3d = update_artifact_3d(
+                        self.main.imgs, artifact, self.main.artifacts_3d,
+                        new_label=new_label)
                 artifact.label = new_label
                 idx = self.label.currentIndex() - 1
                 self.main.artifacts[idx] = artifact
@@ -719,6 +776,9 @@ class AddArtifactsDialog(ImageQCDialog):
             else:
                 artifact.label = new_label
                 self.main.artifacts.append(artifact)
+                if artifact.type_3d:
+                    self.artifacts_3d = update_artifact_3d(
+                        self.main.imgs, artifact, self.main.artifacts_3d)
                 self.update_labels(set_text=new_label)
 
     def delete(self):
@@ -734,6 +794,9 @@ class AddArtifactsDialog(ImageQCDialog):
                 self.main.artifacts.pop(idx)
                 edit_artifact_label(label, '', self.main)
                 self.update_labels()
+                labels = [row[0] for row in self.main.artifacts_3d]
+                if label in labels:
+                    self.main.artifacts_3d.pop(idx)
                 self.update_applied()
         else:
             QMessageBox.warning(
@@ -777,13 +840,38 @@ class AddArtifactsDialog(ImageQCDialog):
                 if dlg.exec():
                     selected_labels = dlg.get_checked_texts()
                     if len(selected_labels) > 0:
+                        all_idxs = list(range(len(self.main.imgs)))
                         if add_all:
-                            apply_idxs = list(range(len(self.main.imgs)))
+                            apply_idxs = np.copy(all_idxs)
                         else:
                             apply_idxs = [self.cbox_imgs.currentIndex()]
                         for label in selected_labels:
-                            add_artifact(label, apply_idxs, self.main)
+                            artifact_no = labels.index(label)
+                            if self.main.artifacts[artifact_no].form in [
+                                    'sphere', 'rectangle prism']:
+                                add_artifact(label, all_idxs, self.main)
+                            else:
+                                add_artifact(label, apply_idxs, self.main)
                         self.update_applied()
+
+    def start_with_empty(self):
+        """Insert clear image as first artifact."""
+        if len(self.main.imgs) == 0:
+            QMessageBox.information(self.main, 'No images loaded',
+                                    'No images loaded. Can not apply artifacts.')
+        else:
+            label = '***set to zero***'
+            all_idxs = list(range(len(self.main.imgs)))
+            res = messageboxes.QuestionBox(
+                self, title='Start with empty image(s)',
+                msg='Empty (set to zero) all images or just selected image',
+                yes_text='All', no_text='Selected')
+            if res.exec() == 1:
+                apply_idxs = np.copy(all_idxs)
+            else:
+                apply_idxs = [self.cbox_imgs.currentIndex()]
+            add_artifact(label, apply_idxs, self.main)
+            self.update_applied()
 
     def view_all_artifacts(self):
         """View currently defined artifacts."""
@@ -983,7 +1071,8 @@ class AddArtifactsDialog(ImageQCDialog):
                         if artifacts_this:
                             for artifact_label in artifacts_this:
                                 if artifact_label not in artifacts_available:
-                                    del_labels.append(artifact_label)
+                                    if artifact_label != '***set to zero***':
+                                        del_labels.append(artifact_label)
                     del_labels = list(set(del_labels))
                     if del_labels:
                         warnings.append(

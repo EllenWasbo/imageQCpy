@@ -1,18 +1,23 @@
-#v3.1.2
-_xxx _xx, 2024_
+# v3.1.2
+_xxx xx, 2024_
 
 New functionalities:
 - CT/SPECT/PET: Option to calculate z-resolution from wire/linesource (in ~x direction) and from oblique edge in z-direction
 - In the Advanced open files - dialog: option to import saved Tag Pattern - Format for grouping images.
+- Simulating artifacts:
+	- Added option to generate 3d artifacts
+	- Added option to set full image to zero before adding artifacts (not fully tested yet!!!!!!!!!!!)
 
 Changes:
 - Changes to calculations of MTF from line source: more robust on how to interpret the direction of the source 
+- Test NM/SNI: When point source correction and using reference image - both the reference image and the image to be analysed will now always be corrected separately allowing for difference in point source position
 
 Fixes:
 - Avoiding crash and output to automation results when CT Siemens constancy file content is shorter than useful content.
+- Avoiding crashes when switching between gaussian and discrete tabulated results for MTF.
 
-#v3.1.1
-_Aug _07, 2024_
+# v3.1.1
+_Aug 07, 2024_
 
 New functionalities:
 - PET: Added spatial resolution (MTF) similar to SPECT. Added option to perform line source test with sliding window, listed results pr window (image group)
@@ -25,18 +30,18 @@ Changes:
 - Added option to simulate gamma camera point source as artifact
 - Added option to merge pixels before NM SNI calculations
 - Alternative or dynamic headers of results tables:
- - Added validation to output settings vs parameter settings
+	- Added validation to output settings vs parameter settings
 - Output settings of parametersets more user friendly:
- - When adding new settings - the alternative is set and locked to the one defined in the parameterset (more logical)
- - When editing, the alternative is selectable (for flexibility with old settings)
- - When changing parameters that might affect related output settings - a warning is given.
- - Added to validation test in 'Verify config files ...' in Settings - Config folder
+	- When adding new settings - the alternative is set and locked to the one defined in the parameterset (more logical)
+	- When editing, the alternative is selectable (for flexibility with old settings)
+	- When changing parameters that might affect related output settings - a warning is given.
+	- Added to validation test in 'Verify config files ...' in Settings - Config folder
 
 Fixes:
 - NM test SNI: v3.1.0 lost connection to reference image, if used. Now restored.
 - Adding artifacts:
- - Handeling adding noise when <=0 within noise shape (setting values to 1 if <=0 before adding noise).
- - Better handeling artifact name when editing of settings. Keep autogenerating or keep manually edited.
+	- Handeling adding noise when <=0 within noise shape (setting values to 1 if <=0 before adding noise).
+	- Better handeling artifact name when editing of settings. Keep autogenerating or keep manually edited.
 - Fixed order error in Settings - LimitsAndPlotTemplates when editing templates.
 - In some combinations of actions (zoom and also maybe profile plot involved?) the image zoom have been unable to reset by the home button and also the refresh button. 
  Another force reset attempt is added hopefully to be able to reset using the refresh button if this happens. So far not succeeded to reproduce the situation.
@@ -53,9 +58,9 @@ Changes:
 - Dialog to add artifacts with improved functionalities, including option to save artifacts to file for reuse.
 - Added option to change angle of ramp for CT slice thickness if other phantoms used. Also added default settings for GE phantom with horizontal wire ramps (angle 45degrees).
 - NM SNI:
- - Option to let SNI be ratio between integrals of 2d NPS or radial profiles, ignoring negative values. Significant difference and clearly more sensitive with latter testing with simulated artifacts.
- - Option to choose whether point source correction with reference image should fit position to reference image or current image, avoiding artifacts to affect the fit.
- - Option to design low/high filter instead of human visual filter. Experimental purpose.
+	- Option to let SNI be ratio between integrals of 2d NPS or radial profiles, ignoring negative values. Significant difference and clearly more sensitive with latter testing with simulated artifacts.
+	- Option to choose whether point source correction with reference image should fit position to reference image or current image, avoiding artifacts to affect the fit.
+	- Option to design low/high filter instead of human visual filter. Experimental purpose.
 - Selected image index now displayed when working with QuickTest templates in the Settings manager (benefit if working with more than a few images).
 
 Bugfixes:

@@ -657,8 +657,8 @@ def get_modality(modalityStr):
             'key': qtOptKey}
 
 
-def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None, NM_count=False,
-            get_window_level=False):
+def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
+            NM_count=False, get_window_level=False):
     """Read pixmap from filepath int numpy array prepeared for display.
 
     Parameters

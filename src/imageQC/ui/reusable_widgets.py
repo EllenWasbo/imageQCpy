@@ -610,6 +610,24 @@ class ToolBarWindowLevel(QToolBar):
 
             self.parent.update_window_level(minval, maxval)
 
+    def get_window_level_mode(self):
+        """Get current window level mode.
+
+        Returns
+        -------
+        mode_string : str
+            min_max, mean_stdev, dcm or ''
+        """
+        if self.tool_min_max_wl.isChecked():
+            mode_string = 'min_max'
+        elif self.tool_range_wl.isChecked():
+            mode_string = 'mean_stdev'
+        elif self.tool_dcm_wl.isChecked():
+            mode_string = 'dcm'
+        else:
+            mode_string = ''
+        return mode_string
+
 
 class WindowLevelWidget(QGroupBox):
     """Widget with groupbox holding WindowLevel display."""
@@ -713,10 +731,12 @@ class WindowLevelWidget(QGroupBox):
             proceed = False
         if proceed:
             formatstr = f'.{self.decimals}f'
-            self.lbl_min_wl.setText(f'{minval:{formatstr}}')
-            self.lbl_max_wl.setText(f'{maxval:{formatstr}}')
-            self.lbl_center.setText(f'{0.5*(minval+maxval):{formatstr}}')
-            self.lbl_width.setText(f'{(maxval-minval):{formatstr}}')
+            formatstrmax = '.2e' if maxval > 99999 else formatstr
+            formatstrmin = '.2e' if minval > 99999 else formatstr
+            self.lbl_min_wl.setText(f'{minval:{formatstrmin}}')
+            self.lbl_max_wl.setText(f'{maxval:{formatstrmax}}')
+            self.lbl_center.setText(f'{0.5*(minval+maxval):{formatstrmax}}')
+            self.lbl_width.setText(f'{(maxval-minval):{formatstrmax}}')
 
             self.parent.set_active_image_min_max(minval, maxval)
             self.colorbar.colorbar_draw(cmap=cmap)
@@ -759,14 +779,13 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
                 amin, amax, (amax - amin)/100.))
             self.ax.plot(bins[:-1], hist)
             self.ax.axis('off')
-            at_min = matplotlib.offsetbox.AnchoredText(
-                f'Min:\n {amin:.{decimals}f}',
-                prop=dict(size=12), frameon=False, loc='upper left')
-            at_max = matplotlib.offsetbox.AnchoredText(
-                f'Max:\n {amax:.{decimals}f}',
-                prop=dict(size=12), frameon=False, loc='upper right')
-            self.ax.add_artist(at_min)
-            self.ax.add_artist(at_max)
+            formatstr = f'.{decimals}f'
+            formatstrmax = '.2e' if amax > 99999 else formatstr
+            formatstrmin = '.2e' if amin > 99999 else formatstr
+            at_minmax = matplotlib.offsetbox.AnchoredText(
+                f'max: {amax:{formatstrmax}} \n min: {amin:{formatstrmin}}',
+                prop=dict(size=12, weight='light'), frameon=False, loc='upper right')
+            self.ax.add_artist(at_minmax)
 
             if all([self.parent.min_wl, self.parent.max_wl]):
                 factor = 1 / 10 ** self.parent.decimals

@@ -536,7 +536,7 @@ class ParamSetNM(ParamSetCommon):
         default_factory=lambda: [[0.0, 0.15, 0.5], [0.1, 0.4, 0.5]])
     sni_scale_factor: int = 1  # 1 = no scale, 2 = merge 2x2
     sni_ref_image: str = ''  # file name (without path and extension)
-    sni_ref_image_fit: bool = False  # True = curvature fit based on ref image
+    #DELETE? sni_ref_image_fit: bool = False  # True = curvature fit based on ref image
     sni_alt: int = 0  # alternative (HEADERS) - depende on _type and _channels
     mtf_type: int = 1  # [Point, line (default), Two lines, edge]
     mtf_roi_size_x: float = 50.

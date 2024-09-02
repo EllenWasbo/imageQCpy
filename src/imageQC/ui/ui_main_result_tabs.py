@@ -769,10 +769,9 @@ class ResultPlotCanvas(PlotCanvas):
                 infotext = ['gaussian', 'discrete']
                 prefix = ['g', 'd']
                 suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
-                if (
-                        self.main.current_paramset.mtf_type == 3
-                        and self.main.current_modality in ['CT', 'SPECT', 'PET']):
-                    suffix = [' line 1', ' line 2']
+                if self.main.current_modality in ['CT', 'SPECT', 'PET']:
+                    if self.main.current_paramset.mtf_type == 3:
+                        suffix = [' line 1', ' line 2']
                 for ddno in range(2):
                     try:
                         dd = details_dicts[ddno]
@@ -869,10 +868,9 @@ class ResultPlotCanvas(PlotCanvas):
 
             linestyles = ['-', '--']
             suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
-            if (
-                    self.main.current_paramset.mtf_type == 3
-                    and self.main.current_modality in ['CT', 'SPECT', 'PET']):
-                suffix = [' line 1', ' line 2']
+            if self.main.current_modality in ['CT', 'SPECT', 'PET']:
+                if self.main.current_paramset.mtf_type == 3:
+                    suffix = [' line 1', ' line 2']
             lbl_prefilter = ''
             prefilter = False
             if 'sigma_prefilter' in details_dicts[0]:
@@ -1126,11 +1124,14 @@ class ResultPlotCanvas(PlotCanvas):
 
                 if lsf_is_interp:
                     proceed = True
-                    if self.main.current_paramset.mtf_type == 4:
-                        proceed = False
-                    elif self.main.current_paramset.mtf_type == 2:
-                        if self.main.current_modality == 'CT':
+                    try:
+                        if self.main.current_paramset.mtf_type == 4:
                             proceed = False
+                        elif self.main.current_paramset.mtf_type == 2:
+                            if self.main.current_modality == 'CT':
+                                proceed = False
+                    except AttributeError:
+                        pass
                     if proceed:
                         for no in range(len(details_dicts)):
                             if 'LSF' in details_dicts[no]:
@@ -1949,7 +1950,7 @@ class ResultPlotCanvas(PlotCanvas):
         def plot_curve_corr_check():
             self.title = 'Curvature correction check'
             details_dict = self.main.results['SNI']['details_dict'][imgno]
-            if 'correction_matrix' in details_dict:
+            if 'corrected_image' in details_dict:
                 # averaging central 10% rows/cols
                 temp_img = self.main.active_img
                 corrected_img = details_dict['corrected_image']
@@ -1983,6 +1984,21 @@ class ResultPlotCanvas(PlotCanvas):
                 self.xtitle = 'pixel number'
                 self.ytitle = 'Average pixel value'
                 self.legend_location = 'lower center'
+                if 'reference_estimated_noise' in details_dict:
+                    ref = details_dict['reference_estimated_noise']
+                    if ref.shape == corrected_img.shape:
+                        prof_y = np.mean(ref[:, xhalf-nx:xhalf+nx], axis=1)
+                        prof_x = np.mean(ref[yhalf-ny:yhalf+ny, :], axis=0)
+                        self.curves.append({
+                            'label': 'Central 10% rows ref. corr.',
+                            'xvals': np.arange(len(prof_x)),
+                            'yvals': prof_x,
+                            'style': 'k'})
+                        self.curves.append({
+                            'label': 'Central 10% columns ref. corr.',
+                            'xvals': np.arange(len(prof_y)),
+                            'yvals': prof_y,
+                            'style': ':k'})
 
         test_widget = self.main.stack_test_tabs.currentWidget()
         try:
@@ -2329,7 +2345,7 @@ class ResultPlotCanvas(PlotCanvas):
             imgno = self.main.gui.active_img_no
             try:
                 details_dict = self.main.results['Uni']['details_dict'][imgno]
-                if 'correction_matrix' in details_dict:
+                if 'corrected_image' in details_dict:
                     # averaging central 10% rows/cols
                     temp_img = self.main.active_img
                     corrected_img = details_dict['corrected_image']

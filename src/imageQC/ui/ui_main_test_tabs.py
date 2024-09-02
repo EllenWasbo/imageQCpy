@@ -407,21 +407,26 @@ class ParamsTabCommon(QTabWidget):
 
     def update_values_mtf(self):
         """Update MTF table values when changing analytic vs discrete options."""
+        proceed = False
         if 'MTF' in self.main.results:
-            #  and self.main.current_modality in ['CT', 'Xray', 'SPECT', 'MR']):
-            if self.main.results['MTF']['pr_image']:
-                details_dicts = self.main.results['MTF']['details_dict']
-            else:
-                details_dicts = [self.main.results['MTF']['details_dict']]
-            try:
-                mtf_gaussian = self.main.current_paramset.mtf_gaussian
-                proceed = True
-            except AttributeError:
-                proceed = False
-            if proceed:
-                prefix = 'g' if mtf_gaussian else 'd'
-                new_values = []
-                for details_dict in details_dicts:
+            if isinstance(self.main.results['MTF'], dict):
+                if self.main.results['MTF']['pr_image']:
+                    details_dicts = self.main.results['MTF']['details_dict']
+                else:
+                    details_dicts = [self.main.results['MTF']['details_dict']]
+                try:
+                    mtf_gaussian = self.main.current_paramset.mtf_gaussian
+                    proceed = True
+                except AttributeError:
+                    proceed = False
+        if proceed:
+            prefix = 'g' if mtf_gaussian else 'd'
+            new_values = []
+            n_cols = len(self.main.results['MTF']['values'][0])
+            for details_dict in details_dicts:
+                if details_dict is None:
+                    new_values.append([None] * n_cols)
+                else:
                     if isinstance(details_dict, dict):
                         details_dict = [details_dict]
                     try:
@@ -436,9 +441,9 @@ class ParamsTabCommon(QTabWidget):
                         pass  # only if x and y dir
                     new_values.append(new_values_this)
 
-                self.main.results['MTF']['values'] = new_values
-                self.main.refresh_results_display()
-                self.main.status_bar.showMessage('MTF tabular values updated', 1000)
+            self.main.results['MTF']['values'] = new_values
+            self.main.refresh_results_display()
+            self.main.status_bar.showMessage('MTF tabular values updated', 1000)
 
     def update_values_rec(self):
         """Update Rec table values when changing type of values to display."""
@@ -1965,7 +1970,7 @@ class WidgetReferenceImage(QWidget):
         toolb.addActions([act_add, act_delete, act_info])
         hlo_ref_image.addWidget(toolb)
         vlo_ref_image.addLayout(hlo_ref_image)
-        vlo_ref_image.addWidget(self.parent.sni_ref_image_fit)
+        #DELETE? vlo_ref_image.addWidget(self.parent.sni_ref_image_fit)
         self.setLayout(vlo_ref_image)
 
     def update_reference_images(self, set_text=''):
@@ -2332,11 +2337,11 @@ class ParamsTabNM(ParamsTabCommon):
             lambda: self.param_changed_from_gui(
                 attribute='sni_radius', update_roi=False))
         self.sni_ref_image = QComboBox()
-        self.sni_ref_image_fit = QCheckBox(
-            'If point source correction, use reference image to correct.')
-        self.sni_ref_image_fit.toggled.connect(
-            lambda: self.param_changed_from_gui(
-                attribute='sni_ref_image_fit', update_roi=False))
+        #DELETE?self.sni_ref_image_fit = QCheckBox(
+        #    'If point source correction, use reference image to correct.')
+        #self.sni_ref_image_fit.toggled.connect(
+        #    lambda: self.param_changed_from_gui(
+        #        attribute='sni_ref_image_fit', update_roi=False))
         self.wid_ref_image = WidgetReferenceImage(self)
         self.sni_correct = GroupBoxCorrectPointSource(
             self, testcode='sni',

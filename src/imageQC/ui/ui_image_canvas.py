@@ -410,16 +410,18 @@ class ImageCanvas(GenericImageCanvas):
         if roi_indexes is None:
             roi_indexes = list(np.arange(len(this_roi)))
 
-        for color_no, roi_no in enumerate(roi_indexes):
+        for i, roi_no in enumerate(roi_indexes):
+            color_no = i % len(colors)
             mask = np.where(this_roi[roi_no], 0, 1)
             if filled:
                 if hatches is None:
                     contour = self.ax.contourf(
                         mask, levels=[0, 0.5], colors=colors[color_no], alpha=0.3)
                 else:
+                    hatch_no = i % len(hatches)
                     contour = self.ax.contourf(
                         mask, levels=[0, 0.5], colors='none',
-                        hatches=hatches[color_no])
+                        hatches=hatches[hatch_no])
                     contour.collections[0].set_edgecolor(colors[color_no])
             else:
                 contour = self.ax.contour(
@@ -428,7 +430,7 @@ class ImageCanvas(GenericImageCanvas):
                     linestyles=linestyles)
             if labels:
                 try:
-                    label = labels[color_no]
+                    label = labels[i]
                     mask_pos = np.where(mask == 0)
                     if labels_pos == 'center':
                         xpos = np.mean(mask_pos[1]) - 2

@@ -1666,7 +1666,7 @@ class ResultPlotCanvas(PlotCanvas):
                          'xvals': xvals,
                          'yvals': [vals[i] for vals in yvals],
                          'style': '-',
-                         'color': COLORS[i]}
+                         'color': COLORS[i % len(COLORS)]}
                 self.curves.append(curve)
             test_widget = self.main.stack_test_tabs.currentWidget()
             val_text = test_widget.roi_table_val.currentText()

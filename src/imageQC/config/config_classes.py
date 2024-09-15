@@ -708,9 +708,7 @@ class ParamSetCT_TaskBased:
     ttf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
     ttf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     ttf_table:  PositionTable = field(default_factory=PositionTable)
-    zrange_table: PositionTable = field(
-        default_factory=lambda: PositionTable(
-            pos_x=[(-1000., 1000.)], pos_y=[(-1000., 1000.)]))
+    ranges_table: list = field(default_factory=list)  # list of [test,param,min,max]
     #  zrange: pos_x = ttf (min, max), pos_y = nps zrange (min, max)
     nps_roi_size: int = 64
     nps_roi_distance_match_ttf: bool = True

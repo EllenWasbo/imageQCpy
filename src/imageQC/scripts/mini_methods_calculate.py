@@ -648,6 +648,42 @@ def get_width_center_at_threshold(
     return (width, center)
 
 
+def get_object_width_xy(image2d, mask_outer=0, threshold_percent_max=50):
+    """Get width of object.
+
+    Parameters
+    ----------
+    image2d : np.ndarray
+    mask_outer : int, optional
+        number of pixels at outer border to ignore. The default is 0.
+    threshold_percent_max : int, optional
+        find width at threshold in percent of max. Default is 50.
+
+    Returns
+    -------
+    list
+        width_x, width_y in number of pixels
+
+    """
+    if mask_outer == 0:
+        prof_y = np.max(image2d, axis=1)
+        prof_x = np.max(image2d, axis=0)
+    else:
+        prof_y = np.max(
+            image2d[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=1)
+        prof_x = np.max(
+            image2d[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=0)
+    prof_x = prof_x - np.min(prof_x)
+    prof_y = prof_y - np.min(prof_y)
+    # get width at halfmax and center for profiles
+    width_x, center_x = get_width_center_at_threshold(
+        prof_x, threshold_percent_max/100 * np.max(prof_x), force_above=True)
+    width_y, center_y = get_width_center_at_threshold(
+        prof_y, threshold_percent_max/100 * np.max(prof_y), force_above=True)
+
+    return [width_x, width_y]
+
+
 def optimize_center(image, mask_outer=0, max_from_part=4):
     """Find center and width of object in image.
 

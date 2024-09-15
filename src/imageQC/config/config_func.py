@@ -705,7 +705,7 @@ def load_paramsets(fnames, path):
                                 doc['rec_table'] = cfc.RecTable(**upd)
 
                         if 'task_based' in fname_this:
-                            class_ = cfc.ParamSetCT_TaskBased()
+                            class_ = cfc.ParamSetCT_TaskBased
                         else:
                             class_ = getattr(cfc, f'ParamSet{modality}')
                         upd = verify_input_dict(doc, class_())

@@ -47,8 +47,8 @@ import imageQC.resources
 class ImageQCDialog(QDialog):
     """Dialog for reuse with imageQC icon and flags."""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
         self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
         self.setWindowFlags(

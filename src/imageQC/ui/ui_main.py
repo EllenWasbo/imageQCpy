@@ -408,7 +408,6 @@ class MainWindow(QMainWindow):
                     amax = round(np.amax(self.active_img))
                     self.wid_window_level.min_wl.setRange(amin, amax)
                     self.wid_window_level.max_wl.setRange(amin, amax)
-                    print(f'update active img amin, amax {amin}, {amax}')
                 if len(np.shape(self.active_img)) == 2:
                     sz_acty, sz_actx = np.shape(self.active_img)
                 else:
@@ -1151,7 +1150,7 @@ class MainWindow(QMainWindow):
         menu_file = QMenu('&File', self)
         menu_file.addActions([
             act_open, act_open_adv, act_read_header, act_open_auto, act_wizard_auto,
-            act_rename_dcm, #act_task_based_auto,
+            act_rename_dcm, act_task_based_auto,
             act_sim_artifact, act_close, act_close_all, act_quit])
         menu_bar.addMenu(menu_file)
         menu_settings = QMenu('&Settings', self)

@@ -6,15 +6,17 @@ New functionalities:
 - In the Advanced open files - dialog: option to import saved Tag Pattern - Format for grouping images.
 - Simulating artifacts:
 	- Added option to generate 3d artifacts
-	- Added option to set full image to zero before adding artifacts (not fully tested yet!!!!!!!!!!!)
+	- (!!!!!!!!!!not fully tested yet!!!!!!!!!!!)Added option to set full image to zero before adding artifacts 
 
 Changes:
 - Changes to calculations of MTF from line source: more robust on how to interpret the direction of the source 
 - Test NM/SNI: When point source correction and using reference image - both the reference image and the image to be analysed will now always be corrected separately allowing for difference in point source position
+- (!!!!!!!!!!!!!!!!!!!!!!) Test CT/Slicethickness: Added options matching CatPhan 700 with mix of wired and beaded ramp in same slice. 
 
 Fixes:
 - Avoiding crash and output to automation results when CT Siemens constancy file content is shorter than useful content.
 - Avoiding crashes when switching between gaussian and discrete tabulated results for MTF.
+- Avoiding crash when adding more than 8 ROIs for the ROI test.
 
 # v3.1.1
 _Aug 07, 2024_

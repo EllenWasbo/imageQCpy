@@ -79,11 +79,11 @@ class ParamsWidget(QWidget):
 
         # run button at bottom
         vlo.addStretch()
-        btn_run = QPushButton(run_txt)
-        btn_run.setToolTip(
+        self.btn_run = QPushButton(run_txt)
+        self.btn_run.setToolTip(
             'Run the current test on marked images (or all if none marked)')
-        btn_run.clicked.connect(parent.run_current)
-        vlo.addWidget(btn_run)
+        self.btn_run.clicked.connect(parent.run_current)
+        vlo.addWidget(self.btn_run)
 
 
 class ParamsTabCommon(QTabWidget):
@@ -1125,8 +1125,9 @@ class ParamsTabCT(ParamsTabCommon):
             True used for task_based_image_quality.py. The default is False.
         """
         super().__init__(parent, remove_roi_num=task_based)
+        self.task_based = task_based
 
-        if task_based:
+        if self.task_based:
             self.create_tab_ttf()
             self.create_tab_nps()
 
@@ -1342,7 +1343,10 @@ class ParamsTabCT(ParamsTabCommon):
 
     def create_tab_ttf(self):
         """GUI of tab TTF."""
-        self.tab_ttf = ParamsWidget(self, run_txt='Calculate TTF')
+        run_txt = 'Calculate TTF'
+        if self.task_based:
+            run_txt = run_txt + ' for active group'
+        self.tab_ttf = ParamsWidget(self, run_txt=run_txt)
         self.tab_ttf.hlo_top.addWidget(uir.LabelItalic(
             'Task based transfer function (TTF)'))
         info_txt = '''
@@ -1485,7 +1489,10 @@ class ParamsTabCT(ParamsTabCommon):
 
     def create_tab_nps(self):
         """GUI of tab NPS."""
-        self.tab_nps = ParamsWidget(self, run_txt='Calculate NPS')
+        run_txt = 'Calculate NPS'
+        if self.task_based:
+            run_txt = run_txt + ' for active group'
+        self.tab_nps = ParamsWidget(self, run_txt=run_txt)
         self.tab_nps.hlo_top.addWidget(uir.LabelItalic('Noise Power Spectrum (NPS)'))
 
         self.nps_roi_size = QDoubleSpinBox(decimals=0,

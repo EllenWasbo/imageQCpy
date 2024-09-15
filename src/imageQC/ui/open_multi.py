@@ -34,7 +34,7 @@ class OpenMultiDialog(ImageQCDialog):
     for consistency with repetitive tasks.
     """
 
-    def __init__(self, main):
+    def __init__(self, main, input_pattern=None):
 
         super().__init__()
         self.setWindowTitle('Select images to open')
@@ -42,9 +42,12 @@ class OpenMultiDialog(ImageQCDialog):
         self.setLayout(vlo)
 
         # TODO Special tag pattern "Group open advanced" as default - modality selection option
-        temp = TagPatternFormat(
-            list_tags=['AcquisitionDate', 'SeriesNumber', 'SeriesDescription'],
-            list_format=['|:8|', '|:04.0f|', ''])
+        if input_pattern is None:
+            temp = TagPatternFormat(
+                list_tags=['AcquisitionDate', 'SeriesNumber', 'SeriesDescription'],
+                list_format=['|:8|', '|:04.0f|', ''])
+        else:
+            temp = input_pattern
         self.wid = OpenMultiWidget(main, input_template=temp, lock_on_general=True)
         vlo.addWidget(self.wid)
 

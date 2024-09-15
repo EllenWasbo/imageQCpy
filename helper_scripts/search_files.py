@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = ".mtf_type"
+search_string = "get_marked_imgs_current_test"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

@@ -515,7 +515,7 @@ def calculate_qc(input_main, wid_auto=None,
                         if 'TTF' in marked[i]:
                             marked_3d[i].append('TTF')
                             extra_tag_pattern = cfc.TagPatternFormat(
-                                list_tags=['SeriesUID'])
+                                list_tags=['SeriesUID', 'ConvolutionKernel'])
                             extra_tag_list = []
                             read_tags[i] = True
                         if 'Sli' in marked[i]:
@@ -594,6 +594,10 @@ def calculate_qc(input_main, wid_auto=None,
                 curr_progress_val = wid_auto.progress_modal.value()
                 progress_increment = round(
                     wid_auto.progress_modal.sub_interval / n_analyse)
+            else:
+                curr_progress_val = 0
+                if main_type == 'TaskBasedImageQualityDialog':
+                    curr_progress_val = 100 * input_main.run_all_index
 
             cancelled = False
             for i in range(n_analyse):
@@ -601,7 +605,8 @@ def calculate_qc(input_main, wid_auto=None,
                     try:
                         input_main.progress_modal.setLabelText(
                             f'Reading/calculating image {i}/{n_img}')
-                        input_main.progress_modal.setValue(round(100 * i/n_img))
+                        input_main.progress_modal.setValue(
+                             curr_progress_val + round(100 * i/n_analyse))
                     except AttributeError:
                         pass
 
@@ -909,19 +914,25 @@ def calculate_qc(input_main, wid_auto=None,
                 pass
 
     elif main_type == 'TaskBasedImageQualityDialog':
-        input_main.display_errmsg(msgs)
-        if current_test_before in flattened_marked or len(flattened_marked) == 0:
-            set_current_test = current_test_before
-        else:
-            set_current_test = flattened_marked[0]
-        idx_set_test = input_main.tests.index(set_current_test)
-        widget = input_main.tab_ct
-        widget.setCurrentIndex(idx_set_test)
-        input_main.current_test = set_current_test
-        input_main.refresh_results_display()
-        if 'TTF' in input_main.results:
-            input_main.refresh_img_display()
-        input_main.progress_modal.setValue(input_main.progress_modal.maximum())
+        if len(msgs) > 0:
+            if input_main.errmsgs is None:
+                input_main.errmsgs = msgs
+            else:
+                input_main.errmsgs.extend(msgs)
+        if input_main.run_all_active is False:
+            input_main.display_errmsg(msgs)
+            if current_test_before in flattened_marked or len(flattened_marked) == 0:
+                set_current_test = current_test_before
+            else:
+                set_current_test = flattened_marked[0]
+            idx_set_test = input_main.tests.index(set_current_test)
+            widget = input_main.tab_ct
+            widget.setCurrentIndex(idx_set_test)
+            input_main.current_test = set_current_test
+            input_main.refresh_results_display()
+            if 'TTF' in input_main.results:
+                input_main.refresh_img_display()
+            input_main.progress_modal.setValue(input_main.progress_modal.maximum())
 
 
 def calculate_2d(image2d, roi_array, image_info, modality,
@@ -2135,8 +2146,12 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
         materials = paramset.ttf_table.labels
-        if len(images_to_test) == 0 or len(materials) == 0:
+        if len(images_to_test) == 0:
             res = Results(headers=headers, headers_sup=headers_sup)
+        elif len(materials) == 0:
+            errmsgs = ['Missing ROIs for TTF. Materials not defined.']
+            res = Results(headers=headers, headers_sup=headers_sup,
+                          errmsg=errmsgs)
         else:
             details_dict_all = []  # list of dict
             values = []
@@ -3452,7 +3467,7 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset, images_to_test):
                 else:
                     errtxt = ', '.join([errtxt, str(slino)])
     if errtxt != '':
-        errmsg = f'Could not find center of object for image {errtxt}'
+        errmsg.append(f'Could not find center of object for image {errtxt}')
     if len(center_xy) > 0:
         center_x = [vals[0] for vals in center_xy]
         center_y = [vals[1] for vals in center_xy]
@@ -3546,7 +3561,7 @@ def calculate_MTF_circular_edge(matrix, roi, pix, paramset, images_to_test):
                 'presmoothed': ESF_filtered,
                 'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details}
         else:
-            errmsg = 'Could not find circular edge.'
+            errmsg.append('Could not find circular edge.')
 
     return (details_dict, errmsg)
 

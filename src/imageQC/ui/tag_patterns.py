@@ -484,8 +484,8 @@ class TagPatternWidget(QWidget):
 class FormatDialog(ImageQCDialog):
     """Dialog to set format-string of tags in TagPatternFormat."""
 
-    def __init__(self, format_string=''):
-        super().__init__()
+    def __init__(self, format_string='', parent=None):
+        super().__init__(parent=parent)
         self.setWindowTitle('Set format')
         self.cbox_decimals = QComboBox()
         self.cbox_padding = QComboBox()

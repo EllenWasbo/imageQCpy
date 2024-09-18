@@ -1425,22 +1425,19 @@ class ResultPlotCanvas(PlotCanvas):
                 yvals = None
                 n_profiles = 0
                 for i, details_dict in enumerate(dicts):
-                    proceed = True
                     if details_dict:
                         if xvals is not None:
                             xvals_this = details_dict['freq']
                             if (xvals != xvals_this).all():
-                                proceed = False
+                                errmsg = 'Failed plotting average NPS. Not same pixel sizes.'
+                                QMessageBox.information(self, 'Failed averaging', errmsg)
+                                xvals = None
+                                yvals = None
+                                n_profiles = 0
+                                break
                         else:
                             xvals = details_dict['freq']
-                    if proceed is False:
-                        errmsg = 'Failed plotting average NPS. Not same pixel sizes.'
-                        QMessageBox.information(self, 'Failed averaging', errmsg)
-                        xvals = None
-                        yvals = None
-                        n_profiles = 0
-                        break
-                    else:
+
                         n_profiles += 1
                         if normalize == 1:
                             AUC = self.main.results['NPS']['values'][i][1]

@@ -50,6 +50,7 @@ class Results:
     details_dict: dict = field(default_factory=dict)
     alternative: int = 0
     pr_image: bool = True
+    pr_image_sup: bool = True
 
 
 def extract_values(values, columns=[], calculation='='):
@@ -199,7 +200,7 @@ def quicktest_output(input_main):
         for test in output_all_actual:
             output_subs = output_all_actual[test]
 
-            res_pr_image = input_main.results[test]['pr_image']
+            res_pr_image = True
 
             # for each sub-output for current test
             for sub in output_subs:
@@ -208,8 +209,10 @@ def quicktest_output(input_main):
                 if sub.alternative > 9:  # supplement table to output
                     values = input_main.results[test]['values_sup']
                     headers = input_main.results[test]['headers_sup']
+                    res_pr_image = input_main.results[test]['pr_image_sup']
                 else:
                     proceed = False
+                    res_pr_image = input_main.results[test]['pr_image']
                     if sub.alternative == -1:  # not defined use all as default
                         proceed = True
                     else:
@@ -766,6 +769,7 @@ def calculate_qc(input_main, wid_auto=None,
                                         'values_sup': [[] for i in range(n_img)],
                                         'details_dict': [{} for i in range(n_img)],
                                         'pr_image': True,
+                                        'pr_image_sup': True,
                                         'values_info': result.values_info,
                                         'values_sup_info': result.values_sup_info
                                         }
@@ -796,26 +800,39 @@ def calculate_qc(input_main, wid_auto=None,
                     f'{attr_list}')
 
             # post processing - where values depend on all images
-            if modality == 'CT' and cancelled is False:
-                if 'Noi' in flattened_marked and 'Noi' in input_main.results:
-                    try:
-                        noise = [
-                            row[1] for row in input_main.results['Noi']['values']]
-                        avg_noise = sum(noise)/len(noise)
-                        for row in input_main.results['Noi']['values']:
-                            # diff from avg (%)
-                            row[2] = 100.0 * (row[1] - avg_noise) / avg_noise
-                            row[3] = avg_noise
-                        # removed if closed images in ui_main update results
-                    except IndexError:
-                        # average and diff from avg ignored if not all tested
-                        for row in input_main.results['Noi']['values']:
-                            if row:
-                                row[2] = 'NA'
-                                row[3] = 'NA'
-                if 'Dim' in flattened_marked:
-                    if 'MainWindow' in str(type(input_main)):
-                        input_main.update_roi()
+            if cancelled is False:
+                if modality == 'CT':
+                    if 'Noi' in flattened_marked:
+                        try:
+                            noise = [
+                                row[1] for row
+                                in input_main.results['Noi']['values']]
+                            avg_noise = sum(noise)/len(noise)
+                            for row in input_main.results['Noi']['values']:
+                                # diff from avg (%)
+                                row[2] = 100.0 * (row[1] - avg_noise) / avg_noise
+                                row[3] = avg_noise
+                            # removed if closed images in ui_main update results
+                        except (KeyError, IndexError):
+                            # average and diff from avg ignored if not all tested
+                            for row in input_main.results['Noi']['values']:
+                                if row:
+                                    row[2] = 'NA'
+                                    row[3] = 'NA'
+                    if 'NPS' in flattened_marked:
+                        input_main.results['NPS']['pr_image_sup'] = False
+                        input_main.results['NPS']['values_sup_info'] = (
+                            'Average from results pr image')
+                        input_main.results['NPS']['headers_sup'] = copy.deepcopy(
+                            HEADERS['CT']['NPS']['alt0'])
+                        values = [row for row in input_main.results['NPS']['values']
+                                  if len(row) > 0]
+                        values = np.array(values)
+                        values_avg = list(np.mean(values, axis=0))
+                        input_main.results['NPS']['values_sup'] = [values_avg]
+                    if 'Dim' in flattened_marked:
+                        if 'MainWindow' in str(type(input_main)):
+                            input_main.update_roi()
 
             if any(marked_3d) and cancelled is False:
                 results_dict = calculate_3d(
@@ -857,6 +874,7 @@ def calculate_qc(input_main, wid_auto=None,
                     'values_sup': [[] for i in range(n_img)],
                     'details_dict': [{} for i in range(n_img)],
                     'pr_image': True,
+                    'pr_image_sup': True,
                     'values_info': '',
                     'values_sup_info': ''
                     }
@@ -2135,7 +2153,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 res = Results(headers=headers, values=values,
                               headers_sup=headers_sup, values_sup=values_sup,
                               details_dict=details_dict,
-                              alternative=paramset.mtf_type, pr_image=pr_image,
+                              alternative=paramset.mtf_type,
+                              pr_image=pr_image, pr_image_sup=pr_image,
                               errmsg=errmsg)
         else:
             res = None
@@ -2218,7 +2237,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             res = Results(headers=headers, values=values,
                           headers_sup=headers_sup, values_sup=values_sup,
                           details_dict=details_dict_all,
-                          pr_image=False,
+                          pr_image=False, pr_image_sup=False,
                           errmsg=errmsgs)
 
         return res
@@ -2487,7 +2506,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 res = Results(headers=headers, values=[values],
                               headers_sup=headers_sup,
                               values_sup=[values_sup],
-                              details_dict=details_dict, pr_image=False,
+                              details_dict=details_dict,
+                              pr_image=False, pr_image_sup=False,
                               errmsg=errmsgs)
             else:
                 res = Results(headers=headers,

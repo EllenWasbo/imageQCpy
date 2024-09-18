@@ -13,10 +13,10 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication, qApp,
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QToolBar,
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QToolBar, QGroupBox,
     QTabWidget, QStackedWidget, QTableWidget, QTableWidgetItem,
-    QLabel, QPushButton, QAction, QListWidget, QComboBox, QLineEdit,
-    QDialogButtonBox, QMessageBox
+    QLabel, QPushButton, QAction, QListWidget, QComboBox, QLineEdit, QCheckBox,
+    QDialogButtonBox, QMessageBox, QFileDialog
     )
 
 # imageQC block start
@@ -43,17 +43,17 @@ from imageQC.scripts.calculate_qc import calculate_qc
 class RangeDialog(ImageQCDialog):
     """Dialog to set range rule."""
 
-    def __init__(self, main, range_input=None, parent=None):
+    def __init__(self, task_main, range_input=None):#, parent=None):
         """Initialize RangeDialog.
 
         Parameters
         ----------
-        parent: TaskBasedImageQualityDialog
+        task_main: TaskBasedImageQualityDialog
         range_input: list or None
             if None = add, else row as list for edit
         """
-        super().__init__(parent=main)
-        self.main = main
+        super().__init__(parent=task_main)
+        self.task_main = task_main
         self.setWindowTitle('Add/edit range rules')
 
         self.cbox_test = QComboBox()
@@ -62,7 +62,7 @@ class RangeDialog(ImageQCDialog):
         self.cbox_range_type.addItems(
             ['DICOM info', 'Max pixel value'])#, 'Phantom diameter'])
         self.cbox_tags = QComboBox()
-        self.cbox_tags.addItems(self.main.CT_tags)
+        self.cbox_tags.addItems(self.task_main.CT_tags)
         self.txt_min = QLineEdit('None')
         self.txt_max = QLineEdit('None')
         self.txt_format = QLineEdit('')
@@ -95,7 +95,7 @@ class RangeDialog(ImageQCDialog):
             'unexpected results'))
 
         btn_get_current = QPushButton(
-            'Get min/max from currently active group of images')
+            'Get min/max from all images')
         btn_get_current.clicked.connect(self.get_current_min_max)
         vlo.addWidget(btn_get_current)
         
@@ -121,20 +121,22 @@ class RangeDialog(ImageQCDialog):
         idx = self.cbox_range_type.currentIndex()
         if idx == 0:  # DICOM
             tag = self.cbox_tags.currentText()
-            if tag not in self.main.tag_strings:
-                self.main.get_image_values(
+            if tag not in self.task_main.tag_strings:
+                self.task_main.get_image_values(
                     max_vals=False,
                     tag_patterns=[cfc.TagPatternFormat(
                         list_tags=[tag], list_format=[self.txt_format.text()])])
-            strings = copy.deepcopy(self.main.tag_strings[tag])
+            strings = copy.deepcopy(self.task_main.tag_strings[tag])
             strings.sort()
             minimum = strings[0]
             maximum = strings[-1]
         elif idx == 1:
-            if len(self.main.max_pix_values) == 0 and len(self.main.imgs_all) > 0:
-                self.main.get_image_values(max_vals=True, tag_patterns=None)
-            minimum = str(np.min(self.main.max_pix_values))
-            maximum = str(np.max(self.main.max_pix_values))
+            if (len(self.task_main.max_pix_values) == 0
+                and len(self.task_main.imgs_all) > 0):
+                self.task_main.get_image_values(
+                    max_vals=True, tag_patterns=None)
+            minimum = str(np.min(self.task_main.max_pix_values))
+            maximum = str(np.max(self.task_main.max_pix_values))
         self.txt_min.setText(minimum)
         self.txt_max.setText(maximum)
 
@@ -180,10 +182,10 @@ class RangeDialog(ImageQCDialog):
 class RangeWidget(QWidget):
     """Widget to set ranges to define NPS or TTF."""
 
-    def __init__(self, main):
+    def __init__(self, task_main):
         """Initialize RangeWidget."""
         super().__init__()
-        self.main = main
+        self.task_main = task_main
         self.table = RangeTableWidget(self)
         hlo = QHBoxLayout()
         self.setLayout(hlo)
@@ -213,15 +215,16 @@ class RangeWidget(QWidget):
         hlo.addLayout(vlo_toolb)
         vlo_toolb.addWidget(toolb)
         btn_update_on_ranges = QPushButton('Set tests from ranges')
-        btn_update_on_ranges.clicked.connect(self.main.set_marked_images_from_ranges)
+        btn_update_on_ranges.clicked.connect(
+            self.task_main.set_marked_images_from_ranges)
         vlo_toolb.addWidget(btn_update_on_ranges)
         btn_all_ttf = QPushButton('All images TTF')
-        btn_all_ttf.clicked.connect(self.main.set_all_ttf)
+        btn_all_ttf.clicked.connect(self.task_main.set_all_ttf)
         vlo_toolb.addWidget(btn_all_ttf)
 
     def add_row(self):
         """Add row to table."""
-        dlg = RangeDialog(self.main)
+        dlg = RangeDialog(self.task_main)
         res = dlg.exec()
         if res:
             info_row = dlg.get_range_info()
@@ -235,9 +238,9 @@ class RangeWidget(QWidget):
                 else:
                     rowno = self.table.rowCount()
                 self.table.current_table.insert(rowno, info_row)
-                self.main.current_paramset.ranges_table = copy.deepcopy(
+                self.task_main.current_paramset.ranges_table = copy.deepcopy(
                     self.table.current_table)
-                self.main.wid_paramset.flag_edit(True)
+                self.task_main.wid_paramset.flag_edit(True)
             self.table.update_table()
 
     def edit_row(self):
@@ -245,15 +248,15 @@ class RangeWidget(QWidget):
         sel = self.table.selectedIndexes()
         if len(sel) > 0:
             rowno = sel[0].row()
-            dlg = RangeDialog(self.main, parent=self,
+            dlg = RangeDialog(self.task_main,# parent=self,
                               range_input=self.table.current_table[rowno])
             res = dlg.exec()
             if res:
                 info_row = dlg.get_range_info()
                 self.table.current_table[rowno] = info_row
-                self.main.current_paramset.ranges_table = copy.deepcopy(
+                self.task_main.current_paramset.ranges_table = copy.deepcopy(
                     self.table.current_table)
-                self.main.wid_paramset.flag_edit(True)
+                self.task_main.wid_paramset.flag_edit(True)
                 self.table.update_table()
 
     def delete_row(self):
@@ -262,9 +265,9 @@ class RangeWidget(QWidget):
         if len(sel) > 0:
             rowno = sel[0].row()
             self.table.current_table.pop(rowno)
-            self.main.current_paramset.ranges_table = copy.deepcopy(
+            self.task_main.current_paramset.ranges_table = copy.deepcopy(
                 self.table.current_table)
-            self.main.wid_paramset.flag_edit(True)
+            self.task_main.wid_paramset.flag_edit(True)
             self.table.update_table()
 
     def get_auto_ranges(self):
@@ -282,30 +285,18 @@ class RangeTableWidget(QTableWidget):
         #self.cellChanged.connect(self.edit_current_table)
         self.update_table()
 
-    '''
-    def edit_current_table(self, row, col):
-        """Update PositionTable when cell edited."""
-        val = self.item(row, col).text()
-        try:
-            val = float(val)
-        except ValueError:
-            val = 0
-        self.current_table[row][col] = val
-        self.parent.main.current_paramset.ranges_table = copy.deepcopy(self.current_table)
-        self.parent.main.wid_paramset.flag_edit(True)
-    '''
-
     def update_table(self):
         """Populate table with current table."""
         if self.current_table is None:  # not initiated yet
-            self.current_table = self.parent.main.current_paramset.ranges_table
+            self.current_table = (
+                self.parent.task_main.current_paramset.ranges_table)
 
         self.blockSignals(True)
         self.clear()
         self.setColumnCount(5)
         self.setHorizontalHeaderLabels(
             ['Test', 'Parameter', 'min', 'max', 'format'])
-        ch_w = self.parent.main.gui.char_width
+        ch_w = self.parent.task_main.gui.char_width
         for i, width in enumerate([12, 30, 12, 12, 12]):
             self.setColumnWidth(i, width*ch_w)
         #self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -324,6 +315,149 @@ class RangeTableWidget(QTableWidget):
 
         self.blockSignals(False)
 
+
+class ExportDialog(ImageQCDialog):
+    """GUI to select the output from calculated results."""
+    def __init__(self, task_main):
+        super().__init__(parent=task_main)
+        self.task_main = task_main
+        self.setWindowTitle('Export results')
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        vlo.addWidget(uir.UnderConstruction(
+            txt='Under construction, not finished...'))
+
+        hlo_browse = QHBoxLayout()
+        vlo.addLayout(hlo_browse)
+        lbl = QLabel('Selected folder for result files: ')
+        hlo_browse.addWidget(lbl)
+        self.path = QLineEdit()
+        hlo_browse.addWidget(self.path)
+        toolb = uir.ToolBarBrowse('Browse to folder')
+        toolb.act_browse.triggered.connect(self.browse)
+        hlo_browse.addWidget(toolb)
+
+        hlo_select_all = QHBoxLayout()
+        btn_select_all= QPushButton('Select all')
+        btn_select_all.clicked.connect(self.select_all)
+        hlo_select_all.addWidget(btn_select_all)
+        btn_deselect_all= QPushButton('Deselect all')
+        btn_deselect_all.clicked.connect(lambda: self.select_all(flag=False))
+        hlo_select_all.addWidget(btn_deselect_all)
+        hlo_select_all.addStretch()
+        vlo.addLayout(hlo_select_all)
+
+        self.ttf = QGroupBox('TTF results')
+        self.ttf.setCheckable(True)
+        self.ttf.setChecked(False)
+        self.ttf.setFont(uir.FontItalic())
+        flo_ttf = QFormLayout()
+        self.ttf.setLayout(flo_ttf)
+
+        self.ttf_dcm = QCheckBox('')
+        self.ttf_table = QCheckBox('')
+        self.ttf_curves_gaussian = QCheckBox('')
+        self.ttf_fit_gaussian = QCheckBox('')
+        self.ttf_curves_discrete = QCheckBox('')
+        flo_ttf.addRow(self.ttf_dcm,
+                       QLabel('Table of condensed DICOM info pr group (ttf_dcm.txt)'))
+        flo_ttf.addRow(self.ttf_table,
+                       QLabel('Table of MTF 50,10,2% pr group and material (ttf_table.txt)'))
+        flo_ttf.addRow(self.ttf_curves_gaussian,
+                       QLabel('TTF curves gaussian pr group and material (ttf_gaussian.txt)'))
+        flo_ttf.addRow(self.ttf_fit_gaussian,
+                       QLabel('TTF gaussian fit parameters pr group and material '
+                              '(ttf_gaussian_fit.txt)'))
+        flo_ttf.addRow(self.ttf_curves_discrete,
+                       QLabel('TTF curves discrete pr group and material (ttf_discrete.txt)'))
+
+        self.nps = QGroupBox('NPS results')
+        self.nps.setCheckable(True)
+        self.nps.setChecked(False)
+        self.nps.setFont(uir.FontItalic())
+        flo_nps = QFormLayout()
+        self.nps.setLayout(flo_nps)
+
+        self.nps_dcm = QCheckBox('')
+        self.nps_table = QCheckBox('')
+        self.nps_curves_pr_image = QCheckBox('')
+        self.nps_curves_average = QCheckBox('')
+        flo_nps.addRow(self.nps_dcm,
+                       QLabel('Table of condensed DICOM info pr group (nps_table.txt)'))
+        flo_nps.addRow(self.nps_table,
+                       QLabel('Table of results pr group (average) (nps_table.txt)'))
+        flo_nps.addRow(QLabel(''), uir.LabelItalic('Tables above combined if both selected.'))
+        flo_nps.addRow(self.nps_curves_average,
+                       QLabel('NPS average curves pr group (nps_curves.txt)'))
+        flo_nps.addRow(self.nps_curves_pr_image,
+                       QLabel('NPS curves pr group and pr image (nps_curves.txt)'))
+        flo_nps.addRow(QLabel(''), uir.LabelItalic('Curves above combined if both selected.'))
+
+        self.dpr = QGroupBox("d' results")
+        self.dpr.setCheckable(True)
+        self.dpr.setChecked(False)
+        self.dpr.setFont(uir.FontItalic())
+        flo_dpr = QFormLayout()
+        self.dpr.setLayout(flo_dpr)
+
+        self.dpr_dcm = QCheckBox('')
+        flo_dpr.addRow(self.dpr_dcm, QLabel('Table of condensed DICOM info pr group'))
+
+        vlo.addWidget(self.ttf)
+        vlo.addWidget(self.nps)
+        vlo.addWidget(self.dpr)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            Qt.Horizontal, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        vlo.addWidget(buttons)
+
+    def browse(self):
+        """Browse to result folder."""
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.Directory)
+        if dlg.exec():
+            self.path.setText(dlg.selectedFiles()[0])
+
+    def select_all(self, flag=True):
+        self.ttf.setChecked(flag)
+        self.ttf_dcm.setChecked(flag)
+        self.ttf_table.setChecked(flag)
+        self.ttf_curves_gaussian.setChecked(flag)
+        self.ttf_fit_gaussian.setChecked(flag)
+        self.ttf_curves_discrete.setChecked(flag)
+        self.nps.setChecked(flag)
+        self.nps_dcm.setChecked(flag)
+        self.nps_table.setChecked(flag)
+        self.nps_curves_average.setChecked(flag)
+        self.nps_curves_pr_image.setChecked(flag)
+        self.dpr.setChecked(flag)
+        self.dpr_dcm.setChecked(flag)
+
+    def get_export_selections(self):
+        if self.ttf.isChecked():
+            ttf = [self.ttf_dcm.isChecked(), self.ttf_table.isChecked(),
+                   self.ttf_curves_gaussian.isChecked(), self.ttf_fit_gaussian.isChecked(),
+                   self.ttf_curves_discrete.isChecked()]
+        else:
+            ttf = None
+        if self.nps.isChecked():
+            nps = [self.nps_dcm.isChecked(), self.nps_table.isChecked(),
+                   self.nps_curves_average.isChecked(), self.nps_curves_pr_image.isChecked()]
+        else:
+            nps = None
+        if self.dpr.isChecked():
+            dpr = [self.dpr_dcm.isChecked()]
+        else:
+            dpr = None
+        if ttf is None and nps is None and dpr is None:
+            path = ''
+        else:
+            path = self.path.text()
+        return (path, ttf, nps, dpr)
 
 class TaskBasedImageQualityDialog(ImageQCDialog):
     """GUI setup for the dialog window."""
@@ -404,6 +538,8 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         self.list_images.currentRowChanged.connect(self.update_active_img)
 
         self.btn_locate_images = QPushButton('Open images...')
+        self.btn_locate_images.setIcon(QIcon(
+            f'{os.environ[ENV_ICON_PATH]}openMulti.png'))
         self.btn_locate_images.clicked.connect(self.open_multi)
         self.lbl_n_loaded = QLabel('0 / 0')
 
@@ -501,8 +637,10 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
 
     def open_multi(self):
         """Start open advanced dialog."""
-        input_pattern = self.current_paramset.dcm_tagpattern
-        dlg = open_multi.OpenMultiDialog(self, input_pattern=input_pattern)
+        input_pattern = self.current_paramset.group_tagpattern
+        edit_grouping = True if len(self.imgs_all) > 0 else False
+        dlg = open_multi.OpenMultiDialog(
+            self, input_pattern=input_pattern, edit_grouping=edit_grouping)
         res = dlg.exec()
         if res:
             if len(dlg.wid.open_imgs) > 0:
@@ -532,8 +670,10 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         self.max_pix_values = []  # hold max pixel value pr img if calculated
         self.tag_strings = {}
 
-    def update_list_images(self, groupno=-1):
+    def update_list_images(self, groupno=None):
         """Fill list_images with all images in selected groups."""
+        if groupno is None:
+            groupno = self.list_groups.currentRow()
         if groupno >= 0:
             self.blockSignals(True)
             img_strings = []
@@ -554,6 +694,16 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                 self.results = copy.deepcopy(self.results_all[groupno])
             self.refresh_results_display()
             self.update_active_img()
+
+    def set_active_img(self, imgno):
+        """Set active image programmatically.
+
+        Parameters
+        ----------
+        imgno : int
+            image number to set active
+        """
+        self.list_images.setCurrentRow(imgno)
 
     def get_image_values(self, max_vals=True, diameters=False,
                          tag_patterns=None):
@@ -616,17 +766,15 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         values = string_values
         within_ranges_list = np.zeros(len(string_values), dtype=bool)
         within = []
-        if format_string:
-            if 'f' in format_string or 'i' in format_string:
-                try:
-                    values = [float(val) for val in values]
-                    values = np.array(values)
-                    minimum = float(minimum)
-                    within = np.where(np.logical_and(
-                        values >= minimum, values <= maximum))
-                    within_ranges_list[within] = True
-                except TypeError:
-                    pass
+        try:
+            values = [float(val) for val in values]
+            values = np.array(values)
+            minimum = float(minimum)
+            within = np.where(np.logical_and(
+                values >= minimum, values <= maximum))
+            within_ranges_list[within] = True
+        except TypeError:
+            pass
         if len(within) == 0:
             if minimum is not None:
                 string_values.insert(0, minimum)
@@ -664,15 +812,9 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             if max_vals:
                 if len(self.max_pix_values):
                     max_vals = False
-            '''
-            diameters = True if '**phantom_diameter**' in types else False
-            if diameters:
-                if len(self.diameters):
-                    diameters = False
-            '''
 
             # update values if needed
-            if max_vals or tag_patterns:#or diameters
+            if max_vals or tag_patterns:
                 self.get_image_values(max_vals=max_vals,
                                       tag_patterns=tag_patterns)
 
@@ -715,13 +857,11 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         self.update_list_images(groupno=groupno)
 
     def get_marked_imgs_current_test(self):
-        """Return indexes in self.imgs_all for images in selected group."""
+        """Return indexes in self.imgs for images in selected group."""
         idxs = []
-        if self.imgs_all:
-            groupno = self.list_groups.currentRow()
-            idxs = [i for i, img in enumerate(self.imgs_all)
-                if self.imgs_group_numbers[i] == groupno
-                and self.current_test in img.marked_quicktest]
+        if self.imgs:
+            idxs = [i for i, img in enumerate(self.imgs)
+                if self.current_test in img.marked_quicktest]
         return idxs
 
     def update_active_img(self):
@@ -730,12 +870,12 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         groupno = self.list_groups.currentRow()
         if self.gui.active_img_no > -1 and groupno > -1:
             self.active_img, _ = dcm.get_img(
-                self.imgs_all[self.gui.active_img_no].filepath,
-                frame_number=self.imgs_all[self.gui.active_img_no].frame_number,
+                self.imgs[self.gui.active_img_no].filepath,
+                frame_number=self.imgs[self.gui.active_img_no].frame_number,
                 tag_infos=self.tag_infos)
 
             self.refresh_img_display()
-            self.refresh_results_display(update_table=False)
+            #self.refresh_results_display(update_table=False)
             self.refresh_selected_table_row()
 
     def update_current_test(self, reset_index=False, refresh_display=True):
@@ -818,17 +958,19 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                         )
                 except (KeyError, TypeError, IndexError):
                     self.wid_res_tbl.result_table.clear()
+
                 try:
                     self.wid_res_tbl_sup.result_table.fill_table(
                         col_labels=self.results[self.current_test]['headers_sup'],
                         values_rows=self.results[self.current_test]['values_sup'],
                         linked_image_list=self.results[
-                            self.current_test]['pr_image'],
+                            self.current_test]['pr_image_sup'],
                         table_info=self.results[
                             self.current_test]['values_sup_info']
                         )
                 except (KeyError, TypeError, IndexError):
                     self.wid_res_tbl_sup.result_table.clear()
+
             elif isinstance(wid, ui_main_result_tabs.ResultPlotWidget):
                 self.wid_res_plot.plotcanvas.plot()
             elif isinstance(wid, ui_main_result_tabs.ResultImageWidget):
@@ -836,11 +978,9 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
 
     def run_all(self):
         """Run all tests (DCM on all, TTF/NPS where set), DPR if both TTF,NPS in group."""
-        proceed = False
         if self.imgs_all:
-            marked = idxs = [img.marked_quicktest for img in self.imgs_all]
-            flattened_marked = [elem for sublist in marked for elem in sublist]
-            if 'TTF' not in flattened_marked and 'NPS' not in flattened_marked:
+            marked = [img.marked_quicktest for img in self.imgs_all]
+            if 'TTF' not in marked and 'NPS' not in marked:
                 self.set_marked_images_from_ranges()
 
             self.results_all = []
@@ -872,7 +1012,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                 self.progress_modal.setValue((groupno + 1) * 100)
                 self.results_all.append(copy.deepcopy(self.results))
 
-            self.run_all_active = True
+            self.run_all_active = False
             self.run_all_index = 0
 
             self.tab_ct.setCurrentIndex(self.tests.index(current_test_before))
@@ -889,15 +1029,71 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
 
     def export_all(self):
         """Export all results to files."""
+        def reduce_to_row(list_of_rows, idxs):
+            """Reduce list of rows to one row.
+            If column values not same, list values."""
+            row = copy.deepcopy(list_of_rows[idxs[0]])
+            for idx, row_this in enumerate(list_of_rows):
+                if idx in idxs:
+                    for colno, val in enumerate(row_this):
+                        if val != row[colno]:
+                            row[colno] = f'{row[colno]}/{val}'
+            return row
+
+        path = ''
+        ttf = None
+        nps = None
+        dpr = None
         if self.results_all:
-            pass
-            #create files / content
+            dlg = ExportDialog(self)
+            res = dlg.exec()
+            if res:
+                path, ttf, nps, dpr = dlg.get_export_selections()
+                if not os.access(path, os.W_OK):
+                    path = ''
+                    QMessageBox.warning(
+                        self, 'Failed saving',
+                        f'No writing permission for {path}')
         else:
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Missing results',
                 msg='Calculate all first to generate results for export',
                 icon=QMessageBox.Information)
             dlg.exec()
+
+        if path:
+            headers_first = ['Group'] + self.results_all[0]['DCM']['headers']
+            headers = {'TTF': [], 'NPS': [], 'DPR': []}
+            values = {'TTF': [], 'NPS': [], 'DPR': []}
+            breakpoint()
+            for groupno, res in enumerate(self.results_all):
+                group_name = self.group_strings[groupno]
+                imgs_this = [img for i, img in enumerate(self.imgs_all)
+                             if groupno == self.imgs_group_numbers[i]]
+                dcm_values = res['DCM']['values']
+                for test in ['TTF', 'NPS']:
+                    idxs = [i for i, img in enumerate(imgs_this)
+                            if test in img.marked_quicktest]
+                    if test in res:
+                        dcm_row = reduce_to_row(dcm_values, idxs)
+                        if test == 'TTF' and ttf:
+                            test_values = res[test]['values']
+                            breakpoint()
+                        elif test == 'NPS' and nps:
+                            test_values = []
+                            breakpoint()
+                        if len(headers[test]) == 0:
+                            headers[test] = (
+                                headers_first + res[test]['headers'])
+                        values[test].append(
+                            [group_name] + dcm_row + test_values)
+            # dcm_pr_group_ttf.txt
+            # dcm_pr_group_nps.txt
+            # ttf_curves and 50/10/2% pr group and material
+            #2 files (NPS and TTF)
+            #user select to include
+            # ttf: groupame (alvays) dcm, tabulated values pr material ttf, curves, supplement (gauusian)
+            # NPS: groupname (always) dcm, tabuled values (all - grouped), curves
 
     def start_wait_cursor(self):
         """Block mouse events by wait cursor."""

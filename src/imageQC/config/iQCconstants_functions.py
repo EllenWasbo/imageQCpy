@@ -169,4 +169,3 @@ def set_auto_common_default():
         )
 
     return cfc.AutoCommon(filename_pattern=filename_pattern)
-

@@ -653,6 +653,11 @@ def load_paramsets(fnames, path):
                                                 cfc.TagPatternFormat())
                         doc['dcm_tagpattern'] = cfc.TagPatternFormat(
                             **upd)
+                        if 'group_tagpattern' in doc:
+                            upd = verify_input_dict(doc['group_tagpattern'],
+                                                    cfc.TagPatternFormat())
+                            doc['group_tagpattern'] = cfc.TagPatternFormat(
+                                **upd)
                         tests = {}
                         for key, test in doc['output']['tests'].items():
                             tests[key] = []
@@ -735,9 +740,24 @@ def load_paramsets(fnames, path):
             if 'task_based' in fnames[0]:
                 settings = [cfc.ParamSetCT_TaskBased(
                     dcm_tagpattern=cfc.TagPatternFormat(
+                        list_tags=[
+                            'SeriesDescription', 'ProtocolName',
+                            'KVP', 'mA', 'ExposureTime', 'ConvolutionKernel',
+                            'CTDIvol', 'SliceThickness',
+                            'AcquisitionDate', 'AcquisitionTime',
+                            'InstanceNumber'],
+                        list_format=[
+                            '', '',
+                            '|:.0f|', '|:.1f|', '|:.1f|', '',
+                            '|:.2f|', '|:.1f|',
+                            '', '|:.0f|',
+                            '|:.0f|']
+                        ),
+                    group_tagpattern=cfc.TagPatternFormat(
                         list_tags=['ConvolutionKernel', 'mAs'],
                         list_format=['', '']
-                        ))]
+                        )
+                    )]
             else:
                 mod = fnames[0].split('_')[1]
                 class_ = getattr(cfc, f'ParamSet{mod}')

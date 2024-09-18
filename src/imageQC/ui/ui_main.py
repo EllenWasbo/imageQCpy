@@ -574,7 +574,10 @@ class MainWindow(QMainWindow):
                         empty_extend = [[] for i in range(n_added_imgs)]
                         res_dict['values'].extend(empty_extend)
                         if 'values_sup' in res_dict:
-                            res_dict['values_sup'].extend(empty_extend)
+                            if res_dict['pr_image_sup']:
+                                res_dict['values_sup'].extend(empty_extend)
+                            else:
+                                del_keys.append(test)
                         if 'details_dict' in res_dict:
                             res_dict['details_dict'].extend(empty_extend)
                     else:
@@ -605,7 +608,11 @@ class MainWindow(QMainWindow):
                         for idx in deleted_idxs:
                             del res_dict['values'][idx]
                             if 'values_sup' in res_dict:
-                                del res_dict['values_sup'][idx]
+                                if res_dict['pr_image_sup']:
+                                    del res_dict['values_sup'][idx]
+                                else:
+                                    del_keys.append(test)
+                                    break
                             if 'details_dict' in res_dict:
                                 del res_dict['details_dict'][idx]
                         if self.current_modality == 'CT' and test == 'Noi':
@@ -632,6 +639,7 @@ class MainWindow(QMainWindow):
                         'values_sup': [],
                         'details_dict': [],
                         'pr_image': True,
+                        'pr_image_sup': True,  # else already deleted
                         'values_info': res_dict['values_info'],
                         'values_sup_info': res_dict['values_sup_info'],
                         }
@@ -660,17 +668,18 @@ class MainWindow(QMainWindow):
         """Set selected results table row to the same as image selected file."""
         if self.current_test in self.results:
             if self.results[self.current_test] is not None:
-                if self.results[self.current_test]['pr_image']:
-                    wid = self.tab_results.currentWidget()
-                    if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
-                        marked_imgs = self.get_marked_imgs_current_test()
-                        if self.gui.active_img_no in marked_imgs:
-                            idx = marked_imgs.index(self.gui.active_img_no)
+                wid = self.tab_results.currentWidget()
+                if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
+                    marked_imgs = self.get_marked_imgs_current_test()
+                    if self.gui.active_img_no in marked_imgs:
+                        idx = marked_imgs.index(self.gui.active_img_no)
+                        if self.results[self.current_test]['pr_image']:
                             self.wid_res_tbl.result_table.blockSignals(True)
-                            self.wid_res_tbl_sup.result_table.blockSignals(True)
                             self.wid_res_tbl.result_table.selectRow(idx)
-                            self.wid_res_tbl_sup.result_table.selectRow(idx)
                             self.wid_res_tbl.result_table.blockSignals(False)
+                        if self.results[self.current_test]['pr_image_sup']:
+                            self.wid_res_tbl_sup.result_table.blockSignals(True)
+                            self.wid_res_tbl_sup.result_table.selectRow(idx)
                             self.wid_res_tbl_sup.result_table.blockSignals(False)
 
     def sort_imgs(self):

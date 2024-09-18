@@ -6,6 +6,7 @@ User interface for open advanced option.
 @author: Ellen Wasbo
 """
 import os
+import copy
 import numpy as np
 
 from PyQt5.QtCore import Qt
@@ -34,8 +35,19 @@ class OpenMultiDialog(ImageQCDialog):
     for consistency with repetitive tasks.
     """
 
-    def __init__(self, main, input_pattern=None):
+    def __init__(self, main, input_pattern=None, edit_grouping=False):
+        """Initialise dialog for advanced open images.
 
+        Parameters
+        ----------
+        main : MainWindow or TaskBasedImageQualityDialog
+            containing .imgs
+        input_pattern : config_classes.TagPatternFormat, optional
+            preset tagpattern for grouping. The default is None.
+        edit_grouping : bool, optional
+            If True, main.imgs already read, option to edit grouping.
+            The default is False.
+        """
         super().__init__()
         self.setWindowTitle('Select images to open')
         vlo = QVBoxLayout()
@@ -48,7 +60,10 @@ class OpenMultiDialog(ImageQCDialog):
                 list_format=['|:8|', '|:04.0f|', ''])
         else:
             temp = input_pattern
-        self.wid = OpenMultiWidget(main, input_template=temp, lock_on_general=True)
+        lock_on_general = True if 'MainWindow' in str(type(main)) else False
+        self.wid = OpenMultiWidget(
+            main, input_template=temp, lock_on_general=lock_on_general,
+            edit_grouping=edit_grouping)
         vlo.addWidget(self.wid)
 
         hlo_dlg_btns = QHBoxLayout()
@@ -82,10 +97,14 @@ class OpenMultiWidget(QWidget):
     """
 
     def __init__(self, main, input_template=None,
-                 lock_on_general=False, lock_on_modality=None):
+                 lock_on_general=False, lock_on_modality=None,
+                 edit_grouping=False):
         super().__init__()
         self.main = main
-        self.imgs = []
+        if edit_grouping:  # TaskBased
+            self.imgs = copy.deepcopy(self.main.imgs_all)
+        else:
+            self.imgs = []
         self.open_imgs = []
         self.current_template = input_template
         self.wid_series_pattern = TagPatternWidget(
@@ -258,6 +277,9 @@ class OpenMultiWidget(QWidget):
         vlo_open.addLayout(hlo_btns)
         vlo_open.addStretch()
 
+        if edit_grouping:
+            self.refresh_lists()
+
     def browse(self):
         """Browse to set selected folder and start searching for images."""
         dlg = QFileDialog()
@@ -267,13 +289,61 @@ class OpenMultiWidget(QWidget):
             self.path.setText(os.path.normpath(fname[0]))
             self.find_all_dcm()
 
+    def read_img_infos(self, filepaths):
+        self.main.start_wait_cursor()
+        self.status_label.showMessage(
+            f'Reading header of {len(filepaths)} dicom files...')
+        img_infos, _, warnings = read_dcm_info(
+            filepaths, tag_infos=self.main.tag_infos,
+            tag_patterns_special=self.main.tag_patterns_special,
+            statusbar=self.status_label,
+            series_pattern=self.current_template)
+        self.main.stop_wait_cursor()
+        if len(warnings) > 0:
+            dlg = messageboxes.MessageBoxWithDetails(
+                self, title='Some files read with warnings',
+                msg='See details for warning messages',
+                details=warnings, icon=QMessageBox.Warning)
+            dlg.exec()
+        if len(img_infos) > 0:
+            series_nmb_name = [' '.join(img.series_list_strings)
+                               for img in img_infos]
+            series_nmb_name = list(set(series_nmb_name))
+            series_nmb_name.sort()
+            self.imgs = [[] for i in range(len(series_nmb_name))]
+            for img in img_infos:
+                ser = ' '.join(img.series_list_strings)
+                serno = series_nmb_name.index(ser)
+                self.imgs[serno].append(img)
+
+            # sort by zpos if available
+            for serno, imgs in enumerate(self.imgs):
+                zs = [img.zpos for img in imgs]
+                if all(zs):
+                    imgs_temp = sorted(zip(imgs, zs), key=lambda t: t[1])
+                    self.imgs[serno] = [img[0] for img in imgs_temp]
+
+            self.list_series.clear()
+            self.list_series.addItems(series_nmb_name)
+            self.list_series.setCurrentRow(0)
+            self.update_list_images(0)
+        else:
+            QMessageBox.warning(self, 'Found no images',
+                                'Found no images in the selcted path.')
+        self.status_label.clearMessage()
+
     def refresh_lists(self):
         """Refresh lists when tag pattern changed."""
-        if self.path.text() != '':
-            self.find_all_dcm()
+        if len(self.imgs) > 0:
+            if isinstance(self.imgs[0], list):
+                imgs = [elem for sublist in self.imgs for elem in sublist]
+            else:
+                imgs = self.imgs
+            dcm_files = [img.filepath for img in imgs]
+            self.read_img_infos(dcm_files)
         else:
-            QMessageBox.warning(self, 'No folder selected',
-                                'No folder selected so there is nothing to refresh.')
+            QMessageBox.warning(self, 'Missing data',
+                                'No read files to refresh. Select a folder.')
 
     def find_all_dcm(self):
         """Find all DICOM files and list these according to the pattern."""
@@ -287,11 +357,10 @@ class OpenMultiWidget(QWidget):
             dcm_dict = find_all_valid_dcm_files(
                 path, parent_widget=self, progress_modal=progress_modal, grouped=False)
             progress_modal.reset()
-            self.main.start_wait_cursor()
-            self.status_label.showMessage(
-                f'Reading header of {len(dcm_dict["files"])} dicom files...')
             if len(dcm_dict['files']) > 0:
                 dcm_files = dcm_dict['files']
+                self.read_img_infos(dcm_files)
+                '''
                 img_infos, _, warnings = read_dcm_info(
                     dcm_files, tag_infos=self.main.tag_infos,
                     tag_patterns_special=self.main.tag_patterns_special,
@@ -331,6 +400,7 @@ class OpenMultiWidget(QWidget):
                                         'Found no images in the selcted path.')
             self.status_label.clearMessage()
             self.main.stop_wait_cursor()
+            '''
 
     def update_list_images(self, serno):
         """Fill list_images with all images in selected groups."""

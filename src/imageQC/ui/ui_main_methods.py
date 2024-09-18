@@ -81,7 +81,7 @@ def refresh_results_display(main, update_table=True):
                         col_labels=main.results[main.current_test]['headers_sup'],
                         values_rows=main.results[main.current_test]['values_sup'],
                         linked_image_list=main.results[
-                            main.current_test]['pr_image'],
+                            main.current_test]['pr_image_sup'],
                         table_info=main.results[
                             main.current_test]['values_sup_info']
                         )

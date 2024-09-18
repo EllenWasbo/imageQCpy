@@ -701,6 +701,9 @@ class ParamSetCT_TaskBased:
     output: QuickTestOutputTemplate = field(
         default_factory=QuickTestOutputTemplate)
     dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
+    # for test DCM
+    group_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
+    # for group on open files
     ttf_roi_size: float = 11.
     ttf_gaussian: bool = True  # True= gaussian fit, False = discrete FFT
     ttf_cut_lsf: bool = True

@@ -1529,7 +1529,8 @@ class ParamsTabCT(ParamsTabCommon):
         Details on methods used can be found in AAPM TG-233<br>
         '''
         self.tab_dpr.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
-
+        self.tab_dpr.hlo_top.addWidget(uir.UnderConstruction(
+            txt='Under construction, not finished...'))
         self.dpr_contrast = QDoubleSpinBox(decimals=0, minimum=1, singleStep=1)
         self.dpr_contrast.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='dpr_contrast'))
@@ -3928,8 +3929,11 @@ class CTnTableWidget(QWidget):  # TODO PositionWidget
             proceed = dlg.exec()
         ctn_table = None
         if proceed:
-            dataf = pd.read_clipboard()
-            nrows, ncols = dataf.shape
+            try:
+                dataf = pd.read_clipboard()
+                nrows, ncols = dataf.shape
+            except pd.errors.ParserError:
+                ncols = 0
             if ncols != 6:
                 pass  # TODO ask for separator / decimal or guess?
                 errmsg = [

@@ -345,6 +345,10 @@ HEADERS_SUP = {
         'Dim': {
             'alt0': ['Upper', 'Lower', 'Left', 'Right', 'Diagonal 1', 'Diagonal 2']
             },
+        'NPS': {
+            'alt0': ['Median frequency (1/mm)', 'Average AUC unnormalized',
+                     'Average variance', 'ROIs avg HU', 'ROIs stdev HU (noise)']
+            },
         },
     'Xray': {
         'ROI': {'alt0': roi_headers_sup},

@@ -99,7 +99,7 @@ class QuestionBox(QMessageBox):
     def __init__(
             self, parent=None, title='?', msg='?',
             yes_text='Yes', no_text='No', msg_width=500,
-            info='', details=[], default_yes=False):
+            info='', details=[], default_yes=False, cancel=False):
         """Initiate QuestionBox.
 
         Parameters
@@ -116,6 +116,8 @@ class QuestionBox(QMessageBox):
             Text on no button. The default is 'No'.
         msg_width : int, optional
             Width of question label. The default is 500.
+        cancel : bool, optional
+            if True = include Cancel button. The default is False.
 
         Returns
         -------
@@ -134,8 +136,10 @@ class QuestionBox(QMessageBox):
             self.setDetailedText('\n'.join(details))
         _qlabels = self.findChildren(QLabel)
         _qlabels[1].setFixedWidth(msg_width)
-        self.addButton(no_text, QMessageBox.RejectRole)
-        self.addButton(yes_text, QMessageBox.AcceptRole)
+        self.addButton(no_text, QMessageBox.NoRole)
+        self.addButton(yes_text, QMessageBox.YesRole)
+        if cancel:
+            self.addButton('Cancel', QMessageBox.RejectRole)
         _qbuttons = self.findChildren(QPushButton)
         if default_yes:
             _qbuttons[0].setAutoDefault(False)

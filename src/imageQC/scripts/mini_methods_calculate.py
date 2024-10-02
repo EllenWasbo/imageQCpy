@@ -412,6 +412,93 @@ def get_NPSuv_profile(NPS_array, nlines=7, exclude_axis=True, pix=1., step_size=
     return (freq, u_profile, v_profile)
 
 
+def get_avg_NPS_curve(results_NPS, normalize=''):
+    """Calculate average NPS curve from multiple images.
+
+    Parameters
+    ----------
+    results_NPS : list of dict
+        as generated in calculate_qc.py for test CT NPS
+    normalize : str, optional
+        No normalization (''), AUC or Large area signal (LAS). The default is ''.
+
+    Returns
+    -------
+    xvals : np.array
+        frequencyies
+    y_avg : np.array
+        average NPS values
+    errmsg : str
+        if failed averaging
+
+    """
+    dicts = results_NPS['details_dict']
+    xvals = None
+    yvals = None
+    y_avg = None
+    errmsg = ''
+    n_profiles = 0
+    for i, details_dict in enumerate(dicts):
+        if details_dict:
+            if xvals is not None:
+                xvals_this = details_dict['freq']
+                if (xvals != xvals_this).all():
+                    errmsg = 'Failed plotting average NPS. Not same pixel sizes.'
+                    xvals = None
+                    yvals = None
+                    n_profiles = 0
+                    break
+            else:
+                xvals = details_dict['freq']
+
+            n_profiles += 1
+            if normalize == 'AUC':
+                AUC = results_NPS['values'][i][1]
+                norm_factor = 1/AUC
+            elif normalize == 'LAS':
+                norm_factor = 1/(details_dict['large_area_signal']**2)
+            else:
+                norm_factor = 1
+            if yvals is None:
+                yvals = norm_factor * details_dict['radial_profile']
+            else:
+                yvals = yvals + norm_factor * details_dict['radial_profile']
+    if n_profiles > 0:
+        y_avg = 1/n_profiles * yvals
+
+    return (xvals, y_avg, errmsg)
+
+
+def get_w_task(contrast, diameter, power):
+    """Generate W_task as defined in AAPM TG150.
+
+    Parameters
+    ----------
+    contrast : float
+    diameter : float
+        in number of pixels
+    power : float or None
+        None means rectangular contrast profile, else designer contrast profile
+
+    Returns
+    -------
+    w_task : np.array
+        Fourier transform of syntetized image ()
+
+    """
+    breakpoint()
+    w_task = None
+    size = 101 if round(diameter) < 50 else (round(diameter) * 2) + 1
+    dists = np.arange(size)
+    radial_profile = np.zeros(size)
+    if power is None:  # rectangular contrast profile
+        radial_profile[dists < diameter/2] = contrast
+    else:  # designer contrast profile
+        radial_profile = contrast * (1 - (2 * dists / diameter)**2) **power
+    w_task = np.fft.fft(radial_profile)
+    return w_taskw_task
+
+
 def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None,
                        step_size=1., ignore_negative=False):
     """Calculate radial profile of image.
@@ -477,6 +564,41 @@ def find_median_spectrum(x, y):
     median_x = x[find_median[0][0]]
     median_y = y[find_median[0][0]]
     return (median_x, median_y)
+
+def get_average_NPS(NPS_results, normalize):
+    xvals = None
+    y_avg = None
+    errmsg = ''
+    n_profiles = 0
+    for i, details_dict in enumerate(NPS_results['details_dict']):
+        if details_dict:
+            if xvals is not None:
+                xvals_this = details_dict['freq']
+                if (xvals != xvals_this).all():
+                    errmsg = 'Failed plotting average NPS. Not same pixel sizes.'
+                    xvals = None
+                    yvals = None
+                    n_profiles = 0
+                    break
+            else:
+                xvals = details_dict['freq']
+
+            n_profiles += 1
+            if normalize == 1:
+                AUC = NPS_results['values'][i][1]
+                norm_factor = 1/AUC
+            elif normalize == 2:
+                norm_factor = 1/(details_dict['large_area_signal']**2)
+            else:
+                norm_factor = 1
+            if yvals is None:
+                yvals = norm_factor * details_dict['radial_profile']
+            else:
+                yvals = yvals + norm_factor * details_dict['radial_profile']
+    if n_profiles > 0:
+        y_avg = 1/n_profiles * yvals
+
+    return (xvals, y_avg, errmsg)
 
 
 def point_source_func(x, C, D):

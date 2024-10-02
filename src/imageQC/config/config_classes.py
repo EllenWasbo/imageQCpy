@@ -402,6 +402,8 @@ class ParamSetCT(ParamSetCommon):
     # 0=wire Catphan, 1=beaded Catphan helical, 2=GE phantom, 3=Siemens phantom
     sli_tan_a: float = 0.42  # tangens of ramp angle
     sli_auto_center: bool = False
+    sli_ignore_direction: bool = False
+    # if Catphan 700 option to ignore vertical ramps or horizontal ramps
     rin_sigma_image: float = 0.  # sigma for gaussfilter of image
     rin_sigma_profile: float = 0.  # sigma for gaussfilter of radial profile
     rin_range_start: float = 5.  # mm from center
@@ -721,10 +723,11 @@ class ParamSetCT_TaskBased:
     # nps_sampling_frequency: float = 0.01  # 1/mm, should match ttf_sampling_frequency
     nps_normalize: int = 0  # normalize curve by 0 = None, 1 = AUC, 2 = large area sign
     nps_plot: int = 0  # default plot 0=pr image, 1=avg, 2=pr image+avg, 3=all img+avg
-    dpr_size: float = 10
-    dpr_contrast: float = 10
+    dpr_size: float = 10  # AAPM recommend 1, 5 and 10
+    dpr_contrast: float = 10  # AAPM recommend 10-100
     dpr_designer: bool = True  # False = rect func, True = designer contrast profile
-    dpr_power: float = 1.
+    dpr_power: float = 1.  # AAPM recommends 1 with range 0.25 - 2
+    dpr_gaussian_ttf: bool = True  # use gaussian TTF (or discrete False)
 
 
 @dataclass

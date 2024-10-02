@@ -261,7 +261,8 @@ class ImageDisplayWidget(GenericImageWidget):
         """Show 3d projection and plot."""
         if len(self.main.imgs) > 1:
             try:
-                zpos = np.array([float(img_info.zpos) for img_info in self.main.imgs])
+                zpos = np.array(
+                    [float(img_info.zpos) for img_info in self.main.imgs])
                 zpos_sorted = np.sort(zpos)
                 sort = False if all(zpos_sorted == zpos) else True
             except TypeError:

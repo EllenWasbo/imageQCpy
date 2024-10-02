@@ -521,6 +521,8 @@ def calculate_qc(input_main, wid_auto=None,
                                 list_tags=['SeriesUID', 'ConvolutionKernel'])
                             extra_tag_list = []
                             read_tags[i] = True
+                        if 'DPR' in marked[i]:
+                            marked_3d[i].append('DPR')
                         if 'Sli' in marked[i]:
                             if paramset.sli_auto_center:
                                 force_new_roi.append('Sli')
@@ -1791,9 +1793,15 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     try:
                         values.append(np.mean(values[1:]))
                         values.append(100. * (values[-1] - values[0]) / values[0])
+                        if paramset.sli_ignore_direction:
+                            for c in [3, 4]:
+                                values.insert(c, None)
                     except TypeError:
                         values.append(None)
                         values.append(None)
+                elif alt == 1 and paramset.sli_ignore_direction:
+                    for c in [1, 2]:
+                        values.insert(c, None)
                 res = Results(
                     headers=headers, values=values,
                     details_dict=details_dict,
@@ -2189,6 +2197,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             paramset_ttf_fix.mtf_cut_lsf = paramset_ttf_fix.ttf_cut_lsf
             paramset_ttf_fix.mtf_cut_lsf_w = paramset_ttf_fix.ttf_cut_lsf_w
             paramset_ttf_fix.mtf_cut_lsf_w_fade = paramset_ttf_fix.ttf_cut_lsf_w_fade
+            contrasts = []
             for idx, roi_array in enumerate(roi_array_all):
                 rows = np.max(roi_array, axis=1)
                 cols = np.max(roi_array, axis=0)
@@ -2220,11 +2229,15 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                             images_to_test[0]].pix[0])
                     details_dict['found_disc_roi'] = roi_disc
                 details_dict_all.append(details_dict)
+                contrast =(
+                    np.max(details_dict['interpolated'])
+                    - np.min(details_dict['interpolated']))
 
                 try:
                     values.append(
                         [materials[idx]]
-                        + details_dict[prefix + 'MTF_details']['values'])
+                        + details_dict[prefix + 'MTF_details']['values']
+                        + [contrast])
                 except TypeError:
                     values.append([materials[idx]] + [None] * 3)
                 try:
@@ -2240,6 +2253,56 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                           pr_image=False, pr_image_sup=False,
                           errmsg=errmsgs)
 
+        return res
+
+    def DPR(images_to_test):
+        """D-prime / detectability from TTF NPS results."""
+        headers = []#copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        proceed = False
+        ttf_details = None
+        nps_details = None
+        proceed = False
+        if len(images_to_test) == 0:
+            res = Results(headers=headers)
+        else:
+            if 'TTF' in input_main.results and 'NPS' in input_main.results:
+                try:
+                    ttf_details = input_main.results['TTF']['details_dict']
+                    breakpoint()
+                    nps_details = [dd for dd
+                                   in input_main.results['NPS']['details_dict']
+                                   if dd]
+                    pix = img_infos[images_to_test[0]].pix[0]#TODO verify NPS and TTF images same pixelsize
+                    power = None if paramset.dpr_designer is False else paramset.dpr_power
+                    diameter_in_pix = paramset.dpr_size / pix
+                    nps_sum = nps_details[0]['NPS_array']
+                    for idx in range(1, len(nps_details)):
+                        nps_sum = nps_sum + nps_details[idx]['NPS_array']
+                    nps_2d_avg = nps_sum / len(nps_details)
+
+                    w_task = mmcalc.get_w_task(
+                        paramset.dpr_contrast, diameter_in_pix, power)
+                    if paramset.dpr_gaussian_ttf:
+                        ttf_2d = ttf_details#TODO....
+                        # select ttf from material with closest contrast
+                        # or option to override this if crappy data?
+                        # alternative dlete crappy data from ttf dataset to override
+                        # warning of crappy data possible?
+                    proceed = True
+                except KeyError:
+                    pass
+        if proceed:
+            values = []
+            details_dict_all = []
+            errmsgs = []
+            detail_dict_all = {}
+            res = Results(headers=headers, values=values,
+                          details_dict=details_dict_all,
+                          pr_image=False, pr_image_sup=False,
+                          errmsg=errmsgs)
+        else:
+            errmsgs = ['Missing TTF or NPS results (or both).']
+            res = Results(headers=headers, errmsg=errmsgs)
         return res
 
     def Cro(images_to_test):

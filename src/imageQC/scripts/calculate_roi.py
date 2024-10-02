@@ -1526,32 +1526,38 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
 
     # Horizontal profiles CT
     if modality == 'CT':
-        if paramset.sli_type in [0, 1, 3, 4]:  # all except only vertical (GE beaded)
-
+        if paramset.sli_type in [0, 1, 3, 4]:
+            # all except only vertical (GE beaded)
+            proceed = True
+            if paramset.sli_type == 1 and paramset.sli_ignore_direction:
+                proceed = False
+            if proceed:
             # first horizontal line coordinates
-            if dxya[2] == 0:
-                x1 = center_x - prof_half
-                x2 = center_x + prof_half
-                y1 = center_y - dist
-                y2 = y1
-            else:
-                x1 = center_x - dist*sin_rot - prof_half*cos_rot
-                x2 = center_x - dist*sin_rot + prof_half*cos_rot
-                y1 = center_y - dist*cos_rot + prof_half*sin_rot
-                y2 = center_y - dist*cos_rot - prof_half*sin_rot
-            h_lines.append([round(y1), round(x1), round(y2), round(x2)])
-
-            if paramset.sli_type in [0, 1, 4]:  # all with two horizontal
-                # second horizontal line coordinates
                 if dxya[2] == 0:
-                    y1 = center_y + dist
+                    x1 = center_x - prof_half
+                    x2 = center_x + prof_half
+                    y1 = center_y - dist
                     y2 = y1
                 else:
-                    x1 = center_x + dist*sin_rot - prof_half*cos_rot
-                    x2 = center_x + dist*sin_rot + prof_half*cos_rot
-                    y1 = center_y + dist*cos_rot + prof_half*sin_rot
-                    y2 = center_y + dist*cos_rot - prof_half*sin_rot
-                h_lines.append([round(y1), round(x1), round(y2), round(x2)])
+                    x1 = center_x - dist*sin_rot - prof_half*cos_rot
+                    x2 = center_x - dist*sin_rot + prof_half*cos_rot
+                    y1 = center_y - dist*cos_rot + prof_half*sin_rot
+                    y2 = center_y - dist*cos_rot - prof_half*sin_rot
+                h_lines.append([round(y1), round(x1),
+                                round(y2), round(x2)])
+
+                if paramset.sli_type in [0, 1, 4]:  # all with two horizontal
+                    # second horizontal line coordinates
+                    if dxya[2] == 0:
+                        y1 = center_y + dist
+                        y2 = y1
+                    else:
+                        x1 = center_x + dist*sin_rot - prof_half*cos_rot
+                        x2 = center_x + dist*sin_rot + prof_half*cos_rot
+                        y1 = center_y + dist*cos_rot + prof_half*sin_rot
+                        y2 = center_y + dist*cos_rot - prof_half*sin_rot
+                    h_lines.append([round(y1), round(x1),
+                                    round(y2), round(x2)])
 
     else:
         for d in dist:
@@ -1572,6 +1578,8 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
         if paramset.sli_type == 1:  # Catphan beaded helical
             dists = [dist, dist_b]
         elif paramset.sli_type in [3, 4]:  # no vertical
+            dists = []
+        elif paramset.sli_type == 0 and paramset.sli_ignore_direction:
             dists = []
         else:
             dists = [dist]

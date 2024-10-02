@@ -66,8 +66,8 @@ ALTERNATIVES_ROI = ['One ROI',
 ALTERNATIVES = {
     'CT': {
         'ROI': ALTERNATIVES_ROI,
-        'Sli': ['Wire ramp Catphan',
-                'Beaded ramp Catphan (helical)',
+        'Sli': ['Wire ramps Catphan (axial)',
+                'Beaded ramps Catphan (helical)',
                 'Vertical beaded ramps GE phantom',
                 'Wire ramp Siemens',
                 'Horizontal wire ramps GE QA phantom'],
@@ -167,7 +167,7 @@ HEADERS = {
             'alt4': ['MTFz 50%', 'MTFz 10%', 'MTFz 2%'],
             },
         'TTF': {
-            'alt0': ['Material', 'MTF 50%', 'MTF 10%', 'MTF 2%'],
+            'alt0': ['Material', 'MTF 50%', 'MTF 10%', 'MTF 2%', 'Contrast'],
             },
         'HUw': {'alt0': ['CT number (HU)', 'Noise=Stdev']},
         'Dim': {

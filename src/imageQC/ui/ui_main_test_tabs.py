@@ -1078,15 +1078,19 @@ class ParamsTabCommon(QTabWidget):
         tests = []
         marked_this = self.main.get_marked_imgs_current_test()
         if len(marked_this) == 0:
-            if self.main.wid_quicktest.gb_quicktest.isChecked():
-                dlg = messageboxes.MessageBoxWithDetails(
-                    self, title='No image marked',
-                    msg=('QuickTests option is active, but no image is marked '
-                         f'for the current test {self.main.current_test}'),
-                    icon=QMessageBox.Warning)
-                dlg.exec()
-            else:
-                tests = [[self.main.current_test]] * len(self.main.imgs)
+            try:
+                if self.main.wid_quicktest.gb_quicktest.isChecked():
+                    dlg = messageboxes.MessageBoxWithDetails(
+                        self, title='No image marked',
+                        msg=('QuickTests option is active, but no image is marked '
+                             f'for the current test {self.main.current_test}'),
+                        icon=QMessageBox.Warning)
+                    dlg.exec()
+                else:
+                    tests = [[self.main.current_test]] * len(self.main.imgs)
+            except AttributeError:
+                if self.main.current_test == 'DPR':
+                    tests = [[self.main.current_test]] * len(self.main.imgs)
         else:
             for img in range(len(self.main.imgs)):
                 if img in marked_this:
@@ -1197,24 +1201,33 @@ class ParamsTabCT(ParamsTabCommon):
         items = ['all']
         tan_a = 0
         self.blockSignals(True)
-        if self.sli_type.currentIndex() == 0:
+        curr_type = self.sli_type.currentIndex()
+        if curr_type == 0:
             items.extend(['H1 upper', 'H2 lower', 'V1 left', 'V2 right'])
             dist = 38.
             tan_a = 0.42
-        elif self.sli_type.currentIndex() == 1:
+        elif curr_type == 1:
             items.extend(['H1 upper', 'H2 lower',
                           'V1 left', 'V2 right', 'V1 inner', 'V2 inner'])
             dist = 45.
-        elif self.sli_type.currentIndex() == 2:
+        elif curr_type == 2:
             items.extend(['V1 left', 'V2 right'])
             dist = 70.
-        elif self.sli_type.currentIndex() == 3:
+        elif curr_type == 3:
             dist = 0.
             tan_a = 0.42
         else:  # == 4
             items.extend(['H1 upper', 'H2 lower'])
             dist = 60.
             tan_a = 0.5
+        vis = True if curr_type in [0, 1] else False
+        self.sli_ignore_direction.setVisible(vis)
+        self.lbl_sli_ignore_direction.setVisible(vis)
+        if vis:
+            ign = 'vertical' if curr_type == 0 else 'horizontal'
+            self.lbl_sli_ignore_direction.setText(
+                    f'Catphan 700 - ignore {ign} ramps')
+
         self.main.current_paramset.sli_ramp_distance = dist
         self.sli_ramp_distance.setValue(dist)
         self.sli_tan_a.setValue(tan_a)
@@ -1306,6 +1319,10 @@ class ParamsTabCT(ParamsTabCommon):
         self.sli_auto_center = QCheckBox('')
         self.sli_auto_center.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='sli_auto_center'))
+        self.lbl_sli_ignore_direction = QLabel('')
+        self.sli_ignore_direction = QCheckBox('')
+        self.sli_ignore_direction.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='sli_ignore_direction'))
         self.sli_plot = QComboBox()
         self.update_sli_plot_options()
         self.sli_plot.currentIndexChanged.connect(self.main.refresh_results_display)
@@ -1320,6 +1337,11 @@ class ParamsTabCT(ParamsTabCommon):
         hlo_type.addWidget(self.sli_type)
         hlo_type.addStretch()
         self.tab_sli.vlo_top.addLayout(hlo_type)
+        hlo_sli_ignore_direction = QHBoxLayout()
+        self.tab_sli.vlo_top.addLayout(hlo_sli_ignore_direction)
+        hlo_sli_ignore_direction.addWidget(self.lbl_sli_ignore_direction)
+        hlo_sli_ignore_direction.addWidget(self.sli_ignore_direction)
+        hlo_sli_ignore_direction.addStretch()
 
         flo1 = QFormLayout()
         flo1.addRow(QLabel('Center to ramp distance (mm)'), self.sli_ramp_distance)
@@ -1524,9 +1546,11 @@ class ParamsTabCT(ParamsTabCommon):
     def create_tab_dpr(self):
         """GUI of tab d-prime used in task based window."""
         self.tab_dpr = ParamsWidget(self, run_txt='Calculate detectability')
-        self.tab_dpr.hlo_top.addWidget(uir.LabelItalic('Detectability'))
+        self.tab_dpr.hlo_top.addWidget(uir.LabelItalic(
+            'Detectability / d-prime'))
         info_txt = '''
-        Details on methods used can be found in AAPM TG-233<br>
+        Details on methods used can be found in AAPM TG-233<br><br>
+        Calculated for groups with both TTF and NPS results.
         '''
         self.tab_dpr.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
         self.tab_dpr.hlo_top.addWidget(uir.UnderConstruction(
@@ -1544,6 +1568,9 @@ class ParamsTabCT(ParamsTabCommon):
                                         singleStep=0.05)
         self.dpr_power.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='dpr_power'))
+        self.dpr_gaussian_ttf = QCheckBox()
+        self.dpr_gaussian_ttf.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='dpr_gaussian_ttf'))
 
         self.dpr_plot = QComboBox()
         self.dpr_plot.addItems(['..',
@@ -1561,10 +1588,12 @@ class ParamsTabCT(ParamsTabCommon):
             self.main.wid_res_image.canvas.result_image_draw)
 
         flo = QFormLayout()
-        flo.addRow(QLabel('Task contrst (HU)'), self.dpr_contrast)
+        flo.addRow(QLabel('Task contrast (HU)'), self.dpr_contrast)
         flo.addRow(QLabel('Task radius (mm)'), self.dpr_size)
         flo.addRow(QLabel('Designer contrast profile'), self.dpr_designer)
-        flo.addRow(QLabel('     sharpness constant'), self.dpr_power)
+        flo.addRow(QLabel('     sharpness constant (n)'), self.dpr_power)
+        flo.addRow(QLabel('Use gaussian TTF (else discrete)'),
+                   self.dpr_gaussian_ttf)
 
         flo2 = QFormLayout()
         flo2.addRow(QLabel('Plot'), self.dpr_plot)
@@ -2123,14 +2152,16 @@ class ParamsTabNM(ParamsTabCommon):
             items_plot = ['SNI values each ROI',
                           'SNI values all images',
                           'NPS all ROIs + filter',
-                          'Filtered NPS and NPS structure, selected ROI']
+                          'Filtered NPS and NPS structure, selected ROI',
+                          'Filter(s)']
             items_res_image = ['2d NPS for selected ROI']
         else:
             items_plot = [
                 'SNI values each ROI',
                 'SNI values all images',
                 'Filtered NPS and NPS structure max+avg (small ROIs)',
-                'Filtered NPS and NPS structure, selected ROI']
+                'Filtered NPS and NPS structure, selected ROI',
+                'Filter(s)']
             items_res_image = ['SNI values map', '2d NPS for selected ROI']
         if self.sni_type.currentIndex() == 3:
             self.sni_roi_outside.setVisible(True)

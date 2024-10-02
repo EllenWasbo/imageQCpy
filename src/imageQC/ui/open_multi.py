@@ -306,13 +306,14 @@ class OpenMultiWidget(QWidget):
                 details=warnings, icon=QMessageBox.Warning)
             dlg.exec()
         if len(img_infos) > 0:
-            series_nmb_name = [' '.join(img.series_list_strings)
-                               for img in img_infos]
+            series_nmb_name = [' '.join(
+                [s.strip() for s in img.series_list_strings])
+                for img in img_infos]
             series_nmb_name = list(set(series_nmb_name))
             series_nmb_name.sort()
             self.imgs = [[] for i in range(len(series_nmb_name))]
             for img in img_infos:
-                ser = ' '.join(img.series_list_strings)
+                ser = ' '.join([s.strip() for s in img.series_list_strings])
                 serno = series_nmb_name.index(ser)
                 self.imgs[serno].append(img)
 
@@ -360,47 +361,6 @@ class OpenMultiWidget(QWidget):
             if len(dcm_dict['files']) > 0:
                 dcm_files = dcm_dict['files']
                 self.read_img_infos(dcm_files)
-                '''
-                img_infos, _, warnings = read_dcm_info(
-                    dcm_files, tag_infos=self.main.tag_infos,
-                    tag_patterns_special=self.main.tag_patterns_special,
-                    statusbar=self.status_label,
-                    series_pattern=self.current_template)
-                self.main.stop_wait_cursor()
-                if len(warnings) > 0:
-                    dlg = messageboxes.MessageBoxWithDetails(
-                        self, title='Some files read with warnings',
-                        msg='See details for warning messages',
-                        details=warnings, icon=QMessageBox.Warning)
-                    dlg.exec()
-                if len(img_infos) > 0:
-                    series_nmb_name = [' '.join(img.series_list_strings)
-                                       for img in img_infos]
-                    series_nmb_name = list(set(series_nmb_name))
-                    series_nmb_name.sort()
-                    self.imgs = [[] for i in range(len(series_nmb_name))]
-                    for img in img_infos:
-                        ser = ' '.join(img.series_list_strings)
-                        serno = series_nmb_name.index(ser)
-                        self.imgs[serno].append(img)
-
-                    # sort by zpos if available
-                    for serno, imgs in enumerate(self.imgs):
-                        zs = [img.zpos for img in imgs]
-                        if all(zs):
-                            imgs_temp = sorted(zip(imgs, zs), key=lambda t: t[1])
-                            self.imgs[serno] = [img[0] for img in imgs_temp]
-
-                    self.list_series.clear()
-                    self.list_series.addItems(series_nmb_name)
-                    self.list_series.setCurrentRow(0)
-                    self.update_list_images(0)
-                else:
-                    QMessageBox.warning(self, 'Found no images',
-                                        'Found no images in the selcted path.')
-            self.status_label.clearMessage()
-            self.main.stop_wait_cursor()
-            '''
 
     def update_list_images(self, serno):
         """Fill list_images with all images in selected groups."""

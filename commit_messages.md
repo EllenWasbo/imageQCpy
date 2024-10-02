@@ -2,21 +2,24 @@
 _xxx xx, 2024_
 
 New functionalities:
+- Added module for TTF/NPS calculation for CT (task based image analysis). Find module from File-menu. d-prime calculation not finished. 
 - CT/SPECT/PET: Option to calculate z-resolution from wire/linesource (in ~x direction) and from oblique edge in z-direction
 - In the Advanced open files - dialog: option to import saved Tag Pattern - Format for grouping images.
 - Simulating artifacts:
 	- Added option to generate 3d artifacts
-	- (!!!!!!!!!!not fully tested yet!!!!!!!!!!!)Added option to set full image to zero before adding artifacts 
+	- Added option to set full image to zero before adding artifacts
 
 Changes:
 - Changes to calculations of MTF from line source: more robust on how to interpret the direction of the source 
-- Test NM/SNI: When point source correction and using reference image - both the reference image and the image to be analysed will now always be corrected separately allowing for difference in point source position
-- (!!!!!!!!!!!!!!!!!!!!!!) Test CT/Slicethickness: Added options matching CatPhan 700 with mix of wired and beaded ramp in same slice. 
+- Test CT / Slicethickness: Added Catphan 700 option (ignoring vertical ramps for axial and horizontal ramps for helical slicethickness compared to Catphan 500/600)
+- Test NM/SNI: When point source correction and using reference image - both the reference image and the image to be analysed will now always be corrected separately 
+allowing for difference in point source position
 
 Fixes:
 - Avoiding crash and output to automation results when CT Siemens constancy file content is shorter than useful content.
 - Avoiding crashes when switching between gaussian and discrete tabulated results for MTF.
 - Avoiding crash when adding more than 8 ROIs for the ROI test.
+- CT test NPS, fixed average plot when NPS not calculated for all images.
 
 # v3.1.1
 _Aug 07, 2024_

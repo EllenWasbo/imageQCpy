@@ -7,7 +7,9 @@ Run TTF and NPS, d-prime on dataset.
 import os
 import copy
 from time import time
+from pathlib import Path
 import numpy as np
+import pandas as pd
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -325,9 +327,6 @@ class ExportDialog(ImageQCDialog):
         vlo = QVBoxLayout()
         self.setLayout(vlo)
 
-        vlo.addWidget(uir.UnderConstruction(
-            txt='Under construction, not finished...'))
-
         hlo_browse = QHBoxLayout()
         vlo.addLayout(hlo_browse)
         lbl = QLabel('Selected folder for result files: ')
@@ -339,12 +338,9 @@ class ExportDialog(ImageQCDialog):
         hlo_browse.addWidget(toolb)
 
         hlo_select_all = QHBoxLayout()
-        btn_select_all= QPushButton('Select all')
-        btn_select_all.clicked.connect(self.select_all)
-        hlo_select_all.addWidget(btn_select_all)
-        btn_deselect_all= QPushButton('Deselect all')
-        btn_deselect_all.clicked.connect(lambda: self.select_all(flag=False))
-        hlo_select_all.addWidget(btn_deselect_all)
+        self.chk_select_all= QCheckBox('Select all')
+        self.chk_select_all.stateChanged.connect(self.select_all)
+        hlo_select_all.addWidget(self.chk_select_all)
         hlo_select_all.addStretch()
         vlo.addLayout(hlo_select_all)
 
@@ -361,16 +357,24 @@ class ExportDialog(ImageQCDialog):
         self.ttf_fit_gaussian = QCheckBox('')
         self.ttf_curves_discrete = QCheckBox('')
         flo_ttf.addRow(self.ttf_dcm,
-                       QLabel('Table of condensed DICOM info pr group (ttf_dcm.txt)'))
+                       QLabel('Table of condensed DICOM info pr group '
+                              '(ttf_dcm.csv)'))
         flo_ttf.addRow(self.ttf_table,
-                       QLabel('Table of MTF 50,10,2% pr group and material (ttf_table.txt)'))
-        flo_ttf.addRow(self.ttf_curves_gaussian,
-                       QLabel('TTF curves gaussian pr group and material (ttf_gaussian.txt)'))
+                       QLabel('Result table pr group and material '
+                              '(ttf_table.csv)'))
         flo_ttf.addRow(self.ttf_fit_gaussian,
-                       QLabel('TTF gaussian fit parameters pr group and material '
-                              '(ttf_gaussian_fit.txt)'))
+                       QLabel('Supplement table (gaussian fit parameters) '
+                              'pr group and material (ttf_table.csv)'))
+        flo_ttf.addRow(QLabel(''), uir.LabelItalic(
+            'Result- and supplement-tables combined if both selected.'))
+        '''
+        flo_ttf.addRow(self.ttf_curves_gaussian,
+                       QLabel('TTF curves gaussian pr group and material '
+                              '(ttf_gaussian.csv)'))
         flo_ttf.addRow(self.ttf_curves_discrete,
-                       QLabel('TTF curves discrete pr group and material (ttf_discrete.txt)'))
+                       QLabel('TTF curves discrete pr group and material '
+                              '(ttf_discrete.csv)'))
+        '''
 
         self.nps = QGroupBox('NPS results')
         self.nps.setCheckable(True)
@@ -384,17 +388,25 @@ class ExportDialog(ImageQCDialog):
         self.nps_curves_pr_image = QCheckBox('')
         self.nps_curves_average = QCheckBox('')
         flo_nps.addRow(self.nps_dcm,
-                       QLabel('Table of condensed DICOM info pr group (nps_table.txt)'))
+                       QLabel('Table of condensed DICOM info pr group '
+                              '(nps_table.csv)'))
         flo_nps.addRow(self.nps_table,
-                       QLabel('Table of results pr group (average) (nps_table.txt)'))
-        flo_nps.addRow(QLabel(''), uir.LabelItalic('Tables above combined if both selected.'))
+                       QLabel('Table of NPS results pr group (average) '
+                              '(nps_table.csv)'))
+        flo_nps.addRow(QLabel(''), uir.LabelItalic(
+            'Tables above combined if both selected.'))
+        '''
         flo_nps.addRow(self.nps_curves_average,
-                       QLabel('NPS average curves pr group (nps_curves.txt)'))
+                       QLabel('NPS average curves pr group (nps_curves.csv)'))
         flo_nps.addRow(self.nps_curves_pr_image,
-                       QLabel('NPS curves pr group and pr image (nps_curves.txt)'))
-        flo_nps.addRow(QLabel(''), uir.LabelItalic('Curves above combined if both selected.'))
+                       QLabel('NPS curves pr group and pr image '
+                              '(nps_curves.csv)'))
+        flo_nps.addRow(QLabel(''), uir.LabelItalic(
+            'Curves above combined if both selected.'))
+        '''
 
-        self.dpr = QGroupBox("d' results")
+        '''
+        self.dpr = QGroupBox('d-prime')
         self.dpr.setCheckable(True)
         self.dpr.setChecked(False)
         self.dpr.setFont(uir.FontItalic())
@@ -402,18 +414,38 @@ class ExportDialog(ImageQCDialog):
         self.dpr.setLayout(flo_dpr)
 
         self.dpr_dcm = QCheckBox('')
-        flo_dpr.addRow(self.dpr_dcm, QLabel('Table of condensed DICOM info pr group'))
+        flo_dpr.addRow(self.dpr_dcm, QLabel("Table of d' results pr group "
+                                            "(d_prime.csv)"))
+        '''
+        hlo_csv = QHBoxLayout()
+        vlo.addLayout(hlo_csv)
+        hlo_csv.addWidget(QLabel('Decimal mark and separator for the csv files'))
+        self.cbox_csv = QComboBox()
+        self.cbox_csv.addItems([
+            '. / , (decimal dot, comma separted)',
+            ', / ; (decimal comma, semicolon separated'])
+        idx = 0 if task_main.current_paramset.output.decimal_mark == '.' else 1
+        self.cbox_csv.setCurrentIndex(idx)
+        hlo_csv.addWidget(self.cbox_csv)
 
         vlo.addWidget(self.ttf)
         vlo.addWidget(self.nps)
-        vlo.addWidget(self.dpr)
+        #vlo.addWidget(self.dpr)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
             Qt.Horizontal, self)
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self.verify_accept)
         buttons.rejected.connect(self.reject)
         vlo.addWidget(buttons)
+
+    def verify_accept(self):
+        """Verify that path is given when ok-pressed."""
+        if self.path.text() == '':
+            QMessageBox.warning(self, 'No path given',
+                'Please specify a path for the export.')
+        else:
+            self.accept()
 
     def browse(self):
         """Browse to result folder."""
@@ -422,22 +454,27 @@ class ExportDialog(ImageQCDialog):
         if dlg.exec():
             self.path.setText(dlg.selectedFiles()[0])
 
-    def select_all(self, flag=True):
+    def select_all(self):
+        flag = True if self.chk_select_all.isChecked() else False
         self.ttf.setChecked(flag)
         self.ttf_dcm.setChecked(flag)
         self.ttf_table.setChecked(flag)
-        self.ttf_curves_gaussian.setChecked(flag)
+        #self.ttf_curves_gaussian.setChecked(flag)
         self.ttf_fit_gaussian.setChecked(flag)
-        self.ttf_curves_discrete.setChecked(flag)
+        #self.ttf_curves_discrete.setChecked(flag)
         self.nps.setChecked(flag)
         self.nps_dcm.setChecked(flag)
         self.nps_table.setChecked(flag)
-        self.nps_curves_average.setChecked(flag)
-        self.nps_curves_pr_image.setChecked(flag)
-        self.dpr.setChecked(flag)
-        self.dpr_dcm.setChecked(flag)
+        #self.nps_curves_average.setChecked(flag)
+        #self.nps_curves_pr_image.setChecked(flag)
+        #self.dpr.setChecked(flag)
+        #self.dpr_dcm.setChecked(flag)
 
     def get_export_selections(self):
+        if self.cbox_csv.currentIndex() == 0:
+            self.task_main.current_paramset.output.decimal_mark = '.'
+        else:
+            self.task_main.current_paramset.output.decimal_mark = ','
         if self.ttf.isChecked():
             ttf = [self.ttf_dcm.isChecked(), self.ttf_table.isChecked(),
                    self.ttf_curves_gaussian.isChecked(), self.ttf_fit_gaussian.isChecked(),
@@ -449,10 +486,13 @@ class ExportDialog(ImageQCDialog):
                    self.nps_curves_average.isChecked(), self.nps_curves_pr_image.isChecked()]
         else:
             nps = None
+        '''
         if self.dpr.isChecked():
             dpr = [self.dpr_dcm.isChecked()]
         else:
-            dpr = None
+        '''
+        dpr = None
+
         if ttf is None and nps is None and dpr is None:
             path = ''
         else:
@@ -590,6 +630,9 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         hlo_buttons.addWidget(btn_export_all)
         
         vlo_right.addWidget(self.wid_paramset)
+        vlo_right.addWidget(uir.LabelHeader(
+            'Specify how to detect which images to use for '
+            'TTF or NPS analysis', 4))
         vlo_right.addWidget(self.wid_range)
         self.stack_test_tabs = QStackedWidget()
         self.tab_ct = ParamsTabCT(self, task_based=True)
@@ -645,13 +688,15 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
         if res:
             if len(dlg.wid.open_imgs) > 0:
                 self.imgs_all = dlg.wid.open_imgs
-                group_strings = [' '.join(img.series_list_strings)
-                                  for img in self.imgs_all]
+                group_strings = [' '.join(
+                    [s.strip() for s in img.series_list_strings])
+                    for img in self.imgs_all]
                 self.group_strings = get_uniq_ordered(group_strings)
                 self.current_group = group_strings[0]
                 self.imgs_group_numbers = []
                 for imgno, img in enumerate(self.imgs_all):
-                    ser = ' '.join(img.series_list_strings)
+                    ser = ' '.join(
+                        [s.strip() for s in img.series_list_strings])
                     groupno = self.group_strings.index(ser)
                     self.imgs_group_numbers.append(groupno)
                     img.marked_quicktest = ['DCM']
@@ -1041,6 +1086,9 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             return row
 
         path = ''
+        decimal_mark = self.current_paramset.output.decimal_mark
+        sep = ';' if decimal_mark == ',' else ','
+        # csv comma separated if decimal mark . else semicolonseparated
         ttf = None
         nps = None
         dpr = None
@@ -1049,11 +1097,12 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             res = dlg.exec()
             if res:
                 path, ttf, nps, dpr = dlg.get_export_selections()
-                if not os.access(path, os.W_OK):
-                    path = ''
-                    QMessageBox.warning(
-                        self, 'Failed saving',
-                        f'No writing permission for {path}')
+                if path:
+                    if not os.access(path, os.W_OK):
+                        path = ''
+                        QMessageBox.warning(
+                            self, 'Failed saving',
+                            f'No writing permission for {path}')
         else:
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Missing results',
@@ -1062,38 +1111,106 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             dlg.exec()
 
         if path:
-            headers_first = ['Group'] + self.results_all[0]['DCM']['headers']
-            headers = {'TTF': [], 'NPS': [], 'DPR': []}
-            values = {'TTF': [], 'NPS': [], 'DPR': []}
-            breakpoint()
-            for groupno, res in enumerate(self.results_all):
-                group_name = self.group_strings[groupno]
-                imgs_this = [img for i, img in enumerate(self.imgs_all)
-                             if groupno == self.imgs_group_numbers[i]]
-                dcm_values = res['DCM']['values']
-                for test in ['TTF', 'NPS']:
-                    idxs = [i for i, img in enumerate(imgs_this)
+            if ttf:
+                dcm_ttf, table_ttf, curves_g, fit_g, curves_d = ttf
+            else:
+                dcm_ttf, table_ttf, curves_g, fit_g, curves_d = [False] * 5
+            if nps:
+                dcm_nps, table_nps, curves_avg, curves_img = nps
+            else:
+                dcm_nps, table_nps, curves_avg, curves_img = [False] * 4
+            if dpr:
+                pass  #TODO
+
+
+            dcm_nps_table = None
+            if dcm_ttf or dcm_nps:
+                dcm_tables = {}
+                if dcm_ttf:
+                    dcm_tables['TTF'] = []
+                if dcm_nps:
+                    dcm_tables['NPS']  = []
+                headers_dcm = ['Group'] + self.results_all[0]['DCM']['headers']
+                for groupno, res in enumerate(self.results_all):
+                    group_name = self.group_strings[groupno]
+                    imgs_this = [img for i, img in enumerate(self.imgs_all)
+                                 if groupno == self.imgs_group_numbers[i]]
+                    dcm_values = res['DCM']['values']
+                    for test in [*dcm_tables]:
+                        idxs = [i for i, img in enumerate(imgs_this)
                             if test in img.marked_quicktest]
-                    if test in res:
                         dcm_row = reduce_to_row(dcm_values, idxs)
-                        if test == 'TTF' and ttf:
-                            test_values = res[test]['values']
-                            breakpoint()
-                        elif test == 'NPS' and nps:
-                            test_values = []
-                            breakpoint()
-                        if len(headers[test]) == 0:
-                            headers[test] = (
-                                headers_first + res[test]['headers'])
-                        values[test].append(
-                            [group_name] + dcm_row + test_values)
-            # dcm_pr_group_ttf.txt
-            # dcm_pr_group_nps.txt
-            # ttf_curves and 50/10/2% pr group and material
-            #2 files (NPS and TTF)
-            #user select to include
-            # ttf: groupame (alvays) dcm, tabulated values pr material ttf, curves, supplement (gauusian)
-            # NPS: groupname (always) dcm, tabuled values (all - grouped), curves
+                        dcm_tables[test].append([group_name] + dcm_row)
+                for test, table in dcm_tables.items():
+                    dataf = pd.DataFrame(table, columns=headers_dcm)
+                    dataf = dataf.set_index('Group').T
+                    if test == 'NPS' and table_nps:
+                        dcm_nps_table = dataf
+                    else:
+                        path_this = Path(path) / f'{test.lower()}_dcm.csv'
+                        dataf.to_csv(path_this, decimal=decimal_mark, sep=sep,
+                                     index=False)
+
+            if ttf:
+                if table_ttf or fit_g:
+                    # Combine result and suplement table pr group
+                    headers = ['Group', 'Material']
+                    suffixes = []
+                    if table_ttf:
+                        suffixes.append('')
+                    if fit_g:
+                        suffixes.append('_sup')
+                    headers_set = False
+                    table = []
+                    for groupno, res in enumerate(self.results_all):
+                        if 'TTF' in res:
+                            group_name = self.group_strings[groupno]
+                            row_pr_material = [
+                                [group_name, row[0]] for row in res['TTF']['values']]
+                            for suffix in suffixes:
+                                ttf_values = res['TTF'][f'values{suffix}']
+                                if headers_set is False:
+                                    headers.extend(
+                                        res['TTF'][f'headers{suffix}'][1:])
+                                    if suffix == suffixes[-1]:
+                                        headers_set = True
+                                for rowno, row in enumerate(row_pr_material):
+                                    row.extend(ttf_values[rowno][1:])
+                            table.extend(row_pr_material)
+                    dataf = pd.DataFrame(table, columns=headers)
+                    dataf = dataf.set_index('Group').T
+                    path_this = Path(path) / 'ttf_table.csv'
+                    dataf.to_csv(path_this, decimal=decimal_mark, sep=sep)
+
+                if curves_g or curves_d:
+                    pass
+
+            if nps:
+                if table_nps:
+                    headers = ['Group']
+                    headers_set = False
+                    table = []
+                    for groupno, res in enumerate(self.results_all):
+                        if 'NPS' in res:
+                            group_name = self.group_strings[groupno]
+                            table.append(
+                                [group_name] + res['NPS']['values_sup'][0])
+                            if headers_set is False:
+                                headers.extend(
+                                    res['NPS']['headers_sup'])
+                                headers_set = True
+                    dataf = pd.DataFrame(table, columns=headers)
+                    dataf = dataf.set_index('Group').T
+                    if dcm_nps_table is not None:
+                        dataf = dcm_nps_table.append(dataf)
+                    path_this = Path(path) / 'nps_table.csv'
+                    dataf.to_csv(path_this, decimal=decimal_mark, sep=sep)
+
+                if curves_avg or curves_img:
+                    pass
+
+            if dpr:
+                pass
 
     def start_wait_cursor(self):
         """Block mouse events by wait cursor."""

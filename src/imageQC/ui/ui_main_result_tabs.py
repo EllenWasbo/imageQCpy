@@ -364,7 +364,10 @@ class ResultPlotCanvas(PlotCanvas):
                     if self.main.results[self.main.current_test] is not None:
                         class_method = getattr(self, self.main.current_test, None)
                         if class_method is not None:
-                            class_method()
+                            try:
+                                class_method()
+                            except (KeyError, TypeError):
+                                pass
 
         if len(self.curves) > 0:
             x_only_int = True
@@ -1847,7 +1850,8 @@ class ResultPlotCanvas(PlotCanvas):
                 self.curves.append(
                     {'label': 'NPS with eye filter',
                      'xvals': xvals, 'yvals': yvals, 'style': '-b'})
-                self.default_range_y = [0, 1.1 * np.max(yvals[10:])]
+                self.default_range_y = [0, 1.4 * np.median(
+                    details_dict_roi['quantum_noise'])]
 
                 self.curves.append(
                     {'label': 'NPS',
@@ -1885,7 +1889,8 @@ class ResultPlotCanvas(PlotCanvas):
                     details_dict_roi = details_dict['pr_roi'][roi_no]
                     yvals = details_dict_roi['rNPS']
                     if roi_no == 0:
-                        self.default_range_y = [0, 1.3 * np.max(yvals[10:])]
+                        self.default_range_y = [0, 1.4 * np.median(
+                            details_dict_roi['quantum_noise'])]
                     xvals = details_dict_roi['freq']
                     self.curves.append(
                         {'label': f'NPS ROI {roi_names[roi_no]}',
@@ -1905,7 +1910,8 @@ class ResultPlotCanvas(PlotCanvas):
                 for roi_no, dd in enumerate(details_dict['pr_roi']):
                     yvals = dd['rNPS']
                     if roi_no == 0:
-                        self.default_range_y = [0, 1.3 * np.max(yvals[10:])]
+                        self.default_range_y = [0, 1.4 * np.median(
+                            details_dict_roi['quantum_noise'])]
                     xvals = dd['freq']
                     self.curves.append(
                         {'label': '_no_legend_',
@@ -1942,6 +1948,27 @@ class ResultPlotCanvas(PlotCanvas):
                  'xvals': xvals, 'yvals': yvals, 'style': ':r'})
             name = roi_names[idx_max + 2]
             self.title = f'Filtered NPS and NPS structure for {name} (max) and avg'
+            self.default_range_x = [0, nyquist_freq]
+
+        def plot_filters():
+            suffix_2 = '_2' if show_filter_2 else ''
+            xvals = details_dict['eye_filter_small']['r']
+            yvals = details_dict['eye_filter_small']['V']
+            if 'V2' in details_dict['eye_filter_small']:
+                labels = ['low', 'high']
+            else:
+                labels = ['Human visual response filter']
+            self.curves.append(
+                {'label': labels[0],
+                 'xvals': xvals, 'yvals': yvals, 'style': '-k'})
+            if len(labels) == 2:
+                yvals = yvals = details_dict['eye_filter_small']['V2']
+                self.curves.append(
+                    {'label': labels[1],
+                     'xvals': xvals, 'yvals': yvals, 'style': ':k'})
+            self.title = 'Frequency filter(s)'
+            self.ytitle = 'Ratio'
+            self.default_range_y = [0, 1.1]
             self.default_range_x = [0, nyquist_freq]
 
         def plot_curve_corr_check():
@@ -2018,6 +2045,8 @@ class ResultPlotCanvas(PlotCanvas):
             plot_all_NPS()
         elif 'correction' in sel_text:
             plot_curve_corr_check()
+        elif 'Filter(s)' in sel_text:
+            plot_filters()
 
     def Spe(self):
         """Prepare plot for test NM Speed test."""

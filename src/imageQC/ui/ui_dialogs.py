@@ -33,12 +33,13 @@ from imageQC.config.iQCconstants import (
     APPDATA, TEMPDIR, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER, ENV_ICON_PATH
     )
 from imageQC.config.config_func import init_user_prefs
+import imageQC.config.config_classes as cfc
+import imageQC.scripts.dcm as dcm
 from imageQC.ui import messageboxes
 from imageQC.ui import reusable_widgets as uir
 from imageQC.scripts.artifact import (
     Artifact, add_artifact, edit_artifact_label, validate_new_artifact_label,
-    update_artifact_3d)
-from imageQC.scripts.dcm import get_projection
+    update_artifact_3d, apply_artifacts)
 from imageQC.scripts.read_vendor_QC_reports import read_GE_Mammo_date
 import imageQC.resources
 # imageQC block end
@@ -1502,7 +1503,8 @@ class ProjectionPlotDialog(ImageQCDialog):
         self.list_projections = QComboBox()
         self.list_projections.addItems(self.projections)
         self.list_projections.setCurrentIndex(0)
-        self.list_projections.currentIndexChanged.connect(self.calculate_projection)
+        self.list_projections.currentIndexChanged.connect(
+            self.calculate_projection)
         self.directions = ['front', 'side']
         self.list_directions = QComboBox()
         self.list_directions.addItems(self.directions)
@@ -1654,6 +1656,81 @@ class ProjectionPlotDialog(ImageQCDialog):
         if update_figure:
             self.canvas.update_figure()
 
+    def get_projection(self, img_infos, included_ids, tag_infos,
+                       projection_type='max', direction='front',
+                       progress_modal=None):
+        """Extract projection from tomographic images.
+
+        Parameters
+        ----------
+        img_infos :  list of DcmInfoGui
+        included_ids : list of int
+            image ids to include
+        tag_infos : list of TagInfos
+        projection_type : str, optional
+            'max', 'min' or 'mean'. The default is 'max'.
+        direction : str, optional
+            'front' or 'side'. The default is 'front'.
+        progress_modal : uir.ProgressModal
+
+        Returns
+        -------
+        projection : np.2darray
+            extracted projection from imgs
+        errmsg : str
+        """
+        projection = None
+        shape_first = None
+        shape_failed = []
+        errmsg = ''
+        np_method = getattr(np, projection_type, None)
+        axis = 0 if direction == 'front' else 1
+        n_img = len(img_infos)
+        patient_position = None
+        tag_patterns = [cfc.TagPatternFormat(list_tags=['PatientPosition'])]
+        for idx, img_info in enumerate(img_infos):
+            if idx in included_ids:
+                if progress_modal:
+                    progress_modal.setValue(round(100*idx/n_img))
+                    progress_modal.setLabelText(
+                        f'Getting data from image {idx}/{n_img}')
+                    if progress_modal.wasCanceled():
+                        projection = None
+                        progress_modal.setValue(100)
+                        break
+                image, tags_ = dcm.get_img(
+                    img_info.filepath,
+                    frame_number=img_info.frame_number, tag_infos=tag_infos,
+                    tag_patterns=tag_patterns
+                    )
+                if len(img_info.artifacts) > 0:
+                    image = apply_artifacts(
+                        image, img_info,
+                        self.main.artifacts, self.main.artifacts_3d, idx)
+                if not patient_position:
+                    try:
+                        patient_position = tags_[0][0]
+                    except (IndexError, KeyError):
+                        pass
+                profile = np_method(image, axis=axis)
+                if projection is None:
+                    shape_first = image.shape
+                    projection = [profile]
+                else:
+                    if image.shape == shape_first:
+                        projection.append(profile)
+                    else:
+                        shape_failed.append(idx)
+
+        if len(shape_failed) > 0:
+            errmsg = ('Could not generate projection due to different sizes. ' +
+                      f'Image number {shape_failed} did not match the first marked image.')
+            projection = None
+        else:
+            projection = np.array(projection)
+
+        return (projection, patient_position, errmsg)
+
     def calculate_projection(self):
         """Calculate projection based on selections."""
         max_progress = 100  # %
@@ -1668,10 +1745,11 @@ class ProjectionPlotDialog(ImageQCDialog):
 
         self.z_values = [i for i in range(len(self.main.imgs)) if i in marked_this]
         self.z_label = 'image number'
-        self.projection, patient_position, errmsg = get_projection(
+        self.projection, patient_position, errmsg = self.get_projection(
             self.main.imgs, marked_this, self.main.tag_infos,
             projection_type=projection_type,
-            direction=self.list_directions.currentText(), progress_modal=progress_modal)
+            direction=self.list_directions.currentText(),
+            progress_modal=progress_modal)
         progress_modal.setValue(max_progress)
         if patient_position:
             if patient_position[0:2] == 'HF':

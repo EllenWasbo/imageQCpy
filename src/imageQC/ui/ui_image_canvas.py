@@ -875,6 +875,11 @@ class ImageCanvas(GenericImageCanvas):
         """Draw NM uniformity ROI."""
         self.add_contours_to_all_rois(colors=['red', 'blue'])
 
+    def Var(self):
+        self.add_contours_to_all_rois(
+            colors=['blue', 'blue'], roi_indexes=[0, 1],
+            linestyles=['solid', 'dotted'])
+
 
 class ResultImageCanvas(GenericImageCanvas):
     """Canvas for display of results as image."""
@@ -1002,7 +1007,7 @@ class ResultImageCanvas(GenericImageCanvas):
                         self.current_image = details_dict['averages']
                     elif sel_txt == 'SNR pr ROI map':
                         self.current_image = details_dict['snrs']
-                    elif sel_txt == 'Variance pr ROI map':
+                    elif sel_txt == 'Average variance pr ROI map':
                         self.current_image = details_dict['variances']
                     elif sel_txt == 'Average pr ROI (% difference from global average)':
                         self.current_image = details_dict['diff_averages']
@@ -1177,8 +1182,11 @@ class ResultImageCanvas(GenericImageCanvas):
             details_dict = self.main.results['Var']['details_dict'][
                 self.main.gui.active_img_no]
             self.cmap = 'viridis'
-            self.title = (
-                f'Variance image of central {self.main.current_paramset.var_percent} %')
+            self.title = 'Variance image'
+            if self.main.current_paramset.var_percent < 100:
+                self.title = (
+                    f'{self.title} of central '
+                    f'{self.main.current_paramset.var_percent} %')
             self.current_image = details_dict['variance_image']
         except KeyError:
             pass

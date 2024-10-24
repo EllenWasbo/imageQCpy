@@ -658,7 +658,7 @@ def get_modality(modalityStr):
 
 
 def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
-            NM_count=False, get_window_level=False):
+            NM_count=False, get_window_level=False, overlay=True):
     """Read pixmap from filepath int numpy array prepeared for display.
 
     Parameters
@@ -677,6 +677,8 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
     get_window_level : bool, optional
         True if adding window min,max as list to tag_strings.
         Used in OpenAutomationDialog. Default is False
+    overlay : bool, optional
+        include overlay (if any) in array. Default is True.
 
     Returns
     -------
@@ -693,14 +695,19 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
         pixarr = None
         try:
             pixarr = pyd.pixel_array
-        except AttributeError:
-            pass
+        except AttributeError as err:
+            if 'convert_pixel_data' in str(err):
+                # fix for pydicom v3.0.1+  TODO - later use only this
+                pixarr = pydicom.pixels.pixel_array(pyd)
+            else:
+                pass
 
-        overlay = None
-        try:
-            overlay = pyd.overlay_array(0x6000)  # e.g. Patient Protocol Siemens CT
-        except AttributeError:
-            pass
+        overlay_array = None
+        if overlay:
+            try:
+                overlay_array = pyd.overlay_array(0x6000)  # e.g. Patient Protocol Siemens CT
+            except AttributeError:
+                pass
 
         if pixarr is not None:
             slope, intercept = get_dcm_info_list(
@@ -729,11 +736,10 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
                 intercept = 0.
 
             if frame_number > -1:
-                ndim = pyd.pixel_array.ndim
+                ndim = pixarr.ndim
                 if ndim == 3:
-                    pixarr = pyd.pixel_array[frame_number, :, :]
-            else:
-                pixarr = pyd.pixel_array
+                    pixarr = pixarr[frame_number, :, :]
+
             if pixarr is not None:
                 npout = pixarr * slope + intercept
 
@@ -744,15 +750,15 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
                          + 0.587 * npout[:, :, 1]
                          + 0.114 * npout[:, :, 2])
 
-        if overlay is not None:
+        if overlay_array is not None:
             if pixarr is not None:
-                if npout.shape == overlay.shape:
-                    npout = np.add(npout, overlay)
+                if npout.shape == overlay_array.shape:
+                    npout = np.add(npout, overlay_array)
                 else:
                     pass  # implement when example file exists
                     # overlay_offset at 0x6000, 0x0050
             else:
-                npout = overlay
+                npout = overlay_array
 
         orient = pyd.get('PatientPosition', '')
         if orient == 'FFS':
@@ -1292,7 +1298,8 @@ def sum_marked_images(img_infos, included_ids, tag_infos):
         if idx in included_ids:
             image, _ = get_img(
                 img_info.filepath,
-                frame_number=img_info.frame_number, tag_infos=tag_infos
+                frame_number=img_info.frame_number, tag_infos=tag_infos,
+                overlay=False
                 )
             if summed_img is None:
                 summed_img = image

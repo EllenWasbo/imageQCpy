@@ -476,6 +476,9 @@ class ParamSetMammo(ParamSetCommon):
     hom_ignore_roi_percent: int = 0
     hom_deviating_pixels: float = 20.
     hom_deviating_rois: float = 15.
+    var_roi_size: float = 2.0
+    var_percent: int = 100
+    var_mask_max: bool = False
     rlr_roi_size: float = 5.
     rlr_relative_to_right: bool = True  # if false relative to left
     rlr_x_mm: float = 60.  # distance to left or right border

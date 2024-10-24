@@ -303,7 +303,7 @@ class EditAnnotationsDialog(ImageQCDialog):
     """Dialog to set annotation settings."""
 
     def __init__(self, annotations=True, annotations_line_thick=0,
-                 annotations_font_size=0, show_axis=False):
+                 annotations_font_size=0, show_axis=False, show_overlay=True):
         super().__init__()
 
         self.setWindowTitle('Set display options')
@@ -312,26 +312,30 @@ class EditAnnotationsDialog(ImageQCDialog):
 
         vlo = QVBoxLayout()
         self.setLayout(vlo)
-        fLO = QFormLayout()
-        vlo.addLayout(fLO)
+        flo = QFormLayout()
+        vlo.addLayout(flo)
 
         self.chk_annotations = QCheckBox('Show annotations')
         self.chk_annotations.setChecked(annotations)
-        fLO.addRow(self.chk_annotations)
+        flo.addRow(self.chk_annotations)
 
         self.spin_line = QSpinBox()
         self.spin_line.setRange(1, 10)
         self.spin_line.setValue(annotations_line_thick)
-        fLO.addRow(QLabel('Line thickness'), self.spin_line)
+        flo.addRow(QLabel('Line thickness'), self.spin_line)
 
         self.spin_font = QSpinBox()
         self.spin_font.setRange(5, 100)
         self.spin_font.setValue(annotations_font_size)
-        fLO.addRow(QLabel('Font size'), self.spin_font)
+        flo.addRow(QLabel('Font size'), self.spin_font)
 
         self.chk_show_axis = QCheckBox('Show axis')
         self.chk_show_axis.setChecked(show_axis)
-        fLO.addRow(self.chk_show_axis)
+        flo.addRow(self.chk_show_axis)
+
+        self.chk_show_overlay = QCheckBox('Show overlay (if any)')
+        self.chk_show_overlay.setChecked(show_overlay)
+        flo.addRow(self.chk_show_overlay)
 
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
@@ -352,12 +356,15 @@ class EditAnnotationsDialog(ImageQCDialog):
             font_size
         bool
             show_axis
+        bool
+            show_overlay
         """
         return (
             self.chk_annotations.isChecked(),
             self.spin_line.value(),
             self.spin_font.value(),
-            self.chk_show_axis.isChecked()
+            self.chk_show_axis.isChecked(),
+            self.chk_show_overlay.isChecked()
             )
 
 
@@ -389,21 +396,21 @@ class AddArtifactsDialog(ImageQCDialog):
         # Artifacts
         vlo_a = QVBoxLayout()
         wid_artifacts.setLayout(vlo_a)
-        fLO = QFormLayout()
-        vlo_a.addLayout(fLO)
+        flo = QFormLayout()
+        vlo_a.addLayout(flo)
         self.label = QComboBox()
         self.label.setMinimumWidth(400)
         self.update_labels()
         self.label.currentIndexChanged.connect(self.label_changed)
-        fLO.addRow(QLabel('Select artifact'), self.label)
+        flo.addRow(QLabel('Select artifact'), self.label)
         self.new_label = QLineEdit('')
-        fLO.addRow(QLabel('Label new artifact'), self.new_label)
+        flo.addRow(QLabel('Label new artifact'), self.new_label)
         self.form = QComboBox()
         self.form.addItems(self.forms_2d)
         self.form.addItems(self.forms_3d)
         self.form.setCurrentIndex(0)
         self.form.currentIndexChanged.connect(self.update_form)
-        fLO.addRow(QLabel('Artifact form'), self.form)
+        flo.addRow(QLabel('Artifact form'), self.form)
         self.x_offset = QDoubleSpinBox(decimals=1)
         self.x_offset.setRange(-1000, 1000)
         self.x_offset.valueChanged.connect(self.value_edited)
@@ -413,9 +420,9 @@ class AddArtifactsDialog(ImageQCDialog):
         self.z_offset = QDoubleSpinBox(decimals=1)
         self.z_offset.setRange(-1000, 1000)
         self.z_offset.valueChanged.connect(self.value_edited)
-        fLO.addRow(QLabel('Center offset x (mm)'), self.x_offset)
-        fLO.addRow(QLabel('Center offset y (mm)'), self.y_offset)
-        fLO.addRow(QLabel('Center offset z (mm)'), self.z_offset)
+        flo.addRow(QLabel('Center offset x (mm)'), self.x_offset)
+        flo.addRow(QLabel('Center offset y (mm)'), self.y_offset)
+        flo.addRow(QLabel('Center offset z (mm)'), self.z_offset)
         self.size_1 = QDoubleSpinBox(decimals=1)
         self.size_1.setRange(0, 1000)
         self.size_1.valueChanged.connect(self.value_edited)
@@ -428,9 +435,9 @@ class AddArtifactsDialog(ImageQCDialog):
         self.size_3.setRange(0, 1000)
         self.size_3.valueChanged.connect(self.value_edited)
         self.size_3_txt = QLabel('')
-        fLO.addRow(self.size_1_txt, self.size_1)
-        fLO.addRow(self.size_2_txt, self.size_2)
-        fLO.addRow(self.size_3_txt, self.size_3)
+        flo.addRow(self.size_1_txt, self.size_1)
+        flo.addRow(self.size_2_txt, self.size_2)
+        flo.addRow(self.size_3_txt, self.size_3)
         self.rotation = QDoubleSpinBox(decimals=1)
         self.rotation.setRange(-359.9, 359.9)
         self.rotation.valueChanged.connect(self.value_edited)
@@ -440,24 +447,24 @@ class AddArtifactsDialog(ImageQCDialog):
         self.rotation_2 = QDoubleSpinBox(decimals=1)
         self.rotation_2.setRange(-359.9, 359.9)
         self.rotation_2.valueChanged.connect(self.value_edited)
-        fLO.addRow(QLabel('Rotation (degrees)'), self.rotation)
-        fLO.addRow(QLabel('Rotation (degrees) x'), self.rotation_1)
-        fLO.addRow(QLabel('Rotation (degrees) y'), self.rotation_2)
+        flo.addRow(QLabel('Rotation (degrees)'), self.rotation)
+        flo.addRow(QLabel('Rotation (degrees) x'), self.rotation_1)
+        flo.addRow(QLabel('Rotation (degrees) y'), self.rotation_2)
         self.sigma = QDoubleSpinBox(decimals=2)
         self.sigma.setRange(0, 5500)
         self.sigma.valueChanged.connect(self.value_edited)
         self.sigma_label = QLabel('Gaussian blur, sigma (mm)')
-        fLO.addRow(self.sigma_label, self.sigma)
+        flo.addRow(self.sigma_label, self.sigma)
         self.method = QComboBox()
         self.method.addItems(['adding', 'multiplying',
                               'adding poisson noise',
                               'adding gamma camera point source'])
         self.method.currentIndexChanged.connect(self.update_method)
-        fLO.addRow(QLabel('Apply artifact value by'), self.method)
+        flo.addRow(QLabel('Apply artifact value by'), self.method)
         self.value = QDoubleSpinBox(decimals=3)
         self.value.setRange(-1000000, 1000000)
         self.value.valueChanged.connect(self.value_edited)
-        fLO.addRow(QLabel('Artifact value'), self.value)
+        flo.addRow(QLabel('Artifact value'), self.value)
         self.lbl_edited = QLabel('')
 
         # buttons related to list of artifacts
@@ -1701,7 +1708,8 @@ class ProjectionPlotDialog(ImageQCDialog):
                 image, tags_ = dcm.get_img(
                     img_info.filepath,
                     frame_number=img_info.frame_number, tag_infos=tag_infos,
-                    tag_patterns=tag_patterns
+                    tag_patterns=tag_patterns,
+                    overlay=self.main.gui.show_overlay
                     )
                 if len(img_info.artifacts) > 0:
                     image = apply_artifacts(

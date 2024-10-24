@@ -22,6 +22,7 @@ class Gui():
     delta_y: int = 0
     delta_a: float = 0.0
     show_axis: bool = False
+    show_overlay: bool = True
 
 
 @dataclass

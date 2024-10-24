@@ -740,7 +740,7 @@ class ParamsTabCommon(QTabWidget):
         self.flat_widget.setLayout(hlo_flat_widget)
 
         flo = QFormLayout()
-        flo.addRow(QLabel('Calculate variance within each ROI'), self.hom_variance)
+        flo.addRow(QLabel('Calculate average variance within each ROI'), self.hom_variance)
         flo.addRow(QLabel('     ROI size variance (mm)'), self.hom_roi_size_variance)
         flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
         flo.addRow(QLabel('Ignore outer mm'), self.hom_mask_outer_mm)
@@ -1042,6 +1042,43 @@ class ParamsTabCommon(QTabWidget):
         hlo_subtract.addWidget(self.rin_subtract_trend)
         hlo_subtract.addStretch()
         self.tab_rin.vlo.addLayout(hlo_subtract)
+
+    def create_tab_var(self, modality='Xray'):
+        """GUI of tab Variance."""
+        self.tab_var = ParamsWidget(self, run_txt='Calculate variance image(s)')
+
+        self.var_roi_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
+        self.var_roi_size.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='var_roi_size'))
+        self.var_percent = QDoubleSpinBox(decimals=1,
+                                          minimum=0.1, maximum=100., singleStep=0.1)
+        self.var_percent.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='var_percent'))
+
+        self.tab_var.vlo_top.addWidget(uir.LabelItalic(
+            'The variance image can reveal artifacts in the image.<br>'
+            'Adjust ROI size to find artifacts of different sizes.'))
+
+        hlo_roi_size = QHBoxLayout()
+        hlo_roi_size.addWidget(QLabel('ROI size (mm)'))
+        hlo_roi_size.addWidget(self.var_roi_size)
+        hlo_roi_size.addWidget(QLabel('if less than 3 pix, 3 pix will be used'))
+        hlo_roi_size.addStretch()
+        hlo_rest = QHBoxLayout()
+        flo_rest = QFormLayout()
+        hlo_rest.addLayout(flo_rest)
+        hlo_rest.addStretch()
+        flo_rest.addRow(QLabel('Include % of image'), self.var_percent)
+        self.tab_var.vlo.addLayout(hlo_roi_size)
+        self.tab_var.vlo.addLayout(hlo_rest)
+
+        if modality == 'Mammo':
+            self.var_mask_max = QCheckBox()
+            self.var_mask_max.toggled.connect(
+                lambda: self.param_changed_from_gui(attribute='var_mask_max'))
+            flo_rest.addRow(QLabel('Mask pixels with max values'),
+                            self.var_mask_max)
 
     def add_NPS_plot_settings(self):
         """Add common NPS settings and gui."""
@@ -1746,6 +1783,8 @@ class ParamsTabXray(ParamsTabCommon):
 
     def create_tab_var(self):
         """GUI of tab Variance."""
+        super().create_tab_var()
+        '''
         self.tab_var = ParamsWidget(self, run_txt='Calculate variance image(s)')
 
         self.var_roi_size = QDoubleSpinBox(
@@ -1772,6 +1811,7 @@ class ParamsTabXray(ParamsTabCommon):
         hlo_percent.addStretch()
         self.tab_var.vlo.addLayout(hlo_roi_size)
         self.tab_var.vlo.addLayout(hlo_percent)
+        '''
 
 
 class ParamsTabMammo(ParamsTabCommon):
@@ -1782,6 +1822,7 @@ class ParamsTabMammo(ParamsTabCommon):
 
         self.create_tab_sdn()
         self.create_tab_hom()
+        self.create_tab_var()
         self.create_tab_rlr()
         self.create_tab_gho()
         self.create_tab_mtf()
@@ -1789,6 +1830,7 @@ class ParamsTabMammo(ParamsTabCommon):
 
         self.addTab(self.tab_sdn, "SDNR")
         self.addTab(self.tab_hom, "Homogeneity")
+        self.addTab(self.tab_var, "Variance")
         self.addTab(self.tab_rlr, "ROI left/right")
         self.addTab(self.tab_gho, "Ghost")
         self.addTab(self.tab_mtf, "MTF")
@@ -1860,6 +1902,10 @@ class ParamsTabMammo(ParamsTabCommon):
 
         self.create_tab_hom_flatfield()
         self.tab_hom.hlo.addWidget(self.flat_widget)
+
+    def create_tab_var(self):
+        """GUI of tab Variance."""
+        super().create_tab_var(modality='Mammo')
 
     def create_tab_rlr(self):
         """GUI of tab ROI left/right."""

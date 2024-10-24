@@ -79,6 +79,7 @@ class GuiVariables():
     annotations_line_thick: int = 3
     annotations_font_size: int = 14
     show_axis: bool = False
+    show_overlay: bool = True
 
 
 class MainWindow(QMainWindow):
@@ -388,7 +389,7 @@ class MainWindow(QMainWindow):
                 self.active_img, _ = dcm.get_img(
                     self.imgs[self.gui.active_img_no].filepath,
                     frame_number=self.imgs[self.gui.active_img_no].frame_number,
-                    tag_infos=self.tag_infos)
+                    tag_infos=self.tag_infos, overlay=self.gui.show_overlay)
             if self.active_img is not None:
                 # apply artifacts if any
                 try:
@@ -464,7 +465,7 @@ class MainWindow(QMainWindow):
             self.active_img, _ = dcm.get_img(
                 self.imgs[self.gui.active_img_no].filepath,
                 frame_number=self.imgs[self.gui.active_img_no].frame_number,
-                tag_infos=self.tag_infos)
+                tag_infos=self.tag_infos, overlay=self.gui.show_overlay)
         except IndexError:
             pass
 

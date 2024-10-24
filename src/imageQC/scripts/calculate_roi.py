@@ -178,7 +178,8 @@ def get_rois(image, image_number, input_main):
                 if paramset.mtf_auto_center:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)
-                    off_center_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
+                    off_center_xy = list(reversed(
+                        np.array(yxmax) - 0.5 * np.array(image.shape)))
                 roi_this = [[], []]
                 roi_this[0] = get_roi_rectangle(
                     img_shape,
@@ -186,6 +187,7 @@ def get_rois(image, image_number, input_main):
                     roi_height=2*roi_size_in_pix + 1,
                     offcenter_xy=off_center_xy)
             else:  # circular edge / wire or cylinder source / line source
+                off_xy_is_null = False
                 if paramset.mtf_auto_center:
                     sigma = 5
                     if paramset.mtf_type == 2 and input_main.current_modality == 'CT':
@@ -203,12 +205,17 @@ def get_rois(image, image_number, input_main):
                             summed_img = image
                         if paramset.mtf_type == 3:  # line z-res
                             sigma = 100
+                            if input_main.current_modality == 'PET':
+                                off_xy_is_null = True
                         elif paramset.mtf_type == 4:  # cylinder z res
                             sigma = 100
 
                     filt_img = ndimage.gaussian_filter(summed_img, sigma=sigma)
                     yxmax = get_max_pos_yx(filt_img)
-                    off_center_xy = np.array(yxmax) - 0.5 * np.array(summed_img.shape)
+                    off_center_xy = list(reversed(
+                        np.array(yxmax) - 0.5 * np.array(summed_img.shape)))
+                    if off_xy_is_null:
+                        off_center_xy[0] = 0.0
 
                 if paramset.mtf_type == 2 and input_main.current_modality == 'CT':
                     # circular edge
@@ -315,7 +322,8 @@ def get_rois(image, image_number, input_main):
                 if paramset.mtf_type in [0, 1]:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)
-                    offcenter_xy = np.array(yxmax) - 0.5 * np.array(image.shape)
+                    offcenter_xy = list(reversed(
+                        np.array(yxmax) - 0.5 * np.array(image.shape)))
 
                 elif paramset.mtf_type == 2:  # perpendicular line sources
                     res = find_lines(image)
@@ -601,10 +609,18 @@ def get_rois(image, image_number, input_main):
         roi_size_in_pix = paramset.var_roi_size / image_info.pix[0]
         roi_small = get_roi_rectangle(
             img_shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
-        w = 0.01 * paramset.var_percent * img_shape[1]
-        h = 0.01 * paramset.var_percent * img_shape[0]
-        roi_large = get_roi_rectangle(
-            img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
+        if paramset.var_percent == 100:
+            roi_large = np.full(img_shape[0:2], True)
+        else:
+            w = 0.01 * paramset.var_percent * img_shape[1]
+            h = 0.01 * paramset.var_percent * img_shape[0]
+            roi_large = get_roi_rectangle(
+                img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
+        try:
+            if paramset.var_mask_max:
+                roi_large[image == np.max(image)] = False
+        except AttributeError:
+            pass
         return [roi_large, roi_small]
 
     if image is not None:
@@ -622,9 +638,9 @@ def get_rois(image, image_number, input_main):
 
 def get_max_pos_yx(image):
     """Find position (row, col) with maximum pixel value."""
-    row_maxs = np.max(image, axis=0)
+    row_maxs = np.max(image, axis=1)
     row_max_id = np.argmax(row_maxs)
-    col_maxs = np.max(image, axis=1)
+    col_maxs = np.max(image, axis=0)
     col_max_id = np.argmax(col_maxs)
 
     return (row_max_id, col_max_id)

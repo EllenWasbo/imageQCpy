@@ -764,7 +764,8 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                 img_array, tag_strings = dcm.get_img(
                     img.filepath, frame_number=img.frame_number,
                     tag_patterns=tag_patterns,
-                    tag_infos=self.main.tag_infos)
+                    tag_infos=self.main.tag_infos,
+                    overlay=self.gui.show_overlay)
                 self.max_pix_values.append(np.max(img_array))
                 if diameters and len(self.diameters) == 0:
                     widths = get_object_width_xy(
@@ -917,7 +918,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             self.active_img, _ = dcm.get_img(
                 self.imgs[self.gui.active_img_no].filepath,
                 frame_number=self.imgs[self.gui.active_img_no].frame_number,
-                tag_infos=self.tag_infos)
+                tag_infos=self.tag_infos, overlay=self.gui.show_overlay)
 
             self.refresh_img_display()
             #self.refresh_results_display(update_table=False)

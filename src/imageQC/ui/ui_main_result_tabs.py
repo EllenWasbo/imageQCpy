@@ -1399,6 +1399,7 @@ class ResultPlotCanvas(PlotCanvas):
                          'xvals': xvals, 'yvals': yvals, 'style': styles[i]})
                     max_ys.append(np.max(yvals))
 
+                maxy = max(max_ys)
                 if self.main.current_modality == 'CT':
                     self.curves.append({
                         'label': '_nolegend_',
@@ -1406,9 +1407,11 @@ class ResultPlotCanvas(PlotCanvas):
                             details_dict['median_freq'], details_dict['median_freq']],
                         'yvals': [0, norm_factor * details_dict['median_val']],
                         'style': '-b'})
+                    self.ax.text(
+                        1.05*details_dict['median_freq'], 0.5*maxy,
+                        'Median', ha='left', size=8, color='b')
 
                 nyquist_freq = 1/(2.*self.main.imgs[imgno].pix[0])
-                maxy = max(max_ys)
                 self.curves.append({
                     'label': '_nolegend_',
                     'xvals': [nyquist_freq, nyquist_freq],
@@ -1465,6 +1468,9 @@ class ResultPlotCanvas(PlotCanvas):
                         'xvals': [median_frequency, median_frequency],
                         'yvals': [0, median_val],
                         'style': '-' + self.color_k})
+                    self.ax.text(
+                        1.05*median_frequency, 0.5*median_val,
+                        'Median', ha='left', size=8, color=self.color_k)
             except (KeyError, IndexError):
                 pass
 
@@ -1509,6 +1515,10 @@ class ResultPlotCanvas(PlotCanvas):
                                     'color': color}
                                 if i == imgno:
                                     med_this = curve_med
+                                    self.ax.text(
+                                        1.05*details_dict['median_freq'],
+                                        0.5*np.max(max_ys),
+                                        'Median', ha='left', size=8, color='r')
                                 else:
                                     self.curves.append(curve_med)
 

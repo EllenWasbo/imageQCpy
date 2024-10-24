@@ -293,15 +293,21 @@ class ImageDisplayWidget(GenericImageWidget):
             annotations=self.main.gui.annotations,
             annotations_line_thick=self.main.gui.annotations_line_thick,
             annotations_font_size=self.main.gui.annotations_font_size,
-            show_axis=self.main.gui.show_axis)
+            show_axis=self.main.gui.show_axis,
+            show_overlay=self.main.gui.show_overlay)
         res = dlg.exec()
         if res:
-            ann, line_thick, font_size, show_axis = dlg.get_data()
+            ann, line_thick, font_size, show_axis, show_overlay = dlg.get_data()
             self.main.gui.annotations = ann
             self.main.gui.annotations_line_thick = line_thick
             self.main.gui.annotations_font_size = font_size
             self.main.gui.show_axis = show_axis
+            self.main.gui.show_overlay = show_overlay
             if self.main.gui.active_img_no > -1:
+                if show_overlay:
+                    self.main.update_active_img(
+                        self.main.tree_file_list.topLevelItem(
+                            self.main.gui.active_img_no))
                 self.canvas.img_draw()
 
     def clicked_imgsize(self):

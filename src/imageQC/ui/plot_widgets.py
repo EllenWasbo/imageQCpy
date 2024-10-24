@@ -78,11 +78,11 @@ class PlotWidget(QWidget):
                 if last_xvalues is not None:
                     np_xvalues = np.array(xvalues)
                     try:
-                        if (np_xvalues == last_xvalues).all():
+                        if np.array_equal(np_xvalues, last_xvalues):
                             xvalues = None
                         else:
                             last_xvalues = np_xvalues
-                    except ValueError:
+                    except (ValueError, AttributeError):
                         last_xvalues = np_xvalues
                 else:
                     last_xvalues = np.array(xvalues)

@@ -29,7 +29,7 @@ from imageQC.config.iQCconstants import (
 import imageQC.config.config_classes as cfc
 from imageQC.config.config_func import get_config_folder
 from imageQC.scripts import digit_methods
-from imageQC.scripts.artifact import apply_artifacts, generate_artifacts_3d
+from imageQC.scripts.artifact import apply_artifacts
 # imageQC block end
 
 
@@ -425,6 +425,7 @@ def calculate_qc(input_main, wid_auto=None,
         input_main.gui.delta_x,
         input_main.gui.delta_y,
         input_main.gui.delta_a]
+    overlay = input_main.gui.show_overlay
 
     paramset = input_main.current_paramset
     if wid_auto is not None:
@@ -628,7 +629,8 @@ def calculate_qc(input_main, wid_auto=None,
                             frame_number=img_infos[i].frame_number,
                             tag_patterns=tag_patterns,
                             tag_infos=tag_infos, NM_count=NM_count[i],
-                            get_window_level=any(auto_template_label)
+                            get_window_level=any(auto_template_label),
+                            overlay=overlay
                             )
                         try:
                             if len(input_main.imgs[i].artifacts) > 0:
@@ -682,7 +684,8 @@ def calculate_qc(input_main, wid_auto=None,
                             frame_number=img_infos[i].frame_number,
                             tag_patterns=[group_pattern],
                             tag_infos=tag_infos,
-                            get_window_level=any(auto_template_label)
+                            get_window_level=any(auto_template_label),
+                            overlay=overlay
                             )
                         try:
                             if len(input_main.imgs[i].artifacts) > 0:
@@ -1932,14 +1935,19 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             roi_size_in_pix = round(paramset.var_roi_size / image_info.pix[0])
             kernel = np.full((roi_size_in_pix, roi_size_in_pix),
                              1./(roi_size_in_pix**2))
-            mu = sp.signal.fftconvolve(image2d, kernel, mode='same')
-            ii = sp.signal.fftconvolve(image2d ** 2, kernel, mode='same')
+            image2d_masked = np.ma.masked_array(
+                image2d, mask=np.invert(roi_array[0]))
+            mu = sp.signal.fftconvolve(image2d_masked, kernel, mode='same')
+            ii = sp.signal.fftconvolve(
+                image2d_masked ** 2, kernel, mode='same')
             variance_image = ii - mu**2
-            rows = np.max(roi_array[0], axis=1)
-            cols = np.max(roi_array[0], axis=0)
-            sub = variance_image[rows][:, cols]
-            values = [np.min(sub), np.max(sub), np.median(sub)]
-            details_dict = {'variance_image': sub}
+
+            variance_masked = np.ma.masked_array(
+                variance_image, mask=np.invert(roi_array[0]))
+            values = [np.ma.min(variance_masked),
+                      np.ma.max(variance_masked),
+                      np.ma.median(variance_masked)]
+            details_dict = {'variance_image': variance_masked}
             res = Results(headers=headers, values=values,
                           details_dict=details_dict)
         return res

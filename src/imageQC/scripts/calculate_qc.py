@@ -20,7 +20,8 @@ from PyQt5.QtWidgets import qApp
 
 # imageQC block start
 from imageQC.scripts import dcm
-from imageQC.scripts.calculate_roi import (get_rois, get_roi_circle, get_roi_SNI)
+from imageQC.scripts.calculate_roi import (
+    get_rois, get_roi_circle, get_roi_SNI, get_roi_rectangle)
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
@@ -1930,24 +1931,48 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         if image2d is None:
             res = Results(headers=headers)
         else:
+            roi_size_in_pix = round(paramset.var_roi_size / image_info.pix[0])
+
+            rows = np.max(roi_array[1], axis=1)
+            cols = np.max(roi_array[1], axis=0)
+            sub = image2d[rows][:, cols]
+
             # code adapted from:
             # https://www.imageeprocessing.com/2015/10/edge-detection-using-local-variance.html
-            roi_size_in_pix = round(paramset.var_roi_size / image_info.pix[0])
             kernel = np.full((roi_size_in_pix, roi_size_in_pix),
                              1./(roi_size_in_pix**2))
-            image2d_masked = np.ma.masked_array(
-                image2d, mask=np.invert(roi_array[0]))
-            mu = sp.signal.fftconvolve(image2d_masked, kernel, mode='same')
-            ii = sp.signal.fftconvolve(
-                image2d_masked ** 2, kernel, mode='same')
-            variance_image = ii - mu**2
+            mu = sp.signal.fftconvolve(sub, kernel, mode='valid')
+            ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='valid')
+            variance_sub = ii - mu**2
 
-            variance_masked = np.ma.masked_array(
-                variance_image, mask=np.invert(roi_array[0]))
-            values = [np.ma.min(variance_masked),
-                      np.ma.max(variance_masked),
-                      np.ma.median(variance_masked)]
-            details_dict = {'variance_image': variance_masked}
+            # mask max?
+            masked = False
+            variance_sub_masked = None
+            if roi_array[4] is not None:
+                # valid part of full image, ensure same size as valid
+                valid_shape = variance_sub.shape
+                roi_percent_valid = get_roi_rectangle(
+                    image2d.shape,
+                    roi_width=valid_shape[1], roi_height=valid_shape[0])
+                rows_ = np.max(roi_percent_valid, axis=1)
+                cols_ = np.max(roi_percent_valid, axis=0)
+                max_mask_valid_part = roi_array[4][rows_][:, cols_]
+                if np.any(max_mask_valid_part):
+                    variance_sub_masked = np.ma.masked_array(
+                        variance_sub, mask=max_mask_valid_part)
+                    masked = True
+            if masked:
+                breakpoint()
+                values = [np.ma.min(variance_sub_masked),
+                          np.ma.max(variance_sub_masked),
+                          np.ma.median(variance_sub_masked)]
+                details_dict = {'variance_image': variance_sub_masked}
+            else:
+                values = [np.min(variance_sub),
+                          np.max(variance_sub),
+                          np.median(variance_sub)]
+                details_dict = {'variance_image': variance_sub}
+
             res = Results(headers=headers, values=values,
                           details_dict=details_dict)
         return res

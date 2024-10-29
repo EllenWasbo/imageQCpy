@@ -28,7 +28,6 @@ def update_roi(main, clear_results_test=False):
             main.status_bar.clearMessage()
         except AttributeError:
             pass
-        main.stop_wait_cursor()
     else:
         main.current_roi = None
     try:
@@ -48,6 +47,9 @@ def update_roi(main, clear_results_test=False):
         if main.current_test in [*main.results]:
             main.results[main.current_test] = None
             main.refresh_results_display()
+
+    if main.active_img is not None:
+        main.stop_wait_cursor()
 
 
 def refresh_results_display(main, update_table=True):

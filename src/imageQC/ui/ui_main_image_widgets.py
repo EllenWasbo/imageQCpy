@@ -302,9 +302,10 @@ class ImageDisplayWidget(GenericImageWidget):
             self.main.gui.annotations_line_thick = line_thick
             self.main.gui.annotations_font_size = font_size
             self.main.gui.show_axis = show_axis
+            overlay_changed = False if self.main.gui.show_overlay == show_overlay else True
             self.main.gui.show_overlay = show_overlay
             if self.main.gui.active_img_no > -1:
-                if show_overlay:
+                if overlay_changed:
                     self.main.update_active_img(
                         self.main.tree_file_list.topLevelItem(
                             self.main.gui.active_img_no))

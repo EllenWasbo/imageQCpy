@@ -1,12 +1,12 @@
 # v3.1.2
-_xxx xx, 2024_
+_Oct 29, 2024_
 
 New functionalities:
 - Added module for TTF/NPS calculation for CT (task based image analysis). Find module from File-menu. d-prime calculation not finished. 
-- CT/SPECT/PET: Option to calculate z-resolution from wire/linesource (in ~x direction) and from slanted edge in z-direction
+- CT/SPECT/PET: Option to calculate z-resolution from wire/linesource (in ~x direction) and from slanted edge in z-direction. Not validated for CT and SPECT, yet.
 - In the Advanced open files dialog: option to import saved Tag Pattern - Format for grouping images (including modality specific tags).
 - Simulating artifacts:
-	- Added option to generate 3d artifacts
+	- Added option to generate 3d artifacts (not fully validated yet)
 	- Added option to set full image to zero before adding artifacts
 - Added Variance as test for Mammo. Similar to Variance test for Xray, but with option to mask max-values as for Homogeneity (flat field test).
 - Added option in Edit Annotations dialog to turn off overlays. Default is still to include overlay in image. NB - during automation overlay is always on. No option, yet, to turn this off.
@@ -23,8 +23,10 @@ Fixes:
 - Avoiding crashes when switching between gaussian and discrete tabulated results for MTF.
 - Avoiding crashes when copying curves (error from changes in v3.1.1)
 - Avoiding crash when adding more than 8 ROIs for the ROI test.
+- Avoiding crash for matplotlib version 3.9+ when changing modality mode or resetting offset.
 - CT test NPS, fixed average plot when NPS not calculated for all images.
 - Handeling pydicom v3.0+ (change in how pixel data is read from DICOM)
+- Some DICOM files cast InvalidDicomError and miss Transfer Syntax UID. Now fix with guess on Transfer Syntax. (Seen for some dental CBCT images). 
 
 # v3.1.1
 _Aug 07, 2024_

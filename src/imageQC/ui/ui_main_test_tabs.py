@@ -1049,16 +1049,18 @@ class ParamsTabCommon(QTabWidget):
 
         self.var_roi_size = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
-        self.var_roi_size.valueChanged.connect(
+        self.var_roi_size.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='var_roi_size'))
         self.var_percent = QDoubleSpinBox(decimals=1,
                                           minimum=0.1, maximum=100., singleStep=0.1)
-        self.var_percent.valueChanged.connect(
+        self.var_percent.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='var_percent'))
 
         self.tab_var.vlo_top.addWidget(uir.LabelItalic(
             'The variance image can reveal artifacts in the image.<br>'
-            'Adjust ROI size to find artifacts of different sizes.'))
+            'Adjust ROI size to find artifacts of different sizes.<br>'
+            'Values are only calculated where the full ROI is inside the defined area to analyse.<br>'
+            'I.e. a margin marked by a dashed line will add to the masked area.'))
 
         hlo_roi_size = QHBoxLayout()
         hlo_roi_size.addWidget(QLabel('ROI size (mm)'))

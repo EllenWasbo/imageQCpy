@@ -697,9 +697,9 @@ class CenterWidget(QGroupBox):
             szy, szx = np.shape(self.main.active_img)
             if self.main.gui.delta_a == 0:
                 self.main.wid_image_display.canvas.ax.lines[0].set_ydata(
-                    y=szy * 0.5 + self.main.gui.delta_y)
+                    y=[szy * 0.5 + self.main.gui.delta_y])
                 self.main.wid_image_display.canvas.ax.lines[1].set_xdata(
-                    x=szx * 0.5 + self.main.gui.delta_x)
+                    x=[szx * 0.5 + self.main.gui.delta_x])
             else:
                 x1, x2, y1, y2 = get_rotated_crosshair(
                     szx, szy,

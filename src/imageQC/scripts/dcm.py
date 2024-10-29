@@ -103,8 +103,12 @@ def read_dcm(file, stop_before_pixels=True):
     try:
         pyd = pydicom.dcmread(file, stop_before_pixels=stop_before_pixels)
     except pydicom.errors.InvalidDicomError:
-        errmsg = f'InvalidDicomError {file}'
-        is_image = False
+        try:
+            pyd = pydicom.dcmread(
+                file, stop_before_pixels=stop_before_pixels, force=True)
+        except:
+            errmsg = f'InvalidDicomError {file}'
+            is_image = False
     except (FileNotFoundError, PermissionError, OSError) as err:
         errmsg = f'Error reading {file} {str(err)}'
         is_image = False
@@ -698,7 +702,21 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
         except AttributeError as err:
             if 'convert_pixel_data' in str(err):
                 # fix for pydicom v3.0.1+  TODO - later use only this
-                pixarr = pydicom.pixels.pixel_array(pyd)
+                try:
+                    pixarr = pydicom.pixels.pixel_array(pyd)
+                except AttributeError as err2:
+                    if 'Transfer Syntax UID' in str(err2):
+                        pyd.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
+                        try:  # try again
+                            pixarr = pydicom.pixels.pixel_array(pyd)
+                        except:
+                            pass
+            elif 'TransferSyntaxUID' in str(err):
+                pyd.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
+                try:
+                    pixarr = pyd.pixel_array
+                except:
+                    pass
             else:
                 pass
 
@@ -1077,7 +1095,14 @@ def find_all_valid_dcm_files(
                         pydicom.dcmread(file, specific_tags=[(0x8, 0x60)])
                         dcm_files.append(file)
                     except pydicom.errors.InvalidDicomError as error0:
-                        print(f'{file}\n{str(error0)}')
+                        try:
+                            pydicom.dcmread(
+                                file, specific_tags=[(0x8, 0x60)], force=True)
+                            dcm_files.append(file)
+                        except:
+                            print(f'{file}\n InvalidDicomError - failed '
+                                  'reading as DICOM file - report error if '
+                                  'file is DICOM')
                     except (
                             FileNotFoundError,
                             AttributeError,

@@ -8,6 +8,7 @@ Calculation processes for the different tests.
 import numpy as np
 from scipy import ndimage
 from scipy.signal import find_peaks
+from scipy.signal import fftconvolve
 from skimage import feature
 
 # imageQC block start
@@ -607,21 +608,34 @@ def get_rois(image, image_number, input_main):
 
     def Var():  # Variance Xray
         roi_size_in_pix = paramset.var_roi_size / image_info.pix[0]
+        roi_n = round(roi_size_in_pix)
         roi_small = get_roi_rectangle(
             img_shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
         if paramset.var_percent == 100:
-            roi_large = np.full(img_shape[0:2], True)
+            roi_percent = np.full(img_shape[0:2], True)
+            roi_percent_valid = np.full(img_shape[0:2], False)
+            roi_percent_valid[roi_n:-roi_n, roi_n:-roi_n] = True
         else:
             w = 0.01 * paramset.var_percent * img_shape[1]
             h = 0.01 * paramset.var_percent * img_shape[0]
-            roi_large = get_roi_rectangle(
+            roi_percent = get_roi_rectangle(
                 img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
+            roi_percent_valid = get_roi_rectangle(
+                img_shape, roi_width=(w - roi_n), roi_height=(h - roi_n),
+                offcenter_xy=(0, 0))
+        roi_mask = None
+        roi_mask_valid = None
         try:
             if paramset.var_mask_max:
-                roi_large[image == np.max(image)] = False
+                roi_mask = np.full(img_shape[0:2], False)
+                roi_mask[image == np.max(image)] = True
+                kernel = np.full((roi_n+1, roi_n+1), 1.0)
+                grow = fftconvolve(roi_mask, kernel, mode='same')
+                roi_mask_valid = np.full(img_shape[0:2], False)
+                roi_mask_valid[grow >= 1] = True
         except AttributeError:
             pass
-        return [roi_large, roi_small]
+        return [roi_small, roi_percent, roi_percent_valid, roi_mask, roi_mask_valid]
 
     if image is not None:
         try:

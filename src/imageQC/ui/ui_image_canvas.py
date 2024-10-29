@@ -378,7 +378,7 @@ class ImageCanvas(GenericImageCanvas):
     def add_contours_to_all_rois(self, colors=None, reset_contours=True,
                                  roi_indexes=None, filled=False,
                                  labels=None, labels_pos='upper_left',
-                                 linestyles='solid',
+                                 linestyles=None,
                                  hatches=None):
         """Draw all ROIs in self.main.current_roi (list) with specific colors.
 
@@ -394,8 +394,8 @@ class ImageCanvas(GenericImageCanvas):
             if true used contourf (filled) instead
         labels : str, optional
             'upper_left' or 'center' relative to roi
-        linestyles : str, optional
-            fx 'dotted'. Default is 'solid'
+        linestyles : list of str, optional
+            Default is None == all solid
         hatches : list of str, optional
             Used if filled is True. Default is None.
         """
@@ -407,11 +407,14 @@ class ImageCanvas(GenericImageCanvas):
             self.contours = []
         if colors is None:
             colors = ['red' for i in range(len(this_roi))]
+        if linestyles is None:
+            linestyles = ['solid' for i in range(len(this_roi))]
         if roi_indexes is None:
             roi_indexes = list(np.arange(len(this_roi)))
 
         for i, roi_no in enumerate(roi_indexes):
             color_no = i % len(colors)
+            linestyle_no = i % len(linestyles)
             mask = np.where(this_roi[roi_no], 0, 1)
             if filled:
                 if hatches is None:
@@ -427,7 +430,7 @@ class ImageCanvas(GenericImageCanvas):
                 contour = self.ax.contour(
                     mask, levels=[0.9],
                     colors=colors[color_no], alpha=0.5, linewidths=self.linewidth,
-                    linestyles=linestyles)
+                    linestyles=linestyles[linestyle_no])
             if labels:
                 try:
                     label = labels[i]
@@ -876,9 +879,17 @@ class ImageCanvas(GenericImageCanvas):
         self.add_contours_to_all_rois(colors=['red', 'blue'])
 
     def Var(self):
+        #  [roi_small, roi_percent, roi_percent_valid, roi_mask, roi_mask_valid]
         self.add_contours_to_all_rois(
-            colors=['blue', 'blue'], roi_indexes=[0, 1],
-            linestyles=['solid', 'dotted'])
+            colors=['blue', 'blue'], roi_indexes=[0, 1, 2],
+            linestyles=['solid', 'dotted', 'dashed'])
+        if self.main.current_roi[3] is not None:
+            self.add_contours_to_all_rois(
+                colors=['red'], roi_indexes=[3],
+                filled=True, hatches=['////'], reset_contours=False)
+            self.add_contours_to_all_rois(
+                colors=['red'], roi_indexes=[4],
+                linestyles=['dashed'], reset_contours=False)
 
 
 class ResultImageCanvas(GenericImageCanvas):

@@ -108,6 +108,7 @@ def get_rois(image, image_number, input_main):
 
     def Gho():  # Ghost
         roi_this = None
+        errmsg = None
         if input_main.current_modality == 'Mammo':
             xs = [x for x in paramset.gho_table.pos_x]
             if paramset.gho_relative_to_right:

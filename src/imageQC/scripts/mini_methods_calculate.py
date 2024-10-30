@@ -486,7 +486,7 @@ def get_w_task(contrast, diameter, power):
         Fourier transform of syntetized image ()
 
     """
-    breakpoint()
+    #breakpoint() not finished
     w_task = None
     size = 101 if round(diameter) < 50 else (round(diameter) * 2) + 1
     dists = np.arange(size)

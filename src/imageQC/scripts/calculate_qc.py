@@ -1962,7 +1962,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         variance_sub, mask=max_mask_valid_part)
                     masked = True
             if masked:
-                breakpoint()
                 values = [np.ma.min(variance_sub_masked),
                           np.ma.max(variance_sub_masked),
                           np.ma.median(variance_sub_masked)]
@@ -2301,7 +2300,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             if 'TTF' in input_main.results and 'NPS' in input_main.results:
                 try:
                     ttf_details = input_main.results['TTF']['details_dict']
-                    breakpoint()
+                    #breakpoint() not finished
                     nps_details = [dd for dd
                                    in input_main.results['NPS']['details_dict']
                                    if dd]

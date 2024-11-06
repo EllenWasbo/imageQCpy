@@ -1407,7 +1407,7 @@ class ResetAutoTemplateDialog(ImageQCDialog):
                 'Select files to copy or move to input path '
                 f'for template {template_name}.'))
             vlo.addWidget(QLabel(
-                '(Tand templates that share the input path)'))
+                '(and templates that share the input path)'))
         else:
             vlo.addWidget(QLabel(
                 'Select files to move out of Archive '

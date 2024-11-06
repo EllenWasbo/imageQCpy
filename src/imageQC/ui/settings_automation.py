@@ -1923,26 +1923,40 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         hlo_options.addWidget(self.cbox_file_type)
         hlo_options.addStretch()
         self.vlo_temp.addLayout(hlo_options)
-        hlo_mammo_options = QHBoxLayout()
-        self.vlo_temp.addLayout(hlo_mammo_options)
-        self.info_Mammo_QAP = uir.LabelItalic(
-            '''
-            If GE Mammo QAP type:<br>
-            Autogenerate templates based on files in your input folder.<br>
-            This folder may contain files from different tests indicated
-            by the input file name prefix.<br>
-            You will also be prompted to auto generate Limits and Plots settings<br>
-            based on the found lower/upper limits specified in the first found file.
-            '''
-            )
-        self.info_Mammo_QAP.setVisible(False)
-        self.btn_auto_generate_Mammo_QAP_templates = QPushButton(
-            'Auto generate Mammo QAP templates...')
-        self.btn_auto_generate_Mammo_QAP_templates.setVisible(False)
-        self.btn_auto_generate_Mammo_QAP_templates.clicked.connect(
+        self.toolb_qap = QToolBar()
+        self.toolb_qap.setVisible(False)
+        txt_qap_btn = 'Auto generate Mammo QAP templates...'
+        btn_auto_generate_Mammo_QAP_templates = QPushButton(txt_qap_btn)
+        btn_auto_generate_Mammo_QAP_templates.clicked.connect(
             self.auto_generate_Mammo_QAP_templates)
-        hlo_options.addWidget(self.info_Mammo_QAP)
-        hlo_options.addWidget(self.btn_auto_generate_Mammo_QAP_templates)
+        txt = (
+            '<h2>Generate automation templates to read GE Mammo QAP result files</h2><br>'
+            '<br>'
+            'The QAP procedure on GE Mammo equipment generate one text file for each test and each time QAP runs. '
+            'imageQC can read these files and extract the numbers to generate tabulated-data '
+            'available for visualizing with plots.'
+            '<br>'
+            'Follow these steps to bulk-generate automation templates for this:<br>'
+            '<ul>'
+            '<li>Export result files from modality GE Mammo QAP.</li>'
+            '<li>Create a folder where you want to load and store the QAP files (later refferd to as the input folder).</li>'
+            '<li>Create another folder where you want imageQC to store tabulated data.<li>'
+            '<li>Copy the text files from the export (from a folder called "basic") to the input folder.<li>'
+            '<li>Start creating a new automation template by setting "Input path"</li>'
+            f'<li>Press the button "{txt_qap_btn }"</li>'
+            '</ul>'
+            'Follow the instructions on screen and one template will be generated for each test type named with '
+            'the same (user-defined) prefix indicating the specific lab.<br>'
+            '<br>'
+            'Next time you export files, use the button "Import GE QAP" in the automation dialog to '
+            'only add files that are not already analysed.<br>'
+            '<br>'
+            'Tip: If you regret the prefix name, search replace in the config-file "auto_vendor_templates.yaml"'
+            )
+        info_qap = uir.InfoTool(html_body_text=txt, parent=self)
+        self.toolb_qap.addWidget(btn_auto_generate_Mammo_QAP_templates)
+        self.toolb_qap.addWidget(info_qap)
+        hlo_options.addWidget(self.toolb_qap)
 
         self.vlo_temp.addStretch()
         hlo_lim_plot = QHBoxLayout()
@@ -1968,10 +1982,10 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         if self.current_template.file_type != '':
             self.cbox_file_type.setCurrentText(
                 self.current_template.file_type)
-        self.info_Mammo_QAP.setVisible(
+        self.toolb_qap.setVisible(
             self.current_modality == 'Mammo')
-        self.btn_auto_generate_Mammo_QAP_templates.setVisible(
-            self.current_modality == 'Mammo')
+        #self.btn_auto_generate_Mammo_QAP_templates.setVisible(
+        #    self.current_modality == 'Mammo')
         self.flag_edit(False)
 
     def get_current_template(self):
@@ -2050,6 +2064,7 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
     def auto_generate_Mammo_QAP_templates(self):
         """Generate templates reading GE Mammo QAP files based on files in input."""
         def pop_already(new_templates, existing_templates):
+            popped_labels = []
             labels_exist = [x.label for x in existing_templates]
             already_labels = [x.label for x in new_templates if x.label in labels_exist]
             if len(already_labels) > 0:
@@ -2065,8 +2080,9 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                                      if temp.label in already_labels]
                     ids_to_delete.reverse()
                     for idx in ids_to_delete:
+                        popped_labels.append(new_templates[idx].label)
                         new_templates.pop(idx)
-            return new_templates
+            return (new_templates, popped_labels)
 
         errmsg = ''
         test_names = []
@@ -2097,7 +2113,10 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
 
         if len(test_names) > 0:
             station_name, proceed = QInputDialog.getText(
-                self, 'Station name', 'Template names should start with:      ')
+                self, 'Station name',
+                'Template names should start with:      ',
+                text=Path(self.txt_input_path.text()).name
+                )
             output_folder = None
             if proceed:
                 QMessageBox.information(
@@ -2126,7 +2145,7 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                         templates.append(template_this)
 
             if len(templates) > 0:
-                templates = pop_already(templates, self.templates['Mammo'])
+                templates, _ = pop_already(templates, self.templates['Mammo'])
 
             # auto generate limits_and_plot_templates?
             if len(templates) > 0:
@@ -2156,14 +2175,15 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                             templates_lim.append(template)
                     # TODO specify path for warnings? litt forklaring...
 
-                    templates_lim = pop_already(
+                    templates_lim, popped_labels = pop_already(
                         templates_lim, self.limits_and_plot_templates['Mammo'])
 
                     # include link to limits_and_plot_template in auto_vendor_templates
-                    labels_lim_new = [x.label for x in templates_lim]
-                    if len(labels_lim_new) > 0:
+                    labels_to_link = [x.label for x in templates_lim]
+                    labels_to_link.extend(popped_labels)
+                    if len(labels_to_link) > 0:
                         for template in templates:
-                            if template.file_prefix in labels_lim_new:
+                            if template.file_prefix in labels_to_link:
                                 template.limits_and_plot_label = template.file_prefix
 
                 # save all new

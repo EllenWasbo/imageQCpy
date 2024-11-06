@@ -471,10 +471,8 @@ class OpenAutomationDialog(ImageQCDialog):
         if dlg.exec():
             fname = dlg.selectedFiles()
             if fname[0] != '':
-                sels = self.list_templates.selectedIndexes()
-                tempno = sels[0].row()
-                mod = self.templates_mod[tempno]
-                auto_template = self.templates_vendor[mod][tempno]
+                mod, _, tempno = self.get_selected_templates_mod_id()
+                auto_template = self.templates_vendor[mod[0]][tempno[0]]
                 proceed = True
                 if auto_template.path_input == '':
                     QMessageBox.warning(

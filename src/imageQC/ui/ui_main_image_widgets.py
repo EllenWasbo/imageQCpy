@@ -220,11 +220,13 @@ class ImageDisplayWidget(GenericImageWidget):
                 QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
                 'Edit annotations', self)
             act_edit_annotations.triggered.connect(self.edit_annotations)
-            self.tool_imgsize = QToolButton()
-            self.tool_imgsize.setToolTip('Maximize image')
-            self.tool_imgsize.setIcon(QIcon(
-                f'{os.environ[ENV_ICON_PATH]}layout_maximg.png'))
-            self.tool_imgsize.clicked.connect(self.clicked_imgsize)
+            self.tool_imgsize = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}layout_maximg.png'),
+                'Maximize image')
+            #self.tool_imgsize.setToolTip('Maximize image')
+            #self.tool_imgsize.setIcon(QIcon(
+            #    f'{os.environ[ENV_ICON_PATH]}layout_maximg.png'))
+            self.tool_imgsize.triggered.connect(self.clicked_imgsize)
             self.tool_imgsize.setCheckable(True)
             act_projection_plot = QAction(
                 QIcon(f'{os.environ[ENV_ICON_PATH]}projections.png'),
@@ -237,7 +239,7 @@ class ImageDisplayWidget(GenericImageWidget):
             tbimg.addWidget(self.tool_profile)
             tbimg.addWidget(self.tool_sum)
             tbimg.addAction(act_edit_annotations)
-            tbimg.addWidget(self.tool_imgsize)
+            tbimg.addAction(self.tool_imgsize)
 
         vlo_img = QVBoxLayout()
         vlo_img.addWidget(tbimg)

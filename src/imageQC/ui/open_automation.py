@@ -7,11 +7,12 @@ User interface for dialog Rename Dicom.
 """
 import os
 from time import time
+import shutil
 from datetime import datetime
 from pathlib import Path
 import logging
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QSize
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAbstractItemView,
@@ -31,6 +32,7 @@ from imageQC.ui import settings
 from imageQC.scripts import automation
 from imageQC.scripts.mini_methods import get_all_matches, find_files_prefix_suffix
 from imageQC.scripts.dcm import sort_imgs
+from imageQC.scripts.read_vendor_QC_reports import read_GE_Mammo_date
 # imageQC block end
 
 logger = logging.getLogger('imageQC')
@@ -49,8 +51,11 @@ def reset_auto_template(auto_template=None, parent_widget=None):
         move_dirs = []
         dirs = [x for x in archive_path.glob('*') if x.is_dir()]
         if len(dirs) > 0:
-            dlg = ResetAutoTemplateDialog(parent_widget, directories=dirs,
-                                          template_name=auto_template.label)
+            dlg = ResetAutoTemplateDialog(
+                parent_widget, directories=dirs,
+                template_name=auto_template.label,
+                original_folder=str(archive_path),
+                target_folder=auto_template.path_input)
             res = dlg.exec()
             if res:
                 idxs = dlg.get_idxs()
@@ -73,9 +78,12 @@ def reset_auto_template(auto_template=None, parent_widget=None):
                         QAP_Mammo = True
                 except AttributeError:
                     pass
-                dlg = ResetAutoTemplateDialog(parent_widget, files=files,
-                                              template_name=auto_template.label,
-                                              QAP_Mammo=QAP_Mammo)
+                dlg = ResetAutoTemplateDialog(
+                    parent_widget, files=files,
+                    template_name=auto_template.label,
+                    original_folder=str(archive_path),
+                    target_folder=auto_template.path_input,
+                    QAP_Mammo=QAP_Mammo)
                 res = dlg.exec()
                 if res:
                     idxs = dlg.get_idxs()
@@ -90,8 +98,12 @@ def reset_auto_template(auto_template=None, parent_widget=None):
                 parent_widget.main.start_wait_cursor()
                 parent_widget.status_label.showMessage(
                     f'Moving files for {auto_template.label}')
+            errmsgs = []
             for file in move_files:
-                file.rename(Path(auto_template.path_input) / file.name)
+                try:
+                    file.rename(Path(auto_template.path_input) / file.name)
+                except FileExistsError as err:
+                    errmsgs.append(str(err))
             if len(move_dirs) > 0:
                 for folder in move_dirs:
                     if not any(folder.iterdir()):
@@ -99,9 +111,16 @@ def reset_auto_template(auto_template=None, parent_widget=None):
             if parent_widget is not None:
                 parent_widget.main.stop_wait_cursor()
                 parent_widget.status_label.clearMessage()
-            QMessageBox.information(
-                parent_widget, 'Finished moving files',
-                f'{len(move_files)} files moved out of Archive.')
+            if len(errmsgs) > 0:
+                dlg = messageboxes.MessageBoxWithDetails(
+                    parent_widget, title='Issues when moving files',
+                    msg='Some files could not be moed. See details.',
+                    details=errmsgs, icon=QMessageBox.Warning)
+                dlg.exec()
+            else:
+                QMessageBox.information(
+                    parent_widget, 'Finished moving files',
+                    f'{len(move_files)} files moved out of Archive.')
     else:
         QMessageBox.information(
             parent_widget, 'Found no Archive',
@@ -139,6 +158,7 @@ class OpenAutomationDialog(ImageQCDialog):
         self.wid_image_display = ImageWidget()
         self.txt_import_path = QLineEdit('')
 
+        icon_size = QSize(32, 32)
         hlo = QHBoxLayout()
         self.setLayout(hlo)
         vlo = QVBoxLayout()
@@ -185,7 +205,10 @@ class OpenAutomationDialog(ImageQCDialog):
         hlo_ignore_since.addStretch()
 
         hlo_import_sort = QHBoxLayout()
-        btn_import_sort = QPushButton('Import and sort from image pool')
+        btn_width = 350
+        btn_import_sort = uir.PushButtonWithIcon(
+            'Import and sort from image pool',
+            'import', align='left', width=btn_width)
         btn_import_sort.clicked.connect(self.import_sort)
         hlo_import_sort.addStretch()
         hlo_import_sort.addWidget(btn_import_sort)
@@ -198,6 +221,7 @@ class OpenAutomationDialog(ImageQCDialog):
 
         self.list_templates = QListWidget()
         self.list_templates.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.list_templates.currentItemChanged.connect(self.update_template_selected)
         self.cbox_filter = QComboBox()
         self.cbox_filter.addItems(['None'] + [*QUICKTEST_OPTIONS])
         self.cbox_filter.currentIndexChanged.connect(self.refresh_list)
@@ -243,14 +267,29 @@ class OpenAutomationDialog(ImageQCDialog):
         hlo_temps.addLayout(vlo_list)
         vlo_buttons = QVBoxLayout()
         hlo_temps.addLayout(vlo_buttons)
-        btn_run_all = QPushButton('Run all')
-        btn_run_selected = QPushButton('Run selected')
-        btn_run_selected_files = QPushButton('Run in main window for selected files...')
+        btn_run_all = uir.PushButtonWithIcon(
+            'Run all', 'play', align='left', width=btn_width)
+        btn_run_selected = uir.PushButtonWithIcon(
+            'Run selected',
+            'play', align='left', width=btn_width)
+        btn_run_selected_files = uir.PushButtonWithIcon(
+            'Run in main window for selected files',
+            'play', align='left', width=btn_width)
+        self.btn_import_qap = uir.PushButtonWithIcon(
+            'Import GE QAP files', 'import',
+            align='left', width=btn_width)
+        self.btn_import_qap.setToolTip(
+            'Import GE Mammo QAP txt results from user '
+            'specified folder with all results. Import from '
+            'set date to templates with same Input path.')
+        self.btn_import_qap.clicked.connect(self.import_qap)
+        self.btn_import_qap.setEnabled(False)
         self.chk_display_images = QCheckBox(
             'Display images/ROIs while tests are run')
         vlo_buttons.addWidget(btn_run_all)
         vlo_buttons.addWidget(btn_run_selected)
         vlo_buttons.addWidget(btn_run_selected_files)
+        vlo_buttons.addWidget(self.btn_import_qap)
         vlo_buttons.addWidget(self.chk_display_images)
         btn_run_all.clicked.connect(self.run_templates)
         btn_run_selected.clicked.connect(self.run_selected)
@@ -412,6 +451,102 @@ class OpenAutomationDialog(ImageQCDialog):
                     error_ex = f'{ex}'
 
         return (n_files, error_ex)
+
+    def update_template_selected(self, current):
+        """(De)activate import GE QAP."""
+        set_enabled = False
+        tempno = self.list_templates.currentIndex().row()
+        if (
+                self.templates_mod[tempno] == 'Mammo'
+                and self.templates_is_vendor[tempno]):  # TODO assumes only one vendor type for now
+            set_enabled = True
+        self.btn_import_qap.setEnabled(set_enabled)
+
+    def import_qap(self):
+        """Select folder with QAP results (all history), select from date."""
+        dlg = QFileDialog(self, 'Select folder with QAP results')
+        dlg.setFileMode(QFileDialog.Directory)
+        files = []
+        folder = ''
+        if dlg.exec():
+            fname = dlg.selectedFiles()
+            if fname[0] != '':
+                sels = self.list_templates.selectedIndexes()
+                tempno = sels[0].row()
+                mod = self.templates_mod[tempno]
+                auto_template = self.templates_vendor[mod][tempno]
+                proceed = True
+                if auto_template.path_input == '':
+                    QMessageBox.warning(
+                        self, 'No input path specified',
+                        'The selected template has no input path defined. '
+                        'Go to settings to fix this.'
+                        )
+                    proceed = False
+
+                filenames_already = []
+                if proceed:
+                    # find files in given folder
+                    # ignore if same filename already
+                    # in input_path (including Archive)
+                    self.main.start_wait_cursor()
+                    p_input = Path(auto_template.path_input)
+                    filenames_already = [
+                        x.name for x in p_input.glob('**/*')
+                        if x.is_file()]
+
+                    folder = Path(fname[0])
+                    files = [
+                        x for x in folder.glob('**/*')
+                        if (x.is_file()
+                            and x.name not in filenames_already)
+                        ]
+                    self.main.stop_wait_cursor()
+
+                if len(files) == 0:
+                    txt_new = ''
+                    if len(filenames_already) > 0:
+                        txt_new = '(new)'
+                    QMessageBox.warning(
+                        self, 'No files found',
+                        f'No {txt_new} valid files found in the '
+                        'selected folder.')
+
+        if len(files) > 0:
+            dlg = ResetAutoTemplateDialog(
+                self, files=files,
+                template_name=auto_template.label,
+                original_folder=str(folder),
+                target_folder=auto_template.path_input,
+                QAP_Mammo=True, import_Mammo=True)
+            res = dlg.exec()
+            if res:
+                idxs = dlg.get_idxs()
+                move_files = [files[idx] for idx in idxs]
+                for file_orig in move_files:
+                    file_new = (
+                        Path(auto_template.path_input) / 
+                        Path(file_orig).stem)
+                    self.move_file(file_orig, file_new)
+
+    def move_file(self, filepath_orig, filepath_new):
+        """Rename and move input file."""
+        status = False
+        errmsg = ''
+        if os.path.exists(filepath_new):
+            errmsg = f'Failed to move\n{filepath_orig}\nto {filepath_new}\nExists already.'
+        else:
+            try:
+                filepath_orig.rename(filepath_new)
+                status = True
+            except (PermissionError, OSError) as err:
+                if 'WinError 17' in str(err):
+                    shutil.move(filepath_orig, filepath_new)
+                    status = True
+                else:
+                    errmsg = f'Failed to rename\n{filepath_orig}\nto {filepath_new}\n{err}'
+
+        return (status, errmsg)
 
     def get_selected_templates_mod_id(self):
         """Get selected templates modalities and ids.

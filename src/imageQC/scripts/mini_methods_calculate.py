@@ -105,7 +105,7 @@ def gauss_fit(x, y, fwhm=0):
             gauss, x, y, p0=[A, sigma],
             bounds=([0.9*A, 0.5*sigma], [1.1*A, 2*sigma])
             )
-    except RuntimeError:  # consider ValueError if not strictly increasing
+    except (ValueError, RuntimeError):
         popt = None
     return popt
 
@@ -293,7 +293,7 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
                     fwhm = 2*np.sqrt(2*np.log(2))*sigma1
                     fwtm = 2*np.sqrt(2*np.log(10))*sigma1
                 else:
-                    # Gaussian fit of the corrected MTF
+                    # Gaussian fit of the corrected MTF to get fwhm/fwtm
                     k_vals_symmetric = np.concatenate((-k_vals[::-1], k_vals[1:]))
                     MTF_symmetric = np.concatenate((MTF[::-1], MTF[1:]))
                     poptMTF = gauss_fit(k_vals_symmetric, MTF_symmetric)
@@ -308,7 +308,7 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
             details = {
                 'LSF_fit_x': LSF_x, 'LSF_fit': LSF_fit, 'LSF_prefit': LSF,
                 'LSF_corrected': LSF_corrected,
-                'LSF_fit_params': popt,
+                'LSF_fit_params': popt, 'prefilter_sigma': prefilter_sigma,
                 'MTF_freq': k_vals, 'MTF': MTF, 'MTF_filtered': MTF_filtered,
                 'FWHM': fwhm, 'FWTM': fwtm,
                 }
@@ -412,15 +412,15 @@ def get_NPSuv_profile(NPS_array, nlines=7, exclude_axis=True, pix=1., step_size=
     return (freq, u_profile, v_profile)
 
 
-def get_avg_NPS_curve(results_NPS, normalize=''):
+def get_avg_NPS_curve(results_NPS, normalize=0):
     """Calculate average NPS curve from multiple images.
 
     Parameters
     ----------
     results_NPS : list of dict
         as generated in calculate_qc.py for test CT NPS
-    normalize : str, optional
-        No normalization (''), AUC or Large area signal (LAS). The default is ''.
+    normalize : int, optional
+        0 = None, 1 = AUC, 2 = large area signal. The default is 0.
 
     Returns
     -------
@@ -432,39 +432,40 @@ def get_avg_NPS_curve(results_NPS, normalize=''):
         if failed averaging
 
     """
-    dicts = results_NPS['details_dict']
     xvals = None
     yvals = None
     y_avg = None
     errmsg = ''
     n_profiles = 0
-    for i, details_dict in enumerate(dicts):
-        if details_dict:
-            if xvals is not None:
-                xvals_this = details_dict['freq']
-                if (xvals != xvals_this).all():
-                    errmsg = 'Failed plotting average NPS. Not same pixel sizes.'
-                    xvals = None
-                    yvals = None
-                    n_profiles = 0
-                    break
-            else:
-                xvals = details_dict['freq']
+    if 'details_dict' in results_NPS:
+        dicts = results_NPS['details_dict']
+        for i, details_dict in enumerate(dicts):
+            if details_dict:
+                if xvals is not None:
+                    xvals_this = details_dict['freq']
+                    if (xvals != xvals_this).all():
+                        errmsg = 'Failed plotting average NPS. Not same pixel sizes.'
+                        xvals = None
+                        yvals = None
+                        n_profiles = 0
+                        break
+                else:
+                    xvals = details_dict['freq']
 
-            n_profiles += 1
-            if normalize == 'AUC':
-                AUC = results_NPS['values'][i][1]
-                norm_factor = 1/AUC
-            elif normalize == 'LAS':
-                norm_factor = 1/(details_dict['large_area_signal']**2)
-            else:
-                norm_factor = 1
-            if yvals is None:
-                yvals = norm_factor * details_dict['radial_profile']
-            else:
-                yvals = yvals + norm_factor * details_dict['radial_profile']
-    if n_profiles > 0:
-        y_avg = 1/n_profiles * yvals
+                n_profiles += 1
+                if normalize == 1:
+                    AUC = results_NPS['values'][i][1]
+                    norm_factor = 1/AUC
+                elif normalize == 2:
+                    norm_factor = 1/(details_dict['large_area_signal']**2)
+                else:
+                    norm_factor = 1
+                if yvals is None:
+                    yvals = norm_factor * details_dict['radial_profile']
+                else:
+                    yvals = yvals + norm_factor * details_dict['radial_profile']
+        if n_profiles > 0:
+            y_avg = 1/n_profiles * yvals
 
     return (xvals, y_avg, errmsg)
 

@@ -28,7 +28,8 @@ from imageQC.ui import reusable_widgets as uir
 from imageQC.ui.plot_widgets import PlotWidget, PlotCanvas
 from imageQC.config.iQCconstants import ENV_ICON_PATH, COLORS
 from imageQC.scripts import mini_methods_format as mmf
-from imageQC.scripts.mini_methods_calculate import find_median_spectrum
+from imageQC.scripts.mini_methods_calculate import (
+    find_median_spectrum, get_avg_NPS_curve)
 # imageQC block end
 
 
@@ -1426,6 +1427,24 @@ class ResultPlotCanvas(PlotCanvas):
 
         def plot_average_NPS():  # only for CT
             try:
+                xvals, y_avg, errmsg = get_avg_NPS_curve(
+                    self.main.results['NPS'], normalize=normalize)
+                self.curves.append(
+                    {'label': 'average NPS', 'xvals': xvals, 'yvals': y_avg,
+                     'style': '-' + self.color_k})
+                median_frequency, median_val = find_median_spectrum(xvals, y_avg)
+                self.curves.append({
+                    'label': '_nolegend_',
+                    'xvals': [median_frequency, median_frequency],
+                    'yvals': [0, median_val],
+                    'style': '-' + self.color_k})
+                self.ax.text(
+                    1.05*median_frequency, 0.3*median_val,
+                    'Median', ha='left', size=8, color=self.color_k)
+            except (KeyError, IndexError):
+                pass
+            '''
+            try:
                 dicts = self.main.results['NPS']['details_dict']
                 xvals = None
                 yvals = None
@@ -1458,7 +1477,7 @@ class ResultPlotCanvas(PlotCanvas):
                             yvals = yvals + norm_factor * details_dict['radial_profile']
                 if n_profiles > 0:
                     y_avg = 1/n_profiles * yvals
-
+                
                     self.curves.append(
                         {'label': 'average NPS', 'xvals': xvals, 'yvals': y_avg,
                          'style': '-' + self.color_k})
@@ -1471,8 +1490,7 @@ class ResultPlotCanvas(PlotCanvas):
                     self.ax.text(
                         1.05*median_frequency, 0.5*median_val,
                         'Median', ha='left', size=8, color=self.color_k)
-            except (KeyError, IndexError):
-                pass
+            '''
 
         def plot_all_NPS():
             try:

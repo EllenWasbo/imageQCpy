@@ -686,7 +686,7 @@ def test_PET_Rec():
         current_paramset=cfc.ParamSetPET(),
         current_quicktest=cfc.QuickTestTemplate(tests=[['Rec']]*36),
         tag_infos=tag_infos,
-        automation_active=False, test_mode=True
+        automation_active=False#, test_mode=True
         )
 
     file_path = path_tests / 'test_inputs' / 'PET' / 'body_phantom'

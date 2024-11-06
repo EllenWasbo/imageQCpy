@@ -724,7 +724,7 @@ class ParamsTabCommon(QTabWidget):
             [
                 'Average pr ROI map',
                 'SNR pr ROI map',
-                'Variance pr ROI map',
+                'Average variance pr ROI map',
                 'Average pr ROI (% difference from global average)',
                 'SNR pr ROI (% difference from global SNR)',
                 'Pixel values (% difference from global average)',
@@ -957,10 +957,10 @@ class ParamsTabCommon(QTabWidget):
         self.tab_nps.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         self.nps_roi_size = QDoubleSpinBox(decimals=0, minimum=22, maximum=10000)
-        self.nps_roi_size.valueChanged.connect(
+        self.nps_roi_size.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='nps_roi_size'))
         self.nps_n_sub = QDoubleSpinBox(decimals=0, minimum=3)
-        self.nps_n_sub.valueChanged.connect(
+        self.nps_n_sub.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='nps_n_sub'))
 
         flo = QFormLayout()
@@ -1829,6 +1829,7 @@ class ParamsTabMammo(ParamsTabCommon):
         self.create_tab_gho()
         self.create_tab_mtf()
         self.create_tab_nps()
+        self.create_tab_cdm()
 
         self.addTab(self.tab_sdn, "SDNR")
         self.addTab(self.tab_hom, "Homogeneity")
@@ -1837,6 +1838,8 @@ class ParamsTabMammo(ParamsTabCommon):
         self.addTab(self.tab_gho, "Ghost")
         self.addTab(self.tab_mtf, "MTF")
         self.addTab(self.tab_nps, "NPS")
+        if self.main.developer_mode == True:
+            self.addTab(self.tab_cdm, "CDMAM")
 
         self.flag_ignore_signals = False
 
@@ -1979,6 +1982,34 @@ class ParamsTabMammo(ParamsTabCommon):
     def create_tab_nps(self):
         """GUI of tab NPS."""
         self.create_tab_nps_xray()
+
+    def create_tab_cdm(self):
+        """GUI for CDMAM analysis."""
+        self.tab_cdm = ParamsWidget(self, run_txt='Analyse CDMAM')
+
+        self.cdm_tolerance_angle = QDoubleSpinBox(
+            decimals=0, minimum=1,  maximum=20, singleStep=1)
+        self.cdm_tolerance_angle.editingFinished.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='cdm_tolerance_angle'))
+
+        self.cdm_threshold_peaks = QDoubleSpinBox(
+            decimals=2, minimum=0.1,  maximum=0.9, singleStep=0.05)
+        self.cdm_threshold_peaks.editingFinished.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='cdm_threshold_peaks'))
+
+        vlo_left = QVBoxLayout()
+        self.tab_cdm.hlo.addLayout(vlo_left)
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('Accept tolerance for phantom position (degrees)'),
+                    self.cdm_tolerance_angle)
+        flo1.addRow(QLabel('Threshold for hough_line_peaks'),
+                    self.cdm_threshold_peaks)
+
+        vlo_left.addLayout(flo1)
+
+        self.tab_cdm.hlo.addStretch()
 
 
 class GroupBoxCorrectPointSource(QGroupBox):

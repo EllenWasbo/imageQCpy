@@ -334,7 +334,7 @@ class MainWindow(QMainWindow):
             if self.current_modality != self.imgs[0].modality:
                 self.current_modality = self.imgs[0].modality
                 self.update_mode()
-            if self.wid_window_level.tb_wl.chk_wl_update.isChecked() is False:
+            if self.wid_window_level.tb_wl.act_wl_update.isChecked() is False:
                 self.wid_window_level.tb_wl.set_window_level('dcm', set_tools=True)
 
         if self.wid_quicktest.gb_quicktest.isChecked():
@@ -404,7 +404,7 @@ class MainWindow(QMainWindow):
                             self.artifacts_3d, self.gui.active_img_no)
                 except (TypeError, AttributeError, IndexError):
                     pass
-                if not self.wid_window_level.tb_wl.chk_wl_update.isChecked():
+                if not self.wid_window_level.tb_wl.act_wl_update.isChecked():
                     amin = round(np.amin(self.active_img))
                     amax = round(np.amax(self.active_img))
                     self.wid_window_level.min_wl.setRange(amin, amax)

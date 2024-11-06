@@ -48,7 +48,9 @@
 		<file alias="layout.png">icons\layout.png</file>
 		<file alias="layout_maximg.png">icons\layout_maximg.png</file>
 		<file alias="layout_resetimg.png">icons\layout_resetimg.png</file>
+		<file alias="locked.png">icons\locked.png</file>
 		<file alias="minmax.png">icons\minmax.png</file>
+		<file alias="minmax_center.png">icons\minmax_center.png</file>
 		<file alias="minus.png">icons\minus.png</file>
 		<file alias="move_to.png">icons\move_to.png</file>
 		<file alias="moveBottom.png">icons\moveBottom.png</file>
@@ -85,6 +87,7 @@
 		<file alias="table_no_headers.png">icons\table_no_headers.png</file>
 		<file alias="table_transpose.png">icons\table_transpose.png</file>
 		<file alias="tags.png">icons\tags.png</file>
+		<file alias="unlocked.png">icons\unlocked.png</file>
 		<file alias="warning.png">icons\warning.png</file>
 		<file alias="watermark_gears.png">icons\watermark_gears.png</file>
 		<file alias="xmean.png">icons\xmean.png</file>
@@ -130,7 +133,9 @@
 		<file alias="layout.png">icons\darkmode\layout.png</file>
 		<file alias="layout_maximg.png">icons\darkmode\layout_maximg.png</file>
 		<file alias="layout_resetimg.png">icons\darkmode\layout_resetimg.png</file>
+		<file alias="locked.png">icons\darkmode\locked.png</file>
 		<file alias="minmax.png">icons\darkmode\minmax.png</file>
+		<file alias="minmax_center.png">icons\darkmode\minmax_center.png</file>
 		<file alias="minus.png">icons\darkmode\minus.png</file>
 		<file alias="move_to.png">icons\darkmode\move_to.png</file>
 		<file alias="moveBottom.png">icons\darkmode\moveBottom.png</file>
@@ -167,6 +172,7 @@
 		<file alias="table_no_headers.png">icons\darkmode\table_no_headers.png</file>
 		<file alias="table_transpose.png">icons\darkmode\table_transpose.png</file>
 		<file alias="tags.png">icons\darkmode\tags.png</file>
+		<file alias="unlocked.png">icons\darkmode\unlocked.png</file>
 		<file alias="warning.png">icons\darkmode\warning.png</file>
 		<file alias="watermark_gears.png">icons\darkmode\watermark_gears.png</file>
 		<file alias="xmean.png">icons\darkmode\xmean.png</file>

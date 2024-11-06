@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when major changes, B when new exe release (to come),
 #   C new python release (or small fix to exe)
-VERSION = '3.1.2'
+VERSION = '3.1.3'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -43,7 +43,8 @@ QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'TTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
     'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
-    'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'Var', 'RLR', 'Gho', 'MTF', 'NPS'],
+    'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'Var', 'RLR', 'Gho', 'MTF',
+              'NPS', 'CDM'],
     'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
     'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Rin'],
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec', 'MTF'],
@@ -335,13 +336,14 @@ HEADERS_SUP = {
             },
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
-                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
+                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y', 'sigma_prefilt'],
             'alt1': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
-                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y'],
-            'alt2': ['A1', 'sigma1', 'A2', 'sigma2'],
+                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y', 'sigma_prefilt'],
+            'alt2': ['A1', 'sigma1', 'A2', 'sigma2', 'sigma_prefilt'],
             'alt3': ['A1 line1', 'sigma1 line1', 'A2 line1', 'sigma2 line1',
-                     'A1 line2', 'sigma1 line2', 'A2 line2', 'sigma2 line2'],
-            'alt4': ['A1', 'sigma1', 'A2', 'sigma2'],
+                     'A1 line2', 'sigma1 line2', 'A2 line2', 'sigma2 line2',
+                     'sigma_prefilt'],
+            'alt4': ['A1', 'sigma1', 'A2', 'sigma2', 'sigma_prefilt'],
             },
         'Dim': {
             'alt0': ['Upper', 'Lower', 'Left', 'Right', 'Diagonal 1', 'Diagonal 2']
@@ -359,7 +361,7 @@ HEADERS_SUP = {
                  'Min SNR', 'Max SNR', 'n ROIs x', 'n ROIs y',
                  'n masked ROIs', 'n masked pixels']
             },
-        'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2']}
+        'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2', 'sigma_prefilt']}
         },
     'Mammo': {
        'ROI': {'alt0': roi_headers_sup},
@@ -371,7 +373,7 @@ HEADERS_SUP = {
                     'Min SNR', 'Max SNR', 'n ROIs x', 'n ROIs y',
                     'n masked ROIs', 'n masked pixels']
            },
-       'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2']}
+       'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2', 'sigma_prefilt']}
        },
     'NM': {
         'ROI': {'alt0': roi_headers_sup},
@@ -386,21 +388,21 @@ HEADERS_SUP = {
                        'Fit distance (mm)', 'ROI max Large', 'ROI max Small']
             },
         'MTF': {
-            'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt1': ['A1', 'sigma1'],
-            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt3': ['A1', 'sigma1'],
+            'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
+            'alt1': ['A1', 'sigma1', 'sigma_prefilt'],
+            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
+            'alt3': ['A1', 'sigma1', 'sigma_prefilt'],
             },
         },
     'SPECT': {
         'ROI': {'alt0': roi_headers_sup},
         'MTF': {
-            'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y',
+            'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
+            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
+            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt',
                      'x offset (mm)', 'y offset (mm)'],
-            'alt3': ['A line1', 'sigma line1', 'A line2', 'sigma line2'],
-            'alt4': ['A', 'sigma']
+            'alt3': ['A line1', 'sigma line1', 'A line2', 'sigma line2', 'sigma_prefilt'],
+            'alt4': ['A', 'sigma', 'sigma_prefilt']
             },
         },
     'PET':  {
@@ -410,12 +412,13 @@ HEADERS_SUP = {
                      'Background at scan start (Bq/mL)'],
             },
         'MTF': {
-            'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
-            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y',
+            'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
+            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
+            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt',
                      'x offset (mm)', 'y offset (mm)'],
-            'alt3': ['A line1', 'sigma line1', 'A line2', 'sigma line2'],
-            'alt4': ['A', 'sigma']
+            'alt3': ['A line1', 'sigma line1', 'A line2', 'sigma line2',
+                     'sigma_prefilt'],
+            'alt4': ['A', 'sigma', 'sigma_prefilt']
             },
         },
     'MR': {
@@ -426,7 +429,7 @@ HEADERS_SUP = {
                        'x max', 'y max']
             },
         'Sli': {'altAll': ['FWHM upper (mm)', 'FWHM lower (mm)']},
-        'MTF': {'alt0': ['A1', 'sigma1']}
+        'MTF': {'alt0': ['A1', 'sigma1', 'sigma_prefilt']}
         },
     'SR': {}
     }

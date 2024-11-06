@@ -538,6 +538,8 @@ def calculate_qc(input_main, wid_auto=None,
                             if paramset.mtf_auto_center:
                                 force_new_roi.append('MTF')
                     elif modality == 'Mammo':
+                        if 'CDM' in marked[i]:
+                            force_new_roi.append('CDM')
                         if 'SDN' in marked[i]:
                             if paramset.sdn_auto_center:
                                 force_new_roi.append('SDN')
@@ -928,10 +930,13 @@ def calculate_qc(input_main, wid_auto=None,
                 if 'TTF' in input_main.results:
                     input_main.refresh_img_display()
             elif 'Rec' in input_main.results:
-                input_main.wid_window_level.tb_wl.set_window_level(
-                    'min_max', set_tools=True)
-                input_main.set_active_img(
-                    input_main.results['Rec']['details_dict']['max_slice_idx'])
+                try:
+                    input_main.wid_window_level.tb_wl.set_window_level(
+                        'min_max', set_tools=True)
+                    input_main.set_active_img(
+                        input_main.results['Rec']['details_dict']['max_slice_idx'])
+                except KeyError:
+                    pass
             try:
                 input_main.progress_modal.setValue(input_main.progress_modal.maximum())
             except AttributeError:
@@ -1021,6 +1026,18 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             else:
                 res = Results(headers=headers)
 
+        return res
+
+    def CDM():
+        '''
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
+        '''
+        if image2d is not None:
+            details_dict = {'threshold_image':  roi_array[1]}
+            res = Results(
+                headers=[], values=[],
+                details_dict=details_dict)
         return res
 
     def CTn():
@@ -1350,6 +1367,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     values_sup = (
                         list(details[0]['gMTF_details']['LSF_fit_params'])
                         + list(details[1]['gMTF_details']['LSF_fit_params'])
+                        + [details[0]['gMTF_details']['prefilter_sigma']]
                         )
                     res = Results(
                         headers=headers, values=values,
@@ -1396,7 +1414,9 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     prefix = 'g' if paramset.mtf_gaussian else 'd'
                     try:
                         values = details[prefix + 'MTF_details']['values']
-                        values_sup = details['gMTF_details']['LSF_fit_params']
+                        values_sup = (
+                            details['gMTF_details']['LSF_fit_params']
+                            + [details['gMTF_details']['prefilter_sigma']])
                         res = Results(
                             headers=headers, values=values,
                             headers_sup=headers_sup, values_sup=values_sup,
@@ -1449,9 +1469,11 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                                 details[s_idx][prefix + 'MTF_details']['values'])
                             values_sup.extend(
                                 list(details[s_idx]['gMTF_details']['LSF_fit_params']))
+                        values_sup.append(details[0]['gMTF_details']['prefilter_sigma'])
                     else:
                         values = details[prefix + 'MTF_details']['values']
                         values_sup = list(details['gMTF_details']['LSF_fit_params'])
+                        values_sup.append(details['gMTF_details']['prefilter_sigma'])
                     res = Results(
                         headers=headers, values=values,
                         headers_sup=headers_sup, values_sup=values_sup,
@@ -2162,6 +2184,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                                     dd[1]['gMTF_details']['LSF_fit_params']))
                             except (IndexError, KeyError, AttributeError, TypeError):
                                 pass
+                            values_sup[-1].append(
+                                dd[0]['gMTF_details']['prefilter_sigma'])
                             values_sup[-1].extend(list(offset_max[idx]))
                         else:
                             values.append([None] * len(headers))
@@ -2188,6 +2212,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                             values.extend([None] * len(values))
                             values_sup.extend([None] * len(values_sup))
                     values=[values]
+                    try:
+                        values_sup.append(details_dict[0]['gMTF_details']['prefilter_sigma'])
+                    except (IndexError, KeyError):
+                        values_sup.append(None)
                     values_sup=[values_sup]
 
                 res = Results(headers=headers, values=values,
@@ -2275,9 +2303,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 try:
                     values_sup.append(
                         [materials[idx]]
-                        + list(details_dict['gMTF_details']['LSF_fit_params']))
+                        + list(details_dict['gMTF_details']['LSF_fit_params'])
+                        + [details_dict['gMTF_details']['prefilter_sigma']])
                 except TypeError:
-                    values_sup.append([materials[idx]] + [None] * 4)
+                    values_sup.append([materials[idx]] + [None] * 5)
 
             res = Results(headers=headers, values=values,
                           headers_sup=headers_sup, values_sup=values_sup,
@@ -2471,11 +2500,16 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         elif proceed is False:
             res = Results(headers=headers, headers_sup=headers_sup, errmsg=errmsgs)
         else:
-            roi_array, errmsg = get_rois(
-                sum_matrix(images_to_test), images_to_test[0], input_main)
-            if errmsg is not None:
-                errmsgs.append(errmsg)
+            try:
+                summed = sum_matrix(images_to_test)
+                roi_array, errmsg = get_rois(
+                    summed, images_to_test[0], input_main)
+            except ValueError as err:
+                errmsgs.append(
+                    f'Failed summing images. {str(err)} Calculation aborted.')
+                proceed = False
 
+        if proceed:
             # find z-profile of first background roi
             avgs_background = []
             for image in matrix:
@@ -2608,6 +2642,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 res = Results(headers=headers,
                               headers_sup=headers_sup,
                               errmsg=errmsgs)
+        else:
+            res = Results(headers=headers,
+                          headers_sup=headers_sup,
+                          errmsg=errmsgs)
 
         return res
 
@@ -4067,8 +4105,10 @@ def calculate_flatfield_mammo(image2d, mask_max, mask_outer, image_info, paramse
                     snrs[j, i] = avg_sub / std_sub
                     if np.ma.count_masked(sub) == 0:
                         if paramset.hom_variance:
-                            mu = sp.signal.fftconvolve(sub, kernel, mode='same')
-                            ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='same')
+                            mu = sp.signal.fftconvolve(
+                                sub, kernel, mode='same')
+                            ii = sp.signal.fftconvolve(
+                                sub ** 2, kernel, mode='same')
                             variance_sub = ii - mu**2
                             variances[j, i] = np.mean(variance_sub)
                 else:
@@ -5152,7 +5192,11 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
                     ystart = peak_xy[1] - pix_kernel // 2
                     roi_this[ystart:ystart + pix_kernel,
                              xstart:xstart + pix_kernel] = peak_kernel_bool[i]
-                    this_roi_peak[peak_idx - n_slice_kernel // 2 + i] = roi_this
+                    try:
+                        this_roi_peak[
+                            peak_idx - n_slice_kernel // 2 + i] = roi_this
+                    except IndexError:
+                        pass
 
             else:
                 avg_values.append(None)

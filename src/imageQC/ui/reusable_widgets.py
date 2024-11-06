@@ -8,7 +8,7 @@ User interface classes for different uses and reuses in ImageQC.
 import os
 import numpy as np
 
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QSize
 from PyQt5.QtGui import QIcon, QFont
 from PyQt5.QtWidgets import (
     qApp, QWidget, QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayout, QFrame,
@@ -142,28 +142,32 @@ class InfoTool(QToolBar):
         dlg.exec()
 
 
-class PushButtonRounded(QPushButton):
+class PushButtonWithIcon(QPushButton):
     """Styled PushButton."""
 
-    def __init__(self, text):
-        super().__init__(text)
-        self.setStyleSheet(
-            """
-            QPushButton {
-                border-style: solid;
-                border-width: 2px;
-                border-color: #888888;
-                border-radius: 10px;
-                padding: 6px;
-                }
-            QPushButton:hover {
-                background-color: #888888;
-                }
-            QPushButton:pressed {
-                background-color: #999999;
-                }
-            """
-            )
+    def __init__(self, text, icon_filename, iconsize=32,
+                 align='center', width=-1):
+        """Compact definition of Pushbuttons with icon and formatting.
+
+        Parameters
+        ----------
+        text : str
+        icon_filename : str
+            file base name in folder icons without extension
+        iconsize : int.
+            The default is 32.
+        align : str, optional
+            Text alignment. The default is 'center'.
+        size : int, optional
+            Size of button. Ignored if -1. Default is -1.
+        """
+        super().__init__(
+            text=f'  {text}',
+            icon=QIcon(f'{os.environ[ENV_ICON_PATH]}{icon_filename}.png'))
+        self.setStyleSheet(f'text-align:{align};')
+        self.setIconSize(QSize(iconsize, iconsize))
+        if width > 0:
+            self.setFixedWidth(width)
 
 
 class HLine(QFrame):
@@ -444,32 +448,51 @@ class ToolBarWindowLevel(QToolBar):
             QIcon(f'{os.environ[ENV_ICON_PATH]}fileDCM.png'))
         self.tool_dcm_wl.clicked.connect(
             lambda: self.clicked_window_level('dcm'))
+        self.tool_min_max_center_wl = QToolButton()
+        self.tool_min_max_center_wl.setToolTip("Set WL to [min,max] of central part of active image")
+        self.tool_min_max_center_wl.setIcon(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}minmax_center.png'))
+        self.tool_min_max_center_wl.clicked.connect(
+            lambda: self.clicked_window_level('min_max_center'))
         self.tool_edit_wl = QToolButton()
         self.tool_edit_wl.setToolTip("Edit WL by numbers")
         self.tool_edit_wl.setIcon(
             QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'))
         self.tool_edit_wl.clicked.connect(self.set_window_level_by_numbers)
         self.addWidget(self.tool_min_max_wl)
+        self.addWidget(self.tool_min_max_center_wl)
         self.addWidget(self.tool_range_wl)
         self.act_tool_dcm_wl = self.addWidget(self.tool_dcm_wl)
         self.addWidget(self.tool_edit_wl)
-        self.chk_wl_update = QCheckBox('Lock WL')
-        self.chk_wl_update.toggled.connect(self.update_window_level_mode)
-        self.act_chk_wl_update = self.addWidget(self.chk_wl_update)
+        self.act_wl_update = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}unlocked.png'),
+            "Lock window level")
+        self.act_wl_update.setCheckable(True)
+        self.act_wl_update.triggered.connect(self.update_window_level_mode)
+        self.addAction(self.act_wl_update)
+        #self.chk_wl_update = QCheckBox('Lock WL')
+        #self.chk_wl_update.toggled.connect(self.update_window_level_mode)
+        #self.act_chk_wl_update = self.addWidget(self.chk_wl_update)
 
     def update_window_level_mode(self):
         """Set and unset lock on window level when selecting a new image."""
-        if self.chk_wl_update.isChecked():
+        if self.act_wl_update.isChecked():
             self.tool_min_max_wl.setCheckable(False)
+            self.tool_min_max_center_wl.setCheckable(False)
             self.tool_range_wl.setCheckable(False)
             self.tool_dcm_wl.setCheckable(False)
+            self.act_wl_update.setIcon(QIcon(
+                f'{os.environ[ENV_ICON_PATH]}locked.png'))
         else:
             self.tool_min_max_wl.setCheckable(True)
+            self.tool_min_max_center_wl.setCheckable(True)
             self.tool_range_wl.setCheckable(True)
             self.tool_dcm_wl.setCheckable(True)
             # default
             self.tool_range_wl.setChecked(True)
             self.set_window_level('mean_stdev')
+            self.act_wl_update.setIcon(QIcon(
+                f'{os.environ[ENV_ICON_PATH]}unlocked.png'))
 
     def get_min_max(self):
         """Get lower and upper window level based on image.
@@ -481,9 +504,11 @@ class ToolBarWindowLevel(QToolBar):
         max_wl : TYPE
             upper window level
         """
-        if self.chk_wl_update.isChecked() is False:
+        if self.act_wl_update.isChecked() is False:
             if self.tool_min_max_wl.isChecked():
                 self.set_window_level('min_max')
+            elif self.tool_min_max_center_wl.isChecked():
+                self.set_window_level('min_max_center')
             elif self.tool_range_wl.isChecked():
                 self.set_window_level('mean_stdev')
             else:
@@ -499,18 +524,26 @@ class ToolBarWindowLevel(QToolBar):
         arg : str
             type of window level 'dcm', 'min_max', 'mean_stdev'
         """
-        if self.chk_wl_update.isChecked() is False:
+        if self.act_wl_update.isChecked() is False:
             # unCheck others, check selected
             if arg == 'min_max':
                 self.tool_min_max_wl.setChecked(True)
+                self.tool_min_max_center_wl.setChecked(False)
+                self.tool_range_wl.setChecked(False)
+                self.tool_dcm_wl.setChecked(False)
+            elif arg == 'min_max_center':
+                self.tool_min_max_wl.setChecked(False)
+                self.tool_min_max_center_wl.setChecked(True)
                 self.tool_range_wl.setChecked(False)
                 self.tool_dcm_wl.setChecked(False)
             elif arg == 'mean_stdev':
                 self.tool_min_max_wl.setChecked(False)
+                self.tool_min_max_center_wl.setChecked(False)
                 self.tool_range_wl.setChecked(True)
                 self.tool_dcm_wl.setChecked(False)
             elif arg == 'dcm':
                 self.tool_min_max_wl.setChecked(False)
+                self.tool_min_max_center_wl.setChecked(False)
                 self.tool_range_wl.setChecked(False)
                 self.tool_dcm_wl.setChecked(True)
 
@@ -529,12 +562,12 @@ class ToolBarWindowLevel(QToolBar):
                 factor * self.parent.max_wl.value()
                 ],
             decimals=self.parent.decimals,
-            show_lock_wl=self.chk_wl_update.isVisible(),
+            show_lock_wl=self.act_wl_update.isVisible(),
             positive_negative=self.parent.positive_negative)
         res = dlg.exec()
         if res:
             minval, maxval, lock = dlg.get_min_max_lock()
-            self.chk_wl_update.setChecked(lock)
+            self.act_wl_update.setChecked(lock)
             self.parent.update_window_level(minval, maxval)
             if lock:
                 self.update_window_level_mode()
@@ -545,12 +578,13 @@ class ToolBarWindowLevel(QToolBar):
         Parameters
         ----------
         arg : str
-            type of window level 'dcm', 'min_max', 'mean_stdev'
+            type of window level 'dcm', 'min_max', 'min_max_center', 'mean_stdev'
         set_tools : bool, optional
             Also set the tool-buttons to change. Default is False.
         """
         if set_tools:
             self.tool_min_max_wl.setChecked(arg == 'min_max')
+            self.tool_min_max_center_wl.setChecked(arg == 'min_max_center')
             self.tool_range_wl.setChecked(arg == 'mean_stdev')
             self.tool_dcm_wl.setChecked(arg == 'dcm')
         try:
@@ -574,23 +608,28 @@ class ToolBarWindowLevel(QToolBar):
                     pass
             else:
                 image_sub = image
-                patches = []
-                try:
-                    if self.parent.parent.wid_image_display.tool_rectangle.isChecked():
-                        patches = self.parent.parent.wid_image_display.canvas.ax.patches
-                except AttributeError:
+                if arg == 'min_max_center':
+                    sz_x, sz_y = image.shape
+                    image_sub = image[sz_y//4:-sz_y//4,sz_x//4:-sz_x//4]
+                else:
+                    patches = []
                     try:
-                        if self.parent.parent.tool_rectangle.isChecked():
-                            patches = self.parent.parent.canvas.ax.patches
+                        if self.parent.parent.wid_image_display.tool_rectangle.isChecked():
+                            patches = self.parent.parent.wid_image_display.canvas.ax.patches
                     except AttributeError:
-                        pass
-                for patch in patches:
-                    if patch.get_gid() == 'rectangle':
-                        [x0, y0], [x1, y1] = patch.get_bbox().get_points()
-                        x_tuple = (int(min([x0, x1])), int(max([x0, x1])) + 1)
-                        y_tuple = (int(min([y0, y1])), int(max([y0, y1])) + 1)
-                        image_sub = image[y_tuple[0]:y_tuple[1], x_tuple[0]:x_tuple[1]]
-                if arg == 'min_max':
+                        try:
+                            if self.parent.parent.tool_rectangle.isChecked():
+                                patches = self.parent.parent.canvas.ax.patches
+                        except AttributeError:
+                            pass
+                    for patch in patches:
+                        if patch.get_gid() == 'rectangle':
+                            [x0, y0], [x1, y1] = patch.get_bbox().get_points()
+                            x_tuple = (int(min([x0, x1])), int(max([x0, x1])) + 1)
+                            y_tuple = (int(min([y0, y1])), int(max([y0, y1])) + 1)
+                            image_sub = image[y_tuple[0]:y_tuple[1], x_tuple[0]:x_tuple[1]]
+
+                if 'min_max' in arg:
                     minval = np.amin(image_sub)
                     maxval = np.amax(image_sub)
                 elif arg == 'mean_stdev':
@@ -620,6 +659,8 @@ class ToolBarWindowLevel(QToolBar):
         """
         if self.tool_min_max_wl.isChecked():
             mode_string = 'min_max'
+        elif self.tool_min_max_center_wl.isChecked():
+            mode_string = 'min_max_center'
         elif self.tool_range_wl.isChecked():
             mode_string = 'mean_stdev'
         elif self.tool_dcm_wl.isChecked():
@@ -650,7 +691,7 @@ class WindowLevelWidget(QGroupBox):
         self.tb_wl = ToolBarWindowLevel(self)
         self.tb_wl.setOrientation(Qt.Horizontal)
         self.tb_wl.act_tool_dcm_wl.setVisible(show_dicom_wl)
-        self.tb_wl.act_chk_wl_update.setVisible(show_lock_wl)
+        self.tb_wl.act_wl_update.setVisible(show_lock_wl)
         self.min_wl = QSlider(Qt.Horizontal)
         self.max_wl = QSlider(Qt.Horizontal)
         self.lbl_min_wl = QLabel('-200')

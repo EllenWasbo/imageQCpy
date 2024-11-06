@@ -1,3 +1,21 @@
+# v3.1.3
+_xxx xx, 2024_
+
+New functionalities:
+- Added window-level button to automatically set window level to central part (currently hard coded as half the width/height of the image).
+- Added option to import GE Mammo QAP result files. During export from modality all files are included. This functionality, in the automation 
+dialog, will offer to locate the folder of exported files and ignore those already analysed or imported.
+
+Changes:
+- Lock window level checkbox changed to toggle-button with lock-icon.
+- CT task based image analysis: improved export options 
+
+Fixes:
+- When the image widget was small, there were an issue with the extend toolbar-button (>>) not showing all tools. Now fixed.
+- Xray/Mammo Homogeneity (flat field test): Bug from v3.1.2 fixed - Variance map pr ROI now visible again 
+- Removed warnings from pydicom v3.0.1 when reading DICOM images not perfectly following the standard 
+- Handled more strange inputs and accepting closing images without crashing for PET test Recovery curves
+
 # v3.1.2
 _Oct 29, 2024_
 

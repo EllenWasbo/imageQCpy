@@ -10,6 +10,7 @@ from scipy import ndimage
 from scipy.signal import find_peaks
 from scipy.signal import fftconvolve
 from skimage import feature
+from skimage.transform import hough_line, hough_line_peaks
 
 # imageQC block start
 import imageQC.scripts.mini_methods_calculate as mmcalc
@@ -62,6 +63,9 @@ def get_rois(image, image_number, input_main):
 
     def Bar():  # Bar phantom NM
         return get_roi_NM_bar(image, image_info, paramset)
+
+    def CDM():  # CDMAM detect grid
+        return find_cdmam(image, image_info, paramset)  # ([lines, binary], errmsgs)
 
     def Cro():  # PET Crosscalibration
         roi_size_in_pix = paramset.cro_roi_size / image_info.pix[0]
@@ -417,18 +421,29 @@ def get_rois(image, image_number, input_main):
             )
 
     def Rec():  # Recovery Curve
-        if 'MainWindow' in str(type(input_main)):
-            if input_main.summed_img is None:  # avoid each time active slice changes
-                input_main.summed_img, _ = dcm.sum_marked_images(
-                    input_main.imgs,
-                    input_main.tree_file_list.get_marked_imgs_current_test(),
-                    tag_infos=input_main.tag_infos
-                    )
-            summed_img = input_main.summed_img
+        errmsg = ''
+        marked_idxs = input_main.tree_file_list.get_marked_imgs_current_test()
+        if len(marked_idxs) > 4:
+            if 'MainWindow' in str(type(input_main)):
+                if input_main.summed_img is None:  # only if new active slice
+                    input_main.summed_img, errmsg = dcm.sum_marked_images(
+                        input_main.imgs, marked_idxs,
+                        tag_infos=input_main.tag_infos)
+                summed_img = input_main.summed_img
+            else:
+                summed_img = image
+            if summed_img is None:
+                roi_array = None
+                if errmsg == '':
+                    errmsg = 'Failed to sum images. Further calculations aborted.'
+            else:
+                roi_array, errmsg = get_roi_recovery_curve(
+                    summed_img, image_info, paramset)
         else:
-            summed_img = image
+            roi_array = None
+            errmsg = 'At least 5 slices expected to calculate recovery curve.'
 
-        return get_roi_recovery_curve(summed_img, image_info, paramset)
+        return (roi_array, errmsg)
 
     def Rin():  # Ring artifact
         roi_this = [None, None]
@@ -1825,3 +1840,90 @@ def find_lines(image):
         center_line_ydir_xy = None
 
     return [center_line_xdir_xy, center_line_ydir_xy]
+
+
+def find_cdmam(image, image_info, paramset):
+        errmsgs = []
+        px_pr_mm = round(1./image_info.pix[0])
+
+        def get_binary_sub(sub):
+            sz_x_sub, sz_y_sub = sub.shape
+            binary = np.zeros(sub.shape, dtype=bool)
+            threshold = np.percentile(sub, 25)
+            binary[sub < threshold] = True
+            return binary
+
+        def find_angles_sub(binary_sub, tested_angles, margin):
+            hspace, theta, d = hough_line(binary_sub, theta=tested_angles)
+            threshold_peaks = paramset.cdm_threshold_peaks * np.max(hspace)
+            _, angles, dists = hough_line_peaks(hspace, theta, d,
+                                                threshold=threshold_peaks,
+                                                min_distance=margin)
+            return (angles, dists)
+
+        margin_angle = paramset.cdm_tolerance_angle * 2 * np.pi / 360
+        sz_y, sz_x = image.shape
+        phantom = 0
+
+        # taste inner 1/8 to find if and which CDMAM phantom
+        center_part = image[sz_y//2 - sz_y//16:sz_y//2 + sz_y//16,
+                            sz_x//2 - sz_x//16:sz_x//2 + sz_x//16]
+        center_binary = get_binary_sub(center_part)
+        tested_angles = np.linspace(
+            0 - margin_angle, np.pi / 4 + margin_angle, 90, endpoint=False)
+        angles, dists = find_angles_sub(
+            center_binary, tested_angles, 5*px_pr_mm)
+        if angles.shape[0] > 2:
+            if np.logical_and(
+                    np.min(angles) > np.pi / 4 - margin_angle,
+                    np.min(angles) < np.pi / 4 + margin_angle):
+                phantom = 34
+            elif np.logical_and(
+                    np.min(angles) > - margin_angle,
+                    np.min(angles) < margin_angle):
+                phantom = 40
+
+        roi_array = None
+        xs, ys = ([], [])
+        margin = 5 * px_pr_mm
+        if phantom == 0:
+            errmsgs.append('Failed to detect horizontal or diagonal lines in central part.')
+        elif phantom == 34:
+            # test central top, central right to detect corners of phantom
+            line_angles = np.array([np.pi / 4, - np.pi / 4])  # +/-45 deg
+            ys = [0, sz_y//8]  # top
+            xs = [(sz_x*3)//8, (sz_x*6)//8]  # mid, right
+        elif phantom == 40:
+            # test rigth top, left btm to detect corners of phantom
+            line_angles = np.array([0, np.pi / 2])  # 0, 90
+            ys = [5 * px_pr_mm, 5 * px_pr_mm + sz_y//4]  # top
+            xs = [(sz_x*3)//4 - 5 * px_pr_mm, sz_x - 5 * px_pr_mm]  # right
+            margin = 2 * px_pr_mm
+
+        if phantom:
+            sub = image[ys[0]:ys[1], xs[0]:xs[1]]
+            roi_array = [np.zeros(image.shape, dtype=bool)]
+            roi_array[0][ys[0]:ys[1], xs[0]:xs[1]] = True
+            lines = [[], []]  # [(x0, y0), slope] for two groups (perpendicular)
+
+            smooth = ndimage.gaussian_filter(sub, sigma=5*px_pr_mm)
+            detrend = smooth / np.median(sub)
+            sub = sub / detrend
+
+            sub_binary = get_binary_sub(sub)
+            for ang_no, angle in enumerate(line_angles):
+                tested_angles = np.linspace(
+                    angle - margin_angle, angle + margin_angle,
+                    paramset.cdm_tolerance_angle*4, endpoint=False)
+                angles, dists = find_angles_sub(
+                    sub_binary, tested_angles, margin)
+                for line_no, (angle, dist) in enumerate(zip(angles, dists)):
+                    angle, dist = angles[line_no], dists[line_no]
+                    x0, y0 = dist * np.array([np.cos(angle), np.sin(angle)])
+                    x, y = (x0 + xs[0], y0 + ys[0])
+                    slope = np.tan(angle + np.pi / 2)
+                    line = [(x, y), slope]
+                    lines[ang_no].append(line)
+            roi_array.append(lines)
+
+        return (roi_array, errmsgs)

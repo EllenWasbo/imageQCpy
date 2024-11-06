@@ -243,6 +243,11 @@ class TreeFileList(QTreeWidget):
                     new_active = idx[0][0]
                 except IndexError:
                     new_active = 0
+                # delete results and roi if both 3d
+                if self.main.current_test == 'Rec':
+                    del self.main.results['Rec']
+                    self.main.current_roi = None
+
                 self.main.set_active_img(new_active)
                 self.main.update_results(deleted_idxs=selrows)
                 if self.main.summed_img is not None:

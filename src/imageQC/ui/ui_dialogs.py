@@ -1340,25 +1340,42 @@ class QuickTestClipboardDialog(ImageQCDialog):
 
 
 class ResetAutoTemplateDialog(ImageQCDialog):
-    """Dialog to move directories/files in input_path/Archive to input_path."""
+    """Dialog to move directories/files in input_path/Archive to input_path.
 
-    def __init__(self, parent_widget, files=[], directories=[], template_name='',
-                 QAP_Mammo=False):
+    Also used to import for QAP Mammo
+    """
+
+    def __init__(self, parent_widget, files=[], directories=[],
+                 template_name='',
+                 original_folder='', target_folder='',
+                 QAP_Mammo=False, import_Mammo=False):
         super().__init__()
-        self.setWindowTitle(f'Reset Automation template {template_name}')
+        self.import_Mammo = import_Mammo
+        self.QAP_Mammo = QAP_Mammo
+        if self.import_Mammo:
+            self.setWindowTitle('Import files for Mammo QAP')
+        else:
+            self.setWindowTitle(
+                f'Reset Automation template {template_name}')
         self.setMinimumHeight(300)
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(600)
         files_or_folders = 'files'
         self.sort_mtime = None
+        self.qap_file_idxs = []
         if len(files) > 0:
-            self.list_elements = [file.name for file in files]
-            if QAP_Mammo:
+            if self.QAP_Mammo:
+                self.list_elements = []
                 dates = []
-                for file in files:
+                for idx, file in enumerate(files):
                     dd, mm, yyyy = read_GE_Mammo_date(file)
-                    dates.append(f'{yyyy}{mm}{dd}')
+                    date = f'{yyyy}/{mm}/{dd}'
+                    if date:
+                        dates.append(date)
+                        self.qap_file_idxs.append(idx)
+                        self.list_elements.append(f'{date} - {file.name}')
                 self.sort_mtime = np.argsort(dates)
             else:
+                self.list_elements = [file.name for file in files]
                 self.sort_mtime = np.argsort([file.stat().st_ctime for file in files])
         else:
             self.list_elements = [folder.name for folder in directories]
@@ -1367,8 +1384,12 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         vlo = QVBoxLayout()
         self.setLayout(vlo)
 
-        self.sort_by_name = False if QAP_Mammo else True
-        self.txt_by_name_or_date = ['Sort by file creation date time', 'Sort by name']
+        self.sort_by_name = False if self.QAP_Mammo else True
+        if self.QAP_Mammo:
+            txt1 = 'Sort by date of file'
+        else:
+            txt1 = 'Sort by file creation date time'
+        self.txt_by_name_or_date = [txt1, 'Sort by name']
         self.btn_by_name_or_date = QPushButton(
             self.txt_by_name_or_date[int(self.sort_by_name)])
         self.btn_by_name_or_date.clicked.connect(self.update_sort)
@@ -1381,18 +1402,34 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         self.list_file_or_dirs.addItems(list_elements)
         self.list_file_or_dirs.setCurrentRow(len(self.list_elements) - 1)
 
-        vlo.addWidget(QLabel(
-            'Select files to move out of Archive '))
-        vlo.addWidget(QLabel(
-            'to regard these files as incoming.'))
-        vlo.addStretch()
-        vlo.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
+        if import_Mammo:
+            vlo.addWidget(QLabel(
+                'Select files to copy or move to input path '
+                f'for template {template_name}.'))
+            vlo.addWidget(QLabel(
+                '(Tand templates that share the input path)'))
+        else:
+            vlo.addWidget(QLabel(
+                'Select files to move out of Archive '
+                'to regard these files as incoming.'))
+        vlo.addSpacing(50)
+        if self.import_Mammo:
+            vlo.addWidget(QLabel(f'List of date / filenames found:'))
+        else:
+            vlo.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
         vlo.addWidget(self.list_file_or_dirs)
         if len(files) > 0:
             vlo.addWidget(self.btn_by_name_or_date)
-        vlo.addStretch()
+        if original_folder and target_folder:
+            vlo.addStretch()
+            vlo.addWidget(QLabel(f'Move from: {original_folder}'))
+            vlo.addWidget(QLabel(f'Move to  : {target_folder}'))
+        vlo.addSpacing(20)
         hlo_buttons = QHBoxLayout()
         vlo.addLayout(hlo_buttons)
+
+        if self.import_Mammo:
+            self.list_file_or_dirs.selectAll()
 
         buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
@@ -1423,6 +1460,9 @@ class ResetAutoTemplateDialog(ImageQCDialog):
             mtime_sort = orig_sort[self.sort_mtime]
             for sel in self.list_file_or_dirs.selectedIndexes():
                 idxs.append(mtime_sort[sel.row()])
+        if self.QAP_Mammo and len(idxs) > 0:
+            idxs_qap = [self.qap_file_idxs[idx] for idx in idxs]
+            idxs = idxs_qap
         return idxs
 
 

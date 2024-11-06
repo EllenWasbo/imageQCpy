@@ -24,6 +24,10 @@ from imageQC.config.config_classes import TagPatternFormat
 # imageQC block end
 
 pydicom.config.future_behavior(True)
+try:
+    pydicom.config.settings.reading_validation_mode = pydicom.config.IGNORE
+except AttributeError:
+    pass
 
 warnings.filterwarnings(action='ignore', category=UserWarning)
 # avoid not important DICOM warnings

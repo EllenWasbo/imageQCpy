@@ -459,6 +459,22 @@ class ImageCanvas(GenericImageCanvas):
             labels=[str(i+1) for i in range(4)]
             )
 
+    def CDM(self):
+        """Draw found lines."""
+        if len(self.main.current_roi) == 2:
+            lines = self.main.current_roi[1]
+            colors = ['red', 'blue']
+            for groupno, linegroup in enumerate(lines):
+                for line in linegroup:
+                    xy0, slope = line
+                    self.ax.add_artist(matplotlib.lines.AxLine(
+                        xy0, None, slope,
+                        color=colors[groupno], linewidth=self.linewidth - 1,
+                        linestyle='solid',
+                        ))
+            self.add_contours_to_all_rois(
+                roi_indexes=[0], reset_contours=False)
+
     def CTn(self):
         """Draw CTn ROI."""
         ctn_table = self.main.current_paramset.ctn_table
@@ -990,6 +1006,20 @@ class ResultImageCanvas(GenericImageCanvas):
         else:
             self.fig.subplots_adjust(.05, .05, 1., 1.)
         self.draw()
+
+    '''
+    def CDM(self):
+        self.cmap = 'gray'
+        try:
+            details_dict = self.main.results['CDM']['details_dict'][
+                self.main.gui.active_img_no]
+        except (IndexError, KeyError):
+            details_dict = None
+        if details_dict:
+            if 'threshold_image' in details_dict:
+                self.title = 'Threshold image for detecting lines'
+                self.current_image = details_dict['threshold_image']
+    '''
 
     def Hom(self):
         """Prepare images of Mammo-Homogeneity."""

@@ -37,7 +37,9 @@ from imageQC.ui.ui_main_test_tabs import ParamsTabCT
 from imageQC.ui import ui_main_result_tabs
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.scripts.mini_methods import get_uniq_ordered, get_included_tags
-from imageQC.scripts.mini_methods_calculate import get_object_width_xy
+from imageQC.scripts.mini_methods_calculate import (
+    get_object_width_xy, get_avg_NPS_curve)
+from imageQC.scripts.mini_methods_format import val_2_str
 from imageQC.scripts.calculate_qc import calculate_qc
 # imageQC block end
 
@@ -367,14 +369,13 @@ class ExportDialog(ImageQCDialog):
                               'pr group and material (ttf_table.csv)'))
         flo_ttf.addRow(QLabel(''), uir.LabelItalic(
             'Result- and supplement-tables combined if both selected.'))
-        '''
+
         flo_ttf.addRow(self.ttf_curves_gaussian,
                        QLabel('TTF curves gaussian pr group and material '
                               '(ttf_gaussian.csv)'))
         flo_ttf.addRow(self.ttf_curves_discrete,
                        QLabel('TTF curves discrete pr group and material '
                               '(ttf_discrete.csv)'))
-        '''
 
         self.nps = QGroupBox('NPS results')
         self.nps.setCheckable(True)
@@ -395,14 +396,16 @@ class ExportDialog(ImageQCDialog):
                               '(nps_table.csv)'))
         flo_nps.addRow(QLabel(''), uir.LabelItalic(
             'Tables above combined if both selected.'))
-        '''
+
         flo_nps.addRow(self.nps_curves_average,
                        QLabel('NPS average curves pr group (nps_curves.csv)'))
+
+        '''
         flo_nps.addRow(self.nps_curves_pr_image,
                        QLabel('NPS curves pr group and pr image '
                               '(nps_curves.csv)'))
-        flo_nps.addRow(QLabel(''), uir.LabelItalic(
-            'Curves above combined if both selected.'))
+    flo_nps.addRow(QLabel(''), uir.LabelItalic(
+        'Curves above combined if both selected.'))
         '''
 
         '''
@@ -459,22 +462,18 @@ class ExportDialog(ImageQCDialog):
         self.ttf.setChecked(flag)
         self.ttf_dcm.setChecked(flag)
         self.ttf_table.setChecked(flag)
-        #self.ttf_curves_gaussian.setChecked(flag)
+        self.ttf_curves_gaussian.setChecked(flag)
         self.ttf_fit_gaussian.setChecked(flag)
-        #self.ttf_curves_discrete.setChecked(flag)
+        self.ttf_curves_discrete.setChecked(flag)
         self.nps.setChecked(flag)
         self.nps_dcm.setChecked(flag)
         self.nps_table.setChecked(flag)
-        #self.nps_curves_average.setChecked(flag)
+        self.nps_curves_average.setChecked(flag)
         #self.nps_curves_pr_image.setChecked(flag)
         #self.dpr.setChecked(flag)
         #self.dpr_dcm.setChecked(flag)
 
     def get_export_selections(self):
-        if self.cbox_csv.currentIndex() == 0:
-            self.task_main.current_paramset.output.decimal_mark = '.'
-        else:
-            self.task_main.current_paramset.output.decimal_mark = ','
         if self.ttf.isChecked():
             ttf = [self.ttf_dcm.isChecked(), self.ttf_table.isChecked(),
                    self.ttf_curves_gaussian.isChecked(), self.ttf_fit_gaussian.isChecked(),
@@ -497,7 +496,9 @@ class ExportDialog(ImageQCDialog):
             path = ''
         else:
             path = self.path.text()
-        return (path, ttf, nps, dpr)
+        decimal_mark = '.' if self.cbox_csv.currentIndex() == 0 else ','
+
+        return (path, decimal_mark, ttf, nps, dpr)
 
 class TaskBasedImageQualityDialog(ImageQCDialog):
     """GUI setup for the dialog window."""
@@ -921,7 +922,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                 tag_infos=self.tag_infos, overlay=self.gui.show_overlay)
 
             self.refresh_img_display()
-            #self.refresh_results_display(update_table=False)
+            self.refresh_results_display(update_table=False)
             self.refresh_selected_table_row()
 
     def update_current_test(self, reset_index=False, refresh_display=True):
@@ -1086,18 +1087,32 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                             row[colno] = f'{row[colno]}/{val}'
             return row
 
+        def table_set_comma_as_decimal_mark(table):
+            new_table = []
+            for row in table:
+                new_table.append(
+                    val_2_str(row, decimal_mark=',', lock_format=True))
+            return new_table
+
+        def to_list_vals(nparr, decimal_mark):
+            list_vals = nparr.tolist()
+            if decimal_mark == ',':
+                list_vals = [str(val).replace('.', ',') for val in list_vals]
+            return list_vals
+
         path = ''
-        decimal_mark = self.current_paramset.output.decimal_mark
-        sep = ';' if decimal_mark == ',' else ','
-        # csv comma separated if decimal mark . else semicolonseparated
         ttf = None
         nps = None
         dpr = None
+        decimal_mark = '.'
+        sep = ','
         if self.results_all:
             dlg = ExportDialog(self)
             res = dlg.exec()
             if res:
-                path, ttf, nps, dpr = dlg.get_export_selections()
+                path, decimal_mark, ttf, nps, dpr = dlg.get_export_selections()
+                if decimal_mark == ',':
+                    sep = ';'
                 if path:
                     if not os.access(path, os.W_OK):
                         path = ''
@@ -1123,6 +1138,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             if dpr:
                 pass  #TODO
 
+            self.current_paramset.output.decimal_mark = decimal_mark
 
             dcm_nps_table = None
             if dcm_ttf or dcm_nps:
@@ -1143,14 +1159,15 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                         dcm_row = reduce_to_row(dcm_values, idxs)
                         dcm_tables[test].append([group_name] + dcm_row)
                 for test, table in dcm_tables.items():
+                    if decimal_mark == ',':
+                        table = table_set_comma_as_decimal_mark(table)
                     dataf = pd.DataFrame(table, columns=headers_dcm)
                     dataf = dataf.set_index('Group').T
                     if test == 'NPS' and table_nps:
                         dcm_nps_table = dataf
                     else:
                         path_this = Path(path) / f'{test.lower()}_dcm.csv'
-                        dataf.to_csv(path_this, decimal=decimal_mark, sep=sep,
-                                     index=False)
+                        dataf.to_csv(path_this, sep=sep, index=False)
 
             if ttf:
                 if table_ttf or fit_g:
@@ -1178,13 +1195,49 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                                 for rowno, row in enumerate(row_pr_material):
                                     row.extend(ttf_values[rowno][1:])
                             table.extend(row_pr_material)
+                    if decimal_mark == ',':
+                        table = table_set_comma_as_decimal_mark(table)
                     dataf = pd.DataFrame(table, columns=headers)
                     dataf = dataf.set_index('Group').T
                     path_this = Path(path) / 'ttf_table.csv'
-                    dataf.to_csv(path_this, decimal=decimal_mark, sep=sep)
+                    dataf.to_csv(path_this, sep=sep)
 
-                if curves_g or curves_d:
-                    pass
+                if curves_g or curves_d and 'TTF' in res:
+                    prefixes = ['', '']
+                    if curves_g:
+                        prefixes[0] = 'g'
+                    if curves_d:
+                        prefixes[1] = 'd'
+                    headers = []
+                    table = [[],[]]  # 'g', 'd'
+                    for groupno, res in enumerate(self.results_all):
+                        details_dicts = res['TTF']['details_dict']
+                        group_name = self.group_strings[groupno]
+                        headers.append('')
+                        headers.extend([group_name]*len(res['TTF']['values']))
+                        for prefix_no, prefix in enumerate(prefixes):
+                            if prefix:
+                                xvals = None
+                                for m_idx, dd in enumerate(details_dicts):
+                                    if xvals is None:
+                                        xvals = dd[
+                                            f'{prefix}MTF_details']['MTF_freq']
+                                    yvals = dd[f'{prefix}MTF_details']['MTF']
+                                    if m_idx == 0:
+                                        table[prefix_no].append(
+                                            ['','Frequency']
+                                            + to_list_vals(xvals, decimal_mark))
+                                    table[prefix_no].append(
+                                        [res['TTF']['values'][m_idx][0]]
+                                        + to_list_vals(yvals, decimal_mark))
+                    filenames = [
+                        'ttf_gaussian.csv', 'ttf_discrete.csv']
+                    for prefix_no, prefix in enumerate(prefixes):
+                        if prefix:
+                            dataf = pd.DataFrame(table[prefix_no]).T
+                            dataf.columns = headers
+                            path_this = Path(path) / filenames[prefix_no]
+                            dataf.to_csv(path_this, index=False, sep=sep)
 
             if nps:
                 if table_nps:
@@ -1200,15 +1253,31 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                                 headers.extend(
                                     res['NPS']['headers_sup'])
                                 headers_set = True
+                    if decimal_mark == ',':
+                        table = table_set_comma_as_decimal_mark(table)
                     dataf = pd.DataFrame(table, columns=headers)
                     dataf = dataf.set_index('Group').T
                     if dcm_nps_table is not None:
-                        dataf = dcm_nps_table.append(dataf)
+                        dataf = pd.concat([dcm_nps_table, dataf])
                     path_this = Path(path) / 'nps_table.csv'
                     dataf.to_csv(path_this, decimal=decimal_mark, sep=sep)
 
-                if curves_avg or curves_img:
-                    pass
+                if curves_avg:  # or curves_img:
+                    headers = []
+                    table = []
+                    for groupno, res in enumerate(self.results_all):
+                        xvals, y_avg, errmsg = get_avg_NPS_curve(
+                            res['NPS'],
+                            normalize=self.current_paramset.nps_normalize)
+                        headers.extend(['Freq', self.group_strings[groupno]])
+                        table.append(xvals.tolist())
+                        table.append(y_avg.tolist())
+
+                    dataf = pd.DataFrame(table).T
+                    dataf.columns = headers
+                    path_this = Path(path) / 'nps_curves.csv'
+                    dataf.to_csv(path_this, index=False,
+                                         decimal=decimal_mark, sep=sep)
 
             if dpr:
                 pass

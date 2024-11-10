@@ -461,19 +461,51 @@ class ImageCanvas(GenericImageCanvas):
 
     def CDM(self):
         """Draw found lines."""
-        if len(self.main.current_roi) == 2:
-            lines = self.main.current_roi[1]
-            colors = ['red', 'blue']
-            for groupno, linegroup in enumerate(lines):
-                for line in linegroup:
-                    xy0, slope = line
+        if len(self.main.current_roi) > 0:
+            '''
+            ref_points = self.main.current_roi[-2]
+            angle = self.main.current_roi[-1]
+            for ref_point in ref_points:
+                for ang in [-angle, angle]:
                     self.ax.add_artist(matplotlib.lines.AxLine(
-                        xy0, None, slope,
-                        color=colors[groupno], linewidth=self.linewidth - 1,
+                        ref_point, None, np.tan(ang),
+                        color='red', linewidth=self.linewidth - 1,
                         linestyle='solid',
                         ))
-            self.add_contours_to_all_rois(
-                roi_indexes=[0], reset_contours=False)
+            
+            '''
+            self.add_contours_to_all_rois(roi_indexes=[0])
+
+            include_array = self.main.current_roi[1]
+            center_xs = self.main.current_roi[2]
+            center_ys = self.main.current_roi[3]
+            box_width = self.main.current_roi[4]
+            wi = box_width // 5
+            sz_y, sz_x = center_xs.shape
+            for row in range(sz_y):
+                for col in range(sz_x):
+                    include = True
+                    if include_array is not None:
+                        include = include_array[row, col]
+                    if include:
+                        x, y = center_xs[row, col], center_ys[row, col]
+                        self.ax.add_artist(matplotlib.lines.Line2D(
+                            [x - wi, x + wi], [y, y],
+                            color='green', linewidth=0.5*self.linewidth
+                            ))
+                        self.ax.add_artist(matplotlib.lines.Line2D(
+                            [x, x], [y - wi, y + wi],
+                            color='green', linewidth=0.5*self.linewidth
+                            ))
+            if include_array is not None:
+                for linegroup in self.main.current_roi[-1]:
+                    for line in linegroup:
+                        xy, slope, _ = line
+                        self.ax.add_artist(matplotlib.lines.AxLine(
+                            xy, None, slope,
+                            color='red', linewidth=self.linewidth - 1,
+                            linestyle='solid',
+                            ))
 
     def CTn(self):
         """Draw CTn ROI."""

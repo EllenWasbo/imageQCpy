@@ -506,9 +506,10 @@ class ParamSetMammo(ParamSetCommon):
     nps_sampling_frequency: float = 0.01  # 1/mm
     nps_normalize: int = 0  # normalize curve by 0 = None, 1 = AUC, 2 = large area sign
     nps_plot: int = 0  # default plot 0=pr image, 1=avg, 2=pr image+avg, 3=all img+avg
+    cdm_margin_mm: float = 7.0
     cdm_threshold_peaks: float = 0.4  # threshold input to hough_line_peaks
     cdm_tolerance_angle: int = 3  # tolerance angulation of phantom relative to image
-
+    cdm_roi_estimate: bool = False  # override roi position with estimate
 
 @dataclass
 class ParamSetNM(ParamSetCommon):

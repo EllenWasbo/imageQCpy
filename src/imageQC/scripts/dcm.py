@@ -821,6 +821,10 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
                     winc = int(winc[0])
             tag_strings.append([winc - winw / 2, winc + winw / 2])
 
+        # for testing:
+        #import scipy as sp
+        #npout = sp.ndimage.rotate(npout, 2, reshape=False)
+
     return (npout, tag_strings)
 
 

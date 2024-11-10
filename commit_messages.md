@@ -5,10 +5,15 @@ New functionalities:
 - Added window-level button to automatically set window level to central part (currently hard coded as half the width/height of the image).
 - Added option to import GE Mammo QAP result files. During export from modality all files are included. This functionality, in the automation 
 dialog, will offer to locate the folder of exported files and ignore those already analysed or imported.
+- Improved functionalities for GE Mammo QAP tests:
+	- Better explaination for the auto-templates from the info-button in Settings - Automation templates vendor files (Mammo)
+	- Added button to import Mammo QAP files from Automation dialog. Export from modality include all files. The new import function ignore files already analysed.
+	- Tolerance read from the files, but if tolerance from same filetype already exist one may skip re-reading this. Now also automatically link the right tolerance-templates.
 
 Changes:
 - Lock window level checkbox changed to toggle-button with lock-icon.
-- CT task based image analysis: improved export options 
+- CT task based image analysis: improved export options
+- Added prefilter sigma for gaussian fit in supplement table. See more info in Wiki appendix C.
 
 Fixes:
 - When the image widget was small, there were an issue with the extend toolbar-button (>>) not showing all tools. Now fixed.

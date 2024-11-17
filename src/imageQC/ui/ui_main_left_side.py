@@ -12,9 +12,9 @@ from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QSlider, QMenu, QAction, QToolBar, QToolButton,
+    QMenu, QAction, QToolBar,
     QMessageBox, QInputDialog, QTreeWidget, QTreeWidgetItem, QFileDialog,
     QDialogButtonBox
     )

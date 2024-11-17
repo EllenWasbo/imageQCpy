@@ -252,11 +252,19 @@ class ImageCanvas(GenericImageCanvas):
             self.fig.subplots_adjust(.0, .0, 1., 1.)
         else:
             self.fig.subplots_adjust(.05, .05, 1., 1.)
+
+        self.current_image = nparr
+
         if annotate:
+            '''
             try:
                 linewidth = self.main.gui.annotations_line_thick
             except AttributeError:
                 linewidth = 1.
+            '''
+                
+            self.add_crosshair()
+            '''
             # central crosshair
             szy, szx = np.shape(nparr)
             if self.main.gui.delta_a == 0:
@@ -282,6 +290,7 @@ class ImageCanvas(GenericImageCanvas):
                     [x1, x2], [szy, 0],
                     color='red', linewidth=linewidth, linestyle='--',
                     gid='axis2'))
+            '''
             # DICOM annotations
             try:
                 tool_sum = self.parent.tool_sum.isChecked()
@@ -310,9 +319,8 @@ class ImageCanvas(GenericImageCanvas):
             self.roi_draw()
         else:
             self.draw()
-        self.current_image = nparr
 
-    def remove_annotations(self):
+    def remove_annotations(self, remove_crosshair=False):
         """Remove current annotations."""
         for contour in self.contours:
             try:
@@ -334,9 +342,13 @@ class ImageCanvas(GenericImageCanvas):
 
         if hasattr(self.ax, 'lines'):
             n_lines = len(self.ax.lines)
-            if n_lines > 2:
-                for i in range(n_lines - 2):
-                    self.ax.lines[-1].remove()
+            if remove_crosshair:
+                for line in self.ax.lines:
+                    line.remove()
+            else:
+                if n_lines > 2:
+                    for i in range(n_lines - 2):
+                        self.ax.lines[-1].remove()
 
         try:
             self.ax.get_legend().remove()
@@ -351,9 +363,46 @@ class ImageCanvas(GenericImageCanvas):
 
         self.draw_idle()
 
+    def add_crosshair(self):
+        nparr = self.current_image
+        szy, szx = np.shape(nparr)
+        try:
+            linewidth = self.main.gui.annotations_line_thick
+        except AttributeError:
+            linewidth = 1.
+        if self.main.gui.delta_a == 0:
+            self.ax.axhline(
+                y=szy*0.5 + self.main.gui.delta_y,
+                color='red', linewidth=linewidth, linestyle='--')
+            self.ax.axvline(
+                x=szx*0.5 + self.main.gui.delta_x,
+                color='red', linewidth=linewidth, linestyle='--')
+        else:
+            x1, x2, y1, y2 = get_rotated_crosshair(
+                szx, szy,
+                (self.main.gui.delta_x,
+                 self.main.gui.delta_y,
+                 self.main.gui.delta_a)
+                )
+            # NB keep these two lines as first and second in ax.lines
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [0, szx], [y1, y2],
+                color='red', linewidth=linewidth, linestyle='--',
+                gid='axis1'))
+            self.ax.add_artist(matplotlib.lines.Line2D(
+                [x1, x2], [szy, 0],
+                color='red', linewidth=linewidth, linestyle='--',
+                gid='axis2'))
+
     def roi_draw(self):
         """Update ROI countours on image."""
-        self.remove_annotations()
+        remove_crosshair = (
+            (self.main.current_test=='DCM')
+            or (self.main.current_test=='CDM')
+            )
+        self.remove_annotations(remove_crosshair=remove_crosshair)
+        if remove_crosshair is False:
+            self.add_crosshair()
 
         annotate = True
         if hasattr(self.main, 'wid_window_level'):
@@ -461,25 +510,12 @@ class ImageCanvas(GenericImageCanvas):
 
     def CDM(self):
         """Draw found lines."""
-        if len(self.main.current_roi) > 0:
-            '''
-            ref_points = self.main.current_roi[-2]
-            angle = self.main.current_roi[-1]
-            for ref_point in ref_points:
-                for ang in [-angle, angle]:
-                    self.ax.add_artist(matplotlib.lines.AxLine(
-                        ref_point, None, np.tan(ang),
-                        color='red', linewidth=self.linewidth - 1,
-                        linestyle='solid',
-                        ))
-            
-            '''
-            self.add_contours_to_all_rois(roi_indexes=[0])
+        if self.main.current_roi is not None:
 
-            include_array = self.main.current_roi[1]
-            center_xs = self.main.current_roi[2]
-            center_ys = self.main.current_roi[3]
-            box_width = self.main.current_roi[4]
+            include_array = self.main.current_roi[0]
+            center_xs = self.main.current_roi[1]
+            center_ys = self.main.current_roi[2]
+            box_width = self.main.current_roi[3]
             wi = box_width // 5
             sz_y, sz_x = center_xs.shape
             for row in range(sz_y):
@@ -496,15 +532,6 @@ class ImageCanvas(GenericImageCanvas):
                         self.ax.add_artist(matplotlib.lines.Line2D(
                             [x, x], [y - wi, y + wi],
                             color='green', linewidth=0.5*self.linewidth
-                            ))
-            if include_array is not None:
-                for linegroup in self.main.current_roi[-1]:
-                    for line in linegroup:
-                        xy, slope, _ = line
-                        self.ax.add_artist(matplotlib.lines.AxLine(
-                            xy, None, slope,
-                            color='red', linewidth=self.linewidth - 1,
-                            linestyle='solid',
                             ))
 
     def CTn(self):

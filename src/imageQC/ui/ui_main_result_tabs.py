@@ -30,6 +30,7 @@ from imageQC.config.iQCconstants import ENV_ICON_PATH, COLORS
 from imageQC.scripts import mini_methods_format as mmf
 from imageQC.scripts.mini_methods_calculate import (
     find_median_spectrum, get_avg_NPS_curve)
+from imageQC.config.config_func import load_cdmam
 # imageQC block end
 
 
@@ -351,6 +352,7 @@ class ResultPlotCanvas(PlotCanvas):
         self.legend_location = 'upper right'
         self.bars = []
         self.curves = []
+        self.scatters = []
         if self.main.current_test == 'vendor':
             try:
                 _ = self.main.results['vendor']['details']
@@ -432,10 +434,28 @@ class ResultPlotCanvas(PlotCanvas):
             except ValueError:
                 pass
                 # seen when in results, results and options change, #TODO better avoid
+        elif len(self.scatters) > 0:
+            first = self.scatters[0]
+            self.ax.set_xticks(np.arange(len(first['xlabels'])))
+            self.ax.set_xticklabels(first['xlabels'])
+            self.ax.set_yticks(np.arange(len(first['ylabels'])))
+            self.ax.set_yticklabels(first['ylabels'])
+            self.ax.set_aspect(1)
+            for scatter in self.scatters:
+                arr = scatter['array']
+                r = np.arange(arr.shape[1])
+                p = np.arange(arr.shape[0])
+                R,P = np.meshgrid(r,p)
+                R[arr == True]
+                self.ax.scatter(
+                    R[arr == True], P[arr == True],
+                    s=scatter['size'],
+                    marker=scatter['marker'],
+                    color=scatter['color'])
         else:
             self.ax.axis('off')
 
-        if len(self.curves) + len(self.bars) > 0:
+        if len(self.curves) + len(self.bars) + len(self.scatters) > 0:
             self.ax.set_xlabel(self.xtitle)
             self.ax.set_ylabel(self.ytitle)
             if len(self.title) > 0:
@@ -488,6 +508,34 @@ class ResultPlotCanvas(PlotCanvas):
             if not any(yrange):
                 break
         return yrange
+
+    def CDM(self):
+        """Prepare plot for test CDMAM."""
+        self.title = 'Correctly found disc in corner (diamond) and at center (circle)'
+        self.xtitle = 'Diameter (mm)'
+        self.ytitle = r'Thickness ($mu$m)'
+        imgno = self.main.gui.active_img_no
+        details_dict = self.main.results['CDM']['details_dict'][imgno]
+
+        cdmam_table_dict = self.main.results['CDM']['details_dict'][-1]
+        xlabels = cdmam_table_dict['diameters']
+        ylabels = cdmam_table_dict['thickness']
+        ylabels.reverse()
+
+        self.scatters.append(
+            {'xlabels': xlabels, 'ylabels': ylabels,
+             'array': np.flipud(details_dict['include_array']),
+             'size': 30, 'marker': 'x', 'color': 'silver'})
+
+        self.scatters.append(
+            {'xlabels': xlabels, 'ylabels': ylabels,
+             'array': np.flipud(details_dict['found_correct_corner']),
+             'size': 100, 'marker': 'D', 'color': 'green'})
+
+        self.scatters.append(
+            {'xlabels': xlabels, 'ylabels': ylabels,
+             'array': np.flipud(details_dict['found_centers']),
+             'size': 30, 'marker': 'o', 'color': 'lightgreen'})
 
     def Cro(self):
         """Prepare plot for test PET cross calibration."""

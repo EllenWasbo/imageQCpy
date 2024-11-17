@@ -8,7 +8,6 @@ Calculation processes for the different tests.
 from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from pathlib import Path
 import copy
 import warnings
 
@@ -21,18 +20,20 @@ from PyQt5.QtWidgets import qApp
 # imageQC block start
 from imageQC.scripts import dcm
 from imageQC.scripts.calculate_roi import (
-    get_rois, get_roi_circle, get_roi_SNI, get_roi_rectangle)
+    get_rois, get_roi_circle, get_roi_rectangle)
+import imageQC.scripts.mtf_methods as mtf_methods
+import imageQC.scripts.nm_methods as nm_methods
+import imageQC.scripts.cdmam_methods as cdmam_methods
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
 from imageQC.config.iQCconstants import (
     HEADERS, HEADERS_SUP, QUICKTEST_OPTIONS, HALFLIFE)
 import imageQC.config.config_classes as cfc
-from imageQC.config.config_func import get_config_folder
+from imageQC.config.config_func import load_cdmam
 from imageQC.scripts import digit_methods
 from imageQC.scripts.artifact import apply_artifacts
 # imageQC block end
-
 
 warnings.filterwarnings(action='ignore', message='All-NaN slice encountered')
 
@@ -469,7 +470,7 @@ def calculate_qc(input_main, wid_auto=None,
             extras = None  # placeholder for extra arguments to pass to calc_2d/3d
             if input_main.current_modality == 'NM' and 'SNI' in flattened_marked:
                 if paramset.sni_ref_image != '':
-                    extras = get_SNI_ref_image(paramset, tag_infos)
+                    extras = nm_methods.get_SNI_ref_image(paramset, tag_infos)
             if 'Num' in flattened_marked:
                 digit_templates = input_main.digit_templates[
                     input_main.current_modality]
@@ -539,7 +540,7 @@ def calculate_qc(input_main, wid_auto=None,
                                 force_new_roi.append('MTF')
                     elif modality == 'Mammo':
                         if 'CDM' in marked[i]:
-                            force_new_roi.append('CDM')
+                            marked_3d[i].append('CDM')
                         if 'SDN' in marked[i]:
                             if paramset.sdn_auto_center:
                                 force_new_roi.append('SDN')
@@ -968,6 +969,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                  paramset, test_code, delta_xya, digit_templates, extras):
     """Calculate tests based on 2d-image.
 
+    NB see code at bottom of this method with result = locals()[test_code]()
+
     Parameters
     ----------
     image2d : ndarray(dtype=float, ndim=2)
@@ -995,6 +998,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
     -------
     result : Results
     """
+
     def Bar():
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         # ['MTF @ F1', 'MTF @ F2', 'MTF @ F3', 'MTF @ F4',
@@ -1026,18 +1030,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             else:
                 res = Results(headers=headers)
 
-        return res
-
-    def CDM():
-        '''
-        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
-        '''
-        if image2d is not None:
-            details_dict = {'threshold_image':  roi_array[1]}
-            res = Results(
-                headers=[], values=[],
-                details_dict=details_dict)
         return res
 
     def CTn():
@@ -1354,7 +1346,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     if paramset.mtf_background_width > 0:
                         errmsg = ['Warning: width of background too narrow.'
                                   ' Background not corrected.']
-                details, errmsg_calc = calculate_MTF_point(
+                details, errmsg_calc = mtf_methods.calculate_MTF_point(
                     sub - background, image_info, paramset)
                 errmsg.extend(errmsg_calc)
                 if len(details) > 1:
@@ -1409,7 +1401,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         cols = np.max(roi_array, axis=0)
                         sub.append(image2d[rows][:, cols])
 
-                    details, errmsg = calculate_MTF_2d_line_edge(
+                    details, errmsg = mtf_methods.calculate_MTF_2d_line_edge(
                         sub, image_info.pix[0], paramset, mode='edge')
                     prefix = 'g' if paramset.mtf_gaussian else 'd'
                     try:
@@ -1447,17 +1439,17 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     sub.append(image2d[rows][:, cols])
 
                 if paramset.mtf_type == 0:
-                    details, errmsg = calculate_MTF_point(
+                    details, errmsg = mtf_methods.calculate_MTF_point(
                         sub[0], image_info, paramset)
                     details[0]['matrix'] = sub[0]
                 elif paramset.mtf_type == 1:
-                    details, errmsg = calculate_MTF_2d_line_edge(
+                    details, errmsg = mtf_methods.calculate_MTF_2d_line_edge(
                         sub, image_info.pix[0], paramset, mode='line')
                 elif paramset.mtf_type == 2:
-                    details, errmsg = calculate_MTF_2d_line_edge(
+                    details, errmsg = mtf_methods.calculate_MTF_2d_line_edge(
                         sub, image_info.pix[0], paramset, mode='line', pr_roi=True)
                 else:  # type 3 edge
-                    details, errmsg = calculate_MTF_2d_line_edge(
+                    details, errmsg = mtf_methods.calculate_MTF_2d_line_edge(
                         sub, image_info.pix[0], paramset, mode='edge')
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
                 try:
@@ -1766,7 +1758,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 if 'reference_image' in extras:
                     if extras['reference_image'][0].shape == image2d.shape:
                         if 'reference_estimated_noise' not in extras:
-                            get_SNI_reference_noise(
+                            nm_methods.get_SNI_reference_noise(
                                 extras, roi_array[0], paramset)
                         reference_noise = extras[
                             'reference_estimated_noise'][image_info.frame_number]
@@ -1775,7 +1767,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                             'Reference image not same size as image to analyse. '
                             'Quantum noise estimated from signal.')
 
-            values, values_sup, details_dict, errmsg = calculate_NM_SNI(
+            values, values_sup, details_dict, errmsg = nm_methods.calculate_NM_SNI(
                 image2d, roi_array, image_info, paramset, reference_noise)
             if err:
                 errmsg.insert(0, err)
@@ -1911,7 +1903,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             errmsg = None
             values_sup = [None] * 3
             if paramset.uni_correct:
-                res, errmsg = get_corrections_point_source(
+                res, errmsg = nm_methods.get_corrections_point_source(
                     image2d, image_info, roi_array[0],
                     fit_x=paramset.uni_correct_pos_x,
                     fit_y=paramset.uni_correct_pos_y,
@@ -1924,7 +1916,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             else:
                 image_input = image2d
 
-            res = calculate_NM_uniformity(
+            res = nm_methods.calculate_NM_uniformity(
                 image_input, roi_array, image_info.pix[0], paramset.uni_scale_factor)
             details_dict['matrix_ufov'] = res['matrix_ufov']
             details_dict['du_matrix'] = res['du_matrix']
@@ -2036,335 +2028,126 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
     flat_marked = [item for sublist in marked_3d for item in sublist]
     all_tests = list(set(flat_marked))
 
+    # NB see code at bottom of this method with
+    #       result = locals()[test_code](images_to_test)
+
     def sum_matrix(images_to_test):
         sum_matrix = matrix[images_to_test[0]]
         for i in images_to_test[1:]:
             sum_matrix = np.add(sum_matrix, matrix[i])
         return sum_matrix
 
-    def MTF(images_to_test):
-        if modality in ['CT', 'SPECT', 'PET']:
-            alt = paramset.mtf_type
-            try:
-                headers = copy.deepcopy(
-                    HEADERS[modality][test_code]['alt' + str(alt)])
-            except KeyError:
-                headers = copy.deepcopy(
-                    HEADERS[modality][test_code]['altAll'])
-            try:
-                headers_sup = copy.deepcopy(
-                    HEADERS_SUP[modality][test_code]['alt' + str(alt)])
-            except KeyError:
-                headers_sup = copy.deepcopy(
-                    HEADERS_SUP[modality][test_code]['altAll'])
-            if len(images_to_test) == 0:
-                res = Results(headers=headers, headers_sup=headers_sup)
-            else:
-                details_dict = {}
-                if alt == 4:
-                    roi_array, errmsg = get_rois(
-                        matrix[images_to_test[0]], images_to_test[0], input_main)
-                else:
-                    sum_image = matrix[images_to_test[0]]
-                    if len(images_to_test) > 1:
-                        for imgNo in images_to_test[1:]:
-                            sum_image = np.add(sum_image, matrix[imgNo])
-                    roi_array, errmsg = get_rois(
-                        sum_image, images_to_test[0], input_main)
-                if alt == 2 and modality == 'CT':
-                    roi_array_inner = roi_array
-                elif alt == 4:
-                    roi_array_inner = roi_array
-                else:
-                    roi_array_inner = roi_array[0]
-
-                background_subtract = False
-                if modality == 'CT' and paramset.mtf_type == 1:
-                    background_subtract = True
-                elif modality in ['PET', 'SPECT'] and paramset.mtf_type < 3:
-                    background_subtract = True
-
-                rows = np.max(roi_array_inner, axis=1)
-                cols = np.max(roi_array_inner, axis=0)
-                sub = []
-                for sli in matrix:
-                    if sli is not None:
-                        this_sub = sli[rows][:, cols]
-                        if background_subtract:
-                            arr = np.ma.masked_array(
-                                sli, mask=np.invert(roi_array[1]))
-                            this_sub = this_sub - np.mean(arr)
-                        sub.append(this_sub)
-                    else:
-                        sub.append(None)
-
-                pr_image = False
-                if paramset.mtf_type == 1:  # wire/line
-                    if len(images_to_test) > 2:
-                        details_dict, errmsg = calculate_MTF_3d_line(
-                            sub, roi_array_inner[rows][:, cols], images_to_test,
-                            img_infos, paramset)
-                    else:
-                        errmsg = 'At least 3 images required for MTF wire/line in 3d'
-                elif paramset.mtf_type == 2:
-                    if modality == 'CT': # circular disc
-                        details_dict, errmsg = calculate_MTF_circular_edge(
-                            sub, roi_array[rows][:, cols],
-                            img_infos[images_to_test[0]].pix[0], paramset, images_to_test)
-                        if details_dict['disc_radius_mm'] is not None:
-                            row0 = np.where(rows)[0][0]
-                            col0 = np.where(cols)[0][0]
-                            dx_dy = (
-                                col0 + details_dict['center_xy'][0] - sum_image.shape[1]//2,
-                                row0 + details_dict['center_xy'][1] - sum_image.shape[0]//2
-                                )
-                            roi_disc = get_roi_circle(
-                                sum_image.shape, dx_dy,
-                                details_dict['disc_radius_mm'] / img_infos[
-                                    images_to_test[0]].pix[0])
-                            details_dict['found_disc_roi'] = roi_disc
-                        details_dict = [details_dict]
-                    else:  # SPECT/PET line source sliding window
-                        pr_image = True
-                        if len(images_to_test) > 2:
-                            details_dict, errmsg = calculate_MTF_3d_line(
-                                sub, roi_array_inner[rows][:, cols], images_to_test,
-                                img_infos, paramset)
-                        else:
-                            errmsg = 'At least 3 images required for MTF wire/line in 3d'
-                elif paramset.mtf_type >= 3:  # z-resolution
-                    pr_image = False
-                    if len(images_to_test) > 4:
-                        if paramset.mtf_type == 3:  # line
-                            details_dict, errmsg = calculate_MTF_3d_line(
-                                sub, roi_array_inner[rows][:, cols], images_to_test,
-                                img_infos, paramset)
-                        elif paramset.mtf_type == 4:  # edge
-                            details_dict, errmsg = calculate_MTF_3d_z_edge(
-                                sub, roi_array_inner[rows][:, cols], images_to_test,
-                                img_infos, paramset)
-                    else:
-                        errmsg = 'At least 5 images required for z-resolution'
-
-                values = None
-                values_sup = None
-                prefix = 'g' if paramset.mtf_gaussian else 'd'
-                if pr_image:
-                    offset_max = []
-                    pix = img_infos[images_to_test[0]].pix[0]
-                    for sli in matrix:
-                        if sli is not None:
-                            this_offset = mmcalc.get_offset_max_pos_2d(
-                                sli, roi_array_inner, pix)
-                            offset_max.append(this_offset)
-                        else:
-                            offset_max.append((None, None))
-                    # add to common details (last dict):
-                    details_dict[-1].update({'offset_max': offset_max})
-
-                    values = []
-                    values_sup = []
-                    for idx in images_to_test:
-                        dd = details_dict[idx]
-                        if dd:
-                            try:
-                                values.append(
-                                    dd[0][prefix + 'MTF_details']['values'])
-                            except TypeError:
-                                pass
-                            try:
-                                values_sup.append(
-                                    list(dd[0]['gMTF_details']['LSF_fit_params']))
-                            except TypeError:
-                                pass
-                            try:  # x-dir, y-dir
-                                values[-1].extend(
-                                    dd[1][prefix + 'MTF_details']['values'])
-                                values_sup[-1].extend(list(
-                                    dd[1]['gMTF_details']['LSF_fit_params']))
-                            except (IndexError, KeyError, AttributeError, TypeError):
-                                pass
-                            values_sup[-1].append(
-                                dd[0]['gMTF_details']['prefilter_sigma'])
-                            values_sup[-1].extend(list(offset_max[idx]))
-                        else:
-                            values.append([None] * len(headers))
-                            sup_this = [None] * len(headers_sup)
-                            sup_this[-2:] = list(offset_max[idx])
-                            values_sup.append(sup_this)
-                else:
-                    try:
-                        values = details_dict[0][prefix + 'MTF_details']['values']
-                    except (TypeError, KeyError):
-                        pass
-                    try:
-                        values_sup = list(details_dict[0][
-                            'gMTF_details']['LSF_fit_params'])
-                    except (TypeError, KeyError):
-                        pass
-                    try:  # x-dir, y-dir or  2 lines
-                        values.extend(
-                            details_dict[1][prefix + 'MTF_details']['values'])
-                        values_sup.extend(list(
-                            details_dict[1]['gMTF_details']['LSF_fit_params']))
-                    except (IndexError, KeyError, AttributeError):
-                        if paramset.mtf_type == 3 and values:
-                            values.extend([None] * len(values))
-                            values_sup.extend([None] * len(values_sup))
-                    values=[values]
-                    try:
-                        values_sup.append(details_dict[0]['gMTF_details']['prefilter_sigma'])
-                    except (IndexError, KeyError):
-                        values_sup.append(None)
-                    values_sup=[values_sup]
-
-                res = Results(headers=headers, values=values,
-                              headers_sup=headers_sup, values_sup=values_sup,
-                              details_dict=details_dict,
-                              alternative=paramset.mtf_type,
-                              pr_image=pr_image, pr_image_sup=pr_image,
-                              errmsg=errmsg)
-        else:
-            res = None
-
-        return res
-
-    def TTF(images_to_test):
+    def CDM(images_to_test):
+        """Read CDMAM for multiple images."""
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
-        materials = paramset.ttf_table.labels
+        #headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
+
         if len(images_to_test) == 0:
-            res = Results(headers=headers, headers_sup=headers_sup)
-        elif len(materials) == 0:
-            errmsgs = ['Missing ROIs for TTF. Materials not defined.']
-            res = Results(headers=headers, headers_sup=headers_sup,
-                          errmsg=errmsgs)
+            res = Results(headers=[])#TODO ----- headers)
         else:
-            details_dict_all = []  # list of dict
-            values = []
-            values_sup = []
+            cdmam_table_dict = {}
             errmsgs = []
-            prefix = 'g' if paramset.ttf_gaussian else 'd'
+            details_dicts = []
+            prev_phantom = 0
+            prev_pix = 0
+            for idx in images_to_test:
+                image = matrix[idx]
+                pix = img_infos[idx].pix[0]  # TODO validate all same pixel size
+                roi_array = None
+                if image is not None:
+                    roi_array, err_this = get_rois(image, idx, input_main)
+                    if err_this:
+                        errmsg.append(f'\tImage {idx}: {errmsg}')
+                    if roi_array is not None:
+                        include_array = roi_array[0]
+                        phantom = 40 if include_array is None else 34
+                        if prev_phantom == 0:
+                            prev_phantom = phantom
+                            from_yaml_dict = load_cdmam()
+                            cdmam_table_dict = from_yaml_dict[f'CDMAM{phantom}']
+                            prev_pix = pix
+                        if phantom != prev_phantom:
+                            errmsg.append(f'\tImage {idx}: Different phantom '
+                                          'type than previous')
+                            roi_array = None
+                        elif prev_pix != pix:
+                            errmsg.append(f'\tImage {idx}: '
+                                          'Different pixel sizes.')
+                            roi_array = None
+                if roi_array is not None:
+                    include_array = roi_array[0]
+                    center_xs = roi_array[1]
+                    center_ys = roi_array[2]
+                    cell_width = roi_array[3]
+                    angle = roi_array[4]
+                    invert = roi_array[5]
+                    if invert:
+                        image = -image
 
-            sum_image = matrix[images_to_test[0]]
-            if len(images_to_test) > 1:
-                for imgNo in images_to_test[1:]:
-                    sum_image = np.add(sum_image, matrix[imgNo])
-            roi_array_all, errmsg = get_rois(
-                sum_image, images_to_test[0], input_main)
-
-            paramset_ttf_fix = copy.deepcopy(paramset)
-            paramset_ttf_fix.mtf_cut_lsf = paramset_ttf_fix.ttf_cut_lsf
-            paramset_ttf_fix.mtf_cut_lsf_w = paramset_ttf_fix.ttf_cut_lsf_w
-            paramset_ttf_fix.mtf_cut_lsf_w_fade = paramset_ttf_fix.ttf_cut_lsf_w_fade
-            contrasts = []
-            for idx, roi_array in enumerate(roi_array_all):
-                rows = np.max(roi_array, axis=1)
-                cols = np.max(roi_array, axis=0)
-                sub = []
-                for sli in matrix:
-                    if sli is not None:
-                        this_sub = sli[rows][:, cols]
-                        sub.append(this_sub)
+                    pix_new = 0.05  # fixed pixelsize of 50 um for analysis
+                    test_angles = []
+                    angle_margin = np.deg2rad(paramset.cdm_tolerance_angle)
+                    if phantom == 34:
+                        line_dist = (cell_width * np.cos(np.pi / 4)**2) / 2
+                        x = round(center_xs[2, 4])
+                        y = round(center_ys[2, 4])
                     else:
-                        sub.append(None)
+                        line_dist = cell_width / 2
+                        x = round(center_xs[0, 0])
+                        y = round(center_ys[0, 0])
+                    line_dist = round((pix / pix_new) * line_dist)
 
-                details_dict, errmsg = calculate_MTF_circular_edge(
-                    sub, roi_array[rows][:, cols],
-                    img_infos[images_to_test[0]].pix[0],
-                    paramset_ttf_fix, images_to_test)
-                if errmsg:
-                    errmsgs.append(f'{materials[idx]}:')
-                    errmsgs.extend(errmsg)
-                if details_dict['disc_radius_mm'] is not None:
-                    row0 = np.where(rows)[0][0]
-                    col0 = np.where(cols)[0][0]
-                    dx_dy = (
-                        col0 + details_dict['center_xy'][0] - sum_image.shape[1]//2,
-                        row0 + details_dict['center_xy'][1] - sum_image.shape[0]//2
-                        )
-                    roi_disc = get_roi_circle(
-                        sum_image.shape, dx_dy,
-                        details_dict['disc_radius_mm'] / img_infos[
-                            images_to_test[0]].pix[0])
-                    details_dict['found_disc_roi'] = roi_disc
-                details_dict_all.append(details_dict)
-                contrast =(
-                    np.max(details_dict['interpolated'])
-                    - np.min(details_dict['interpolated']))
+                    wi, templates, kernels = cdmam_methods.get_template_kernel(
+                        cdmam_table_dict, phantom,
+                        pix, pix_new, cell_width, angle, image, (x, y))
 
-                try:
-                    values.append(
-                        [materials[idx]]
-                        + details_dict[prefix + 'MTF_details']['values']
-                        + [contrast])
-                except TypeError:
-                    values.append([materials[idx]] + [None] * 3)
-                try:
-                    values_sup.append(
-                        [materials[idx]]
-                        + list(details_dict['gMTF_details']['LSF_fit_params'])
-                        + [details_dict['gMTF_details']['prefilter_sigma']])
-                except TypeError:
-                    values_sup.append([materials[idx]] + [None] * 5)
+                    sz_y, sz_x = center_xs.shape
+                    res_table = []
 
-            res = Results(headers=headers, values=values,
-                          headers_sup=headers_sup, values_sup=values_sup,
-                          details_dict=details_dict_all,
-                          pr_image=False, pr_image_sup=False,
-                          errmsg=errmsgs)
+                    threshold_peaks = paramset.cdm_threshold_peaks
+                    for row in range(sz_y):
+                        res_table.append([])
+                        for col in range(sz_x):
+                            res_table[-1].append([])
+                            include = include_array[row, col]
+                            if include:
+                                x = round(center_xs[row, col])
+                                y = round(center_ys[row, col])
+                                sub = image[y - wi:y + wi, x - wi:x + wi]
+                                res = cdmam_methods.read_cdmam_sub(
+                                    sub, phantom, line_dist,
+                                    templates[col],
+                                    kernels[col])
+                                res_table[row][col] = res
 
-        return res
+                    found_correct_corner = np.zeros((sz_y, sz_x), dtype=bool)
+                    found_centers = np.zeros((sz_y, sz_x), dtype=bool)
+                    corners = np.array(
+                        cdmam_table_dict['corner_index'])
+                    for row in range(sz_y):
+                        for col in range(sz_x):
+                            include = include_array[row, col]
+                            if include:
+                                found_correct_corner[row, col] = (
+                                    res_table[row][col][0] == corners[row, col])
+                                found_centers[row, col] = res_table[row][col][1]
+                    details_dict = {
+                        'found_correct_corner': found_correct_corner,
+                        'include_array': include_array,
+                        'found_centers': found_centers,
+                        'res_table': res_table
+                        }
+                    details_dicts.append(details_dict)
 
-    def DPR(images_to_test):
-        """D-prime / detectability from TTF NPS results."""
-        headers = []#copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        proceed = False
-        ttf_details = None
-        nps_details = None
-        proceed = False
-        if len(images_to_test) == 0:
-            res = Results(headers=headers)
-        else:
-            if 'TTF' in input_main.results and 'NPS' in input_main.results:
-                try:
-                    ttf_details = input_main.results['TTF']['details_dict']
-                    #breakpoint() not finished
-                    nps_details = [dd for dd
-                                   in input_main.results['NPS']['details_dict']
-                                   if dd]
-                    pix = img_infos[images_to_test[0]].pix[0]#TODO verify NPS and TTF images same pixelsize
-                    power = None if paramset.dpr_designer is False else paramset.dpr_power
-                    diameter_in_pix = paramset.dpr_size / pix
-                    nps_sum = nps_details[0]['NPS_array']
-                    for idx in range(1, len(nps_details)):
-                        nps_sum = nps_sum + nps_details[idx]['NPS_array']
-                    nps_2d_avg = nps_sum / len(nps_details)
+                if details_dicts:
+                    details_dicts.append(cdmam_table_dict)
 
-                    w_task = mmcalc.get_w_task(
-                        paramset.dpr_contrast, diameter_in_pix, power)
-                    if paramset.dpr_gaussian_ttf:
-                        ttf_2d = ttf_details#TODO....
-                        # select ttf from material with closest contrast
-                        # or option to override this if crappy data?
-                        # alternative dlete crappy data from ttf dataset to override
-                        # warning of crappy data possible?
-                    proceed = True
-                except KeyError:
-                    pass
-        if proceed:
-            values = []
-            details_dict_all = []
-            errmsgs = []
-            detail_dict_all = {}
-            res = Results(headers=headers, values=values,
-                          details_dict=details_dict_all,
-                          pr_image=False, pr_image_sup=False,
-                          errmsg=errmsgs)
-        else:
-            errmsgs = ['Missing TTF or NPS results (or both).']
-            res = Results(headers=headers, errmsg=errmsgs)
-        return res
+                res = Results(
+                    headers=headers, values=[0])
+                res = Results(headers=headers, values=[0],
+                              details_dict=details_dicts, pr_image=False,
+                              errmsg=errmsgs)
+            return res
 
     def Cro(images_to_test):
         """PET cross calibration."""
@@ -2468,7 +2251,249 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                               errmsg=errmsgs)
         return res
 
-    def Rec(images_to_test, test_mode=False):
+    def DPR(images_to_test):
+        """D-prime / detectability from TTF NPS results."""
+        headers = []#copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        proceed = False
+        ttf_details = None
+        nps_details = None
+        proceed = False
+        if len(images_to_test) == 0:
+            res = Results(headers=headers)
+        else:
+            if 'TTF' in input_main.results and 'NPS' in input_main.results:
+                try:
+                    ttf_details = input_main.results['TTF']['details_dict']
+                    #breakpoint() not finished
+                    nps_details = [dd for dd
+                                   in input_main.results['NPS']['details_dict']
+                                   if dd]
+                    pix = img_infos[images_to_test[0]].pix[0]#TODO verify NPS and TTF images same pixelsize
+                    power = None if paramset.dpr_designer is False else paramset.dpr_power
+                    diameter_in_pix = paramset.dpr_size / pix
+                    nps_sum = nps_details[0]['NPS_array']
+                    for idx in range(1, len(nps_details)):
+                        nps_sum = nps_sum + nps_details[idx]['NPS_array']
+                    nps_2d_avg = nps_sum / len(nps_details)
+
+                    w_task = mmcalc.get_w_task(
+                        paramset.dpr_contrast, diameter_in_pix, power)
+                    if paramset.dpr_gaussian_ttf:
+                        ttf_2d = ttf_details#TODO....
+                        # select ttf from material with closest contrast
+                        # or option to override this if crappy data?
+                        # alternative dlete crappy data from ttf dataset to override
+                        # warning of crappy data possible?
+                    proceed = True
+                except KeyError:
+                    pass
+        if proceed:
+            values = []
+            details_dict_all = []
+            errmsgs = []
+            detail_dict_all = {}
+            res = Results(headers=headers, values=values,
+                          details_dict=details_dict_all,
+                          pr_image=False, pr_image_sup=False,
+                          errmsg=errmsgs)
+        else:
+            errmsgs = ['Missing TTF or NPS results (or both).']
+            res = Results(headers=headers, errmsg=errmsgs)
+        return res
+
+    def MTF(images_to_test):
+        res = None
+        proceed = False
+        if modality in ['CT', 'SPECT', 'PET']:
+            alt = paramset.mtf_type
+            try:
+                headers = copy.deepcopy(
+                    HEADERS[modality][test_code]['alt' + str(alt)])
+            except KeyError:
+                headers = copy.deepcopy(
+                    HEADERS[modality][test_code]['altAll'])
+            try:
+                headers_sup = copy.deepcopy(
+                    HEADERS_SUP[modality][test_code]['alt' + str(alt)])
+            except KeyError:
+                headers_sup = copy.deepcopy(
+                    HEADERS_SUP[modality][test_code]['altAll'])
+            if len(images_to_test) == 0:
+                res = Results(headers=headers, headers_sup=headers_sup)
+            else:
+                proceed = True
+
+        if proceed:
+            details_dict = {}
+            if alt == 4:
+                roi_array, errmsg = get_rois(
+                    matrix[images_to_test[0]], images_to_test[0], input_main)
+            else:
+                sum_image = matrix[images_to_test[0]]
+                if len(images_to_test) > 1:
+                    for imgNo in images_to_test[1:]:
+                        sum_image = np.add(sum_image, matrix[imgNo])
+                roi_array, errmsg = get_rois(
+                    sum_image, images_to_test[0], input_main)
+            if alt == 2 and modality == 'CT':
+                roi_array_inner = roi_array
+            elif alt == 4:
+                roi_array_inner = roi_array
+            else:
+                roi_array_inner = roi_array[0]
+
+            background_subtract = False
+            if modality == 'CT' and paramset.mtf_type == 1:
+                background_subtract = True
+            elif modality in ['PET', 'SPECT'] and paramset.mtf_type < 3:
+                background_subtract = True
+
+            rows = np.max(roi_array_inner, axis=1)
+            cols = np.max(roi_array_inner, axis=0)
+            sub = []
+            for sli in matrix:
+                if sli is not None:
+                    this_sub = sli[rows][:, cols]
+                    if background_subtract:
+                        arr = np.ma.masked_array(
+                            sli, mask=np.invert(roi_array[1]))
+                        this_sub = this_sub - np.mean(arr)
+                    sub.append(this_sub)
+                else:
+                    sub.append(None)
+
+            pr_image = False
+            if paramset.mtf_type == 1:  # wire/line
+                if len(images_to_test) > 2:
+                    details_dict, errmsg = mtf_methods.calculate_MTF_3d_line(
+                        sub, roi_array_inner[rows][:, cols], images_to_test,
+                        img_infos, paramset)
+                else:
+                    errmsg = 'At least 3 images required for MTF wire/line in 3d'
+            elif paramset.mtf_type == 2:
+                if modality == 'CT': # circular disc
+                    details_dict, errmsg = mtf_methods.calculate_MTF_circular_edge(
+                        sub, roi_array[rows][:, cols],
+                        img_infos[images_to_test[0]].pix[0],
+                        paramset, images_to_test)
+                    if details_dict['disc_radius_mm'] is not None:
+                        row0 = np.where(rows)[0][0]
+                        col0 = np.where(cols)[0][0]
+                        dx_dy = (
+                            col0 + details_dict['center_xy'][0] - sum_image.shape[1]//2,
+                            row0 + details_dict['center_xy'][1] - sum_image.shape[0]//2
+                            )
+                        roi_disc = get_roi_circle(
+                            sum_image.shape, dx_dy,
+                            details_dict['disc_radius_mm'] / img_infos[
+                                images_to_test[0]].pix[0])
+                        details_dict['found_disc_roi'] = roi_disc
+                    details_dict = [details_dict]
+                else:  # SPECT/PET line source sliding window
+                    pr_image = True
+                    if len(images_to_test) > 2:
+                        details_dict, errmsg = mtf_methods.calculate_MTF_3d_line(
+                            sub, roi_array_inner[rows][:, cols], images_to_test,
+                            img_infos, paramset)
+                    else:
+                        errmsg = 'At least 3 images required for MTF wire/line in 3d'
+            elif paramset.mtf_type >= 3:  # z-resolution
+                pr_image = False
+                if len(images_to_test) > 4:
+                    if paramset.mtf_type == 3:  # line
+                        details_dict, errmsg = mtf_methods.calculate_MTF_3d_line(
+                            sub, roi_array_inner[rows][:, cols],
+                            images_to_test, img_infos, paramset)
+                    elif paramset.mtf_type == 4:  # edge
+                        details_dict, errmsg = mtf_methods.calculate_MTF_3d_z_edge(
+                            sub, roi_array_inner[rows][:, cols],
+                            images_to_test, img_infos, paramset)
+                else:
+                    errmsg = 'At least 5 images required for z-resolution'
+
+            values = None
+            values_sup = None
+            prefix = 'g' if paramset.mtf_gaussian else 'd'
+            if pr_image:
+                offset_max = []
+                pix = img_infos[images_to_test[0]].pix[0]
+                for sli in matrix:
+                    if sli is not None:
+                        this_offset = mmcalc.get_offset_max_pos_2d(
+                            sli, roi_array_inner, pix)
+                        offset_max.append(this_offset)
+                    else:
+                        offset_max.append((None, None))
+                # add to common details (last dict):
+                details_dict[-1].update({'offset_max': offset_max})
+
+                values = []
+                values_sup = []
+                for idx in images_to_test:
+                    dd = details_dict[idx]
+                    if dd:
+                        try:
+                            values.append(
+                                dd[0][prefix + 'MTF_details']['values'])
+                        except TypeError:
+                            pass
+                        try:
+                            values_sup.append(
+                                list(dd[0]['gMTF_details']['LSF_fit_params']))
+                        except TypeError:
+                            pass
+                        try:  # x-dir, y-dir
+                            values[-1].extend(
+                                dd[1][prefix + 'MTF_details']['values'])
+                            values_sup[-1].extend(list(
+                                dd[1]['gMTF_details']['LSF_fit_params']))
+                        except (IndexError, KeyError, AttributeError, TypeError):
+                            pass
+                        values_sup[-1].append(
+                            dd[0]['gMTF_details']['prefilter_sigma'])
+                        values_sup[-1].extend(list(offset_max[idx]))
+                    else:
+                        values.append([None] * len(headers))
+                        sup_this = [None] * len(headers_sup)
+                        sup_this[-2:] = list(offset_max[idx])
+                        values_sup.append(sup_this)
+            else:
+                try:
+                    values = details_dict[0][prefix + 'MTF_details']['values']
+                except (TypeError, KeyError):
+                    pass
+                try:
+                    values_sup = list(details_dict[0][
+                        'gMTF_details']['LSF_fit_params'])
+                except (TypeError, KeyError):
+                    pass
+                try:  # x-dir, y-dir or  2 lines
+                    values.extend(
+                        details_dict[1][prefix + 'MTF_details']['values'])
+                    values_sup.extend(list(
+                        details_dict[1]['gMTF_details']['LSF_fit_params']))
+                except (IndexError, KeyError, AttributeError):
+                    if paramset.mtf_type == 3 and values:
+                        values.extend([None] * len(values))
+                        values_sup.extend([None] * len(values_sup))
+                values=[values]
+                try:
+                    values_sup.append(
+                        details_dict[0]['gMTF_details']['prefilter_sigma'])
+                except (IndexError, KeyError):
+                    values_sup.append(None)
+                values_sup=[values_sup]
+
+            res = Results(headers=headers, values=values,
+                          headers_sup=headers_sup, values_sup=values_sup,
+                          details_dict=details_dict,
+                          alternative=paramset.mtf_type,
+                          pr_image=pr_image, pr_image_sup=pr_image,
+                          errmsg=errmsg)
+
+        return res
+
+    def Rec(images_to_test):
         """PET Recovery Curve."""
         alt = paramset.rec_type
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
@@ -2489,7 +2514,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 'Automation not available for Recovery Curve, GUI input needed')
             proceed = False
         try:
-            if input_main.test_mode is True:
+            if input_main.test_mode:
                 proceed = True  # force proceed without activity_dict
         except AttributeError:
             pass
@@ -2649,6 +2674,27 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
         return res
 
+    def SNI(images_to_test):
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        errmsgs = []
+        if len(images_to_test) == 0:
+            res = Results(headers=headers)
+        else:
+            image_input = sum_matrix(images_to_test)  # always if 3d option
+            if paramset.sni_correct:
+                errmsgs.append('Point source correction ignored when image sum used.')
+            roi_array, errmsg = get_rois(
+                image_input, images_to_test[0], input_main)
+            details_dict = {'sum_image': image_input}
+            values, _, details_dict2, _ = nm_methods.calculate_NM_SNI(
+                image_input, roi_array, img_infos[0], paramset, None)
+            details_dict.update(details_dict2)
+
+            res = Results(headers=headers, values=[values],
+                          details_dict=[details_dict], errmsg=errmsgs, pr_image=False)
+
+        return res
+
     def SNR(images_to_test):
         # use two and two images
         values_first_imgs = []
@@ -2694,6 +2740,93 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             res = Results(values=values, headers=headers, errmsg=errmsg, pr_image=True)
         return res
 
+    def TTF(images_to_test):
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
+        materials = paramset.ttf_table.labels
+        if len(images_to_test) == 0:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        elif len(materials) == 0:
+            errmsgs = ['Missing ROIs for TTF. Materials not defined.']
+            res = Results(headers=headers, headers_sup=headers_sup,
+                          errmsg=errmsgs)
+        else:
+            details_dict_all = []  # list of dict
+            values = []
+            values_sup = []
+            errmsgs = []
+            prefix = 'g' if paramset.ttf_gaussian else 'd'
+
+            sum_image = matrix[images_to_test[0]]
+            if len(images_to_test) > 1:
+                for imgNo in images_to_test[1:]:
+                    sum_image = np.add(sum_image, matrix[imgNo])
+            roi_array_all, errmsg = get_rois(
+                sum_image, images_to_test[0], input_main)
+
+            paramset_ttf_fix = copy.deepcopy(paramset)
+            paramset_ttf_fix.mtf_cut_lsf = paramset_ttf_fix.ttf_cut_lsf
+            paramset_ttf_fix.mtf_cut_lsf_w = paramset_ttf_fix.ttf_cut_lsf_w
+            paramset_ttf_fix.mtf_cut_lsf_w_fade = paramset_ttf_fix.ttf_cut_lsf_w_fade
+            contrasts = []
+            for idx, roi_array in enumerate(roi_array_all):
+                rows = np.max(roi_array, axis=1)
+                cols = np.max(roi_array, axis=0)
+                sub = []
+                for sli in matrix:
+                    if sli is not None:
+                        this_sub = sli[rows][:, cols]
+                        sub.append(this_sub)
+                    else:
+                        sub.append(None)
+
+                details_dict, errmsg = mtf_methods.calculate_MTF_circular_edge(
+                    sub, roi_array[rows][:, cols],
+                    img_infos[images_to_test[0]].pix[0],
+                    paramset_ttf_fix, images_to_test)
+                if errmsg:
+                    errmsgs.append(f'{materials[idx]}:')
+                    errmsgs.extend(errmsg)
+                if details_dict['disc_radius_mm'] is not None:
+                    row0 = np.where(rows)[0][0]
+                    col0 = np.where(cols)[0][0]
+                    dx_dy = (
+                        col0 + details_dict['center_xy'][0] - sum_image.shape[1]//2,
+                        row0 + details_dict['center_xy'][1] - sum_image.shape[0]//2
+                        )
+                    roi_disc = get_roi_circle(
+                        sum_image.shape, dx_dy,
+                        details_dict['disc_radius_mm'] / img_infos[
+                            images_to_test[0]].pix[0])
+                    details_dict['found_disc_roi'] = roi_disc
+                details_dict_all.append(details_dict)
+                contrast =(
+                    np.max(details_dict['interpolated'])
+                    - np.min(details_dict['interpolated']))
+
+                try:
+                    values.append(
+                        [materials[idx]]
+                        + details_dict[prefix + 'MTF_details']['values']
+                        + [contrast])
+                except TypeError:
+                    values.append([materials[idx]] + [None] * 3)
+                try:
+                    values_sup.append(
+                        [materials[idx]]
+                        + list(details_dict['gMTF_details']['LSF_fit_params'])
+                        + [details_dict['gMTF_details']['prefilter_sigma']])
+                except TypeError:
+                    values_sup.append([materials[idx]] + [None] * 5)
+
+            res = Results(headers=headers, values=values,
+                          headers_sup=headers_sup, values_sup=values_sup,
+                          details_dict=details_dict_all,
+                          pr_image=False, pr_image_sup=False,
+                          errmsg=errmsgs)
+
+        return res
+
     def Uni(images_to_test):
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         errmsgs = []
@@ -2705,7 +2838,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 errmsgs.append('Point source correction ignored when image sum used.')
             roi_array, errmsg = get_rois(
                 image_input, images_to_test[0], input_main)
-            res = calculate_NM_uniformity(
+            res = nm_methods.calculate_NM_uniformity(
                 image_input, roi_array, img_infos[0].pix[0], paramset.uni_scale_factor)
             details_dict = {
                 'sum_image': image_input,
@@ -2718,27 +2851,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 headers=headers, values=[values],
                 details_dict=[details_dict],
                 errmsg=errmsgs, pr_image=False)
-
-        return res
-
-    def SNI(images_to_test):
-        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
-        errmsgs = []
-        if len(images_to_test) == 0:
-            res = Results(headers=headers)
-        else:
-            image_input = sum_matrix(images_to_test)  # always if 3d option
-            if paramset.sni_correct:
-                errmsgs.append('Point source correction ignored when image sum used.')
-            roi_array, errmsg = get_rois(
-                image_input, images_to_test[0], input_main)
-            details_dict = {'sum_image': image_input}
-            values, _, details_dict2, _ = calculate_NM_SNI(
-                image_input, roi_array, img_infos[0], paramset, None)
-            details_dict.update(details_dict2)
-
-            res = Results(headers=headers, values=[values],
-                          details_dict=[details_dict], errmsg=errmsgs, pr_image=False)
 
         return res
 
@@ -2992,906 +3104,6 @@ def get_profile_sli(image, paramset, line, direction='h'):
 
     return (profile, errmsg)
 
-
-def calculate_MTF_point(matrix, img_info, paramset):
-    """Calculate MTF from point source.
-
-    Based on J Appl Clin Med Phys, Vol 14. No4, 2013, pp216..
-
-    Parameters
-    ----------
-    matrix : numpy.ndarray
-        part of image limited to the point source, background-corrected
-    img_info : DcmInfo
-        as defined in scripts/dcm.py
-    paramset : ParamSetXX
-        depending on modality
-
-    Returns
-    -------
-    details : list of dict
-        [results in x direction, y direction]
-        center: float
-            center in roi_array current direction
-        matrix: np.array 2d
-            image within roi
-        LSF_x: np.array
-            x-axis  - positions for LSF
-        LSF: np.array
-        dMTF_details: dict
-            as returned by mmcalc.get_MTF_discrete
-            + values [MTF 50%, 10%, 2%]
-        gMTF_details: dict
-            as returned by mmcalc.get_MTF_gauss
-            + values [MTF 50%, 10%, 2%]
-    errmsgs : list of str
-    """
-    details = []
-    errmsgs = []
-    for ax in [0, 1]:
-        details_dict = {}
-        profile = np.sum(matrix, axis=ax)
-        width, center = mmcalc.get_width_center_at_threshold(
-            profile, np.max(profile)/2)
-        if center is None:
-            errmsgs.append('Could not find center of point in ROI.')
-        else:
-            pos = (np.arange(len(profile)) - center) * img_info.pix[0]
-
-            # modality specific settings
-            fade_lsf_fwhm = None
-            try:
-                cut_lsf = paramset.mtf_cut_lsf
-                cut_lsf_fwhm = paramset.mtf_cut_lsf_w
-                try:
-                    fade_lsf_fwhm = paramset.mtf_cut_lsf_w_fade
-                except AttributeError:
-                    pass
-            except AttributeError:
-                cut_lsf = False
-                cut_lsf_fwhm = None
-
-            cw = 0
-            cwf = 0
-            if cut_lsf:
-                profile, cw, cwf = mmcalc.cut_and_fade_LSF(
-                    profile, center=center, fwhm=width,
-                    cut_width=cut_lsf_fwhm, fade_width=fade_lsf_fwhm)
-
-            details_dict['center'] = center
-            details_dict['LSF_x'] = pos
-            details_dict['LSF'] = profile
-
-            # Discrete MTF
-            res = mmcalc.get_MTF_discrete(profile, dx=img_info.pix[0])
-            res['cut_width'] = cw * img_info.pix[0]
-            res['cut_width_fade'] = cwf * img_info.pix[0]
-            if isinstance(paramset, cfc.ParamSetCT):
-                res['values'] = mmcalc.get_curve_values(
-                    res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
-            else:  # NM, SPECT or PET
-                fwtm, _ = mmcalc.get_width_center_at_threshold(
-                    profile, np.max(profile)/10)
-                if width is not None:
-                    width = width*img_info.pix[0]
-                if fwtm is not None:
-                    fwtm = fwtm*img_info.pix[0]
-                res['values'] = [width, fwtm]
-            details_dict['dMTF_details'] = res
-
-            # Gaussian MTF
-            if isinstance(paramset, cfc.ParamSetCT):
-                gaussfit = 'double'
-            else:  # NM, SPECT or PET
-                gaussfit = 'single'
-            res, err = mmcalc.get_MTF_gauss(
-                profile, dx=img_info.pix[0], gaussfit=gaussfit)
-            if err is not None:
-                errmsgs.append(err)
-            else:
-                if isinstance(paramset, cfc.ParamSetCT):
-                    res['values'] = mmcalc.get_curve_values(
-                        res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
-                else:  # NM, SPECT or PET
-                    profile = res['LSF_fit']
-                    fwhm, _ = mmcalc.get_width_center_at_threshold(
-                        profile, np.max(profile)/2)
-                    fwtm, _ = mmcalc.get_width_center_at_threshold(
-                        profile, np.max(profile)/10)
-                    if fwhm is not None:
-                        fwhm = fwhm*img_info.pix[0]
-                    if fwtm is not None:
-                        fwtm = fwtm*img_info.pix[0]
-                    res['values'] = [fwhm, fwtm]
-                details_dict['gMTF_details'] = res
-
-                details.append(details_dict)
-
-    return (details, errmsgs)
-
-
-def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
-    """Calculate MTF from line ~normal to slices.
-
-    Parameters
-    ----------
-    matrix : numpy.2darray or list of numpy.array
-        list of 2d part of slice limited ROI
-    roi : numpy.2darray of bool
-        2d part of larger roi
-    images_to_test : list of int
-        image numbers to test
-    image_infos : list of DcmInfo
-        DcmInfo as defined in scripts/dcm.py
-    paramset : ParamSetXX
-        depending on modality
-
-    Returns
-    -------
-    details_dict: list of dict
-        x_dir, y_dir, common_details
-    errmsg : list of str
-    """
-    details_dict = []
-    common_details_dict = {}
-    errmsg = []
-    matrix = [sli for sli in matrix if sli is not None]
-    zpos = np.array([image_infos[sli].zpos for sli in images_to_test])
-    max_values = np.array([np.max(sli) for sli in matrix])
-    common_details_dict['max_roi_marked_images'] = max_values
-    common_details_dict['zpos_marked_images'] = zpos
-
-    ignore_slices = []
-    if paramset.mtf_type < 3:  # not performed for z-resolution
-        try:  # ignore slices with max outside tolerance
-            tolerance = paramset.mtf_line_tolerance
-            sort_idxs = np.argsort(max_values)
-            max_n_highest = np.mean(
-                max_values[sort_idxs[-3:]])
-            diff = 100/max_n_highest * (np.array(max_values) - max_n_highest)
-            idxs = np.where(np.abs(diff) > tolerance)
-            ignore_slices = list(idxs[0])
-        except AttributeError:
-            pass
-
-    proceed = True
-    zpos_used = None
-    if len(ignore_slices) > 0:
-        if len(matrix) - len(ignore_slices) < 3:
-            errmsg.append(
-                'Need at least 3 valid images for this test. Found less.')
-            proceed = False
-        else:
-            zpos_copy = np.copy(zpos)
-            zpos = np.delete(zpos, ignore_slices)
-            max_values_copy = np.copy(max_values)
-            ignore_slices.reverse()
-            for i in ignore_slices:
-                if paramset.mtf_type == 1:  # not sliding window
-                    del matrix[i]
-                max_values_copy[i] = np.nan
-                zpos_copy[i] = np.nan
-            common_details_dict['max_roi_used'] = max_values_copy
-            common_details_dict['zpos_used'] = zpos_copy
-            zpos_used = zpos_copy
-
-    if proceed:
-        pix = image_infos[images_to_test[0]].pix[0]
-
-        if paramset.mtf_type == 1:
-            for i in [0, 1]:
-                axis = 2 if i == 0 else 1
-                matrix_xz = np.sum(matrix, axis=axis)
-
-                details_dict_this, errmsg_this = calculate_MTF_2d_line_edge(
-                    matrix_xz, pix, paramset, mode='line',
-                    vertical_positions_mm=zpos_used, rotate='no')
-                details_dict.append(details_dict_this)
-                errmsg.append(errmsg_this)
-        elif paramset.mtf_type == 2:  # sliding window
-            n_slices = paramset.mtf_sliding_window
-            n_margin = n_slices // 2
-            details_dict = [None] * n_margin
-            for zz in range(n_margin, len(matrix) - n_margin):
-                details_img = []
-                matrix_this = matrix[zz - n_margin : zz + n_margin + 1]
-                vert_pos = zpos_used[zz - n_margin : zz + n_margin + 1]
-                if np.isnan(np.sum(vert_pos)):
-                    details_dict.append(None)
-                else:
-                    for i in [0, 1]:
-                        axis = 2 if i == 0 else 1
-                        matrix_xz = np.sum(matrix_this, axis=axis)
-                        details_dict_this, errmsg_this = calculate_MTF_2d_line_edge(
-                            matrix_xz, pix, paramset, mode='line',
-                            vertical_positions_mm=vert_pos, recalculate_halfmax=True,
-                            rotate='no')
-                        details_img.append(details_dict_this)
-                        if errmsg_this:
-                            errmsg.append(f'Center slice number {zz}, axis {i}: {errmsg_this}')
-                    details_dict.append(details_img)
-            details_dict.extend([None] * n_margin)
-        elif paramset.mtf_type == 3:  # z-resolution line
-            halfmax = 0.5 * (np.max(max_values) + np.min(max_values))
-            above_halfmax = np.where(max_values > halfmax)
-            groups = np.diff(above_halfmax)
-            start_group2 = np.where(groups[0] > 1)
-            n_groups = 0
-            idxs = [None, None]  # first slice of groups
-            idxs_end = [None, None]  # last slice of groups
-
-            z_diffs = np.diff(zpos)
-            z_dist = z_diffs[0]
-            if np.min(z_diffs) < np.max(z_diffs):
-                errmsg.append('NB: z-increment differ for the slices. Could cause erroneous results.')
-
-            margin = paramset.mtf_roi_size // z_dist
-            if margin < 2:
-                errmsg.append(
-                    'ROI radius used to select images. Set > 2 * slice thickness.')
-            else:
-                if len(start_group2[0]) == 1:
-                    n_groups = 2
-                    halfmax_end_group1 = above_halfmax[0][start_group2[0][0]]
-                    mid_slice_1 = (
-                        above_halfmax[0][0] + halfmax_end_group1) // 2
-                    halfmax_start_group2 = above_halfmax[0][start_group2[0][0] + 1]
-                    mid_slice_2 = (
-                        halfmax_start_group2 + above_halfmax[0][-1]) // 2
-                    idxs[0] = int(max([0, mid_slice_1 - margin]))
-                    idxs_end[0] = int(min([mid_slice_1 + margin, halfmax_start_group2 - 1]))
-                    idxs[1] = int(max([halfmax_end_group1 + 1, mid_slice_2 - margin]))
-                    idxs_end[1] = int(min([mid_slice_2 + margin, len(matrix)]))
-                elif len(start_group2[0]) == 0:
-                    n_groups = 1
-                    mid_slice = (
-                        above_halfmax[0][-1] + above_halfmax[0][0]) // 2
-                    idxs[0] = int(max([0, mid_slice - margin]))
-                    idxs_end[0] = int(min([mid_slice + margin, len(matrix)]))
-
-                empty = np.full(max_values.shape, np.nan)
-                common_details_dict['max_roi_used'] = np.copy(empty)
-                common_details_dict['zpos_used'] = np.copy(empty)
-                if n_groups == 2:
-                    common_details_dict['max_roi_used_2'] = np.copy(empty)
-                    common_details_dict['zpos_used_2'] = np.copy(empty)
-
-                for group in range(n_groups):
-                    suffix = ''
-                    if group == 1:
-                        suffix = '_2'
-                    common_details_dict[f'max_roi_used{suffix}'][
-                        idxs[group] : idxs_end[group]] = max_values[
-                            idxs[group] : idxs_end[group]]
-                    common_details_dict[f'zpos_used{suffix}'][
-                        idxs[group] : idxs_end[group]] = zpos[
-                            idxs[group] : idxs_end[group]]
-                    matrix_this = matrix[idxs[group] : idxs_end[group]]
-                    matrix_xz = np.sum(matrix_this, axis=1)  # assume line in ~x dir 
-                    # TODO allow also vertical line
-
-                    # rotate matrix and use slice_thick as pix and xrange as vertical range
-                    xpos = np.arange(matrix_xz.shape[1]) * pix
-                    matrix_zx = np.rot90(matrix_xz)
-                    details_dict_this, errmsg_this = calculate_MTF_2d_line_edge(
-                        matrix_zx, z_dist, paramset, mode='line',
-                        vertical_positions_mm=xpos, rotate='no')
-                    details_dict.append(details_dict_this)
-                    errmsg.append(errmsg_this)
-
-    details_dict.append(common_details_dict)
-
-    return (details_dict, errmsg)
-
-
-def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
-                               pr_roi=False, vertical_positions_mm=None,
-                               rotate='auto',
-                               recalculate_halfmax=False):
-    """Calculate MTF from straight line.
-
-    Parameters
-    ----------
-    matrix : numpy.2darray or list of numpy.2darray
-        image within roi(s) - result will be combined from all rois
-    pix : float
-        pixelsize in mm
-    paramset : ParamSetXX
-        depending on modality
-    mode : str, optional
-        'edge' or 'line'. Default is 'edge'
-    pr_roi : bool, Optional
-        MTF pr roi in matrix or average. Default is False.
-    vertical_positions_mm : list of float, optional
-        if vertical pix size != pix and possiby irregular. Default is None
-        list of y pix positions in mm
-    rotate: str
-        auto to auto-detect direction
-        no/yes to avoid/force matrix rotiation (ensure vertical)
-    recalculate_halfmax: bool
-        Option to allow for recalculating halfmax when finding line position. Default is False.
-
-    Returns
-    -------
-    details_dict: dict
-    errmsg: list
-    """
-    edge = True if mode == 'edge' else False
-    details_dict = []  # {} if only one
-    details_dicts_edge = []  # one for each roi (edge=line)
-    ESF_all = []  # if edge
-    LSF_all = []
-    LSF_no_filt_all = []
-    ESF_x = None  # if edge
-    LSF_x = None
-    errmsg = []
-    step_size = 0.1 * pix
-    if not isinstance(matrix, list):
-        matrix = [matrix]
-
-    def ensure_vertical(sub):
-        """Rotate matrix if edge/line not in y direction."""
-        if edge:
-            x1 = np.mean(sub[:, :2])
-            x2 = np.mean(sub[:, -2:])
-            diff_x = abs(x1 - x2)
-            y1 = np.mean(sub[:2, :])
-            y2 = np.mean(sub[-2:, :])
-            diff_y = abs(y1 - y2)
-            halfmax = 0.5 * (x1 + x2)
-            if diff_x < diff_y:
-                if rotate == 'auto':
-                    sub = np.rot90(sub)
-                    halfmax = 0.5 * (y1 + y2)
-            if rotate == 'yes':
-                sub = np.rot90(sub)
-                halfmax = 0.5 * (y1 + y2)
-        else:  # line
-            prof_y = np.sum(sub, axis=1)
-            prof_x = np.sum(sub, axis=0)
-            range_y = np.max(prof_y) - np.min(prof_y)
-            range_x = np.max(prof_x) - np.min(prof_x)
-            if range_y > range_x:
-                if rotate == 'auto':
-                    sub = np.rot90(sub)
-            if rotate == 'yes':
-                sub = np.rot90(sub)
-            halfmax = 0.5 * (np.max(sub) + np.min(sub))
-        return (sub, halfmax)
-
-    def get_edge_pos(sub, halfmax, txt_roi=''):
-        """Find position of edge/line for each row in matrix."""
-        edge_pos = []
-        x = np.arange(sub.shape[1])
-        if edge:
-            smoothed = sp.ndimage.gaussian_filter(sub, sigma=3)
-            for i in range(smoothed.shape[0]):
-                res = mmcalc.get_curve_values(x, smoothed[i, :], [halfmax])
-                edge_pos.append(res[0])
-        else:
-            for i in range(sub.shape[0]):
-                if recalculate_halfmax:
-                    halfmax_this = 0.5 * (np.max(sub[i, :]) + np.min(sub[i, :]))
-                    _, center = mmcalc.get_width_center_at_threshold(sub[i, :], halfmax_this)
-                else:
-                    _, center = mmcalc.get_width_center_at_threshold(sub[i, :], halfmax)
-                edge_pos.append(center)
-        proceed = True
-        ys = np.arange(sub.shape[0])
-
-        if None in edge_pos:
-            n_found = len(edge_pos) - edge_pos.count(None)
-            txt_mode = 'Edge' if edge else 'Line'
-            if n_found < 0.5 * len(edge_pos):
-                proceed = False
-                errmsg.append(
-                    f'{txt_mode} position found for < 50% of ROI {txt_roi}. '
-                    'Test failed.')
-            else:
-                idx_None = mm.get_all_matches(edge_pos, None)
-                edge_pos = [e for i, e in enumerate(edge_pos) if i not in idx_None]
-                ys = [y for i, y in enumerate(list(ys)) if i not in idx_None]
-            if errmsg == []:
-                errmsg.append(
-                    f'{txt_mode} position not found for full ROI. Parts of ROI ignored.')
-        return (edge_pos, x, ys, proceed)
-
-    for m in range(len(matrix)):
-        sub, halfmax = ensure_vertical(matrix[m])
-        txt_roi = f'{m}' if len(matrix) > 1 else ''
-        edge_pos, x, ys, proceed = get_edge_pos(sub, halfmax, txt_roi=txt_roi)
-
-        if proceed:
-            # linear fit of edge positions
-            vertical_positions = None
-            if vertical_positions_mm is not None:
-                if isinstance(vertical_positions_mm, list):
-                    if len(vertical_positions_mm) == sub.shape[0]:
-                        y_pos_mm = [vertical_positions_mm[y] for y in ys]
-                        ys = 1./pix * np.array(y_pos_mm)  # unit = pix
-                        vertical_positions = ys
-            res = sp.stats.linregress(ys, edge_pos)  # x = ay + b
-            slope = 1./res.slope  # to y = (1/a)x + (-b/a) to avoid error when steep
-            intercept = - res.intercept / res.slope
-            x_fit = np.array([min(edge_pos), max(edge_pos)])
-            y_fit = slope * x_fit + intercept
-            angle = np.abs((180/np.pi) * np.arctan(
-                (x_fit[1]-x_fit[0])/(y_fit[1]-y_fit[0])
-                ))
-
-            # sort pixels by position normal to edge
-            dist_map = mmcalc.get_distance_map_edge(
-                sub.shape, slope=slope, intercept=intercept,
-                vertical_positions=vertical_positions)
-
-            dist_map_flat = dist_map.flatten()
-            values_flat = sub.flatten()
-            sort_idxs = np.argsort(dist_map_flat)
-            dists = dist_map_flat[sort_idxs]
-            sorted_values = values_flat[sort_idxs]
-            dists = pix * dists
-
-            details_dicts_edge.append({
-                'edge_pos': edge_pos, 'edge_row': ys,
-                'edge_fit_x': x_fit, 'edge_fit_y': y_fit,
-                'edge_r2': res.rvalue**2, 'angle': angle,
-                'sorted_pixels_x': dists,
-                'sorted_pixels': sorted_values,
-                'edge_or_line': mode
-                })
-
-            new_x, new_y = mmcalc.resample_by_binning(
-                input_y=sorted_values, input_x=dists,
-                step=step_size,
-                first_step=-sub.shape[1]/2 * pix,
-                n_steps=10*sub.shape[1])
-
-            if edge:
-                if ESF_x is None:
-                    ESF_x = new_x
-                ESF_all.append(new_y)
-            else:
-                if LSF_x is None:
-                    LSF_x = new_x
-                LSF_all.append(new_y)
-
-    sigma_f = 0
-    if ESF_all:
-        sigma_f = 3.  # if sigma_f=5 , FWHM ~9 newpix = ~ 1 original pix
-        for ESF in ESF_all:
-            LSF, LSF_no_filt, _ = mmcalc.ESF_to_LSF(ESF, prefilter_sigma=sigma_f)
-            LSF = LSF/np.max(LSF)
-            LSF_no_filt = LSF_no_filt/np.max(LSF_no_filt)
-            LSF_all.append(LSF)
-            LSF_no_filt_all.append(LSF_no_filt)
-
-    if LSF_all:
-        if len(LSF_all) > 1 and pr_roi is False:
-            LSF = [np.mean(np.array(LSF_all), axis=0)]
-            if LSF_no_filt_all:
-                LSF_no_filt = [np.mean(np.array(LSF_no_filt_all), axis=0)]
-        else:
-            LSF = LSF_all
-            if LSF_no_filt_all:
-                LSF_no_filt = LSF_no_filt_all
-        if not LSF_no_filt_all:
-            LSF_no_filt = LSF
-
-        cw = 0
-        try:
-            cut_lsf = paramset.mtf_cut_lsf
-            cut_lsf_fwhm = paramset.mtf_cut_lsf_w
-        except AttributeError:
-            cut_lsf = False
-            cut_lsf_fwhm = None
-
-        if isinstance(paramset, cfc.ParamSetXray):
-            gaussfit_type = 'double_both_positive'
-            lp_vals = [0.5, 1, 1.5, 2, 2.5]
-            mtf_vals = [0.5]
-        elif isinstance(paramset, cfc.ParamSetMammo):
-            gaussfit_type = 'double_both_positive'
-            lp_vals = [1, 2, 3, 4, 5]
-            mtf_vals = [0.5]
-        elif isinstance(paramset, cfc.ParamSetCT):  # wire 3d
-            gaussfit_type = 'double'
-            lp_vals = None
-            mtf_vals = [0.5, 0.1, 0.02]
-        else:  # MR, NM, SPECT, PET 3d linesource
-            gaussfit_type = 'single'
-            lp_vals = None
-            mtf_vals = [0.5, 0.1, 0.02]
-
-        for i in range(len(LSF)):
-            width, center = mmcalc.get_width_center_at_threshold(
-                LSF[i], np.max(LSF[i])/2)
-            if width is not None:
-                # Calculate gaussian and discrete MTF
-                if cut_lsf:
-                    LSF_no_filt_this, cw, _ = mmcalc.cut_and_fade_LSF(
-                        LSF_no_filt[i], center=center, fwhm=width,
-                        cut_width=cut_lsf_fwhm)
-                else:
-                    LSF_no_filt_this = LSF_no_filt[i]
-                dMTF_details = mmcalc.get_MTF_discrete(LSF_no_filt_this, dx=step_size)
-                dMTF_details['cut_width'] = cw * step_size
-
-                LSF_x = step_size * (np.arange(LSF[i].size) - center)
-                gMTF_details, err = mmcalc.get_MTF_gauss(
-                    LSF[i], dx=step_size, prefilter_sigma=sigma_f*step_size,
-                    gaussfit=gaussfit_type)
-
-                if err is not None:
-                    errmsg.append(err)
-                else:
-                    if isinstance(
-                            paramset, 
-                            (cfc.ParamSetNM, cfc.ParamSetSPECT, cfc.ParamSetPET
-                             )):
-                        fwhm, _ = mmcalc.get_width_center_at_threshold(
-                            LSF[i], np.max(LSF[i])/2)
-                        fwtm, _ = mmcalc.get_width_center_at_threshold(
-                            LSF[i], np.max(LSF[i])/10)
-                        if fwhm:
-                            fwhm = step_size * fwhm
-                        if fwtm:
-                            fwtm = step_size * fwtm
-                        dMTF_details['values'] = [fwhm, fwtm]
-                        gMTF_details['values'] = [gMTF_details['FWHM'],
-                                                  gMTF_details['FWTM']]
-                    else:
-                        if lp_vals is not None:
-                            gMTF_details['values'] = mmcalc.get_curve_values(
-                                    gMTF_details['MTF'], gMTF_details['MTF_freq'],
-                                    lp_vals)
-                            dMTF_details['values'] = mmcalc.get_curve_values(
-                                    dMTF_details['MTF'], dMTF_details['MTF_freq'],
-                                    lp_vals,
-                                    force_first_below=True)
-                        gvals = mmcalc.get_curve_values(
-                                gMTF_details['MTF_freq'], gMTF_details['MTF'], mtf_vals)
-                        dvals = mmcalc.get_curve_values(
-                                dMTF_details['MTF_freq'], dMTF_details['MTF'], mtf_vals,
-                                force_first_below=True)
-                        if lp_vals is not None:
-                            gMTF_details['values'].extend(gvals)
-                            dMTF_details['values'].extend(dvals)
-                        else:
-                            gMTF_details['values'] = gvals
-                            dMTF_details['values'] = dvals
-
-                details_dict.append({
-                    'LSF_x': LSF_x, 'LSF': LSF_no_filt_this,
-                    'ESF_x': ESF_x, 'ESF': ESF_all,
-                    'sigma_prefilter': sigma_f*step_size,
-                    'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details,
-                    'edge_details': details_dicts_edge})
-            else:
-                errmsg = f'Could not find {mode}.'
-
-    if len(details_dict) == 1:
-        details_dict = details_dict[0]
-
-    return (details_dict, errmsg)
-
-
-def calculate_MTF_circular_edge(matrix, roi, pix, paramset, images_to_test):
-    """Calculate MTF from circular edge.
-
-    Based on Richard et al: Towards task-based assessment of CT performance,
-    Med Phys 39(7) 2012
-
-    Parameters
-    ----------
-    matrix : numpy.2darray or list of numpy.array
-        list of 2d part of slice limited to disc (or None if ignored slice)
-    roi : numpy.2darray of bool
-        2d part of larger roi limited to disc
-    pix : float
-        pixelsize in mm
-    paramset : ParamSetXX
-        depending on modality
-
-    Returns
-    -------
-    details_dict
-    """
-    details_dict = {}
-    errmsg = []
-
-    try:
-        if matrix.ndim == 2:
-            matrix = [matrix]
-    except AttributeError:
-        pass
-
-    # find center of disc with high precision
-    center_xy = []
-    errtxt = ''
-    for slino, sli in enumerate(matrix):
-        if sli is not None:
-            center_this = mmcalc.center_xy_of_disc(
-                sli, roi=roi, mode='max_or_min', sigma=1)
-            if None not in center_this:
-                center_xy.append(center_this)
-            else:
-                if errtxt == '':
-                    errtxt = str(slino)
-                else:
-                    errtxt = ', '.join([errtxt, str(slino)])
-    if errtxt != '':
-        errmsg.append(f'Could not find center of object for image {errtxt}')
-    if len(center_xy) > 0:
-        center_x = [vals[0] for vals in center_xy]
-        center_y = [vals[1] for vals in center_xy]
-        center_xy = [np.mean(np.array(center_x)), np.mean(np.array(center_y))]
-        # sort pixel values from center
-        dist_map = mmcalc.get_distance_map_point(
-            matrix[images_to_test[0]].shape,
-            center_dx=center_xy[0] - 0.5 * matrix[images_to_test[0]].shape[1],
-            center_dy=center_xy[1] - 0.5 * matrix[images_to_test[0]].shape[0])
-        dists_flat = dist_map.flatten()
-        sort_idxs = np.argsort(dists_flat)
-        dists = dists_flat[sort_idxs]
-
-        dists = pix * dists
-        values_all = []
-        nsum = 0
-        total_imgs = None
-        for sli in matrix:
-            if sli is not None:
-                if total_imgs is None:
-                    total_imgs = sli
-                else:
-                    total_imgs = total_imgs + sli
-                values_all.append(sli.flatten()[sort_idxs])
-                nsum += 1
-        img_avg = 1/nsum * total_imgs
-        img_avg_flat = img_avg.flatten()
-        values_avg = img_avg_flat[sort_idxs]
-
-        # ignore dists > radius
-        radius = 0.5 * matrix[images_to_test[0]].shape[0] * pix
-        dists_cut = dists[dists < radius]
-        values = values_avg[dists < radius]
-
-        step_size = .1 * pix
-        new_x, new_y = mmcalc.resample_by_binning(
-            input_y=values, input_x=dists_cut, step=step_size)
-        sigma_f = 5.
-        LSF, LSF_no_filt, ESF_filtered = mmcalc.ESF_to_LSF(
-            new_y, prefilter_sigma=sigma_f)
-
-        width, center = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/2)
-        disc_radius_mm = None
-        if width is not None:
-            if center is not None:
-                disc_radius_mm = center * step_size
-            # Discrete MTF
-            # modality specific settings
-            fade_lsf_fwhm = 0
-            cw = 0
-            cwf = 0
-            try:
-                cut_lsf = paramset.mtf_cut_lsf
-                cut_lsf_fwhm = paramset.mtf_cut_lsf_w
-                try:
-                    fade_lsf_fwhm = paramset.mtf_cut_lsf_w_fade
-                except AttributeError:
-                    pass
-            except AttributeError:
-                cut_lsf = False
-                cut_lsf_fwhm = None
-            if cut_lsf:
-                LSF_no_filt, cw, cwf = mmcalc.cut_and_fade_LSF(
-                    LSF_no_filt, center=center, fwhm=width,
-                    cut_width=cut_lsf_fwhm, fade_width=fade_lsf_fwhm)
-            dMTF_details = mmcalc.get_MTF_discrete(LSF_no_filt, dx=step_size)
-            dMTF_details['cut_width'] = cw * step_size
-            dMTF_details['cut_width_fade'] = cwf * step_size
-
-            LSF_x = step_size * (np.arange(LSF.size) - center)
-
-            gMTF_details, err = mmcalc.get_MTF_gauss(
-                LSF, dx=step_size, prefilter_sigma=sigma_f*step_size, gaussfit='double')
-
-            if err is not None:
-                errmsg.append(err)
-            else:
-                gMTF_details['values'] = mmcalc.get_curve_values(
-                        gMTF_details['MTF_freq'], gMTF_details['MTF'], [0.5, 0.1, 0.02])
-            dMTF_details['values'] = mmcalc.get_curve_values(
-                    dMTF_details['MTF_freq'], dMTF_details['MTF'], [0.5, 0.1, 0.02],
-                    force_first_below=True)
-
-            details_dict = {
-                'matrix': matrix,
-                'center_xy': center_xy, 'disc_radius_mm': disc_radius_mm,
-                'LSF_x': LSF_x, 'LSF': LSF_no_filt,
-                'sigma_prefilter': sigma_f*step_size,
-                'sorted_pixels_x': dists, 'sorted_pixels': values_all,
-                'interpolated_x': new_x, 'interpolated': new_y,
-                'presmoothed': ESF_filtered,
-                'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details}
-        else:
-            errmsg.append('Could not find circular edge.')
-
-    return (details_dict, errmsg)
-
-
-def calculate_MTF_3d_z_edge(matrix, roi, images_to_test, image_infos, paramset):
-    """Calculate MTF from edge ~parallel to slices.
-
-    Parameters
-    ----------
-    matrix : numpy.2darray or list of numpy.array
-        list of 2d part of slice limited by ROI
-    roi : numpy.2darray of bool
-        2d part of larger roi
-    images_to_test : list of int
-        image numbers to test
-    image_infos : list of DcmInfo
-        DcmInfo as defined in scripts/dcm.py
-    paramset : ParamSetXX
-        depending on modality
-
-    Returns
-    -------
-    details_dict: list of dict
-        x_dir, y_dir, common_details
-    errmsg : list of str
-    """
-    details_dict = []
-    common_details_dict = {}
-    errmsg = []
-    matrix = [sli for sli in matrix if sli is not None]
-    zpos = np.array([image_infos[sli].zpos for sli in images_to_test])
-    avg_values = np.array([np.mean(sli) for sli in matrix])
-    common_details_dict['max_roi_marked_images'] = avg_values
-    common_details_dict['zpos_marked_images'] = zpos
-
-    pix = image_infos[images_to_test[0]].pix[0]
-    z_diffs = np.diff(zpos)
-    z_dist = z_diffs[0]
-    if np.min(z_diffs) < np.max(z_diffs):
-        errmsg.append('NB: z-increment differ for the slices. Could cause erroneous results.')
-
-    halfmax = 0.5 * (np.max(avg_values) + np.min(avg_values))
-    above_halfmax = np.where(avg_values > halfmax)
-    margin = paramset.mtf_roi_size // z_dist
-
-    proceed = False
-    if margin < 2:
-        errmsg.append(
-            'ROI radius used to select images. Set > 2 * slice thickness.')
-    else:
-        diff = np.diff(avg_values)
-        if np.abs(np.min(diff)) > np.abs(np.max(diff)):  # high values first
-            mid_slice = above_halfmax[0][-1]
-        else:
-            mid_slice = above_halfmax[0][0]
-        idx_start = int(max([0, mid_slice - margin]))
-        idx_end = int(min([mid_slice + margin, len(matrix)]))
-
-        if idx_end - idx_start > 5:
-            proceed = True
-        else:
-            errmsg.append(
-                'Failed to find edge in z-direction with reasonable margin.')
-
-    if proceed:
-        empty = np.full(avg_values.shape, np.nan)
-        common_details_dict['max_roi_used'] = np.copy(empty)
-        common_details_dict['zpos_used'] = np.copy(empty)
-        common_details_dict['max_roi_used'][
-            idx_start : idx_end] = avg_values[idx_start : idx_end]
-        zpos_used = zpos[idx_start : idx_end]
-        common_details_dict['zpos_used'][
-                idx_start : idx_end] = zpos_used
-        matrix_this = matrix[idx_start : idx_end]
-
-        sz_y, sz_x = matrix_this[0].shape
-        edge_pos = np.full(matrix_this[0].shape, np.nan)
-
-        sub = np.array(matrix_this)
-        for i in range(sz_x):
-            for j in range(sz_y):
-                # TODO make polyfit_2d ignore nan #if roi[j, i]:
-                smoothed = sp.ndimage.gaussian_filter1d(
-                    sub[:, j, i], sigma=3)
-                res = mmcalc.get_curve_values(
-                    zpos_used, smoothed, [halfmax])
-                edge_pos[j, i] = res[0]
-        fit = mmcalc.polyfit_2d(edge_pos, max_order=1)
-        abcd = mmcalc.get_plane_from_3_points(
-            (fit[0, 0], 0, 0),
-            (fit[-1, 0], pix*(sz_y-1), 0),
-            (fit[0, -1], 0, pix*(sz_x-1))
-            )
-        coords = np.meshgrid(
-            zpos_used, pix * np.arange(sz_y), pix * np.arange(sz_x),
-            indexing='ij')
-        # display fit plane Z = (d - a*X - b*Y) / c
-        dist_matrix = mmcalc.get_distance_3d_plane(coords, abcd)
-
-        dists_flat = dist_matrix.flatten()
-        sort_idxs = np.argsort(dists_flat)
-        dists = dists_flat[sort_idxs]
-        values = sub.flatten()
-        values = values[sort_idxs]
-
-        step_size = .1 * z_dist
-        new_x, new_y = mmcalc.resample_by_binning(
-            input_y=values, input_x=dists, first_step=np.min(dists),
-            step=step_size)
-        sigma_f = 5.
-        LSF, LSF_no_filt, ESF_filtered = mmcalc.ESF_to_LSF(
-            new_y, prefilter_sigma=sigma_f)
-
-        width, center = mmcalc.get_width_center_at_threshold(LSF, np.max(LSF)/2)
-        if width is not None:
-            # Discrete MTF
-            fade_lsf_fwhm = 0
-            cw = 0
-            cwf = 0
-            cut_lsf = paramset.mtf_cut_lsf
-            cut_lsf_fwhm = paramset.mtf_cut_lsf_w
-            fade_lsf_fwhm = paramset.mtf_cut_lsf_w_fade
-            if cut_lsf:
-                LSF_no_filt, cw, cwf = mmcalc.cut_and_fade_LSF(
-                    LSF_no_filt, center=center, fwhm=width,
-                    cut_width=cut_lsf_fwhm, fade_width=fade_lsf_fwhm)
-            dMTF_details = mmcalc.get_MTF_discrete(LSF_no_filt, dx=step_size)
-            dMTF_details['cut_width'] = cw * step_size
-            dMTF_details['cut_width_fade'] = cwf * step_size
-
-            LSF_x = step_size * (np.arange(LSF.size) - center)
-
-            gMTF_details, err = mmcalc.get_MTF_gauss(
-                LSF, dx=step_size, prefilter_sigma=sigma_f*step_size, gaussfit='double')
-
-            if err is not None:
-                errmsg.append(err)
-            else:
-                if isinstance(paramset, cfc.ParamSetCT):
-                    gMTF_details['values'] = mmcalc.get_curve_values(
-                        gMTF_details['MTF_freq'], gMTF_details['MTF'],
-                        [0.5, 0.1, 0.02])
-                else:  # SPECT or PET
-                    fwtm, _ = mmcalc.get_width_center_at_threshold(
-                        LSF, np.max(LSF)/10)
-                    if width is not None:
-                        width = width * step_size
-                    if fwtm is not None:
-                        fwtm = fwtm * step_size
-                    gMTF_details['values'] = [width, fwtm]
-
-            if isinstance(paramset, cfc.ParamSetCT):
-                dMTF_details['values'] = mmcalc.get_curve_values(
-                    dMTF_details['MTF_freq'], dMTF_details['MTF'],
-                    [0.5, 0.1, 0.02],
-                    force_first_below=True)
-            else:  # SPECT or PET
-                fwtm, _ = mmcalc.get_width_center_at_threshold(
-                    LSF, np.max(LSF)/10)
-                if width is not None:
-                    width = width * step_size
-                if fwtm is not None:
-                    fwtm = fwtm * step_size
-                dMTF_details['values'] = [width, fwtm]
-
-            details_dict = [{
-                'matrix': matrix,
-                'LSF_x': LSF_x, 'LSF': LSF_no_filt,
-                'sigma_prefilter': sigma_f*step_size,
-                'sorted_pixels_x': dists, 'sorted_pixels': values,
-                'interpolated_x': new_x, 'interpolated': new_y,
-                'presmoothed': ESF_filtered,
-                'dMTF_details': dMTF_details, 'gMTF_details': gMTF_details}]
-
-    details_dict.append(common_details_dict)
-
-    return (details_dict, errmsg)
 
 def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
     """Calculate NPS for each roi in array.
@@ -4183,847 +3395,7 @@ def calculate_flatfield_mammo(image2d, mask_max, mask_outer, image_info, paramse
     return details
 
 
-def get_corrections_point_source(
-        image2d, img_info, roi_array,
-        fit_x=False, fit_y=False, lock_z=False, guess_z=0.1,
-        correction_type='multiply', estimate_noise=False):
-    """Estimate xyz of point source and generate correction matrix.
 
-    Parameters
-    ----------
-    image2d : numpy.ndarray
-        input image full resolution
-    img_info :  DcmInfo
-        as defined in scripts/dcm.py
-    roi_array : numpy.ndarray
-        roi_array for largest ROI used for the fit (ufov)
-    fit_x : bool, optional
-        Fit in x direction. The default is False.
-    fit_y : bool, optional
-        Fit in y direction. The default is False.
-    lock_z : bool
-        Set distance to source = guess_z when fitting. The default is False.
-    guess_z : float
-        If guess_z = 0.1 = DICOM radius or 400.
-        If guess > 0.1 used as first approximation. Default is 0.1
-    correction_type : str, optional
-        'subtract' or 'multiply'. Default is 'multiply'
-    estimate_noise : bool
-        if True estimate poisson noise for fitted image
-
-    Returns
-    -------
-    dict
-        corrected_image : numpy.2darray
-        correction_matrix : numpy.2darray
-            add this matrix to obtain corrected image2d
-        fit_matrix : numpy.2darray
-            fitted image
-        estimated_noise_image : numpy.2darray
-            fitted_image with estimated poisson noise
-        dx : corrected x position (mm)
-        dy : corrected y position (mm)
-        distance : corrected distance (mm)
-    str
-        errormessage
-    """
-    corrected_image = image2d
-    correction_matrix = np.ones(image2d.shape)
-    fit_matrix = None
-    distance = 0.
-    estimated_noise_image = None
-    errmsg = None
-
-    # get subarray
-    rows = np.max(roi_array, axis=1)
-    cols = np.max(roi_array, axis=0)
-    image_in_ufov = image2d[rows][:, cols]
-    ufov_denoised = sp.ndimage.gaussian_filter(image_in_ufov, sigma=1.)
-
-    # fit center position
-    fit = [fit_x, fit_y]
-    offset = [0., 0.]
-    for a in range(2):
-        if fit[a]:
-            sum_vector = np.sum(ufov_denoised, axis=a)
-            popt = mmcalc.gauss_4param_fit(
-                np.arange(len(sum_vector)), sum_vector)
-            if popt is not None:
-                C, A, x0, sigma = popt
-                offset[a] = x0 - 0.5*len(sum_vector)
-    dx, dy = offset
-
-    # calculate distances from center in plane
-    dists_inplane = mmcalc.get_distance_map_point(
-        image2d.shape, center_dx=dx, center_dy=dy)
-    dists_inplane = img_info.pix[0] * dists_inplane
-
-    dists_ufov = dists_inplane[rows][:, cols]
-    dists_ufov_flat = dists_ufov.flatten()
-    values_flat = ufov_denoised.flatten()
-    sort_idxs = np.argsort(dists_ufov_flat)
-    values = values_flat[sort_idxs]
-    dists = dists_ufov_flat[sort_idxs]
-
-    if lock_z:
-        nm_radius = guess_z
-        lock_radius = True
-    else:
-        if guess_z <= 0.1:
-            try:
-                nm_radius = img_info.nm_radius
-            except AttributeError:
-                nm_radius = 400
-        else:
-            nm_radius = guess_z
-        lock_radius = False
-
-    if nm_radius is None:
-        errmsg = (
-            'Failed fitting matrix to point source. nm_radius is None. Report error.')
-    else:
-        popt = mmcalc.point_source_func_fit(
-            dists, values,
-            center_value=np.max(ufov_denoised),
-            avg_radius=nm_radius, lock_radius=lock_radius)
-        if popt is not None:
-            C, distance = popt
-            fit = mmcalc.point_source_func(dists_inplane.flatten(), C, distance)
-
-            # estimate noise
-            fit_matrix = fit.reshape(image2d.shape)
-            if estimate_noise:
-                rng = np.random.default_rng()
-                estimated_noise_image = rng.poisson(fit_matrix)
-
-            # correct input image
-            if correction_type == 'multiply':
-                normalized_fit_matrix = fit_matrix/np.max(fit)
-                corrected_image = image2d / normalized_fit_matrix
-            elif correction_type == 'subtract':
-                correction_matrix = np.max(fit) - fit_matrix
-                corrected_image = image2d + correction_matrix
-        else:
-            errmsg = 'Failed fitting matrix to point source.'
-
-    return ({'corrected_image': corrected_image,
-             'correction_matrix': correction_matrix,
-             'fit_matrix': fit_matrix,
-             'estimated_noise_image': estimated_noise_image,
-             'dx': dx, 'dy': dy, 'distance': distance}, errmsg)
-
-
-def calculate_NM_uniformity(image2d, roi_array, pix, scale_factor):
-    """Calculate uniformity parameters.
-
-    Parameters
-    ----------
-    image2d : numpy.ndarray
-    roi_array : list of numpy.ndarray
-        2d mask for ufov [0] and cfov [1]
-    pix : float
-        pixel size of image2d
-    scale_factor : int
-        scale factor to get 6.4 mm/pix. 0 = Auto, 1 = none, 2... = scale factor
-
-    Returns
-    -------
-    matrix : numpy.ndarray
-        downscaled and smoothed image used for calculation of uniformity values
-    du_matrix : numpy.ndarray
-        calculated du_values maximum of x/y direction
-    values : list of float
-        ['IU_UFOV %', 'DU_UFOV %', 'IU_CFOV %', 'DU_CFOV %']
-    """
-    def get_differential_uniformity(image, cfov):
-        # assume image is part of image within ufov
-        # cfov = True where inside cfov
-        from numpy.lib.stride_tricks import sliding_window_view
-        sz_y, sz_x = image.shape
-        du_cols_ufov = np.zeros(image.shape)
-        du_cols_cfov = np.zeros(image.shape)
-        image_data_ufov = np.copy(image.data)
-        image_data_ufov[image.mask == True] = np.nan
-        image_data_cfov = np.copy(image.data)
-        image_data_cfov[cfov == False] = np.nan
-        for x in range(sz_x):
-            view = sliding_window_view(image_data_ufov[:, x], 5)
-            maxs = np.nanmax(view, axis=-1)
-            mins = np.nanmin(view, axis=-1)
-            du_cols_ufov[2:-2, x] = 100. * (maxs - mins) / (maxs + mins)
-            cfov_data = image_data_cfov[:, x]
-            if not np.isnan(cfov_data).all():
-                view = sliding_window_view(cfov_data, 5)
-                maxs = np.nanmax(view, axis=-1)
-                mins = np.nanmin(view, axis=-1)
-                du_cols_cfov[2:-2, x] = 100. * (maxs - mins) / (maxs + mins)
-
-        du_rows_ufov = np.zeros(image.shape)
-        du_rows_cfov = np.zeros(image.shape)
-        for y in range(sz_y):
-            view = sliding_window_view(image_data_ufov[y, :], 5)
-            maxs = np.nanmax(view, axis=-1)
-            mins = np.nanmin(view, axis=-1)
-            du_rows_ufov[y, 2:-2] = 100. * (maxs - mins) / (maxs + mins)
-            cfov_data = image_data_cfov[y, :]
-            if not np.isnan(cfov_data).all():
-                view = sliding_window_view(cfov_data, 5)
-            maxs = np.nanmax(view, axis=-1)
-            mins = np.nanmin(view, axis=-1)
-            du_rows_cfov[y, 2:-2] = 100. * (maxs - mins) / (maxs + mins)
-
-        du_matrix_ufov = np.maximum(du_cols_ufov, du_rows_ufov)
-        du_matrix_ufov[image.mask == True] = np.nan
-        du_matrix_cfov = np.maximum(du_cols_cfov, du_rows_cfov)
-        du_matrix_cfov[cfov == False] = np.nan
-
-        return {'du_matrix': du_matrix_ufov, 'du_ufov': np.nanmax(du_matrix_ufov),
-                'du_cfov': np.nanmax(du_matrix_cfov)}
-
-    # continue with image within ufov only
-    rows = np.max(roi_array[0], axis=1)
-    cols = np.max(roi_array[0], axis=0)
-    image2d = image2d[rows][:, cols]
-    cfov = roi_array[1][rows][:, cols]
-    ufov_input = roi_array[0][rows][:, cols]
-
-    # roi already handeled ignoring pixels with zero counts as nearest neighbour (NEMA)
-    if scale_factor == 1:
-        image = image2d
-        block_size = 1
-    else:
-        # resize to 6.4+/-30% mm pixels according to NEMA
-        # pix_range = [6.4*0.7, 6.4*1.3]
-        block_size = scale_factor
-        if scale_factor == 0:  # Auto scale
-            scale_factors = [(np.floor(64/pix)), (np.ceil(6.4/pix))]
-            pix_diff = np.abs(pix*np.array(scale_factors) - 6.4)
-            selected_pix = np.where(pix_diff == np.min(pix_diff))
-            block_size = int(scale_factors[selected_pix[0][0]])
-
-        # skip pixels excess of size/block_size = NEMA at least 50% of pixel inside
-        sz_y, sz_x = image2d.shape
-        skip_y, skip_x = (sz_y % block_size, sz_x % block_size)
-        n_blocks_y, n_blocks_x = (sz_y // block_size, sz_x // block_size)
-        start_y, start_x = (skip_y // 2, skip_x // 2)
-        end_x = start_x + n_blocks_x * block_size
-        end_y = start_y + n_blocks_y * block_size
-        cfov = cfov[start_y:end_y, start_x:end_x]
-        ufov_input = ufov_input[start_y:end_y, start_x:end_x]
-        image2d = image2d[start_y:end_y, start_x:end_x]
-        image = skimage.measure.block_reduce(
-            image2d, (block_size, block_size), np.sum)
-        # scale down to ~6.4mm/pix
-
-        # cfov, NEMA - at least 50% of the pixel should be inside UFOV to be included
-        reduced_roi = skimage.measure.block_reduce(
-            cfov, (block_size, block_size), np.mean)
-        cfov = np.where(reduced_roi > 0.5, True, False)
-
-        if False in ufov_input:
-            reduced_roi = skimage.measure.block_reduce(
-                ufov_input, (block_size, block_size), np.mean)
-            ufov_input = np.where(reduced_roi > 0.5, True, False)
-
-    # ufov, NEMA NU-1: ignore pixels < 75% of CFOV mean in outer rows/cols of UFOV
-    arr_cfov = np.ma.masked_array(image, mask=np.invert(cfov))
-    cfov_mean = np.mean(arr_cfov)  # TODO test against minimum 10000 (NEMA)
-    ufov = np.where(image > 0.75*cfov_mean, True, False)
-    if False in ufov:
-        ufov[1:-1][:, 1:-1] = True  # ignore only outer rows/cols
-    if False in ufov_input:
-        ufov[ufov_input == False] = False
-
-    sz_y, sz_x = image.shape
-    center_pixel_count = image[sz_y//2][sz_x//2]
-
-    # smooth masked array
-    kernel = np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]])
-    kernel = kernel / np.sum(kernel)
-    arr = np.ma.masked_array(image, mask=np.invert(ufov))
-    smooth64 = mmcalc.masked_convolve2d(arr, kernel, boundary='symm', mode='same')
-
-    # differential uniformity
-    du_dict = get_differential_uniformity(smooth64, cfov)
-    du_ufov = du_dict['du_ufov']
-    du_cfov = du_dict['du_cfov']
-
-    smooth64_data = smooth64.data
-
-    # integral uniformity
-    max_val = np.max(smooth64_data[ufov == True])
-    min_val = np.min(smooth64_data[ufov == True])
-    iu_ufov = 100. * (max_val - min_val) / (max_val + min_val)
-    max_val = np.max(smooth64_data[cfov == True])
-    min_val = np.min(smooth64_data[cfov == True])
-    iu_cfov = 100. * (max_val - min_val) / (max_val + min_val)
-
-    return {'matrix_ufov': smooth64_data,
-            'du_matrix': du_dict['du_matrix'], 'pix_size': pix * block_size,
-            'center_pixel_count': center_pixel_count,
-            'values': [iu_ufov, du_ufov, iu_cfov, du_cfov]}
-
-
-def get_eye_filter(roi_size, pix, paramset):
-    """Get eye filter V(r)=r^1.3*exp(-cr^2).
-
-    Parameters
-    ----------
-    roi_size : int
-        size of roi or image in pix
-    pix : float
-        mm pr pix in image
-    paramset : ParamSetNM
-
-    Returns
-    -------
-    eye_filter : dict
-        filter 2d : np.ndarray quadratic with size roi_height
-        curve: dict of r and V
-    """
-    def tukey_filter_func(r, start_L_flat_ratio):
-        """Calulates Tukey filter.
-
-        Parameters
-        ----------
-        r : np.array
-            frequency values
-        start_L_tapered_ratio : tuple of floats
-            start = minimum_frequency
-            L = width (frequencies)
-            flat ratio = 1- tapered_ratio
-
-        Returns
-        -------
-        V : filter values
-        """
-        start, L, flat_ratio = start_L_flat_ratio
-        t = L * (1-flat_ratio)
-        V = np.ones(r.shape)
-        V[r < start + t/2] = 0.5 * (1 + np.cos(2 * np.pi/t * (
-            r[r < start + t/2] - start - t/2)))
-        V[r > L + start - t/2] = 0.5 * (1 + np.cos(2 * np.pi/t * (
-            r[r > L + start - t/2] - L - start + t/2)))
-        V[r < start] = 0
-        V[r > start + L] = 0
-        return V
-
-    def eye_filter_func(r, c):
-        return r**1.3 * np.exp(-c*r**2)
-
-    freq = np.fft.fftfreq(roi_size, d=pix)
-    freq = freq[:freq.size//2]  # from center
-    if paramset.sni_channels:
-        V = tukey_filter_func(freq, paramset.sni_channels_table[0])
-    else:
-        V = eye_filter_func(freq, paramset.sni_eye_filter_c)
-    eye_filter_1d = {'r': freq, 'V': 1/np.max(V) * V}
-    if paramset.sni_channels:
-        V2 = tukey_filter_func(freq, paramset.sni_channels_table[1])
-        eye_filter_1d['V2'] = 1/np.max(V2) * V2
-
-    unit = freq[1] - freq[0]
-    dists = mmcalc.get_distance_map_point(
-        (roi_size, roi_size))
-    if paramset.sni_channels:
-        eye_filter_2d = tukey_filter_func(unit*dists, paramset.sni_channels_table[0])
-    else:
-        eye_filter_2d = eye_filter_func(unit*dists, paramset.sni_eye_filter_c)
-    eye_filter_2d = 1/np.max(eye_filter_2d) * eye_filter_2d
-    if paramset.sni_channels:
-        eye_filter_2d_2 = tukey_filter_func(
-            unit*dists, paramset.sni_channels_table[1])
-        eye_filter_2d = [eye_filter_2d, eye_filter_2d_2]
-
-    return {'filter_2d': eye_filter_2d, 'curve': eye_filter_1d, 'unit': unit}
-
-
-def get_SNI_ref_image(paramset, tag_infos):
-    """Get noise from reference image.
-
-    Parameters
-    ----------
-    paramset : cfc.ParamsetNM
-    tag_infos : tag_infos to read reference image
-
-    Returns
-    -------
-    dict
-        'reference_image': list of nd.array
-        empty list if image failed to read
-        one image for each frame else
-    """
-    sni_ref_image = []
-    filename = (
-        Path(get_config_folder()) / 'SNI_ref_images' /
-        (paramset.sni_ref_image + '.dcm'))
-    ref_infos, _, _ = dcm.read_dcm_info([filename], GUI=False, tag_infos=tag_infos)
-    for rno, ref_info in enumerate(ref_infos):
-        image, _ = dcm.get_img(
-            filename,
-            frame_number=rno, tag_infos=tag_infos)
-        if image is not None:
-            sni_ref_image.append(image)
-    return {'reference_image': sni_ref_image,
-            'reference_image_info': ref_infos}
-
-
-def get_SNI_reference_noise(dict_extras, roi_array, paramset):
-    """Calculate reference noise based on SNI reference image.
-
-    Parameters
-    ----------
-    dict_extras : dict
-        Dictionary holding info about reference image and corrections
-    roi_array : np.ndarray
-    paramset : cfc.ParamsetNM
-    """
-    if 'reference_image' in dict_extras:
-        ref_noise = []
-        if paramset.sni_correct:
-            for i, image in enumerate(dict_extras['reference_image']):
-                fit_dict, errmsg = get_corrections_point_source(
-                    image, dict_extras['reference_image_info'][i], roi_array,
-                    fit_x=paramset.sni_correct_pos_x,
-                    fit_y=paramset.sni_correct_pos_y,
-                    lock_z=paramset.sni_lock_radius, guess_z=paramset.sni_radius,
-                    correction_type='subtract'
-                    )
-                ref_noise.append(fit_dict['corrected_image'])
-        else:
-            ref_noise = copy.deepcopy(dict_extras['reference_image'])
-
-        block_size = paramset.sni_scale_factor
-        if block_size > 1:
-            # skip pixels excess of size/block_size
-            sz_y, sz_x = dict_extras['reference_image'][0].shape
-            skip_y, skip_x = (sz_y % block_size, sz_x % block_size)
-            n_blocks_y, n_blocks_x = (sz_y // block_size, sz_x // block_size)
-            start_y, start_x = (skip_y // 2, skip_x // 2)
-            end_x = start_x + n_blocks_x * block_size
-            end_y = start_y + n_blocks_y * block_size
-            for i in range(len(ref_noise)):
-                ref_noise[i] = skimage.measure.block_reduce(
-                    ref_noise[i][start_y:end_y, start_x:end_x],
-                    (block_size, block_size), np.sum)
-
-        dict_extras.update({'reference_estimated_noise': ref_noise})
-
-
-def calculate_SNI_ROI(image2d, roi_array_this, eye_filter=None, unit=1.,
-                      pix=1., fit_dict=None, image_mean=0.,
-                      sampling_frequency=0.01, sni_dim=0):
-    """Calculate SNI for one ROI.
-
-    Parameters
-    ----------
-    image2d : numpy.2darray
-        if fit_matrix is not None, this is a flattened matrix
-        (corrected for point source curvature)
-    roi_array : numpy.2darray
-        2d mask for the current ROI
-    eye_filter : numpy.2darray or list of numpy.2darray
-    unit : float
-        unit of NPS and eye_filter
-    pix : float
-    fit_dict : dict
-        dictionary from get_corrections_point_source (if corrections else None)
-    image_mean : float
-        average value within the large area
-    sampling_frequency : float
-        sampling frequency for radial profiles
-    sni_dim : int
-        options for sni calculations 0=2d NPS ratio, 1=radial profile ratio
-
-    Returns
-    -------
-    values : list of float
-        ['SNI max', 'SNI L1', 'SNI L2', 'SNI S1', .. 'SNI S6']
-    details_dict : dict
-        NPS : numpy.2darray NPS in ROI
-        quantum_noise : constant or numpy.2darray (NPS of estimated noise)
-        freq : numpy.1darray - frequencies of radial NPS curve
-        rNPS : radial NPS curve
-        rNPS_filt
-        rNPS_struct
-        rNPS_struct_filt
-    """
-    rows = np.max(roi_array_this, axis=1)
-    cols = np.max(roi_array_this, axis=0)
-    subarray = image2d[rows][:, cols]
-    line = subarray.shape[0] // 2  # position of 0 frequency
-    rNPS_quantum_noise = None
-    if fit_dict is None:  # uncorrected image and without reference image
-        NPS = mmcalc.get_2d_NPS(subarray, pix)
-        quantum_noise = image_mean * pix**2
-        """ explained how quantum noise is found above
-        Mean count=variance=pixNPS^2*Total(NPS) where pixNPS=1./(ROIsz*pix)
-        Total(NPS)=NPSvalue*ROIsz^2
-        NPSvalue = Meancount/(pixNPS^2*ROIsz^2)=MeanCount*pix^2
-        """
-        NPS[line, line] = 0
-        NPS_struct = NPS - quantum_noise
-        NPS_struct[line, line] = 0
-    else:
-        if 'correction_matrix' in fit_dict:  # point source corrected
-            # curve correct both subarray and quantum noise
-            corr_matrix = fit_dict['correction_matrix'][rows][:, cols]
-            subarray = subarray + corr_matrix
-            if 'reference_estimated_noise' in fit_dict:
-                sub_estimated_noise = fit_dict[
-                    'reference_estimated_noise'][rows][:, cols]
-            else:
-                sub_estimated_noise = fit_dict[
-                    'estimated_noise_image'][rows][:, cols]
-                sub_estimated_noise = sub_estimated_noise + corr_matrix
-        else:  # reference image, not point source corrected
-            sub_estimated_noise = fit_dict[
-                'reference_estimated_noise'][rows][:, cols]
-        # 2d NPS
-        NPS = mmcalc.get_2d_NPS(subarray, pix)
-        quantum_noise = mmcalc.get_2d_NPS(sub_estimated_noise, pix)
-        # set lowest frequencies to 0 as these are extreme due to curvature
-        quantum_noise[line, line] = 0
-        NPS[line, line] = 0
-        _, rNPS_quantum_noise = mmcalc.get_radial_profile(
-            quantum_noise, pix=unit, step_size=sampling_frequency)
-        NPS_struct = np.subtract(NPS, quantum_noise)
-
-    rNPS_filt_2 = None
-    rNPS_struct_filt_2 = None
-    SNI_2 = None
-    if isinstance(eye_filter, list):
-        NPS_filt = NPS * eye_filter[0]
-        NPS_struct_filt = NPS_struct * eye_filter[0]
-        NPS_filt_2 = NPS * eye_filter[1]
-        NPS_struct_filt_2 = NPS_struct * eye_filter[1]
-    else:
-        NPS_filt = NPS * eye_filter
-        NPS_struct_filt = NPS_struct * eye_filter
-
-    # radial NPS curves
-    freq, rNPS = mmcalc.get_radial_profile(
-        NPS, pix=unit, step_size=sampling_frequency, ignore_negative=True)
-    _, rNPS_filt = mmcalc.get_radial_profile(
-        NPS_filt, pix=unit, step_size=sampling_frequency, ignore_negative=True)
-    _, rNPS_struct = mmcalc.get_radial_profile(
-        NPS_struct, pix=unit, step_size=sampling_frequency, ignore_negative=True)
-    _, rNPS_struct_filt = mmcalc.get_radial_profile(
-        NPS_struct_filt, pix=unit, step_size=sampling_frequency, ignore_negative=True)
-    if isinstance(eye_filter, list):
-        _, rNPS_filt_2 = mmcalc.get_radial_profile(
-            NPS_filt_2, pix=unit, step_size=sampling_frequency, ignore_negative=True)
-        _, rNPS_struct_filt_2 = mmcalc.get_radial_profile(
-            NPS_struct_filt_2, pix=unit, step_size=sampling_frequency,
-            ignore_negative=True)
-
-    if sni_dim == 0:
-        ignore_negative = False  # ignore for testing - results show crappy data
-        if ignore_negative:
-            SNI = np.sum(NPS_struct_filt[NPS_struct_filt > 0]) / np.sum(NPS_filt)
-        else:
-            SNI = np.sum(NPS_struct_filt) / np.sum(NPS_filt)
-        if isinstance(eye_filter, list):
-            if ignore_negative:
-                SNI_2 = np.sum(
-                    NPS_struct_filt_2[NPS_struct_filt_2 > 0]) / np.sum(NPS_filt_2)
-            else:
-                SNI_2 = np.sum(NPS_struct_filt_2) / np.sum(NPS_filt_2)
-    else:
-        SNI = np.sum(rNPS_struct_filt) / np.sum(rNPS_filt)
-        if isinstance(eye_filter, list):
-            SNI_2 = np.sum(rNPS_struct_filt_2) / np.sum(rNPS_filt_2)
-
-    details_dict_roi = {
-        'NPS': NPS, 'quantum_noise': quantum_noise,
-        'freq': freq, 'rNPS': rNPS, 'rNPS_filt': rNPS_filt, 'rNPS_filt_2': rNPS_filt_2,
-        'rNPS_struct': rNPS_struct, 'rNPS_struct_filt': rNPS_struct_filt,
-        'rNPS_struct_filt_2': rNPS_struct_filt_2,
-        'rNPS_quantum_noise': rNPS_quantum_noise
-        }
-    return (SNI, SNI_2, details_dict_roi)
-
-
-def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_noise):
-    """Calculate Structured Noise Index.
-
-    Parameters
-    ----------
-    image2d : numpy.ndarray
-    roi_array : list of numpy.ndarray
-        list of 2d masks for all_rois, full ROI, L1, L2, small ROIs
-    image_info :  DcmInfo
-        as defined in scripts/dcm.py
-    paramset : cfc.ParamsetNM
-    reference_noise : numpy.ndarray or None
-        corrected and block_reduced reference image
-
-    Returns
-    -------
-    values : list of float
-        according to defined headers in config/iQCconstants.py HEADERS
-    details_dict : dict
-    errmsgs : list of str
-    """
-    values_sup = [None] * 3
-    details_dict = {}
-    SNI_values = []
-    SNI_values_2 = []
-    errmsgs = []
-
-    fit_dict = None
-    if reference_noise is not None:
-        fit_dict = {}
-        fit_dict['reference_estimated_noise'] = reference_noise
-
-    # point source correction
-    if paramset.sni_correct:
-        est_noise = True if reference_noise is None else False
-
-        #DELETE?
-        #if reference_image is not None and paramset.sni_ref_image_fit:
-        #    fit_image = reference_image
-        #else:
-        #    fit_image = image2d
-
-        fit_dict_2, errmsg = get_corrections_point_source(
-            image2d, image_info, roi_array[0],
-            fit_x=paramset.sni_correct_pos_x,
-            fit_y=paramset.sni_correct_pos_y,
-            lock_z=paramset.sni_lock_radius, guess_z=paramset.sni_radius,
-            correction_type='subtract', estimate_noise=est_noise
-            )
-        if fit_dict:
-            fit_dict.update(fit_dict_2)
-        else:
-            fit_dict = fit_dict_2
-        if errmsg is not None:
-            errmsgs.append(errmsg)
-        values_sup = [fit_dict['dx'], fit_dict['dy'], fit_dict['distance']]
-
-    block_size = paramset.sni_scale_factor
-    if block_size > 1:
-        # skip pixels excess of size/block_size
-        sz_y, sz_x = image2d.shape
-        skip_y, skip_x = (sz_y % block_size, sz_x % block_size)
-        n_blocks_y, n_blocks_x = (sz_y // block_size, sz_x // block_size)
-        start_y, start_x = (skip_y // 2, skip_x // 2)
-        end_x = start_x + n_blocks_x * block_size
-        end_y = start_y + n_blocks_y * block_size
-        image2d = skimage.measure.block_reduce(
-            image2d[start_y:end_y, start_x:end_x], (block_size, block_size), np.sum)
-
-        if fit_dict:
-            #DELETE?
-            #if 'reference_image' in fit_dict:
-            #    reference_image = skimage.measure.block_reduce(
-            #        reference_image[start_y:end_y, start_x:end_x],
-            #        (block_size, block_size), np.sum)
-            #    fit_dict['reference_image'] = reference_image
-            for key in ['estimated_noise_image', 'correction_matrix']:
-                if key in fit_dict:
-                    if fit_dict[key] is not None:
-                        temp = skimage.measure.block_reduce(
-                            fit_dict[key][start_y:end_y, start_x:end_x],
-                            (block_size, block_size), np.sum)
-                        fit_dict[key] = temp
-
-        # recalculate rois (avoid block reduce on rois, might get non-quadratic)
-        roi_array, errmsg = get_roi_SNI(image2d, image_info, paramset,
-                                        block_size=block_size)
-
-    if fit_dict is not None:
-        details_dict = fit_dict
-
-    arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[0]))
-    image_mean = np.mean(arr)
-
-    details_dict['pr_roi'] = []
-
-    # large ROIs
-    rows = np.max(roi_array[1], axis=1)
-    eye_filter = get_eye_filter(
-        np.count_nonzero(rows), image_info.pix[0]*block_size, paramset)
-    details_dict['eye_filter_large'] = eye_filter['curve']
-    for i in [1, 2]:
-        SNI, SNI_2, details_dict_roi = calculate_SNI_ROI(
-            image2d, roi_array[i],
-            eye_filter=eye_filter['filter_2d'], unit=eye_filter['unit'],
-            pix=image_info.pix[0]*block_size, fit_dict=fit_dict, image_mean=image_mean,
-            sampling_frequency=paramset.sni_sampling_frequency,
-            sni_dim=paramset.sni_ratio_dim)
-        details_dict['pr_roi'].append(details_dict_roi)
-        SNI_values.append(SNI)
-        SNI_values_2.append(SNI_2)
-
-    largest_L = '-'
-    if SNI_values[0] > SNI_values[1]:
-        largest_L = 'L1'
-    elif SNI_values[0] < SNI_values[1]:
-        largest_L = 'L2'
-    if any(SNI_values_2):
-        if SNI_values_2[0] > SNI_values_2[1]:
-            largest_L = largest_L + ' / L1'
-        elif SNI_values_2[0] < SNI_values_2[1]:
-            largest_L = largest_L + ' / L2'
-        else:
-            largest_L + ' / -'
-    values_sup.append(largest_L)
-
-    if paramset.sni_type == 0:
-        # small ROIs
-        rows = np.max(roi_array[3], axis=1)
-        eye_filter = get_eye_filter(
-            np.count_nonzero(rows), image_info.pix[0]*block_size, paramset)
-        details_dict['eye_filter_small'] = eye_filter['curve']
-        for i in range(3, 9):
-            SNI, SNI_2, details_dict_roi = calculate_SNI_ROI(
-                image2d, roi_array[i],
-                eye_filter['filter_2d'], unit=eye_filter['unit'],
-                pix=image_info.pix[0]*block_size, fit_dict=fit_dict, image_mean=image_mean,
-                sampling_frequency=paramset.sni_sampling_frequency,
-                sni_dim=paramset.sni_ratio_dim)
-            details_dict['pr_roi'].append(details_dict_roi)
-            SNI_values.append(SNI)
-            SNI_values_2.append(SNI_2)
-
-        if paramset.sni_channels:
-            values = (
-                SNI_values[0:2]
-                + [np.max(SNI_values[2:])] + [np.mean(SNI_values[2:])]
-                + SNI_values_2[0:2]
-                + [np.max(SNI_values_2[2:])] + [np.mean(SNI_values_2[2:])]
-                )
-        else:
-            values = [np.max(SNI_values)] + SNI_values
-        maxno = SNI_values[2:].index(max(SNI_values[2:]))
-        if any(SNI_values_2):
-            idx = SNI_values_2[2:].index(max(SNI_values_2[2:]))
-            maxno_2 = f' / S{idx+1}'
-        else:
-            maxno_2 = ''
-        values_sup.append(f'S{maxno+1}{maxno_2}')
-        details_dict['SNI_values'] = SNI_values
-        if paramset.sni_channels:
-            details_dict['SNI_values_2'] = SNI_values_2
-    else:
-        idx_roi_row_0 = 3
-        try:
-            rows = np.max(roi_array[idx_roi_row_0][0], axis=1)
-        except (np.AxisError, TypeError):  # if first is ignored Siemens
-            rows = np.max(roi_array[idx_roi_row_0 + 2][3], axis=1)  # central
-            # TODO better catch - what if this also (not likely) is None?
-        eye_filter = get_eye_filter(
-            np.count_nonzero(rows), image_info.pix[0]*block_size, paramset)
-        details_dict['eye_filter_small'] = eye_filter['curve']
-
-        if paramset.sni_type in [1, 2]:
-            SNI_map = np.zeros(
-                (len(roi_array)-idx_roi_row_0, len(roi_array[idx_roi_row_0])))
-            SNI_map_2 = np.copy(SNI_map)
-        else:  # 3 Siemens
-            SNI_map = []
-            SNI_map_2 = []
-        rNPS_filt_sum = None
-        rNPS_struct_filt_sum = None
-        rNPS_filt_2_sum = None
-        rNPS_struct_filt_2_sum = None
-        small_names = []
-        for rowno, row in enumerate(roi_array[idx_roi_row_0:]):
-            for colno, roi in enumerate(row):
-                small_names.append(f'r{rowno}_c{colno}')
-                if roi is not None:
-                    SNI, SNI_2, details_dict_roi = calculate_SNI_ROI(
-                        image2d, roi,
-                        eye_filter['filter_2d'], unit=eye_filter['unit'],
-                        pix=image_info.pix[0]*block_size, fit_dict=fit_dict,
-                        image_mean=image_mean,
-                        sampling_frequency=paramset.sni_sampling_frequency,
-                        sni_dim=paramset.sni_ratio_dim)
-                    details_dict['pr_roi'].append(details_dict_roi)
-                    if paramset.sni_type in [1, 2]:
-                        SNI_map[rowno, colno] = SNI
-                        SNI_map_2[rowno, colno] = SNI_2
-                    else:  # 3 Siemens
-                        SNI_map.append(SNI)
-                        SNI_map_2.append(SNI_2)
-                    SNI_values.append(SNI)
-                    SNI_values_2.append(SNI_2)
-                    if rNPS_filt_sum is None:
-                        rNPS_filt_sum = details_dict_roi['rNPS_filt']
-                        rNPS_struct_filt_sum = details_dict_roi['rNPS_struct_filt']
-                    else:
-                        rNPS_filt_sum = rNPS_filt_sum + details_dict_roi['rNPS_filt']
-                        rNPS_struct_filt_sum = (
-                            rNPS_struct_filt_sum + details_dict_roi['rNPS_struct_filt'])
-                    if paramset.sni_channels:
-                        if rNPS_filt_2_sum is None:
-                            rNPS_filt_2_sum = details_dict_roi['rNPS_filt_2']
-                            rNPS_struct_filt_2_sum = details_dict_roi['rNPS_struct_filt_2']
-                        else:
-                            rNPS_filt_2_sum = rNPS_filt_2_sum + details_dict_roi['rNPS_filt_2']
-                            rNPS_struct_filt_2_sum = (
-                                rNPS_struct_filt_2_sum + details_dict_roi['rNPS_struct_filt_2'])
-                else:
-                    details_dict['pr_roi'].append(None)
-                    SNI_values.append(np.nan)
-                    SNI_values_2.append(np.nan)
-                    if paramset.sni_type == 3:  # always? if ignored
-                        SNI_map.append(np.nan)
-                        SNI_map_2.append(np.nan)
-        values = []
-        max_nos = []
-        if paramset.sni_type == 3:  # avoid np.nan for ignored
-            if paramset.sni_channels:
-                arrs = [np.array(SNI_map), np.array(SNI_map_2)]
-                vals = [SNI_values, SNI_values_2]
-            else:
-                arrs = [np.array(SNI_map)]
-                vals = [SNI_values]
-            for idx, arr in enumerate(arrs):
-                max_no = np.where(arr == np.max(arr[arr > -1]))
-                max_nos.append(max_no[0][0])
-                values.extend([
-                    vals[idx][0], vals[idx][1],
-                    np.max(arr[arr > -1]),
-                    np.mean(arr[arr > -1])
-                    ])
-                if paramset.sni_channels is False:
-                    values.append(np.median(arr[arr > -1]))
-        else:
-            if paramset.sni_channels:
-                vals = [SNI_values, SNI_values_2]
-            else:
-                vals = [SNI_values]
-            for vals_this in vals:
-                SNI_small = vals_this[2:]
-                max_no = np.where(SNI_small == np.max(SNI_small))
-                max_nos.append(max_no[0][0])
-                values.extend(
-                    SNI_values[0:2]
-                    + [np.max(SNI_map), np.mean(SNI_map)])
-                if paramset.sni_channels is False:
-                    values.append(np.median(SNI_map))
-        details_dict['roi_max_idx_small'] = max_nos[0]
-        txt_small_max = small_names[max_nos[0]]
-        if paramset.sni_channels:
-            details_dict['roi_max_idx_small_2'] = max_nos[1]
-            txt_small_max = txt_small_max + ' / ' + small_names[max_nos[1]]
-        values_sup.append(txt_small_max)
-
-        details_dict['avg_rNPS_filt_small'] = rNPS_filt_sum / len(SNI_values)
-        details_dict['avg_rNPS_struct_filt_small'] = (
-            rNPS_struct_filt_sum / len(SNI_values))
-        details_dict['SNI_map'] = SNI_map
-        details_dict['SNI_values'] = SNI_values
-        if paramset.sni_channels:
-            details_dict['avg_rNPS_filt_2_small'] = rNPS_filt_2_sum / len(SNI_values_2)
-            details_dict['avg_rNPS_struct_filt_2_small'] = (
-                rNPS_struct_filt_2_sum / len(SNI_values_2))
-            details_dict['SNI_map_2'] = SNI_map_2
-            details_dict['SNI_values_2'] = SNI_values_2
-
-    return (values, values_sup, details_dict, errmsgs)
 
 
 def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, background):

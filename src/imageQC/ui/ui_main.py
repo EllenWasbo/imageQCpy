@@ -6,7 +6,7 @@
 import sys
 import os
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import time, ctime
 from pathlib import Path
 import webbrowser
@@ -70,6 +70,7 @@ class GuiVariables():
     # which img number in imgDicts is currently on display
     last_clicked_pos: tuple = (-1, -1)  # x,y
     current_auto_template: str = ''
+    auto_filter_modalities: list = field(default_factory=list)
     # if open auto, run files main, reset on mode change
 
     panel_width: int = 1400
@@ -123,6 +124,7 @@ class MainWindow(QMainWindow):
         self.gui.char_width = char_width
         self.gui.annotations_line_thick = self.user_prefs.annotations_line_thick
         self.gui.annotations_font_size = self.user_prefs.annotations_font_size
+        self.gui.auto_filter_modalities = self.user_prefs.auto_filter_modalities
 
         self.progress_modal = None
         self.status_bar = StatusBar(self)
@@ -999,6 +1001,7 @@ class MainWindow(QMainWindow):
                 # save current settings to user prefs
                 self.user_prefs.annotations_line_thick = self.gui.annotations_line_thick
                 self.user_prefs.annotations_font_size = self.gui.annotations_font_size
+                self.user_prefs.auto_filter_modalities = self.gui.auto_filter_modalities
                 ok, path = cff.save_user_prefs(self.user_prefs, parentwidget=self)
             except:  # on pytest
                 pass

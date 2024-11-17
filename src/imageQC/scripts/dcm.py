@@ -1102,7 +1102,7 @@ def find_all_valid_dcm_files(
                     try:
                         pydicom.dcmread(file, specific_tags=[(0x8, 0x60)])
                         dcm_files.append(file)
-                    except pydicom.errors.InvalidDicomError as error0:
+                    except pydicom.errors.InvalidDicomError:
                         try:
                             pydicom.dcmread(
                                 file, specific_tags=[(0x8, 0x60)], force=True)

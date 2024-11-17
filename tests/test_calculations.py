@@ -429,6 +429,50 @@ def test_Mammo_Hom():
     assert np.array_equal(sup_1, sup_1_exp)
 
 
+def test_Mammo_cdm34():
+    input_main = InputMain(
+        current_modality='Mammo',
+        current_test='CDM',
+        current_paramset=cfc.ParamSetMammo(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['CDM']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (path_tests / 'test_inputs' / 'Mammo' / 'CDMAM')
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        [file_path / 'cdmam34.dcm'],
+        GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    breakpoint()
+    vals = np.round(np.array(input_main.results['CDM']['values'][0]))
+    assert np.array_equal(vals, [0, 0])
+
+
+def test_Mammo_cdm40():
+    input_main = InputMain(
+        current_modality='Mammo',
+        current_test='CDM',
+        current_paramset=cfc.ParamSetMammo(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['CDM']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (path_tests / 'test_inputs' / 'Mammo' / 'CDMAM')
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        [file_path / 'cdmam40.dcm'],
+        GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    breakpoint()
+    vals = np.round(np.array(input_main.results['CDM']['values'][0]))
+    assert np.array_equal(vals, [0, 0])
+
+
 def test_NM_uniformity():
 
     input_main = InputMain(
@@ -686,7 +730,7 @@ def test_PET_Rec():
         current_paramset=cfc.ParamSetPET(),
         current_quicktest=cfc.QuickTestTemplate(tests=[['Rec']]*36),
         tag_infos=tag_infos,
-        automation_active=False#, test_mode=True
+        automation_active=False, test_mode=True
         )
 
     file_path = path_tests / 'test_inputs' / 'PET' / 'body_phantom'

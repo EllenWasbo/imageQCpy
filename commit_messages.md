@@ -2,7 +2,6 @@
 _xxx xx, 2024_
 
 New functionalities:
-- Added window-level button to automatically set window level to central part (currently hard coded as half the width/height of the image).
 - Added option to import GE Mammo QAP result files. During export from modality all files are included. This functionality, in the automation 
 dialog, will offer to locate the folder of exported files and ignore those already analysed or imported.
 - Improved functionalities for GE Mammo QAP tests:
@@ -11,7 +10,12 @@ dialog, will offer to locate the folder of exported files and ignore those alrea
 	- Tolerance read from the files, but if tolerance from same filetype already exist one may skip re-reading this. Now also automatically link the right tolerance-templates.
 
 Changes:
-- Lock window level checkbox changed to toggle-button with lock-icon.
+- Window level widget: 
+	- Added button to set window level to (min, max) of central part of image (half the width/height)
+	- Lock window level (checkbox) changed to toggle-button with lock-icon.
+- Crosshair always removed when test DCM is selected.
+- Automation dialog:
+	- Modality filter changed from dropdown list to checkable list. Last used modality filter will be saved to user preferences.
 - CT task based image analysis: improved export options
 - Added prefilter sigma for gaussian fit in supplement table. See more info in Wiki appendix C.
 
@@ -20,6 +24,11 @@ Fixes:
 - Xray/Mammo Homogeneity (flat field test): Bug from v3.1.2 fixed - Variance map pr ROI now visible again 
 - Removed warnings from pydicom v3.0.1 when reading DICOM images not perfectly following the standard 
 - Handled more strange inputs and accepting closing images without crashing for PET test Recovery curves
+
+Code structure:
+- gathered MTF methods from calculate_qc.py and mini_methods_calculate.py into a new file mtf_methods.py
+- gathered NM SNI and uniformity methods from from calculate_qc.py and mini_methods_calculate.py into a new file nm_methods.py
+- started coding for CDMAM analysis, hidden if not in developer mode.
 
 # v3.1.2
 _Oct 29, 2024_

@@ -12,12 +12,12 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-from PyQt5.QtCore import Qt, QTimer, QSize
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAbstractItemView,
-    QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox, QListWidget,
-    QComboBox, QFileDialog, QMessageBox
+    QLabel, QLineEdit, QAction, QSpinBox, QCheckBox, QListWidget,
+    QFileDialog, QMessageBox
     )
 
 # imageQC block start
@@ -32,7 +32,6 @@ from imageQC.ui import settings
 from imageQC.scripts import automation
 from imageQC.scripts.mini_methods import get_all_matches, find_files_prefix_suffix
 from imageQC.scripts.dcm import sort_imgs
-from imageQC.scripts.read_vendor_QC_reports import read_GE_Mammo_date
 # imageQC block end
 
 logger = logging.getLogger('imageQC')
@@ -158,7 +157,6 @@ class OpenAutomationDialog(ImageQCDialog):
         self.wid_image_display = ImageWidget()
         self.txt_import_path = QLineEdit('')
 
-        icon_size = QSize(32, 32)
         hlo = QHBoxLayout()
         self.setLayout(hlo)
         vlo = QVBoxLayout()
@@ -222,9 +220,6 @@ class OpenAutomationDialog(ImageQCDialog):
         self.list_templates = QListWidget()
         self.list_templates.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.list_templates.currentItemChanged.connect(self.update_template_selected)
-        self.cbox_filter = QComboBox()
-        self.cbox_filter.addItems(['None'] + [*QUICKTEST_OPTIONS])
-        self.cbox_filter.currentIndexChanged.connect(self.refresh_list)
 
         hlo_temps = QHBoxLayout()
         vlo.addLayout(hlo_temps)
@@ -233,7 +228,7 @@ class OpenAutomationDialog(ImageQCDialog):
         hlo_temps.addWidget(tb_temps)
         act_refresh = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}refresh.png'),
-            'Refresh list with count of incoming files', self)
+            'Refresh list', self)
         act_refresh.triggered.connect(self.refresh_list)
         act_open_result_file = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}file.png'),
@@ -254,19 +249,36 @@ class OpenAutomationDialog(ImageQCDialog):
             'Edit templates', self)
         act_settings.triggered.connect(self.edit_template)
         tb_temps.addActions(
-            [act_refresh, act_open_result_file, act_open_input_path,
+            [act_open_result_file, act_open_input_path,
              act_reset_template, act_settings])
 
         vlo_list = QVBoxLayout()
-        hlo_filter = QHBoxLayout()
-        vlo_list.addLayout(hlo_filter)
-        hlo_filter.addWidget(QLabel('Filter:'))
-        hlo_filter.addWidget(self.cbox_filter)
-
+        hlo_temps.addWidget(tb_temps)
         vlo_list.addWidget(self.list_templates)
         hlo_temps.addLayout(vlo_list)
         vlo_buttons = QVBoxLayout()
         hlo_temps.addLayout(vlo_buttons)
+
+        all_modalities = [*QUICKTEST_OPTIONS][:-1]
+        if len(self.main.gui.auto_filter_modalities) == 0:
+            checked_modalities = list(range(len(all_modalities)))
+        else:
+            checked_modalities = [
+                idx for idx, mod in enumerate(all_modalities)
+                if mod in self.main.gui.auto_filter_modalities]
+        self.list_modalities = uir.ListWidgetCheckable(
+            texts=all_modalities, set_checked_ids=checked_modalities)
+        hlo_mod = QHBoxLayout()
+        tb_filter = QToolBar()
+        tb_filter.setOrientation(Qt.Vertical)
+        tb_filter.addAction(act_refresh)
+        hlo_mod.addWidget(tb_filter)
+        vlo_buttons.addWidget(uir.LabelItalic('Filter:'))
+        vlo_buttons.addLayout(hlo_mod)
+        hlo_mod.addSpacing(25)
+        hlo_mod.addWidget(self.list_modalities)
+        hlo_mod.addStretch()
+
         btn_run_all = uir.PushButtonWithIcon(
             'Run all', 'play', align='left', width=btn_width)
         btn_run_selected = uir.PushButtonWithIcon(
@@ -680,19 +692,20 @@ class OpenAutomationDialog(ImageQCDialog):
         rows : list of int, optional
             Specify which templates to update count for. The default is None.
         """
+        modalities = self.list_modalities.get_checked_texts()
+        self.main.gui.auto_filter_modalities = modalities
         self.main.start_wait_cursor()
         if not isinstance(rows, list):
             templist = self.get_template_list()
             self.list_templates.clear()
             if len(templist) > 0:
-                if self.cbox_filter.currentText() != 'None':
-                    self.templates_displayed_ids = get_all_matches(
-                        self.templates_mod, self.cbox_filter.currentText())
-                    filt_templist = [templist[i] for i in self.templates_displayed_ids]
-                    templist = filt_templist
-                else:
-                    self.templates_displayed_ids = list(range(len(templist)))
-                self.list_templates.addItems(templist)
+                self.templates_displayed_ids = []
+                for mod in modalities:
+                    self.templates_displayed_ids.extend(
+                        get_all_matches(self.templates_mod, mod))
+                filt_templist = [
+                    templist[i] for i in self.templates_displayed_ids]
+                self.list_templates.addItems(filt_templist)
 
         else:
             ids = [self.templates_displayed_ids[row] for row in rows]
@@ -826,7 +839,8 @@ class OpenAutomationDialog(ImageQCDialog):
                     open_txt = 'Open DICOM files'
             if proceed:
                 if temp_this.path_input == '':
-                    fnames = QFileDialog.getOpenFileNames(self, open_txt, filter=filt)
+                    fnames = QFileDialog.getOpenFileNames(
+                        self, open_txt, filter=filt)
                 else:
                     fnames = QFileDialog.getOpenFileNames(
                         self, open_txt, temp_this.path_input, filter=filt)

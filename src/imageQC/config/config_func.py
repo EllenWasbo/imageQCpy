@@ -578,6 +578,25 @@ def load_default_pos_tables(filename='Siemens_AutoQC'):
     return tables
 
 
+def load_cdmam(filename='cdmam'):
+    """Load CDMAM diameters and thickness.
+
+    Returns
+    -------
+    tables : dict
+        keys: thickness, diameters
+    """
+    tables = {}
+    file = QFile(f":/config_defaults/{filename}.yaml")
+    if file.open(QIODevice.ReadOnly | QFile.Text):
+        data = QTextStream(file).readAll()
+        file.close()
+        docs = yaml.safe_load_all(data)
+        for doc in docs:
+            for key, tab in doc.items():
+                tables[key] = tab
+    return tables
+
 def convert_OneDrive(path):
     """Test wether C:Users and OneDrive in path - replace username if not correct.
 

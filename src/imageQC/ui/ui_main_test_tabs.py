@@ -1986,28 +1986,56 @@ class ParamsTabMammo(ParamsTabCommon):
     def create_tab_cdm(self):
         """GUI for CDMAM analysis."""
         self.tab_cdm = ParamsWidget(self, run_txt='Analyse CDMAM')
-
+        info_txt = '''
+        <ul>
+        <li>Phantom v3.4 or v4.0 is detected based on grid direction in central 
+        part of phantom.</li>
+        <li>TODO: Orientation is automatically detected</li>
+        <li></li>
+        </ul>
+        '''
+        self.tab_cdm.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
         self.cdm_tolerance_angle = QDoubleSpinBox(
             decimals=0, minimum=1,  maximum=20, singleStep=1)
         self.cdm_tolerance_angle.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='cdm_tolerance_angle'))
 
+        '''
         self.cdm_threshold_peaks = QDoubleSpinBox(
             decimals=2, minimum=0.1,  maximum=0.9, singleStep=0.05)
         self.cdm_threshold_peaks.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='cdm_threshold_peaks'))
+        '''
 
         vlo_left = QVBoxLayout()
         self.tab_cdm.hlo.addLayout(vlo_left)
+        self.tab_cdm.hlo.addWidget(uir.VLine())
         flo1 = QFormLayout()
         flo1.addRow(QLabel('Accept tolerance for phantom position (degrees)'),
                     self.cdm_tolerance_angle)
+        '''
         flo1.addRow(QLabel('Threshold for hough_line_peaks'),
                     self.cdm_threshold_peaks)
+        '''
 
         vlo_left.addLayout(flo1)
+
+        vlo_right = QVBoxLayout()
+        self.tab_cdm.hlo.addLayout(vlo_right)
+        flo2 = QFormLayout()
+        vlo_right.addLayout(flo2)
+        self.cdm_result_image = QComboBox()
+        self.cdm_result_plot = QComboBox()
+        flo2.addRow(QLabel('Result plot:'), self.cdm_result_plot)
+        flo2.addRow(QLabel('Result image:'), self.cdm_result_image)
+        self.cdm_result_plot.addItems(
+            ['Found disc at center and in correct corner'])
+        self.cdm_result_image.addItems(
+            ['Cell map'])
+        self.cdm_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
 
         self.tab_cdm.hlo.addStretch()
 

@@ -211,141 +211,6 @@ def polyfit_2d(array_2d, max_order=2):
     return fitted_2darray
 
 
-def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
-    """Fit LSF to gaussian and calculate gaussian MTF.
-
-    Parameters
-    ----------
-    LSF : np.array
-        LSF 1d
-    dx : float, optional
-        step_size, default is 1.
-    prefilter_sigma : float, optional
-        prefiltered with gaussian filter, sigma=prefilter_sigma. The default is None.
-    gaussfit : str, optional
-        single or double or double_allow_both_positive (sum of two gaussian).
-        double assume by default 1 negative + 1 positive gauss.
-        double_both_positive demand both positive.
-        The default is 'single'.
-
-    Returns
-    -------
-    dict
-        with calculation details
-    str
-        error message
-    """
-    popt = None
-    details = {}
-    errmsg = None
-    width, center = get_width_center_at_threshold(LSF, 0.5 * max(LSF))
-    if center is None:
-        errmsg = 'Failed finding center of LSF.'
-    else:
-        LSF_x = dx * (np.arange(LSF.size) - center)
-        A2 = None
-        sigma2 = None
-        if gaussfit == 'double':
-            popt = gauss_double_fit(LSF_x, LSF, fwhm1=width * dx)
-            if popt is not None:
-                if len(popt) == 4:
-                    A1, sigma1, A2, sigma2 = popt
-                    LSF_fit = gauss_double(LSF_x, *popt)
-                else:
-                    A1, sigma1 = popt
-                    LSF_fit = gauss(LSF_x, *popt)
-        elif gaussfit == 'double_both_positive':
-            popt = gauss_double_fit(LSF_x, LSF, fwhm1=width * dx, A2_positive=True)
-            if popt is not None:
-                A1, sigma1, A2, sigma2 = popt
-                LSF_fit = gauss_double(LSF_x, *popt)
-        else:  # single
-            popt = gauss_fit(LSF_x, LSF)
-            if popt is not None:
-                LSF_fit = gauss(LSF_x, *popt)
-                A1, sigma1 = popt
-
-        if popt is None:
-            errmsg = 'Failed fitting LSF to gaussian.'
-        else:
-            n_steps = 200  # sample 20 steps from 0 to 1 stdv MTF curve (stdev = 1/sigma1)
-            # TODO user configurable n_steps
-            k_vals = np.arange(n_steps) * (10./n_steps) / sigma1
-            MTF = gauss(k_vals, A1*sigma1, 1/sigma1)
-            if A2 is not None and sigma2 is not None:
-                F2 = gauss(k_vals, A2*sigma2, 1/sigma2)
-                MTF = np.add(MTF, F2)
-            MTF_filtered = None
-            if prefilter_sigma is None:
-                prefilter_sigma = 0
-            if prefilter_sigma > 0:
-                F_filter = gauss(k_vals, 1., 1/prefilter_sigma)
-                MTF_filtered = 1/MTF[0] * MTF  # for display
-                MTF = np.divide(MTF, F_filter)
-            MTF = 1/MTF[0] * MTF
-            k_vals = k_vals / (2*np.pi)
-
-            fwhm = None
-            fwtm = None
-            LSF_corrected = None
-            if gaussfit == 'single':
-                if prefilter_sigma == 0:
-                    fwhm = 2*np.sqrt(2*np.log(2))*sigma1
-                    fwtm = 2*np.sqrt(2*np.log(10))*sigma1
-                else:
-                    # Gaussian fit of the corrected MTF to get fwhm/fwtm
-                    k_vals_symmetric = np.concatenate((-k_vals[::-1], k_vals[1:]))
-                    MTF_symmetric = np.concatenate((MTF[::-1], MTF[1:]))
-                    poptMTF = gauss_fit(k_vals_symmetric, MTF_symmetric)
-                    if poptMTF is not None:
-                        _, sigmaMTF = poptMTF
-                        LSF_corrected = gauss(
-                            LSF_x, np.max(LSF_fit), 1/(2*np.pi*sigmaMTF))
-                        LSF_sigma = 1./(2*np.pi*sigmaMTF)
-                        fwhm = 2*np.sqrt(2*np.log(2))*LSF_sigma
-                        fwtm = 2*np.sqrt(2*np.log(10))*LSF_sigma
-
-            details = {
-                'LSF_fit_x': LSF_x, 'LSF_fit': LSF_fit, 'LSF_prefit': LSF,
-                'LSF_corrected': LSF_corrected,
-                'LSF_fit_params': popt, 'prefilter_sigma': prefilter_sigma,
-                'MTF_freq': k_vals, 'MTF': MTF, 'MTF_filtered': MTF_filtered,
-                'FWHM': fwhm, 'FWTM': fwtm,
-                }
-
-    return (details, errmsg)
-
-
-def get_MTF_discrete(LSF, dx=1, padding_factor=1):
-    """Fourier transform of vector with zero-padding.
-
-    Parameters
-    ----------
-    LSF : np.array of floats
-        line spread function
-    dx : float
-        stepsize in LSF
-    padding_factor: float, optional
-        zero-pad each side by padding-factor * length of LSF. Default is 1.
-
-    Returns
-    -------
-    freq : np.array of float
-        frequency axis of MTF
-    MTF : np.array of float
-        modulation transfer function
-    """
-    nLSF = round(padding_factor * LSF.size)
-    LSF = np.pad(LSF, pad_width=nLSF, mode='constant', constant_values=0)
-    MTF = np.abs(np.fft.fft(LSF))
-    freq = np.fft.fftfreq(LSF.size, d=dx)
-    MTF = MTF[:MTF.size//2]
-    freq = freq[:freq.size//2]
-    MTF = MTF/MTF[0]
-
-    return {'MTF_freq': freq, 'MTF': MTF}
-
-
 def get_2d_NPS(sub_image, pix, zero_padding=False):
     """Calculate fourier transform of 2d array."""
     if zero_padding:
@@ -683,7 +548,7 @@ def center_xy_of_disc(matrix2d, threshold=None, roi=None, mode='mean', sigma=5.)
 
 
 def get_width_center_at_threshold(
-        profile, threshold, get_widest=True, force_above=False):
+        profile, threshold=None, get_widest=True, force_above=False):
     """Get width and center of largest group in profile above threshold.
 
     Parameters
@@ -710,6 +575,8 @@ def get_width_center_at_threshold(
 
     if isinstance(profile, list):
         profile = np.array(profile)
+    if threshold is None:
+        threshold = 0.5 * (np.min(profile) + np.max(profile))
 
     above = np.where(profile > threshold)
     if np.ma.is_masked(profile):
@@ -924,87 +791,6 @@ def find_center_object(image, mask_outer=0, tolerances_width=[None, None], sigma
                 res = (center_x, center_y, width_x, width_y)
                 break
     return res
-
-
-def ESF_to_LSF(ESF, prefilter_sigma):
-    """Calculate LSF spread function from edge spread function.
-
-    Parameters
-    ----------
-    ESF : np.1darray
-    prefilter_sigma : float
-        gaussian filter to be corrected when gaussian MTF is used
-
-    Returns
-    -------
-    LSF : np.1darray
-        line spread function after gaussian filter - for gaussian fit
-    LSF_not_filtered : np.1darray
-        line spread function without gaussian prefilter - for discrete MTF
-    ESF_filtered : np.1darray
-        ESF gaussian smoothed
-    """
-    values_f = gaussian_filter(ESF, sigma=prefilter_sigma)
-    LSF = np.diff(values_f)
-    LSF_not_filtered = np.diff(ESF)
-    if np.abs(np.min(LSF)) > np.abs(np.max(LSF)):  # ensure positive gauss
-        LSF = -1. * LSF
-        LSF_not_filtered = -1. * LSF_not_filtered
-
-    return (LSF, LSF_not_filtered, values_f)
-
-
-def cut_and_fade_LSF(profile, center=0, fwhm=0, cut_width=0, fade_width=0):
-    """Cut and fade profile fwhm from center to reduce noise in LSF.
-
-    Parameters
-    ----------
-    profile : list of float
-    center : float
-        center pos in pix
-    fwhm : float
-        fwhm in pix
-    cut_width : float
-        cut profile cut_width*fwhm from halfmax. If zero, also fade width ignored.
-    fade_width : float (or None)
-        fade profile to background fade*fwhm inside cut_width
-
-    Returns
-    -------
-    modified_profile : list of float
-    cut_dist_pix : float
-        distance from center where profile is cut (unit = pix)
-    fade_dist_pix : float
-        distance from center where profile starts fading (unit = pix)
-    """
-    modified_profile = profile
-    n_fade = 0
-    if cut_width > 0:
-        cut_width += 0.5  # from halfmax = 0.5 fwhm
-        dx = cut_width*fwhm
-        first_x = max(round(center - dx), 0)
-        last_x = min(round(center + dx), len(profile) - 1)
-        if fade_width is None:
-            fade_width = 0
-        if fade_width > 0:
-            fade_width = min(fade_width, cut_width)
-            n_fade = round(fade_width*fwhm)
-            first_fade_x = first_x + n_fade
-            last_fade_x = last_x - n_fade
-            nn = first_fade_x - first_x
-            gradient = np.multiply(
-                np.arange(nn)/nn, profile[first_x:first_fade_x])
-            modified_profile[first_x:first_fade_x] = gradient
-            nn = last_x - last_fade_x
-            gradient = np.multiply(
-                np.flip(np.arange(nn)/nn), profile[last_fade_x:last_x])
-            modified_profile[last_fade_x:last_x] = gradient
-        if first_x > 0:
-            modified_profile[0:first_x] = 0
-        if last_x < len(profile) - 2:
-            modified_profile[last_x:] = 0
-
-    return (modified_profile, dx, dx - n_fade)
 
 
 def rotate_point(xy, rotation_axis_xy, angle):

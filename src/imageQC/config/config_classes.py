@@ -18,6 +18,7 @@ class UserPreferences:
     font_size: int = 8
     annotations_line_thick: int = 1
     annotations_font_size: int = 8
+    auto_filter_modalities: list = field(default_factory=list)
 
 
 @dataclass

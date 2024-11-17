@@ -7,12 +7,12 @@ Calculation processes for the different tests.
 """
 import numpy as np
 from scipy import ndimage
-from scipy.signal import (find_peaks, fftconvolve, medfilt2d)
+from scipy.signal import (find_peaks, fftconvolve)
 from skimage import feature
-from skimage.transform import hough_line, hough_line_peaks
 
 # imageQC block start
 import imageQC.scripts.mini_methods_calculate as mmcalc
+from imageQC.scripts.cdmam_methods import find_cdmam
 import imageQC.scripts.dcm as dcm
 # imageQC block end
 
@@ -421,26 +421,28 @@ def get_rois(image, image_number, input_main):
 
     def Rec():  # Recovery Curve
         errmsg = ''
-        marked_idxs = input_main.tree_file_list.get_marked_imgs_current_test()
-        if len(marked_idxs) > 4:
-            if 'MainWindow' in str(type(input_main)):
+        summed_img = None
+        if 'MainWindow' in str(type(input_main)):
+            marked_idxs = input_main.tree_file_list.get_marked_imgs_current_test()
+            if len(marked_idxs) > 4:
                 if input_main.summed_img is None:  # only if new active slice
                     input_main.summed_img, errmsg = dcm.sum_marked_images(
                         input_main.imgs, marked_idxs,
                         tag_infos=input_main.tag_infos)
                 summed_img = input_main.summed_img
             else:
-                summed_img = image
-            if summed_img is None:
                 roi_array = None
-                if errmsg == '':
-                    errmsg = 'Failed to sum images. Further calculations aborted.'
-            else:
-                roi_array, errmsg = get_roi_recovery_curve(
-                    summed_img, image_info, paramset)
+                errmsg = 'At least 5 slices expected to calculate recovery curve.'
         else:
+            summed_img = image
+
+        if summed_img is None:
             roi_array = None
-            errmsg = 'At least 5 slices expected to calculate recovery curve.'
+            if errmsg == '':
+                errmsg = 'Failed to sum images. Further calculations aborted.'
+        else:
+            roi_array, errmsg = get_roi_recovery_curve(
+                summed_img, image_info, paramset)
 
         return (roi_array, errmsg)
 
@@ -1839,303 +1841,3 @@ def find_lines(image):
         center_line_ydir_xy = None
 
     return [center_line_xdir_xy, center_line_ydir_xy]
-
-
-def find_cdmam(image, image_info, paramset):
-        errmsgs = []
-        px_pr_mm = round(1./image_info.pix[0])
-        roi_estimate=paramset.cdm_roi_estimate
-
-        def detrend_sub(sub):
-            smooth = ndimage.gaussian_filter(sub, sigma=5*px_pr_mm)
-            sub = medfilt2d(sub, 3)
-            detrend = smooth / np.median(sub)
-            return sub / detrend
-
-        def get_binary_sub(sub):
-            sz_x_sub, sz_y_sub = sub.shape
-            binary = np.zeros(sub.shape, dtype=bool)
-            threshold = np.percentile(sub, 25)
-            binary[sub < threshold] = True
-            return binary
-
-        def find_angles_sub(binary_sub, tested_angles, margin):
-            hspace, theta, d = hough_line(binary_sub, theta=tested_angles)
-            threshold_peaks = paramset.cdm_threshold_peaks * np.max(hspace)
-            _, angles, dists = hough_line_peaks(hspace, theta, d,
-                                                threshold=threshold_peaks,
-                                                min_distance=margin)
-            return (angles, dists)
-
-        def find_phantom_part(axis=0):
-            margin = 5 * px_pr_mm
-            prof = np.mean(image, axis=axis)
-            in_phantom = np.where(np.logical_and(
-                prof < np.median(prof)*1.1,
-                prof > np.median(prof)*0.9))
-            start, end = in_phantom[0][0], in_phantom[0][-1]
-            start = start + margin
-            end = end - margin
-            sz_y, sz_x = image.shape
-            if axis == 0:
-                prof = np.mean(
-                    image[sz_y // 2 - 10: sz_y // 2 + 10, start:end], axis=0)
-            else:
-                prof = np.median(
-                    image[start:end, sz_x // 2 - 10: sz_x // 2 + 10], axis=1)
-            smoothed = ndimage.gaussian_filter1d(prof, 7)
-            detrended_profile = prof / (smoothed / np.median(prof))
-            minval = np.min(detrended_profile)
-            maxval = np.max(detrended_profile)
-            medianval = np.median(detrended_profile)
-            if medianval - minval > maxval - medianval:  # invert
-                detrended_profile = - detrended_profile
-            profile = detrended_profile - np.median(detrended_profile)
-            return (start, end, profile)
-
-        def find_phantom_34(angles_center):
-            xy_refs = [[], []]
-            dx_intersections = []
-            xs, ys = [[], []]
-            margin = 5 * px_pr_mm
-            sz_y, sz_x = image.shape
-
-            # test central top, central right to detect corners of phantom
-            line_angles = np.array([np.pi / 4, - np.pi / 4])  # +/-45 deg
-
-            x_start, x_end, x_prof = find_phantom_part()
-            x_mid = (x_end + x_start) // 2
-            width = x_end - x_start
-            ys = [margin, sz_y//4]  # top
-            xs = [x_start + width // 4, x_end - width // 4]  # mid
-            subs = [
-                image[ys[0]:ys[1], xs[0]:xs[1]],
-                image[-ys[1]:-ys[0], xs[0]:xs[1]]]
-            roi_array = [np.zeros(image.shape, dtype=bool)]
-            roi_array[0][ys[0]:ys[1], xs[0]:xs[1]] = True
-            lines = [[], []]  # [(x0, y0), slope] for two groups (perpendicular)
-
-            for sub_no, sub in enumerate(subs):
-                lines = [[], []]
-                # find lines
-                sub = detrend_sub(sub)
-                sub_binary = get_binary_sub(sub)
-                for ang_no, angle in enumerate(line_angles):
-                    tested_angles = np.linspace(
-                        angle - margin_angle, angle + margin_angle,
-                        paramset.cdm_tolerance_angle*4, endpoint=False)
-                    angles, dists = find_angles_sub(
-                        sub_binary, tested_angles, margin)
-                    for line_no, (angle, dist) in enumerate(zip(angles, dists)):
-                        angle, dist = angles[line_no], dists[line_no]
-                        x0, y0 = dist * np.array([np.cos(angle), np.sin(angle)])
-                        if sub_no == 0:
-                            x, y = (x0 + xs[0], y0 + ys[0])
-                        else:
-                            x, y = (x0 + xs[0], y0 + sz_y - ys[1])
-                        slope = np.tan(angle + np.pi / 2)
-                        intercept = y - slope * x
-                        line = [(x, y), slope, intercept]
-                        lines[ang_no].append(line)
-
-                # find intercepts of lines to define rest of grid
-                intercept_xys = []
-                for line1 in lines[1]:
-                    for line2 in lines[0]:
-                        _, a1, b1 = line1
-                        _, a2, b2 = line2
-                        x = (b2 - b1) / (a1 - a2)
-                        y = a1 * x + b1
-                        intercept_xys.append((x, y))
-
-                # sort by y
-                intercept_xys = sorted(intercept_xys, key=lambda xy: xy[1])
-                y_diffs = np.diff([xy[1] for xy in intercept_xys])
-                halfmax = 0.5 * (np.max(y_diffs) - np.min(y_diffs))
-                large_shifts = np.zeros(y_diffs.shape, dtype=bool)
-                large_shifts[y_diffs > halfmax] = True
-                idxs = np.where(large_shifts == True)[0]
-                dx_ic_row = []  # differenced within row of intercept points
-
-                start_idx = 0
-                if sub_no == 0:
-                    xy_refs[0] = intercept_xys[0]
-                    start_idx = 1
-                elif sub_no == 1:
-                    xy_refs[1] = intercept_xys[-1]
-                for i in range(start_idx, idxs.shape[0]):
-                    xys_in_row = sorted(
-                        intercept_xys[idxs[i-1]:idxs[i]], key=lambda xy: xy[0])
-                    xs_this = [xy[0] for xy in xys_in_row]
-                    dx_ic_row.extend(list(np.diff(xs_this)))
-                dx_intersections.append(np.abs(np.mean(dx_ic_row)))
-
-            ref_dx = xy_refs[1][0] - xy_refs[0][0]
-            ref_dy = xy_refs[1][1] - xy_refs[0][1]
-            diff_angle = np.arctan(ref_dx / ref_dy)
-
-            diagonal = ref_dy / 16
-            dist = np.cos(angle) * diagonal
-            angle = np.pi / 4 + diff_angle
-
-            include_array = np.zeros((16, 16), dtype=bool)
-            for row in range(16):
-                for col in range(16):
-                    if row + col > 5:
-                        include_array[row, col] = True
-                        if row + col > 23:
-                            include_array[row, col] = False
-            include_array[0, -1] = False
-            include_array[-1, 0] = False
-
-            sz_y, sz_x = (16, 16)
-            xs = np.zeros((16,16), dtype=np.float64)
-            ys = np.zeros((16,16), dtype=np.float64)
-            for row, y in enumerate(dist * np.arange(sz_y) + dist / 2):
-                for col, x in enumerate(dist * np.arange(sz_x) + dist / 2):
-                    r = np.sqrt(x**2 + y**2)
-                    phi = np.arctan2(y, x) - (np.pi/4 + diff_angle)
-                    xs[row, col] = r * np.cos(phi)
-                    ys[row, col] = r * np.sin(phi)
-            center_x = 0.5 * (xy_refs[0][0] + xy_refs[1][0])
-            center_y = 0.5 * (xy_refs[0][1] + xy_refs[1][1])
-            dx = center_x - xs[8, 8] + diagonal / 2
-            dy = center_y - ys[8, 8]
-            xs = xs + dx
-            ys = ys + dy
-
-            roi_array.extend(
-                [include_array, xs, ys, diagonal, xy_refs, angle, lines])
-            return roi_array
-
-        def find_phantom_40(angles_center):
-            dist = None
-            estimate_x, estimate_y = roi_estimate, roi_estimate
-            # finding vertical line positions
-            x_start, x_end, xprof = find_phantom_part(axis=0)
-            if estimate_x is False:
-                #second_derived = np.diff(np.diff(xprof))
-                peaks = find_peaks(xprof, distance=7*px_pr_mm,
-                                   height=0.5*np.max(xprof))
-                peaks_pos = peaks[0]
-                if len(peaks_pos) == 17:
-                    dx = x_start
-                    x_start, x_end = peaks_pos[0] + dx, peaks_pos[-1] + dx
-                    dist = (peaks_pos[-1] - peaks_pos[0]) / 16
-                else:
-                    errmsgs.append(
-                        'Failed to find a grid 16 cells wide. x-positions '
-                        'centered on assumed phantom.')
-                    estimate_x = True
-
-            y_start, y_end, yprof = find_phantom_part(axis=1)
-            if estimate_y is False:
-                #second_derived = np.diff(np.diff(yprof))
-                peaks = find_peaks(yprof, distance=3.5*px_pr_mm,
-                                   height=0.5*np.max(yprof))
-                peaks_pos = peaks[0]
-                if len(peaks_pos) == 25:
-                    dy = y_start
-                    y_start, y_end = peaks_pos[0] + dy, peaks_pos[-1] + dy
-                    if dist is None:
-                        dist = (peaks_pos[-1] - peaks_pos[0]) / 22.5
-                else:  # look for the first separator (shorter dists)
-                    if dist is None:
-                        dist = 9 * px_pr_mm
-                    dists = np.diff(peaks_pos)
-                    idx_sep = np.where(np.logical_and(
-                        dists < 1.05 * dist / 2, dists > 0.95 * dist / 2))
-                    idx_sep = idx_sep[0]
-                    if len(idx_sep[0]) == 3:
-                        first_peak_sep = peaks_pos[idx_sep[0][0]]
-                        y_start = first_peak_sep - dist * 3
-                        y_end = y_start + dist * 22.5
-                    else:
-                        errmsgs.append(
-                            'Failed to find a grid 21 cells high. '
-                            'y-positions centered on assumed phantom.')
-                        estimate_y = True
-
-            if dist is None:
-                dist = 9 * px_pr_mm
-            if estimate_x:
-                mid_x = 0.5 * (x_end + x_start)
-                x_start, x_end = mid_x - 8 * dist, mid_x + 8 * dist
-            if estimate_y:
-                mid_y = 0.5 * (y_end + y_start)
-                y_start, y_end = mid_y - 22.5/2 * dist, mid_y + 22.5/2 * dist
-
-            roi_array = None
-            if dist and y_start:
-                xs, ys = np.meshgrid(
-                    dist * (np.arange(16) + 0.5),
-                    dist * (np.arange(21) + 0.5))
-                ys[3:, :] = ys[3:, :] + 0.5 * dist
-                ys[7:, :] = ys[7:, :] + 0.5 * dist
-                ys[11:, :] = ys[11:, :] + 0.5 * dist
-                # center before rotate
-                xs = xs - 8 * dist
-                ys = ys - 22.5/2 * dist
-
-                diff_angle = np.median(angles_center)
-                for row in range(21):
-                    for col in range(16):
-                        x, y = xs[row, col], ys[row, col]
-                        r = np.sqrt(x**2 + y**2)
-                        phi = np.arctan2(y, x) + diff_angle
-                        xs[row, col] = r * np.cos(phi)
-                        ys[row, col] = r * np.sin(phi)
-
-                xs = xs + 8 * dist + x_start
-                ys = ys + 22.5/2 * dist + y_start
-
-                roi_array = [np.zeros(image.shape, dtype=bool)]
-                roi_array[0][round(y_start):round(y_end),
-                             round(x_start):round(x_end)] = True
-                roi_array[0] = ndimage.rotate(
-                    roi_array[0].astype(float), -diff_angle, reshape=False)
-                roi_array.extend([None, xs, ys, dist*1.5])
-            return roi_array
-
-        # ############## find_cdmam ################################
-        margin_angle = paramset.cdm_tolerance_angle * 2 * np.pi / 360
-        sz_y, sz_x = image.shape
-        phantom = 0
-
-        # taste inner part to find if and which CDMAM phantom
-        center_part = image[sz_y//2 - sz_y//8:sz_y//2 + sz_y//8,
-                            sz_x//2 - sz_x//8:sz_x//2 + sz_x//8]
-        center_part = detrend_sub(center_part)
-        center_binary = get_binary_sub(center_part)
-        tested_angles = np.linspace(
-            0 - margin_angle, np.pi / 4 + margin_angle, 90, endpoint=False)
-        angles, dists = find_angles_sub(
-            center_binary, tested_angles, 7*px_pr_mm)
-        angles_center = None
-        if angles.shape[0] >= 2:
-            ang_45 = np.where(np.logical_and(
-                angles > np.pi / 4 - margin_angle,
-                angles < np.pi / 4 + margin_angle))
-            ang_0 = np.where(np.logical_and(
-                angles > - margin_angle,
-                angles < margin_angle))
-            if ang_45[0].shape[0] > ang_0[0].shape[0]:
-                phantom = 34
-                angles_center = [
-                    angle for idx, angle in enumerate(angles)
-                    if idx in ang_45[0]]
-            elif ang_0[0].shape[0] > 2:
-                phantom = 40
-                angles_center = [
-                    angle for idx, angle in enumerate(angles)
-                    if idx in ang_0[0]]
-
-        roi_array = None
-        if phantom == 0:
-            errmsgs.append('Failed to detect horizontal or diagonal lines in central part.')
-        elif phantom == 34:
-            roi_array = find_phantom_34(angles_center)
-        elif phantom == 40:
-            roi_array = find_phantom_40(angles_center)
-
-        return (roi_array, errmsgs)

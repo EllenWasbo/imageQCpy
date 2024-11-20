@@ -257,7 +257,11 @@ class ImageDisplayWidget(GenericImageWidget):
             self.main.gui.last_clicked_pos = (
                     round(event.xdata), round(event.ydata))
             if event.dblclick:
-                self.main.wid_center.set_center_to_clickpos()
+                if self.main.current_test == 'CDM':
+                    self.main.wid_res_image.canvas.set_cdm_cell_display(
+                        round(event.xdata), round(event.ydata))
+                else:
+                    self.main.wid_center.set_center_to_clickpos()
 
     def projection_plot(self):
         """Show 3d projection and plot."""

@@ -700,20 +700,23 @@ class CenterWidget(QGroupBox):
 
         if self.main.gui.annotations and self.main.active_img is not None:
             szy, szx = np.shape(self.main.active_img)
-            if self.main.gui.delta_a == 0:
-                self.main.wid_image_display.canvas.ax.lines[0].set_ydata(
-                    y=[szy * 0.5 + self.main.gui.delta_y])
-                self.main.wid_image_display.canvas.ax.lines[1].set_xdata(
-                    x=[szx * 0.5 + self.main.gui.delta_x])
-            else:
-                x1, x2, y1, y2 = get_rotated_crosshair(
-                    szx, szy,
-                    (self.main.gui.delta_x, self.main.gui.delta_y,
-                     self.main.gui.delta_a))
-                self.main.wid_image_display.canvas.ax.lines[0].set_ydata(
-                    [y1, y2])
-                self.main.wid_image_display.canvas.ax.lines[1].set_xdata(
-                    [x1, x2])
+            try:
+                if self.main.gui.delta_a == 0:
+                    self.main.wid_image_display.canvas.ax.lines[0].set_ydata(
+                        y=[szy * 0.5 + self.main.gui.delta_y])
+                    self.main.wid_image_display.canvas.ax.lines[1].set_xdata(
+                        x=[szx * 0.5 + self.main.gui.delta_x])
+                else:
+                    x1, x2, y1, y2 = get_rotated_crosshair(
+                        szx, szy,
+                        (self.main.gui.delta_x, self.main.gui.delta_y,
+                         self.main.gui.delta_a))
+                    self.main.wid_image_display.canvas.ax.lines[0].set_ydata(
+                        [y1, y2])
+                    self.main.wid_image_display.canvas.ax.lines[1].set_xdata(
+                        [x1, x2])
+            except IndexError:
+                pass
 
             self.main.wid_image_display.canvas.draw()
             self.main.update_roi()

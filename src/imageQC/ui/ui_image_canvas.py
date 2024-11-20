@@ -12,6 +12,7 @@ import matplotlib
 import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib import patches
+from PyQt5.QtWidgets import QMessageBox
 
 # imageQC block start
 from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
@@ -256,41 +257,8 @@ class ImageCanvas(GenericImageCanvas):
         self.current_image = nparr
 
         if annotate:
-            '''
-            try:
-                linewidth = self.main.gui.annotations_line_thick
-            except AttributeError:
-                linewidth = 1.
-            '''
-                
             self.add_crosshair()
-            '''
-            # central crosshair
-            szy, szx = np.shape(nparr)
-            if self.main.gui.delta_a == 0:
-                self.ax.axhline(
-                    y=szy*0.5 + self.main.gui.delta_y,
-                    color='red', linewidth=linewidth, linestyle='--')
-                self.ax.axvline(
-                    x=szx*0.5 + self.main.gui.delta_x,
-                    color='red', linewidth=linewidth, linestyle='--')
-            else:
-                x1, x2, y1, y2 = get_rotated_crosshair(
-                    szx, szy,
-                    (self.main.gui.delta_x,
-                     self.main.gui.delta_y,
-                     self.main.gui.delta_a)
-                    )
-                # NB keep these two lines as first and second in ax.lines
-                self.ax.add_artist(matplotlib.lines.Line2D(
-                    [0, szx], [y1, y2],
-                    color='red', linewidth=linewidth, linestyle='--',
-                    gid='axis1'))
-                self.ax.add_artist(matplotlib.lines.Line2D(
-                    [x1, x2], [szy, 0],
-                    color='red', linewidth=linewidth, linestyle='--',
-                    gid='axis2'))
-            '''
+
             # DICOM annotations
             try:
                 tool_sum = self.parent.tool_sum.isChecked()
@@ -364,35 +332,36 @@ class ImageCanvas(GenericImageCanvas):
         self.draw_idle()
 
     def add_crosshair(self):
-        nparr = self.current_image
-        szy, szx = np.shape(nparr)
-        try:
-            linewidth = self.main.gui.annotations_line_thick
-        except AttributeError:
-            linewidth = 1.
-        if self.main.gui.delta_a == 0:
-            self.ax.axhline(
-                y=szy*0.5 + self.main.gui.delta_y,
-                color='red', linewidth=linewidth, linestyle='--')
-            self.ax.axvline(
-                x=szx*0.5 + self.main.gui.delta_x,
-                color='red', linewidth=linewidth, linestyle='--')
-        else:
-            x1, x2, y1, y2 = get_rotated_crosshair(
-                szx, szy,
-                (self.main.gui.delta_x,
-                 self.main.gui.delta_y,
-                 self.main.gui.delta_a)
-                )
-            # NB keep these two lines as first and second in ax.lines
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [0, szx], [y1, y2],
-                color='red', linewidth=linewidth, linestyle='--',
-                gid='axis1'))
-            self.ax.add_artist(matplotlib.lines.Line2D(
-                [x1, x2], [szy, 0],
-                color='red', linewidth=linewidth, linestyle='--',
-                gid='axis2'))
+        if self.current_image is not None:
+            nparr = self.current_image
+            szy, szx = np.shape(nparr)
+            try:
+                linewidth = self.main.gui.annotations_line_thick
+            except AttributeError:
+                linewidth = 1.
+            if self.main.gui.delta_a == 0:
+                self.ax.axhline(
+                    y=szy*0.5 + self.main.gui.delta_y,
+                    color='red', linewidth=linewidth, linestyle='--')
+                self.ax.axvline(
+                    x=szx*0.5 + self.main.gui.delta_x,
+                    color='red', linewidth=linewidth, linestyle='--')
+            else:
+                x1, x2, y1, y2 = get_rotated_crosshair(
+                    szx, szy,
+                    (self.main.gui.delta_x,
+                     self.main.gui.delta_y,
+                     self.main.gui.delta_a)
+                    )
+                # NB keep these two lines as first and second in ax.lines
+                self.ax.add_artist(matplotlib.lines.Line2D(
+                    [0, szx], [y1, y2],
+                    color='red', linewidth=linewidth, linestyle='--',
+                    gid='axis1'))
+                self.ax.add_artist(matplotlib.lines.Line2D(
+                    [x1, x2], [szy, 0],
+                    color='red', linewidth=linewidth, linestyle='--',
+                    gid='axis2'))
 
     def roi_draw(self):
         """Update ROI countours on image."""
@@ -465,6 +434,7 @@ class ImageCanvas(GenericImageCanvas):
             color_no = i % len(colors)
             linestyle_no = i % len(linestyles)
             mask = np.where(this_roi[roi_no], 0, 1)
+            contour = None
             if filled:
                 if hatches is None:
                     contour = self.ax.contourf(
@@ -476,10 +446,17 @@ class ImageCanvas(GenericImageCanvas):
                         hatches=hatches[hatch_no])
                     contour.collections[0].set_edgecolor(colors[color_no])
             else:
-                contour = self.ax.contour(
-                    mask, levels=[0.9],
-                    colors=colors[color_no], alpha=0.5, linewidths=self.linewidth,
-                    linestyles=linestyles[linestyle_no])
+                try:
+                    contour = self.ax.contour(
+                        mask, levels=[0.9],
+                        colors=colors[color_no], alpha=0.5, linewidths=self.linewidth,
+                        linestyles=linestyles[linestyle_no])
+                except: # np.core._exeptions._ArrayMemoryExeption
+                    QMessageBox.warning(
+                        self.main, 'Failed drawing ROI',
+                        'An error occured during drawing ROIs. This might be '
+                        'due to a memory issue. You may turn off annotations to '
+                        'avoid memory issues.')
             if labels:
                 try:
                     label = labels[i]
@@ -499,7 +476,8 @@ class ImageCanvas(GenericImageCanvas):
                                      color=colors[color_no])
                 except (ValueError, IndexError):
                     pass
-            self.contours.append(contour)
+            if contour is not None:
+                self.contours.append(contour)
 
     def Bar(self):
         """Draw Bar ROIs."""
@@ -512,26 +490,36 @@ class ImageCanvas(GenericImageCanvas):
         """Draw found lines."""
         if self.main.current_roi is not None:
 
-            include_array = self.main.current_roi[0]
-            center_xs = self.main.current_roi[1]
-            center_ys = self.main.current_roi[2]
-            box_width = self.main.current_roi[3]
-            wi = box_width // 5
+            include_array = None
+            if 'include_array' in self.main.current_roi:
+                include_array = self.main.current_roi['include_array']
+            center_xs = self.main.current_roi['xs']
+            center_ys = self.main.current_roi['ys']
+            box_width = self.main.current_roi['cell_width']
+            wi = box_width // 10
             sz_y, sz_x = center_xs.shape
+
+            idx_diam = self.main.tab_mammo.cdm_cbox_diameter.currentIndex()
+            idx_thick = self.main.tab_mammo.cdm_cbox_thickness.currentIndex()
+
             for row in range(sz_y):
                 for col in range(sz_x):
                     include = True
                     if include_array is not None:
                         include = include_array[row, col]
                     if include:
+                        if row == idx_thick and col == idx_diam:
+                            color = 'blue'
+                        else:
+                            color = 'green'
                         x, y = center_xs[row, col], center_ys[row, col]
                         self.ax.add_artist(matplotlib.lines.Line2D(
                             [x - wi, x + wi], [y, y],
-                            color='green', linewidth=0.5*self.linewidth
+                            color=color, linewidth=0.5*self.linewidth
                             ))
                         self.ax.add_artist(matplotlib.lines.Line2D(
                             [x, x], [y - wi, y + wi],
-                            color='green', linewidth=0.5*self.linewidth
+                            color=color, linewidth=0.5*self.linewidth
                             ))
 
     def CTn(self):
@@ -982,6 +970,7 @@ class ResultImageCanvas(GenericImageCanvas):
         self.max_val = None
         self.title = ''
         self.positive_negative = False  # display positive as red, negative as blue
+        self.contours_to_add = []
 
         if self.main.current_test in self.main.results:
             if self.main.results[self.main.current_test] is not None:
@@ -1007,7 +996,8 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.img = self.ax.imshow(
                     self.current_image,
                     cmap=self.cmap, vmin=self.min_val, vmax=self.max_val)
-                self.parent.image_title.setText(self.title)
+                self.parent.image_title.setText(
+                    '<html><head/><body><p>'+self.title+'</p></body></html>')
                 contrast = self.max_val - self.min_val
             except TypeError:
                 proceed = False
@@ -1037,18 +1027,17 @@ class ResultImageCanvas(GenericImageCanvas):
                 if self.main.current_paramset.hom_tab_alt == 3:
                     flatfield = True
             if flatfield:
-                if 'Hom' in self.main.results and self.main.current_test == 'Hom':
-                    if self.current_image.shape == self.main.active_img.shape:
-                        try:
-                            details_dict = self.main.results['Hom']['details_dict'][
-                                self.main.gui.active_img_no]
-                        except (IndexError, KeyError):
-                            details_dict = None
-                        if details_dict:
-                            if 'deviating_pixel_coordinates' in details_dict:
-                                for coord in details_dict['deviating_pixel_coordinates']:
-                                    self.ax.add_patch(patches.Circle(
-                                        coord, radius=20, color='r', fill=False))
+                self.mark_deviating_pixels()
+
+            if self.contours_to_add:
+                for contour_to_add in self.contours_to_add:
+                    mask = np.where(contour_to_add[0], 0, 1)
+                    contour = self.ax.contour(
+                        mask, levels=[0.9],
+                        colors=contour_to_add[1], alpha=0.5,
+                        linewidths=self.linewidth,
+                        linestyles=contour_to_add[2])
+
         else:
             self.img = self.ax.imshow(np.zeros((100, 100)))
             at = matplotlib.offsetbox.AnchoredText(
@@ -1066,7 +1055,52 @@ class ResultImageCanvas(GenericImageCanvas):
             self.fig.subplots_adjust(.05, .05, 1., 1.)
         self.draw()
 
-    '''
+    def mark_deviating_pixels(self):
+        if 'Hom' in self.main.results and self.main.current_test == 'Hom':
+            if self.current_image.shape == self.main.active_img.shape:
+                try:
+                    details_dict = self.main.results['Hom']['details_dict'][
+                        self.main.gui.active_img_no]
+                except (IndexError, KeyError):
+                    details_dict = None
+                if details_dict:
+                    if 'deviating_pixel_coordinates' in details_dict:
+                        for coord in details_dict['deviating_pixel_coordinates']:
+                            self.ax.add_patch(patches.Circle(
+                                coord, radius=20, color='r', fill=False))
+
+    def set_cdm_cell_display(self, xpos, ypos):
+        """Set result image to cell closes to xpos, ypos in image."""
+        # find closest row, col
+        # block signals, set diameter, and set thickness unblock signals
+        try:
+            details_dict = self.main.results['CDM']['details_dict'][
+                self.main.gui.active_img_no]
+        except (IndexError, KeyError):
+            details_dict = None
+        if details_dict:
+            diff_xs = np.abs(self.main.current_roi['xs'] - xpos)
+            diff_ys = np.abs(self.main.current_roi['ys'] - ypos)
+            tolerance = 0.5 * self.main.current_roi['cell_width']
+            min_xs = np.where(diff_xs < tolerance)
+            min_ys = np.where(diff_ys < tolerance)
+            row, col = None, None
+            if min_xs[0].shape[0] > 0 and min_ys[0].shape[0] > 0:
+                if self.main.current_roi['phantom'] == 40:
+                    row = min_xs[0][0]
+                    col = min_ys[1][0]
+                else:
+                    pos1 = list(zip(list(min_xs[0]), list(min_xs[1])))
+                    pos2 = list(zip(list(min_ys[0]), list(min_ys[1])))
+                    match = list(set(pos1).intersection(pos2))
+                    row, col = match[0]
+                if row is not None and col is not None:
+                    self.main.tab_mammo.blockSignals(True)
+                    self.main.tab_mammo.cdm_cbox_thickness.setCurrentIndex(row)
+                    self.main.tab_mammo.cdm_cbox_diameter.setCurrentIndex(col)
+                    self.main.tab_mammo.blockSignals(False)
+                    self.result_image_draw()
+
     def CDM(self):
         self.cmap = 'gray'
         try:
@@ -1075,10 +1109,59 @@ class ResultImageCanvas(GenericImageCanvas):
         except (IndexError, KeyError):
             details_dict = None
         if details_dict:
-            if 'threshold_image' in details_dict:
-                self.title = 'Threshold image for detecting lines'
-                self.current_image = details_dict['threshold_image']
-    '''
+            idx_diam = self.main.tab_mammo.cdm_cbox_diameter.currentIndex()
+            idx_thick = self.main.tab_mammo.cdm_cbox_thickness.currentIndex()
+
+            res = details_dict['res_table'][idx_thick][idx_diam]
+
+            self.main.wid_image_display.canvas.roi_draw()
+
+            if res:
+                self.current_image = res['processed_sub']
+                self.min_val = np.min(self.current_image)
+                self.max_val = np.max(self.current_image)
+
+                diameter = self.main.tab_mammo.cdm_cbox_diameter.currentText()
+                thickness = self.main.results['CDM']['details_dict'][-1]['thickness']
+                if self.main.current_roi['phantom'] == 40:
+                    thick_txt = thickness[idx_thick][idx_diam]
+                else:
+                    thick_txt = self.main.tab_mammo.cdm_cbox_thickness.currentText()
+
+                self.title = (
+                    f'Processed sub-image for diameter {diameter} mm, '
+                    f'thickess {thick_txt} &mu;m')
+
+                if self.main.tab_mammo.cdm_chk_show_kernel.isChecked():
+                    sz_sub = self.current_image.shape[0]
+                    kernel = (details_dict['kernels'][idx_diam] > 0)
+                    greens = np.zeros((sz_sub, sz_sub), dtype=bool)
+                    reds = np.zeros((sz_sub, sz_sub), dtype=bool)
+
+                    sz_k = kernel.shape[0]
+                    radk = sz_k // 2
+
+                    yk, xk = res['min_positions'][0]
+                    if res['central_disc_found']:
+                        greens[yk - radk:yk - radk + sz_k,
+                               xk - radk:xk - radk + sz_k] = kernel
+                    else:
+                        reds[yk - radk:yk - radk + sz_k,
+                             xk - radk:xk - radk + sz_k] = kernel
+
+                    corner_idx = res['corner_index'][0]
+                    if self.main.current_roi['phantom'] == 40:
+                        corner_idx += 1
+
+                    yk, xk = res['min_positions'][corner_idx]
+                    if details_dict['found_correct_corner'][idx_thick, idx_diam]:
+                        greens[yk - radk:yk - radk + sz_k,
+                               xk - radk:xk - radk + sz_k] = kernel
+                    else:
+                        reds[yk - radk:yk - radk + sz_k,
+                             xk - radk:xk - radk + sz_k] = kernel
+                    self.contours_to_add.append([greens, 'green', '--'])
+                    self.contours_to_add.append([reds, 'red', '--'])
 
     def Hom(self):
         """Prepare images of Mammo-Homogeneity."""

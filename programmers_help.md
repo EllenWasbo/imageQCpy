@@ -44,6 +44,11 @@ If adding icons, a dark-mode icon is also needed.
 - add Modality to dash_app (table_overview)
 - consider adding variants to scripts/dcm.py - get_modality
 
+## When adding new parameters and variants to a test
+- if alternative to current test: add result table headers in config/iQCconstants.py HEADERS (and HEADERS_SUP if supplement data) (and optionally ALTERNATIVES)
+- add configurable parameters in config/config_classes.py ParamSet&lt;Modality&gt; (or ParamsetCommon if available to all paramsets), starting with the testcode (three letters)
+- else follow instructions for adding testcode (below)
+
 ## When adding new testcode (analyse type)
 - add testcode (three letters at least first capital) in config/iQCconstants.py QUICKTEST_OPTIONS same order as tabs for the tests
 - add result table headers in config/iQCconstants.py HEADERS (and HEADERS_SUP if supplement data) (and ALTERNATIVES if alternative headers)

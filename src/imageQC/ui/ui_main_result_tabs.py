@@ -513,24 +513,27 @@ class ResultPlotCanvas(PlotCanvas):
         """Prepare plot for test CDMAM."""
         self.title = 'Correctly found disc in corner (diamond) and at center (circle)'
         self.xtitle = 'Diameter (mm)'
-        self.ytitle = r'Thickness ($mu$m)'
+        self.ytitle = r'Thickness ($\mu$m)'
         imgno = self.main.gui.active_img_no
         details_dict = self.main.results['CDM']['details_dict'][imgno]
 
         cdmam_table_dict = self.main.results['CDM']['details_dict'][-1]
         xlabels = cdmam_table_dict['diameters']
-        ylabels = cdmam_table_dict['thickness']
+        cbox = self.main.tab_mammo.cdm_cbox_thickness
+        ylabels = [cbox.itemText(i) for i in range(cbox.count())]
         ylabels.reverse()
 
-        self.scatters.append(
-            {'xlabels': xlabels, 'ylabels': ylabels,
-             'array': np.flipud(details_dict['include_array']),
-             'size': 30, 'marker': 'x', 'color': 'silver'})
+        if 'include_array' in details_dict:
+            if details_dict['include_array'] is not None:
+                self.scatters.append(
+                    {'xlabels': xlabels, 'ylabels': ylabels,
+                     'array': np.flipud(details_dict['include_array']),
+                     'size': 30, 'marker': 'x', 'color': 'silver'})
 
         self.scatters.append(
             {'xlabels': xlabels, 'ylabels': ylabels,
              'array': np.flipud(details_dict['found_correct_corner']),
-             'size': 100, 'marker': 'D', 'color': 'green'})
+             'size': 100, 'marker': 's', 'color': 'green'})
 
         self.scatters.append(
             {'xlabels': xlabels, 'ylabels': ylabels,
@@ -1491,54 +1494,6 @@ class ResultPlotCanvas(PlotCanvas):
                     'Median', ha='left', size=8, color=self.color_k)
             except (KeyError, IndexError):
                 pass
-            '''
-            try:
-                dicts = self.main.results['NPS']['details_dict']
-                xvals = None
-                yvals = None
-                n_profiles = 0
-                for i, details_dict in enumerate(dicts):
-                    if details_dict:
-                        if xvals is not None:
-                            xvals_this = details_dict['freq']
-                            if (xvals != xvals_this).all():
-                                errmsg = 'Failed plotting average NPS. Not same pixel sizes.'
-                                QMessageBox.information(self, 'Failed averaging', errmsg)
-                                xvals = None
-                                yvals = None
-                                n_profiles = 0
-                                break
-                        else:
-                            xvals = details_dict['freq']
-
-                        n_profiles += 1
-                        if normalize == 1:
-                            AUC = self.main.results['NPS']['values'][i][1]
-                            norm_factor = 1/AUC
-                        elif normalize == 2:
-                            norm_factor = 1/(details_dict['large_area_signal']**2)
-                        else:
-                            norm_factor = 1
-                        if yvals is None:
-                            yvals = norm_factor * details_dict['radial_profile']
-                        else:
-                            yvals = yvals + norm_factor * details_dict['radial_profile']
-                if n_profiles > 0:
-                    y_avg = 1/n_profiles * yvals
-                
-                    self.curves.append(
-                        {'label': 'average NPS', 'xvals': xvals, 'yvals': y_avg,
-                         'style': '-' + self.color_k})
-                    median_frequency, median_val = find_median_spectrum(xvals, y_avg)
-                    self.curves.append({
-                        'label': '_nolegend_',
-                        'xvals': [median_frequency, median_frequency],
-                        'yvals': [0, median_val],
-                        'style': '-' + self.color_k})
-                    self.ax.text(
-                        1.05*median_frequency, 0.5*median_val,
-                        'Median', ha='left', size=8, color=self.color_k)
-            '''
 
         def plot_all_NPS():
             try:

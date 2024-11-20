@@ -148,6 +148,15 @@ class ParamsTabCommon(QTabWidget):
                         reciever.setChecked(content)
                     else:
                         reciever.setValue(content)
+                    if field.name == 'roi_use_table':
+                        new_rect_pos = True if paramset.roi_use_table == 2 else False
+                        if new_rect_pos != self.roi_table_widget.use_rectangle:
+                            self.roi_table_widget.use_rectangle = new_rect_pos
+                            self.roi_table_widget.update_on_rectangle_change()
+                        if paramset.roi_use_table == 0:
+                            self.roi_table_widget.setEnabled(False)
+                        else:
+                            self.roi_table_widget.setEnabled(True)
                 elif field.type == 'float':
                     reciever.setValue(content)
                 elif field.type == 'bool':
@@ -191,15 +200,6 @@ class ParamsTabCommon(QTabWidget):
                     self.roi_table_widget.table.current_table = copy.deepcopy(
                         paramset.roi_table)
                     self.roi_table_widget.table.update_table()
-                elif field.name == 'roi_use_table':
-                    new_rect_pos = True if paramset.roi_use_table == 2 else False
-                    if new_rect_pos != self.roi_table_widget.use_rectangle:
-                        self.roi_table_widget.use_rectangle = new_rect_pos
-                        self.roi_table_widget.update_on_rectangle_change()
-                    if paramset.roi_use_table == 0:
-                        self.roi_table_widget.setEnabled(False)
-                    else:
-                        self.roi_table_widget.setEnabled(True)
                 elif field.name == 'sni_channels_table':
                     self.sni_channels_table_widget.update_table()
 
@@ -1838,8 +1838,7 @@ class ParamsTabMammo(ParamsTabCommon):
         self.addTab(self.tab_gho, "Ghost")
         self.addTab(self.tab_mtf, "MTF")
         self.addTab(self.tab_nps, "NPS")
-        if self.main.developer_mode == True:
-            self.addTab(self.tab_cdm, "CDMAM")
+        self.addTab(self.tab_cdm, "CDMAM")
 
         self.flag_ignore_signals = False
 
@@ -1990,8 +1989,7 @@ class ParamsTabMammo(ParamsTabCommon):
         <ul>
         <li>Phantom v3.4 or v4.0 is detected based on grid direction in central 
         part of phantom.</li>
-        <li>TODO: Orientation is automatically detected</li>
-        <li></li>
+        <li>.... test is under construction and validation.</li>
         </ul>
         '''
         self.tab_cdm.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
@@ -2000,14 +1998,21 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_tolerance_angle.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='cdm_tolerance_angle'))
+        
+        self.cdm_result_image = QComboBox()
+        self.cdm_result_plot = QComboBox()
+        self.cdm_cbox_diameter = QComboBox()
+        self.cdm_cbox_thickness = QComboBox()
+        self.cdm_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+        self.cdm_cbox_diameter.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+        self.cdm_cbox_thickness.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
 
-        '''
-        self.cdm_threshold_peaks = QDoubleSpinBox(
-            decimals=2, minimum=0.1,  maximum=0.9, singleStep=0.05)
-        self.cdm_threshold_peaks.editingFinished.connect(
-            lambda: self.param_changed_from_gui(
-                attribute='cdm_threshold_peaks'))
-        '''
+        self.cdm_chk_show_kernel = QCheckBox('Show kernel for found discs')
+        self.cdm_chk_show_kernel.toggled.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
 
         vlo_left = QVBoxLayout()
         self.tab_cdm.hlo.addLayout(vlo_left)
@@ -2015,10 +2020,6 @@ class ParamsTabMammo(ParamsTabCommon):
         flo1 = QFormLayout()
         flo1.addRow(QLabel('Accept tolerance for phantom position (degrees)'),
                     self.cdm_tolerance_angle)
-        '''
-        flo1.addRow(QLabel('Threshold for hough_line_peaks'),
-                    self.cdm_threshold_peaks)
-        '''
 
         vlo_left.addLayout(flo1)
 
@@ -2026,16 +2027,28 @@ class ParamsTabMammo(ParamsTabCommon):
         self.tab_cdm.hlo.addLayout(vlo_right)
         flo2 = QFormLayout()
         vlo_right.addLayout(flo2)
-        self.cdm_result_image = QComboBox()
-        self.cdm_result_plot = QComboBox()
+        
         flo2.addRow(QLabel('Result plot:'), self.cdm_result_plot)
         flo2.addRow(QLabel('Result image:'), self.cdm_result_image)
+        vlo_right.addWidget(
+            QLabel('Show processed sub-image in results image for:'))
+        hlo_diam_thick = QHBoxLayout()
+        vlo_right.addLayout(hlo_diam_thick)
+        hlo_diam_thick.addWidget(QLabel('Diameter:'))
+        hlo_diam_thick.addWidget(self.cdm_cbox_diameter)
+        hlo_diam_thick.addWidget(QLabel('mm       Thickness:'))
+        hlo_diam_thick.addWidget(self.cdm_cbox_thickness)
+        hlo_diam_thick.addWidget(QLabel(
+            '<html><head/><body><p>&mu;m (or number if CDMAM v4.0)</p></body></html>'))
+        vlo_right.addWidget(self.cdm_chk_show_kernel)
+        vlo_right.addWidget(uir.LabelItalic(
+            'Double-click center of cells in the image to display the '
+            'processed matrix for that cell in'))
+
         self.cdm_result_plot.addItems(
             ['Found disc at center and in correct corner'])
         self.cdm_result_image.addItems(
-            ['Cell map'])
-        self.cdm_result_image.currentIndexChanged.connect(
-            self.main.wid_res_image.canvas.result_image_draw)
+            ['Processed sub-image for selected diameter and thickness'])
 
         self.tab_cdm.hlo.addStretch()
 

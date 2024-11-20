@@ -8,6 +8,7 @@ dialog, will offer to locate the folder of exported files and ignore those alrea
 	- Better explaination for the auto-templates from the info-button in Settings - Automation templates vendor files (Mammo)
 	- Added button to import Mammo QAP files from Automation dialog. Export from modality include all files. The new import function ignore files already analysed.
 	- Tolerance read from the files, but if tolerance from same filetype already exist one may skip re-reading this. Now also automatically link the right tolerance-templates.
+- Added test for analysing CDMAM v3.4 and v4.0 phantoms. Test is not validated yet and not finished.
 
 Changes:
 - Window level widget: 
@@ -24,6 +25,7 @@ Fixes:
 - Xray/Mammo Homogeneity (flat field test): Bug from v3.1.2 fixed - Variance map pr ROI now visible again 
 - Removed warnings from pydicom v3.0.1 when reading DICOM images not perfectly following the standard 
 - Handled more strange inputs and accepting closing images without crashing for PET test Recovery curves
+- other small fixes
 
 Code structure:
 - gathered MTF methods from calculate_qc.py and mini_methods_calculate.py into a new file mtf_methods.py

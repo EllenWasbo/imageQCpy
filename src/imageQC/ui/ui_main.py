@@ -952,9 +952,10 @@ class MainWindow(QMainWindow):
             if isinstance(errmsg, str):
                 self.status_bar.showMessage(errmsg, 2000, warning=True)
             elif isinstance(errmsg, list):
-                self.status_bar.showMessage(
-                    'Finished with issues', 2000, warning=True,
-                    add_warnings=errmsg)
+                if errmsg:
+                    self.status_bar.showMessage(
+                        'Finished with issues', 2000, warning=True,
+                        add_warnings=errmsg)
 
     def display_previous_warnings(self):
         """Display saved statusbar warnings."""

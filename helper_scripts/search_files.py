@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "ESF_to_LSF"
+search_string = "wid_res"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

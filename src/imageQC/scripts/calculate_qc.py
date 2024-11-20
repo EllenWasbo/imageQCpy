@@ -938,6 +938,26 @@ def calculate_qc(input_main, wid_auto=None,
                         input_main.results['Rec']['details_dict']['max_slice_idx'])
                 except KeyError:
                     pass
+            elif 'CDM' in input_main.results:
+                input_main.tab_mammo.cdm_cbox_diameter.clear()
+                input_main.tab_mammo.cdm_cbox_diameter.addItems(
+                    [str(x) for x in
+                     input_main.results['CDM']['details_dict'][-1]['diameters']])
+                input_main.tab_mammo.cdm_cbox_thickness.clear()
+                thickness = input_main.results[
+                    'CDM']['details_dict'][-1]['thickness']
+                phantom = 40 if isinstance(thickness[0], list) else 34
+                if phantom == 40:
+                    items = [str(idx) for idx in range(16)]
+                    items[0] = items[0] + ' (thickest)'
+                    items[-1] = items[-1] + ' (thinnest)'
+                    row, col = 0, 0
+                else:
+                    items = [str(x) for x in thickness]
+                    row, col = 0, 6
+                input_main.tab_mammo.cdm_cbox_thickness.addItems(items)
+                input_main.tab_mammo.cdm_cbox_diameter.setCurrentIndex(col)
+                input_main.tab_mammo.cdm_cbox_thickness.setCurrentIndex(row)
             try:
                 input_main.progress_modal.setValue(input_main.progress_modal.maximum())
             except AttributeError:
@@ -2043,24 +2063,33 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         #headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
 
         if len(images_to_test) == 0:
-            res = Results(headers=[])#TODO ----- headers)
+            res = Results(headers=headers)
         else:
             cdmam_table_dict = {}
             errmsgs = []
             details_dicts = []
             prev_phantom = 0
             prev_pix = 0
-            for idx in images_to_test:
+            n_imgs = len(images_to_test)
+            curr_progress_value = 0
+            for i, idx in enumerate(images_to_test):
+                try:
+                    input_main.progress_modal.setLabelText(
+                        f'Calculating image {i}/{n_imgs}')
+                    curr_progress_value = round(100 * i/n_imgs)
+                    input_main.progress_modal.setValue(
+                         curr_progress_value)
+                except AttributeError:
+                    pass
                 image = matrix[idx]
                 pix = img_infos[idx].pix[0]  # TODO validate all same pixel size
-                roi_array = None
+                roi_dict = None
                 if image is not None:
-                    roi_array, err_this = get_rois(image, idx, input_main)
+                    roi_dict, err_this = get_rois(image, idx, input_main)
                     if err_this:
                         errmsg.append(f'\tImage {idx}: {errmsg}')
-                    if roi_array is not None:
-                        include_array = roi_array[0]
-                        phantom = 40 if include_array is None else 34
+                    if roi_dict is not None:
+                        phantom = 34 if 'include_array' in roi_dict else 40
                         if prev_phantom == 0:
                             prev_phantom = phantom
                             from_yaml_dict = load_cdmam()
@@ -2069,73 +2098,91 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         if phantom != prev_phantom:
                             errmsg.append(f'\tImage {idx}: Different phantom '
                                           'type than previous')
-                            roi_array = None
+                            roi_dict = None
                         elif prev_pix != pix:
                             errmsg.append(f'\tImage {idx}: '
                                           'Different pixel sizes.')
-                            roi_array = None
-                if roi_array is not None:
-                    include_array = roi_array[0]
-                    center_xs = roi_array[1]
-                    center_ys = roi_array[2]
-                    cell_width = roi_array[3]
-                    angle = roi_array[4]
-                    invert = roi_array[5]
+                            roi_dict = None
+                if roi_dict is not None:
+                    include_array = None
+                    if 'include_array' in roi_dict:
+                        include_array = roi_dict['include_array']
+                    center_xs = roi_dict['xs']
+                    center_ys = roi_dict['ys']
+                    cell_width = roi_dict['cell_width']
+                    invert = roi_dict['invert']
                     if invert:
                         image = -image
+                    rot90_k = 0
+                    if 'rot90_k' in roi_dict:
+                        rot90_k = roi_dict['rot90_k']
 
                     pix_new = 0.05  # fixed pixelsize of 50 um for analysis
-                    test_angles = []
-                    angle_margin = np.deg2rad(paramset.cdm_tolerance_angle)
                     if phantom == 34:
                         line_dist = (cell_width * np.cos(np.pi / 4)**2) / 2
-                        x = round(center_xs[2, 4])
-                        y = round(center_ys[2, 4])
                     else:
                         line_dist = cell_width / 2
-                        x = round(center_xs[0, 0])
-                        y = round(center_ys[0, 0])
                     line_dist = round((pix / pix_new) * line_dist)
 
-                    wi, templates, kernels = cdmam_methods.get_template_kernel(
-                        cdmam_table_dict, phantom,
-                        pix, pix_new, cell_width, angle, image, (x, y))
+                    templates, wi = cdmam_methods.get_templates(
+                        image, center_xs, center_ys, pix, pix_new,
+                        cell_width, line_dist, phantom, rot90_k,
+                        cdmam_table_dict)
+                    kernels = cdmam_methods.get_kernels(
+                        cdmam_table_dict, pix_new)
 
                     sz_y, sz_x = center_xs.shape
                     res_table = []
 
-                    threshold_peaks = paramset.cdm_threshold_peaks
+                    nn = 0
+                    include = True
                     for row in range(sz_y):
                         res_table.append([])
                         for col in range(sz_x):
                             res_table[-1].append([])
-                            include = include_array[row, col]
+                            if phantom == 34:
+                                include = include_array[row, col]
                             if include:
+                                try:
+                                    input_main.progress_modal.setValue(
+                                        curr_progress_value +
+                                        round((100/n_imgs) * nn / (sz_y*sz_x)))
+                                except AttributeError:
+                                    pass
                                 x = round(center_xs[row, col])
                                 y = round(center_ys[row, col])
                                 sub = image[y - wi:y + wi, x - wi:x + wi]
+                                if sub.shape[0] != sub.shape[1]:
+                                    sub = cdmam_methods.fix_cropped_sub(
+                                        image, x, y, wi)
                                 res = cdmam_methods.read_cdmam_sub(
                                     sub, phantom, line_dist,
-                                    templates[col],
-                                    kernels[col])
+                                    templates, kernels[col])
                                 res_table[row][col] = res
+                                nn += 1
 
                     found_correct_corner = np.zeros((sz_y, sz_x), dtype=bool)
                     found_centers = np.zeros((sz_y, sz_x), dtype=bool)
                     corners = np.array(
                         cdmam_table_dict['corner_index'])
+
                     for row in range(sz_y):
                         for col in range(sz_x):
-                            include = include_array[row, col]
+                            if phantom == 34:
+                                include = include_array[row, col]
                             if include:
                                 found_correct_corner[row, col] = (
-                                    res_table[row][col][0] == corners[row, col])
-                                found_centers[row, col] = res_table[row][col][1]
+                                    res_table[row][col]['corner_index']
+                                    == corners[row, col])
+                                found_centers[row, col] = (
+                                    res_table[row][col]['central_disc_found'])
+
                     details_dict = {
                         'found_correct_corner': found_correct_corner,
                         'include_array': include_array,
                         'found_centers': found_centers,
-                        'res_table': res_table
+                        'res_table': res_table,
+                        'kernels': kernels
                         }
                     details_dicts.append(details_dict)
 

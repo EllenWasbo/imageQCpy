@@ -511,12 +511,10 @@ class ResultPlotCanvas(PlotCanvas):
 
     def CDM(self):
         """Prepare plot for test CDMAM."""
-        self.title = 'Correctly found disc in corner (diamond) and at center (circle)'
         self.xtitle = 'Diameter (mm)'
         self.ytitle = r'Thickness ($\mu$m)'
         imgno = self.main.gui.active_img_no
         details_dict = self.main.results['CDM']['details_dict'][imgno]
-
         cdmam_table_dict = self.main.results['CDM']['details_dict'][-1]
         xlabels = cdmam_table_dict['diameters']
         cbox = self.main.tab_mammo.cdm_cbox_thickness
@@ -530,15 +528,52 @@ class ResultPlotCanvas(PlotCanvas):
                      'array': np.flipud(details_dict['include_array']),
                      'size': 30, 'marker': 'x', 'color': 'silver'})
 
-        self.scatters.append(
-            {'xlabels': xlabels, 'ylabels': ylabels,
-             'array': np.flipud(details_dict['found_correct_corner']),
-             'size': 100, 'marker': 's', 'color': 'green'})
+        def prepare_found_corner_center_plot():
+            self.title = 'Correctly found disc in corner (diamond) and at center (circle)'
 
-        self.scatters.append(
-            {'xlabels': xlabels, 'ylabels': ylabels,
-             'array': np.flipud(details_dict['found_centers']),
-             'size': 30, 'marker': 'o', 'color': 'lightgreen'})
+            self.scatters.append(
+                {'xlabels': xlabels, 'ylabels': ylabels,
+                 'array': np.flipud(details_dict['found_correct_corner']),
+                 'size': 100, 'marker': 's', 'color': 'green'})
+
+            self.scatters.append(
+                {'xlabels': xlabels, 'ylabels': ylabels,
+                 'array': np.flipud(details_dict['found_centers']),
+                 'size': 30, 'marker': 'o', 'color': 'lightgreen'})
+
+        def prepare_comparison_vs_inp_plot(sel_text):
+            self.title = sel_text + '(imageQC found = green, inp found = orange)'
+
+            if 'corner' in sel_text:
+                self.scatters.append(
+                    {'xlabels': xlabels, 'ylabels': ylabels,
+                     'array': np.flipud(details_dict['found_correct_corner']),
+                     'size': 100, 'marker': 's', 'color': 'green'})
+                if 'found_correct_corner_inp' in details_dict:
+                    self.scatters.append(
+                        {'xlabels': xlabels, 'ylabels': ylabels,
+                         'array': np.flipud(details_dict['found_correct_corner_inp']),
+                         'size': 50, 'marker': 's', 'color': 'orange'})
+            if 'center' in sel_text:
+                self.scatters.append(
+                    {'xlabels': xlabels, 'ylabels': ylabels,
+                     'array': np.flipud(details_dict['found_centers']),
+                     'size': 60, 'marker': 'o', 'color': 'green'})
+                if 'found_centers_inp' in details_dict:
+                    self.scatters.append(
+                        {'xlabels': xlabels, 'ylabels': ylabels,
+                         'array': np.flipud(details_dict['found_centers_inp']),
+                         'size': 30, 'marker': 'o', 'color': 'orange'})
+
+        test_widget = self.main.stack_test_tabs.currentWidget()
+        try:
+            sel_text = test_widget.cdm_result_plot.currentText()
+        except AttributeError:
+            sel_text = ''
+        if sel_text == 'Found disc at center and in correct corner':
+            prepare_found_corner_center_plot()
+        elif 'CDCOM' in sel_text:
+            prepare_comparison_vs_inp_plot(sel_text)
 
     def Cro(self):
         """Prepare plot for test PET cross calibration."""

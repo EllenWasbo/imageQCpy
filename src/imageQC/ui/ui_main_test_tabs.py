@@ -681,7 +681,8 @@ class ParamsTabCommon(QTabWidget):
                         df = pd.DataFrame(coords)
                         df.columns = ['x', 'y']
                         df.to_clipboard(index=False, excel=True)
-                        self.main.status_bar.showMessage('Values in clipboard', 2000)
+                        self.main.status_bar.showMessage(
+                            'Values in clipboard', 2000)
                 self.main.refresh_results_display()
             else:
                 QMessageBox.warning(
@@ -695,7 +696,8 @@ class ParamsTabCommon(QTabWidget):
         self.hom_roi_size_variance = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
         self.hom_roi_size_variance.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_roi_size_variance'))
+            lambda: self.param_changed_from_gui(
+                attribute='hom_roi_size_variance'))
         self.hom_variance = QCheckBox()
         self.hom_variance.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='hom_variance'))
@@ -709,11 +711,13 @@ class ParamsTabCommon(QTabWidget):
         self.hom_ignore_roi_percent = QDoubleSpinBox(
             decimals=0, minimum=0., maximum=95, singleStep=1)
         self.hom_ignore_roi_percent.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_ignore_roi_percent'))
+            lambda: self.param_changed_from_gui(
+                attribute='hom_ignore_roi_percent'))
         self.hom_deviating_pixels = QDoubleSpinBox(
             decimals=0, minimum=1, singleStep=1)
         self.hom_deviating_pixels.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_deviating_pixels'))
+            lambda: self.param_changed_from_gui(
+                attribute='hom_deviating_pixels'))
         self.hom_deviating_rois = QDoubleSpinBox(
             decimals=0, minimum=1, singleStep=1)
         self.hom_deviating_rois.valueChanged.connect(
@@ -1982,6 +1986,61 @@ class ParamsTabMammo(ParamsTabCommon):
         """GUI of tab NPS."""
         self.create_tab_nps_xray()
 
+    def cdm_get_compare_inp(self):
+        imgno = self.main.gui.active_img_no
+        try:
+            details_dict = self.main.results['CDM']['details_dict'][imgno]
+        except (IndexError, KeyError):
+            details_dict = None
+            QMessageBox.warning(
+                self, 'Missing results',
+                'The read files will be connected to calculated results, none exist. '
+                'Calculate results and retry.')
+        if details_dict:
+            fnames = QFileDialog.getOpenFileNames(
+                self, 'Select matrix.inp + matrix2.inp files to compare to',
+                filter="INP files (*.inp);;All files (*)")
+        else:
+            fnames = None
+        if fnames is not None:
+            paths = fnames[0]
+            if len(paths) != 2:
+                QMessageBox.warning(
+                    self, 'Wrong number of files',
+                    f'Expecting two files, found {len(paths)}. Comparison aborted.')
+            else:
+                proceed = True
+                if Path(paths[0]).name != 'matrix.inp' and Path(paths[1]).name != 'matrix2.inp':
+                    question = (
+                        'Expecting matrix.inp and matrix2.inp as filenames. Found other names. '
+                        f'Proceed assuming the first file {Path(paths[0]).name} represent found '
+                        f'corners and the second {Path(paths[1]).name} found centers?')
+                    proceed = messageboxes.proceed_question(self, question)
+                if proceed:
+                    dataframes = []
+                    shape = details_dict['found_correct_corner'].shape
+                    for path in paths:
+                        dataf = pd.read_csv(path, sep='\s+', header=None)
+                        dataf = dataf.to_numpy()
+                        if dataf.shape == shape:
+                            found_array = np.zeros(shape, dtype=bool)
+                            found_array[dataf == 1] = True
+                            dataframes.append(dataf)
+                        else:
+                            QMessageBox.warning(
+                                self, 'Wrong shape',
+                                f'Expecting shape {shape}, found shape {dataf.shape}. '
+                                'Not same phantom version?')
+                            break
+                    if len(dataframes) == 2:
+                        details_dict.update({
+                            'found_correct_corner_inp': dataframes[0],
+                            'found_centers_inp': dataframes[0]
+                            })
+                        QMessageBox.information(
+                            self, 'Files read',
+                            'Find comparison in Results Plot selecting the plot type.')
+
     def create_tab_cdm(self):
         """GUI for CDMAM analysis."""
         self.tab_cdm = ParamsWidget(self, run_txt='Analyse CDMAM')
@@ -1998,11 +2057,13 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_tolerance_angle.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='cdm_tolerance_angle'))
-        
+
         self.cdm_result_image = QComboBox()
         self.cdm_result_plot = QComboBox()
         self.cdm_cbox_diameter = QComboBox()
         self.cdm_cbox_thickness = QComboBox()
+        self.cdm_result_plot.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
         self.cdm_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
         self.cdm_cbox_diameter.currentIndexChanged.connect(
@@ -2043,10 +2104,15 @@ class ParamsTabMammo(ParamsTabCommon):
         vlo_right.addWidget(self.cdm_chk_show_kernel)
         vlo_right.addWidget(uir.LabelItalic(
             'Double-click center of cells in the image to display the '
-            'processed matrix for that cell in'))
+            'processed cell in Result image tab'))
+        btn_compare_inp = QPushButton('Compare score map to .inp from CDCOM')
+        btn_compare_inp.clicked.connect(self.cdm_get_compare_inp)
+        vlo_right.addWidget(btn_compare_inp)
 
         self.cdm_result_plot.addItems(
-            ['Found disc at center and in correct corner'])
+            ['Found disc at center and in correct corner',
+             'Compare found corners to .inp from CDCOM',
+             'Compare found centers to .inp from CDCOM'])
         self.cdm_result_image.addItems(
             ['Processed sub-image for selected diameter and thickness'])
 

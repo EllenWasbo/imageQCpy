@@ -1129,8 +1129,8 @@ class ResultImageCanvas(GenericImageCanvas):
                     thick_txt = self.main.tab_mammo.cdm_cbox_thickness.currentText()
 
                 self.title = (
-                    f'Processed sub-image for diameter {diameter} mm, '
-                    f'thickess {thick_txt} &mu;m')
+                    f'Processed sub-image averaged by kernel, disc with '
+                    f'diameter {diameter} mm, thickess {thick_txt} &mu;m')
 
                 if self.main.tab_mammo.cdm_chk_show_kernel.isChecked():
                     sz_sub = self.current_image.shape[0]

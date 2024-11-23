@@ -451,12 +451,14 @@ class ImageCanvas(GenericImageCanvas):
                         mask, levels=[0.9],
                         colors=colors[color_no], alpha=0.5, linewidths=self.linewidth,
                         linestyles=linestyles[linestyle_no])
-                except: # np.core._exeptions._ArrayMemoryExeption
+                except TypeError:
+                    pass
+                except np.core._exeptions._ArrayMemoryExeption:
                     QMessageBox.warning(
                         self.main, 'Failed drawing ROI',
-                        'An error occured during drawing ROIs. This might be '
-                        'due to a memory issue. You may turn off annotations to '
-                        'avoid memory issues.')
+                        'There was a memory issue while drawing ROIs. '
+                        'You may turn off annotations to avoid memory issues.')
+
             if labels:
                 try:
                     label = labels[i]
@@ -570,15 +572,21 @@ class ImageCanvas(GenericImageCanvas):
         if self.main.current_modality == 'Mammo':
             flatfield = True
         elif self.main.current_modality == 'Xray':
-            if self.main.current_paramset.hom_tab_alt == 3:
+            if self.main.current_paramset.hom_tab_alt >= 3:
                 flatfield = True
 
         if flatfield:
-            self.add_contours_to_all_rois(colors=['blue', 'blue'], roi_indexes=[0, 1])
+            colors = ['blue']
+            idxs = [0]
+            if self.main.current_roi[1] is not None:
+                colors.append('blue')
+                idxs.append(1)
+            self.add_contours_to_all_rois(colors=colors, roi_indexes=idxs)
             if self.main.current_paramset.hom_mask_max:
-                self.add_contours_to_all_rois(
-                    colors=['red'], roi_indexes=[2],
-                    filled=True, hatches=['////'], reset_contours=False)
+                if self.main.current_roi[2] is not None:
+                    self.add_contours_to_all_rois(
+                        colors=['red'], roi_indexes=[2],
+                        filled=True, hatches=['////'], reset_contours=False)
             if self.main.current_paramset.hom_mask_outer_mm > 0:
                 mask = np.where(self.main.current_roi[-1], 0, 1)
                 contour = self.ax.contour(
@@ -970,6 +978,7 @@ class ResultImageCanvas(GenericImageCanvas):
         self.max_val = None
         self.title = ''
         self.positive_negative = False  # display positive as red, negative as blue
+        self.set_min_max = False  # Force window level to be min-max at first display
         self.contours_to_add = []
 
         if self.main.current_test in self.main.results:
@@ -979,10 +988,24 @@ class ResultImageCanvas(GenericImageCanvas):
                     class_method()
 
         if self.current_image is not None:
-            if self.min_val is None:
-                self.min_val = np.amin(self.current_image)
-            if self.max_val is None:
-                self.max_val = np.amax(self.current_image)
+            if self.min_val is None or self.max_val is None:
+                if self.current_image.dtype == bool:
+                    self.min_val = False
+                    self.max_val = True
+                elif self.set_min_max:
+                    self.min_val = np.min(self.current_image)
+                    self.max_val = np.max(self.current_image)
+                    if self.max_val == self.min_val:
+                        self.max_val += 1
+                else:
+                    minval, maxval = (
+                        self.parent.wid_window_level.tb_wl.calculate_min_max(
+                            mode_string=''))
+                    if self.min_val is None:
+                        self.min_val = minval
+                    if self.max_val is None:
+                        self.max_val = maxval
+
             if self.positive_negative:
                 if self.min_val != - self.max_val:
                     maxv = np.max(np.abs([self.min_val, self.max_val]))
@@ -1008,8 +1031,10 @@ class ResultImageCanvas(GenericImageCanvas):
                 elif contrast < 20:
                     self.parent.wid_window_level.decimals = 1
                 try:
-                    rmin = round(self.min_val * 10 ** self.parent.wid_window_level.decimals)
-                    rmax = round(self.max_val * 10 ** self.parent.wid_window_level.decimals)
+                    minimg = np.min(self.current_image)
+                    maximg = np.max(self.current_image)
+                    rmin = round(minimg * 10 ** self.parent.wid_window_level.decimals)
+                    rmax = round(maximg * 10 ** self.parent.wid_window_level.decimals)
                     self.parent.wid_window_level.min_wl.setRange(rmin, rmax)
                     self.parent.wid_window_level.max_wl.setRange(rmin, rmax)
                     self.parent.wid_window_level.update_window_level(
@@ -1024,7 +1049,7 @@ class ResultImageCanvas(GenericImageCanvas):
             if self.main.current_modality == 'Mammo':
                 flatfield = True
             elif self.main.current_modality == 'Xray':
-                if self.main.current_paramset.hom_tab_alt == 3:
+                if self.main.current_paramset.hom_tab_alt >= 3:
                     flatfield = True
             if flatfield:
                 self.mark_deviating_pixels()
@@ -1169,7 +1194,7 @@ class ResultImageCanvas(GenericImageCanvas):
         if self.main.current_modality == 'Mammo':
             flatfield = True
         elif self.main.current_modality == 'Xray':
-            if self.main.current_paramset.hom_tab_alt == 3:
+            if self.main.current_paramset.hom_tab_alt >= 3:
                 flatfield = True
 
         if flatfield:
@@ -1183,21 +1208,54 @@ class ResultImageCanvas(GenericImageCanvas):
                 if self.main.current_modality == 'Mammo':
                     sel_txt = self.main.tab_mammo.hom_result_image.currentText()
                 else:
-                    sel_txt = self.main.tab_xray.hom_result_image.currentText()
+                    if self.main.current_paramset.hom_tab_alt == 3:
+                        sel_txt = self.main.tab_xray.hom_result_image.currentText()
+                    else:
+                        sel_txt = self.main.tab_xray.hom_result_image_aapm.currentText()
                 self.title = sel_txt
-                try:
+
+                try:  # flatfield mammo and aapm variants
                     if sel_txt == 'Average pr ROI map':
                         self.current_image = details_dict['averages']
+                    elif sel_txt == 'Noise pr ROI map':
+                        self.current_image = details_dict['stds']
                     elif sel_txt == 'SNR pr ROI map':
-                        self.current_image = details_dict['snrs']
+                        if 'snrs' in details_dict:
+                            self.current_image = details_dict['snrs']
+                        elif 'stds' in details_dict:
+                            self.current_image = np.divide(
+                                details_dict['averages'], details_dict['stds'])
                     elif sel_txt == 'Average variance pr ROI map':
                         self.current_image = details_dict['variances']
                     elif sel_txt == 'Average pr ROI (% difference from global average)':
-                        self.current_image = details_dict['diff_averages']
+                        if 'diff_averages' in details_dict:
+                            self.current_image = details_dict['diff_averages']
+                        else:
+                            overall_avg = np.mean(details_dict['averages'])
+                            diff_avgs = details_dict['averages'] - overall_avg
+                            self.current_image = 100 / overall_avg * diff_avgs
+                        self.positive_negative = True
+                    elif sel_txt == 'Noise pr ROI (% difference from average noise)':
+                        overall_avg = np.mean(details_dict['stds'])
+                        diff_avgs = details_dict['stds'] - overall_avg
+                        self.current_image = 100 / overall_avg * diff_avgs
                         self.positive_negative = True
                     elif sel_txt == 'SNR pr ROI (% difference from global SNR)':
                         self.current_image = details_dict['diff_snrs']
                         self.positive_negative = True
+                    elif sel_txt == 'SNR pr ROI (% difference from average SNR)':
+                        snrs = np.divide(
+                            details_dict['averages'], details_dict['stds'])
+                        overall_avg = np.mean(snrs)
+                        diff_avgs = snrs - overall_avg
+                        self.current_image = 100 / overall_avg * diff_avgs
+                        self.positive_negative = True
+                    elif sel_txt == 'Local Uniformity map':
+                        self.current_image = details_dict['local_uniformities']
+                    elif sel_txt == 'Local Noise Uniformity map':
+                        self.current_image = details_dict['local_noise_uniformities']
+                    elif sel_txt == 'Local SNR Uniformity map':
+                        self.current_image = details_dict['local_snr_uniformities']
                     elif sel_txt == 'Pixel values (% difference from global average)':
                         self.current_image = details_dict['diff_pixels']
                         self.positive_negative = True
@@ -1209,6 +1267,15 @@ class ResultImageCanvas(GenericImageCanvas):
                         self.cmap = 'RdYlGn_r'
                     elif sel_txt == '# deviating pixels pr ROI':
                         self.current_image = details_dict['deviating_pixel_clusters']
+                        self.set_min_max = True
+                    elif sel_txt == 'Anomalous pixels':
+                        if details_dict['n_anomalous_pixels'] > 0:
+                            self.current_image = details_dict['anomalous_pixels']
+                            self.cmap = 'RdYlGn_r'
+                    elif sel_txt == '# anomalous pixels pr ROI':
+                        self.current_image = details_dict['n_anomalous_pixels_pr_roi']
+                        self.set_min_max = True
+
                 except KeyError:
                     pass
 

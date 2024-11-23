@@ -1242,12 +1242,21 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         alt = 0
         res = None
         if image2d is not None:
-            for i in range(np.shape(roi_array)[0]):
-                arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
-                avgs.append(np.mean(arr))
-                stds.append(np.std(arr))
+            proceed = True
+            if modality == 'Mammo':
+                proceed = False
+            elif modality == 'Xray':
+                if paramset.hom_tab_alt >= 3:
+                    proceed = False
+            if proceed:
+                for i in range(np.shape(roi_array)[0]):
+                    arr = np.ma.masked_array(
+                        image2d, mask=np.invert(roi_array[i]))
+                    avgs.append(np.mean(arr))
+                    stds.append(np.std(arr))
 
-        flatfield = False
+        flatfield_mammo = False
+        flatfield_aapm = False
         if modality == 'CT':
             headers = copy.deepcopy(HEADERS[modality][test_code]['altAll'])
             headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
@@ -1265,7 +1274,9 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 if alt == 0:
                     values = avgs + stds
                 elif alt == 3:
-                    flatfield = True
+                    flatfield_mammo = True
+                elif alt == 4:
+                    flatfield_aapm = True
                 else:
                     avg_all = np.sum(avgs) / len(avgs)
                     diffs = [(avg - avg_all) for avg in avgs]
@@ -1278,7 +1289,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         elif modality == 'Mammo':
             headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
             headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
-            flatfield = True
+            flatfield_mammo = True
 
         elif modality == 'PET':
             headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
@@ -1287,10 +1298,10 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 diffs = [100.*(avgs[i] - avg)/avg for i in range(5)]
                 values = avgs + diffs
 
-        if flatfield:
+        if flatfield_mammo:
             if image2d is not None:
                 details = calculate_flatfield_mammo(
-                    image2d, roi_array[-2], roi_array[-1], image_info, paramset)
+                    image2d, roi_array[-1], image_info, paramset)
                 if details:
                     values = [
                         np.mean(details['averages']),
@@ -1316,6 +1327,32 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     res = Results(
                         headers=headers, values=values,
                         headers_sup=headers_sup, values_sup=values_sup,
+                        details_dict=details)
+        elif flatfield_aapm:
+            if image2d is not None:
+                details = calculate_flatfield_aapm(
+                    image2d, roi_array[-1], image_info, paramset)
+                snrs = np.divide(details['averages'], details['stds'])
+                if details:
+                    values = [
+                        np.mean(details['averages']),
+                        np.mean(details['stds']),
+                        np.mean(snrs),
+                        np.min(snrs),
+                        details['n_anomalous_pixels'],
+                        np.max(details['n_anomalous_pixels_pr_roi']),
+                        np.max(details['local_uniformities']),
+                        details['global_uniformity'],
+                        np.max(details['local_noise_uniformities']),
+                        details['global_noise_uniformity'],
+                        np.max(details['local_snr_uniformities']),
+                        details['global_snr_uniformity'],
+                        details['relSDrow'],
+                        details['relSDcol']
+                        ]
+
+                    res = Results(
+                        headers=headers, values=values,
                         details_dict=details)
 
         if res is None:
@@ -3291,15 +3328,100 @@ def calculate_NPS(image2d, roi_array, img_info, paramset, modality='CT'):
     return (values, details_dict)
 
 
-def calculate_flatfield_mammo(image2d, mask_max, mask_outer, image_info, paramset):
+def calculate_flatfield_aapm(image2d, mask_outer, image_info, paramset):
     """Calculate homogeneity Mammo according to EU guidelines.
 
     Parameters
     ----------
     image2d : numpy.ndarray
         input image
-    mask_max : numpy.ndarray
-        mask of max values if paramset.hom_mask_max is set
+    mask_outer : numpy.ndarray
+        mask of outer mm if paramset.hom_mask_outer_mm > 0
+    image_info : DcmInfo
+        as defined in scripts/dcm.py
+    paramset : cfc.ParamSetMammo
+
+    Returns
+    -------
+    details : dict
+    """
+    roi_size_in_pix = round(paramset.hom_roi_size / image_info.pix[0])
+    if mask_outer is not None:
+        rows = np.max(mask_outer, axis=1)
+        cols = np.max(mask_outer, axis=0)
+        sub = image2d[rows][:, cols]
+    else:
+        sub = image2d
+
+    # similar code to find variance image using fftconvolve
+    kernel = np.full((roi_size_in_pix, roi_size_in_pix),
+                     1./(roi_size_in_pix**2))
+    mu = sp.signal.fftconvolve(sub, kernel, mode='valid')
+    ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='valid')
+    noise_sub = np.sqrt(ii - mu**2)
+
+    margin_valid = (np.array(sub.shape) - np.array(mu.shape)) // 2
+    sub_valid_part = sub[margin_valid[0]:margin_valid[0] + mu.shape[0],
+                         margin_valid[1]:margin_valid[1] + mu.shape[1]]
+    diff_valid_part = np.abs(sub_valid_part - mu)  # abs. difference from mean
+    anomalous_pixels = np.zeros(mu.shape, dtype=bool)
+    anomalous_pixels = (
+        diff_valid_part > paramset.hom_anomalous_factor * noise_sub)
+    sum_kernel = np.ones((roi_size_in_pix, roi_size_in_pix), dtype=int)
+    anomalous_pixels_pr_roi = sp.signal.fftconvolve(
+        anomalous_pixels, sum_kernel, mode='same')
+
+    uniformity_arrays = []
+    global_uniformity = []
+
+    for input_array in [sub_valid_part, noise_sub, np.divide(mu, noise_sub)]:
+        uniformity_arrays.append(mmcalc.get_differential_uniformity_map(
+            input_array, 8))
+        global_uniformity.append(
+            100. * (np.max(input_array) - np.min(input_array))
+            / np.mean(input_array))
+
+    # correlated noise TG150 4.3.9
+    sd_col_row = []
+    diff_profile_col_row = []
+    avg_noise = np.mean(noise_sub)
+    for i in range(2):
+        avg_profile = np.mean(sub, axis=i)  # col then row
+        std = np.sum((avg_profile - np.mean(avg_profile))**2)
+        std = np.sqrt(std/(avg_profile.size - 1))
+        sd_col_row.append(std / avg_noise)
+
+        avg_profile = np.concatenate(
+            ([avg_profile[0]], avg_profile, [avg_profile[-1]]))
+        diff = (avg_profile 
+                - 0.5* (np.roll(avg_profile, 1) + np.roll(avg_profile, -1)))
+        diff_profile_col_row.append(diff[1:-1])
+
+    details_dict = {
+        'averages': mu,
+        'stds': noise_sub,
+        'anomalous_pixels': anomalous_pixels,
+        'n_anomalous_pixels': np.count_nonzero(anomalous_pixels),
+        'n_anomalous_pixels_pr_roi': anomalous_pixels_pr_roi,
+        'local_uniformities': uniformity_arrays[0],
+        'local_noise_uniformities': uniformity_arrays[1],
+        'local_snr_uniformities': uniformity_arrays[2],
+        'global_uniformity': global_uniformity[0],
+        'global_noise_uniformity': global_uniformity[1],
+        'global_snr_uniformity': global_uniformity[2],
+        'relSDrow': sd_col_row[1], 'relSDcol': sd_col_row[0],
+        'diff_neighbours_profile_col_row': diff_profile_col_row
+        }
+
+    return details_dict
+
+def calculate_flatfield_mammo(image2d, mask_outer, image_info, paramset):
+    """Calculate homogeneity Mammo according to EU guidelines.
+
+    Parameters
+    ----------
+    image2d : numpy.ndarray
+        input image
     mask_outer : numpy.ndarray
         mask of outer mm if paramset.hom_mask_outer_mm > 0
     image_info : DcmInfo

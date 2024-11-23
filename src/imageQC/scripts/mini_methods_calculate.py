@@ -1183,3 +1183,41 @@ def get_distance_3d_plane(coords, abcd):
     factor = 1 / np.sqrt(a**2 + b**2 + c**2)
     dist_matrix = factor * (a * X + b * Y + c * Z - d)
     return dist_matrix
+
+
+def get_differential_uniformity_map(image, window_length):
+    """Calculate differential uniformity by sliding window.
+
+    Parameters
+    ----------
+    image : np.ndarray
+    window_length : int
+        number of pixels to slide along x and y direction
+
+    Returns
+    -------
+    du_matrix : np.ndarray
+        differential uniformity map
+    """
+    #from numpy.lib.stride_tricks import sliding_window_view
+    sz_y, sz_x = image.shape
+    du_cols = np.zeros(image.shape)
+    du_rows = np.zeros(image.shape)
+    halfw = window_length // 2
+    for x in range(sz_x):
+        view = np.lib.stride_tricks.sliding_window_view(
+            image[:, x], window_length)
+        maxs = np.nanmax(view, axis=-1)
+        mins = np.nanmin(view, axis=-1)
+        du_cols[halfw:halfw+maxs.size, x] = 100. * (maxs - mins) / (maxs + mins)
+
+    for y in range(sz_y):
+        view = np.lib.stride_tricks.sliding_window_view(
+            image[y, :], window_length)
+        maxs = np.nanmax(view, axis=-1)
+        mins = np.nanmin(view, axis=-1)
+        du_rows[y, halfw:halfw+maxs.size] = 100. * (maxs - mins) / (maxs + mins)
+
+    du_matrix = np.maximum(du_cols, du_rows)
+
+    return du_matrix

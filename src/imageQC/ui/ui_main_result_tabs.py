@@ -748,6 +748,19 @@ class ResultPlotCanvas(PlotCanvas):
             self.curves.append(tolmin)
             self.curves.append(tolmax)
             self.default_range_y = self.test_values_outside_yrange([-6, 6])
+        elif self.main.current_modality == 'Xray':
+            if self.main.current_paramset.hom_tab_alt == 4:  # flatfield aapm
+                self.title = ('Profile averaged over all rows or columns minus '
+                              'average of two neighbour pixels in same profile')
+                imgno = self.main.gui.active_img_no
+                details_dict = self.main.results['Hom']['details_dict'][imgno]
+                styles = ['-r', '-b']
+                labels = ['Row', 'Column']
+                profs = details_dict['diff_neighbours_profile_col_row']
+                for i, prof in enumerate(profs):
+                    self.curves.append(
+                        {'label': labels[i], 'xvals': np.arange(prof.size),
+                         'yvals': prof, 'style': styles[i]})
         elif self.main.current_modality == 'PET':
             self.title = '% difference from mean of all means'
             yvalsC = []

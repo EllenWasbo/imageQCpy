@@ -470,9 +470,6 @@ class ToolBarWindowLevel(QToolBar):
         self.act_wl_update.setCheckable(True)
         self.act_wl_update.triggered.connect(self.update_window_level_mode)
         self.addAction(self.act_wl_update)
-        #self.chk_wl_update = QCheckBox('Lock WL')
-        #self.chk_wl_update.toggled.connect(self.update_window_level_mode)
-        #self.act_chk_wl_update = self.addWidget(self.chk_wl_update)
 
     def update_window_level_mode(self):
         """Set and unset lock on window level when selecting a new image."""
@@ -488,11 +485,80 @@ class ToolBarWindowLevel(QToolBar):
             self.tool_min_max_center_wl.setCheckable(True)
             self.tool_range_wl.setCheckable(True)
             self.tool_dcm_wl.setCheckable(True)
-            # default
             self.tool_range_wl.setChecked(True)
             self.set_window_level('mean_stdev')
             self.act_wl_update.setIcon(QIcon(
                 f'{os.environ[ENV_ICON_PATH]}unlocked.png'))
+
+    def calculate_min_max(self, mode_string=''):
+        """Calculate min max from current image and window level mode."""
+        image = None
+        minval = None
+        maxval = None
+        try:
+            image = self.parent.parent.active_img
+        except AttributeError:
+            try:
+                image = self.parent.parent.canvas.current_image
+            except AttributeError:
+                image = None
+        if image is not None:
+            if mode_string == '':
+                mode_string = self.get_window_level_mode()
+            minval = 0
+            maxval = 0
+            if mode_string == 'dcm':
+                try:
+                    imgno = self.parent.parent.gui.active_img_no
+                    img_info = self.parent.parent.imgs[imgno]
+                    if img_info.window_width > 0:
+                        minval = img_info.window_center - 0.5*img_info.window_width
+                        maxval = img_info.window_center + 0.5*img_info.window_width
+                except (AttributeError, IndexError):
+                    pass
+            else:
+                image_sub = image
+                if mode_string == 'min_max_center':
+                    sz_x, sz_y = image.shape
+                    image_sub = image[sz_y//4:-sz_y//4,sz_x//4:-sz_x//4]
+                else:
+                    patches = []
+                    try:
+                        if self.parent.parent.wid_image_display.tool_rectangle.isChecked():
+                            patches = self.parent.parent.wid_image_display.canvas.ax.patches
+                    except AttributeError:
+                        try:
+                            if self.parent.parent.tool_rectangle.isChecked():
+                                patches = self.parent.parent.canvas.ax.patches
+                        except AttributeError:
+                            pass
+                    for patch in patches:
+                        if patch.get_gid() == 'rectangle':
+                            [x0, y0], [x1, y1] = patch.get_bbox().get_points()
+                            x_tuple = (int(min([x0, x1])), int(max([x0, x1])) + 1)
+                            y_tuple = (int(min([y0, y1])), int(max([y0, y1])) + 1)
+                            image_sub = image[y_tuple[0]:y_tuple[1], x_tuple[0]:x_tuple[1]]
+
+                if 'min_max' in mode_string:
+                    minval = np.amin(image_sub)
+                    maxval = np.amax(image_sub)
+                elif mode_string == 'mean_stdev':
+                    meanval = np.mean(image_sub)
+                    stdval = np.std(image_sub)
+                    minval = meanval-stdval
+                    maxval = meanval+stdval
+
+            if maxval == minval:
+                minval = np.amin(image)
+                maxval = np.amax(image)
+            if maxval - minval >= 20:
+                minval = np.round(minval)
+                maxval = np.round(maxval)
+
+            if maxval == minval:
+                maxval = minval + 1
+
+        return (minval, maxval)
 
     def get_min_max(self):
         """Get lower and upper window level based on image.
@@ -579,6 +645,7 @@ class ToolBarWindowLevel(QToolBar):
         ----------
         arg : str
             type of window level 'dcm', 'min_max', 'min_max_center', 'mean_stdev'
+            or '' to get already set
         set_tools : bool, optional
             Also set the tool-buttons to change. Default is False.
         """
@@ -587,66 +654,9 @@ class ToolBarWindowLevel(QToolBar):
             self.tool_min_max_center_wl.setChecked(arg == 'min_max_center')
             self.tool_range_wl.setChecked(arg == 'mean_stdev')
             self.tool_dcm_wl.setChecked(arg == 'dcm')
-        try:
-            image = self.parent.parent.active_img
-        except AttributeError:
-            try:
-                image = self.parent.parent.canvas.current_image
-            except AttributeError:
-                image = None
-        if image is not None:
-            minval = 0
-            maxval = 0
-            if arg == 'dcm':
-                try:
-                    imgno = self.parent.parent.gui.active_img_no
-                    img_info = self.parent.parent.imgs[imgno]
-                    if img_info.window_width > 0:
-                        minval = img_info.window_center - 0.5*img_info.window_width
-                        maxval = img_info.window_center + 0.5*img_info.window_width
-                except (AttributeError, IndexError):
-                    pass
-            else:
-                image_sub = image
-                if arg == 'min_max_center':
-                    sz_x, sz_y = image.shape
-                    image_sub = image[sz_y//4:-sz_y//4,sz_x//4:-sz_x//4]
-                else:
-                    patches = []
-                    try:
-                        if self.parent.parent.wid_image_display.tool_rectangle.isChecked():
-                            patches = self.parent.parent.wid_image_display.canvas.ax.patches
-                    except AttributeError:
-                        try:
-                            if self.parent.parent.tool_rectangle.isChecked():
-                                patches = self.parent.parent.canvas.ax.patches
-                        except AttributeError:
-                            pass
-                    for patch in patches:
-                        if patch.get_gid() == 'rectangle':
-                            [x0, y0], [x1, y1] = patch.get_bbox().get_points()
-                            x_tuple = (int(min([x0, x1])), int(max([x0, x1])) + 1)
-                            y_tuple = (int(min([y0, y1])), int(max([y0, y1])) + 1)
-                            image_sub = image[y_tuple[0]:y_tuple[1], x_tuple[0]:x_tuple[1]]
 
-                if 'min_max' in arg:
-                    minval = np.amin(image_sub)
-                    maxval = np.amax(image_sub)
-                elif arg == 'mean_stdev':
-                    meanval = np.mean(image_sub)
-                    stdval = np.std(image_sub)
-                    minval = meanval-stdval
-                    maxval = meanval+stdval
-
-            if maxval == minval:
-                minval = np.amin(image)
-                maxval = np.amax(image)
-
-            minval = np.round(minval)
-            maxval = np.round(maxval)
-            if maxval == minval:
-                maxval = minval + 1
-
+        minval, maxval = self.calculate_min_max(mode_string=arg)
+        if minval is not None:
             self.parent.update_window_level(minval, maxval)
 
     def get_window_level_mode(self):
@@ -823,10 +833,6 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
             formatstr = f'.{decimals}f'
             formatstrmax = '.2e' if amax > 99999 else formatstr
             formatstrmin = '.2e' if amin > 99999 else formatstr
-            at_minmax = matplotlib.offsetbox.AnchoredText(
-                f'max: {amax:{formatstrmax}} \n min: {amin:{formatstrmin}}',
-                prop=dict(size=12, weight='light'), frameon=False, loc='upper right')
-            self.ax.add_artist(at_minmax)
 
             if all([self.parent.min_wl, self.parent.max_wl]):
                 factor = 1 / 10 ** self.parent.decimals
@@ -840,9 +846,13 @@ class WindowLevelHistoCanvas(FigureCanvasQTAgg):
                     if max_ratio == min_ratio:
                         max_ratio = min_ratio + 0.01
                     self.fig.subplots_adjust(min_ratio, 0., max_ratio, 1.)
+                    xpos = amin + 5/100*(amax-amin)
+                    self.ax.annotate(
+                        f'max: {amax:{formatstrmax}} \nmin: {amin:{formatstrmin}}',
+                        (xpos, 0.1*np.max(hist)), fontsize=12)
 
             self.draw()
-        except ValueError:
+        except (TypeError, ValueError):
             pass
 
 

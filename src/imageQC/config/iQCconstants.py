@@ -80,8 +80,8 @@ ALTERNATIVES = {
         'Hom': ['Central + quadrants ROI, avg and stdev for each ROI',
                 'Central + quadrants ROI, avg + difference from overall average',
                 'Central + quadrants ROI, avg + % difference from overall average',
-                'Flat field test from Mammo'],
-        # 'AAPM recommendations?'
+                'Flat field test from Mammo',
+                'Flat field test AAPM TG150'],
         },
     'Mammo': {
        'ROI': ALTERNATIVES_ROI,
@@ -192,7 +192,11 @@ HEADERS = {
                      'ROI3 - avg %', 'ROI4 - avg %'],
             'alt3': ['Avg', 'Avg SNR', 'n ROIs',
                      'Deviating avgs', 'Deviating SNRs', 'Deviating ROIs',
-                     '% dev ROIs', 'Deviating pixels', '% dev pixels']
+                     '% dev ROIs', 'Deviating pixels', '% dev pixels'],
+            'alt4': ['AvgPix', 'AvgNoi', 'AvgSNR', 'MinSNR', 'nAnomalusPix',
+                     'Max nAnomPrROI',
+                     'L Unif', 'G Unif', 'L NoiUnif', 'G NoiUnif', 'L SNRUnif',
+                     'G SNRUnif', 'relSDrow', 'relSDcol']
             },
         'Noi': {'alt0': ['Avg pixel value', 'Noise=Stdev']},
         'MTF': {
@@ -360,7 +364,8 @@ HEADERS_SUP = {
             'alt0': [], 'alt1': [], 'alt2': [],
             'alt3': ['Min pixel', 'Max pixel', 'Min Avg', 'Max Avg',
                  'Min SNR', 'Max SNR', 'n ROIs x', 'n ROIs y',
-                 'n masked ROIs', 'n masked pixels']
+                 'n masked ROIs', 'n masked pixels'],
+            'alt4': []
             },
         'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2', 'sigma_prefilt']}
         },

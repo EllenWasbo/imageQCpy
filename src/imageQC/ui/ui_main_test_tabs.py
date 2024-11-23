@@ -157,6 +157,9 @@ class ParamsTabCommon(QTabWidget):
                             self.roi_table_widget.setEnabled(False)
                         else:
                             self.roi_table_widget.setEnabled(True)
+                    elif field.name == 'hom_tab_alt':
+                        enable = True if content >= 3 else False
+                        self.hom_mask_outer_mm.setEnabled(enable)
                 elif field.type == 'float':
                     reciever.setValue(content)
                 elif field.type == 'bool':
@@ -368,6 +371,9 @@ class ParamsTabCommon(QTabWidget):
                     else:
                         self.roi_table_widget.setEnabled(True)
                         self.set_offset('roi_offset_xy', reset=True)
+                elif attribute == 'hom_tab_alt':
+                    enable = True if content >= 3 else False
+                    self.hom_mask_outer_mm.setEnabled(enable)
                 elif attribute in ['sni_type', 'sni_channels']:
                     alt = 0 if self.main.current_paramset.sni_type == 0 else 2
                     if self.main.current_paramset.sni_channels:
@@ -690,8 +696,60 @@ class ParamsTabCommon(QTabWidget):
                     'Could not find results for current image. '
                     'Calculate homogeneity first.')
 
-    def create_tab_hom_flatfield(self):
-        """GUI for Mammo flatfield test (Hom) available also for Xray."""
+    def create_tab_hom_flatfield_aapm(self):
+        """GUI for AAPM TG150 flatfield test."""
+        self.hom_anomalous_factor = QDoubleSpinBox(
+            decimals=1, minimum=0.1, singleStep=.1)
+        self.hom_anomalous_factor.editingFinished.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='hom_anomalous_factor'))
+
+        self.hom_result_plot_aapm = QComboBox()
+        self.hom_result_plot_aapm.addItems(
+            ['Profile averages compared to neighbor row/column'])
+        # TODO activate if more than one option (item):
+        #self.hom_result_plot.currentIndexChanged.connect(
+        #    self.main.wid_res_plot.canvas.plot)
+
+        self.hom_result_image_aapm = QComboBox()
+        self.hom_result_image_aapm.addItems(
+            [
+                'Average pr ROI map',
+                'Noise pr ROI map',
+                'SNR pr ROI map',
+                'Local Uniformity map',
+                'Local Noise Uniformity map',
+                'Local SNR Uniformity map',
+                'Average pr ROI (% difference from global average)',
+                'Noise pr ROI (% difference from average noise)',
+                'SNR pr ROI (% difference from average SNR)',
+                'Anomalous pixels',
+                '# anomalous pixels pr ROI'
+             ])
+        self.hom_result_image_aapm.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+
+        hlo_flat_widget = QHBoxLayout()
+        self.flat_widget_aapm = QWidget()
+        self.flat_widget_aapm.setLayout(hlo_flat_widget)
+
+        hlo_flat_widget.addStretch()
+        hlo_flat_widget.addWidget(uir.VLine())
+        vlo_right = QVBoxLayout()
+        hlo_flat_widget.addLayout(vlo_right)
+        flo_right = QFormLayout()
+        vlo_right.addLayout(flo_right)
+
+        flo_right.addRow(QLabel('Anomalous pixels (N stdev from average)'),
+                         self.hom_anomalous_factor)
+        flo_right.addRow(QLabel('Result plot:'), self.hom_result_plot_aapm)
+        flo_right.addRow(QLabel('Result image:'), self.hom_result_image_aapm)
+        btn_get_coord = QPushButton('Get coordinates of anomalous pixels')
+        btn_get_coord.clicked.connect(self.hom_get_coordinates)
+        vlo_right.addWidget(btn_get_coord)
+
+    def create_tab_hom_flatfield_mammo(self):
+        """GUI for Mammo flatfield test."""
 
         self.hom_roi_size_variance = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
@@ -704,25 +762,46 @@ class ParamsTabCommon(QTabWidget):
         self.hom_mask_max = QCheckBox()
         self.hom_mask_max.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='hom_mask_max'))
-        self.hom_mask_outer_mm = QDoubleSpinBox(
-            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
-        self.hom_mask_outer_mm.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_mask_outer_mm'))
         self.hom_ignore_roi_percent = QDoubleSpinBox(
             decimals=0, minimum=0., maximum=95, singleStep=1)
-        self.hom_ignore_roi_percent.valueChanged.connect(
+        self.hom_ignore_roi_percent.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='hom_ignore_roi_percent'))
         self.hom_deviating_pixels = QDoubleSpinBox(
             decimals=0, minimum=1, singleStep=1)
-        self.hom_deviating_pixels.valueChanged.connect(
+        self.hom_deviating_pixels.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='hom_deviating_pixels'))
         self.hom_deviating_rois = QDoubleSpinBox(
             decimals=0, minimum=1, singleStep=1)
-        self.hom_deviating_rois.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_deviating_rois'))
+        self.hom_deviating_rois.editingFinished.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='hom_deviating_rois'))
 
+        hlo_flat_widget = QHBoxLayout()
+        self.flat_widget = QWidget()
+        self.flat_widget.setLayout(hlo_flat_widget)
+
+        flo = QFormLayout()
+        flo.addRow(QLabel('Calculate average variance within each ROI'),
+                   self.hom_variance)
+        flo.addRow(QLabel('     ROI size variance (mm)'),
+                   self.hom_roi_size_variance)
+        flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
+        flo.addRow(QLabel('Ignore ROIs where more than (%) pixels masked'),
+                   self.hom_ignore_roi_percent)
+        hlo_flat_widget.addLayout(flo)
+        hlo_flat_widget.addWidget(uir.VLine())
+        vlo_right = QVBoxLayout()
+        hlo_flat_widget.addLayout(vlo_right)
+        flo_right = QFormLayout()
+        vlo_right.addLayout(flo_right)
+
+        flo_right.addRow(QLabel('Deviating pixels (% from average)'),
+                         self.hom_deviating_pixels)
+        flo_right.addRow(QLabel('Deviating ROIs (% from average)'),
+                         self.hom_deviating_rois)
+        
         self.hom_result_image = QComboBox()
         self.hom_result_image.addItems(
             [
@@ -739,31 +818,7 @@ class ParamsTabCommon(QTabWidget):
         self.hom_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
 
-        self.flat_widget = QWidget()
-        hlo_flat_widget = QHBoxLayout()
-        self.flat_widget.setLayout(hlo_flat_widget)
-
-        flo = QFormLayout()
-        flo.addRow(QLabel('Calculate average variance within each ROI'), self.hom_variance)
-        flo.addRow(QLabel('     ROI size variance (mm)'), self.hom_roi_size_variance)
-        flo.addRow(QLabel('Mask pixels with max values'), self.hom_mask_max)
-        flo.addRow(QLabel('Ignore outer mm'), self.hom_mask_outer_mm)
-        flo.addRow(QLabel('Ignore ROIs where more than (%) pixels masked'),
-                   self.hom_ignore_roi_percent)
-        hlo_flat_widget.addLayout(flo)
-        hlo_flat_widget.addWidget(uir.VLine())
-        vlo_right = QVBoxLayout()
-        hlo_flat_widget.addLayout(vlo_right)
-        flo_right = QFormLayout()
-        flo_right.addRow(QLabel('Deviating pixels (% from average)'),
-                         self.hom_deviating_pixels)
-        flo_right.addRow(QLabel('Deviating ROIs (% from average)'),
-                         self.hom_deviating_rois)
-        vlo_right.addLayout(flo_right)
-        hlo_res_img = QHBoxLayout()
-        hlo_res_img.addWidget(QLabel('Result image'))
-        hlo_res_img.addWidget(self.hom_result_image)
-        vlo_right.addLayout(hlo_res_img)
+        flo_right.addRow(QLabel('Result image:'), self.hom_result_image)
         btn_get_coord = QPushButton('Get coordinates of deviating pixels')
         btn_get_coord.clicked.connect(self.hom_get_coordinates)
         vlo_right.addWidget(btn_get_coord)
@@ -1682,9 +1737,9 @@ class ParamsTabXray(ParamsTabCommon):
         super().update_enabled()
         if self.main.current_modality == 'Xray':
             paramset = self.main.current_paramset
-            if paramset.hom_tab_alt == 3:
+            if paramset.hom_tab_alt >= 3:
                 self.hom_roi_size_label.setText('ROI size (mm)')
-                self.stack_hom.setCurrentIndex(1)
+                self.stack_hom.setCurrentIndex(paramset.hom_tab_alt - 3 + 1)
             else:
                 self.hom_roi_size_label.setText('ROI radius (mm)')
                 self.stack_hom.setCurrentIndex(0)
@@ -1703,10 +1758,18 @@ class ParamsTabXray(ParamsTabCommon):
         self.hom_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
         self.hom_roi_size_label = QLabel('ROI radius (mm)')
+        self.hom_mask_outer_mm = QDoubleSpinBox(
+            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
+        self.hom_mask_outer_mm.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_mask_outer_mm'))
+        self.hom_mask_outer_mm.setEnabled(False)
+
         self.tab_hom.hlo_top.addWidget(self.hom_roi_size_label)
         self.tab_hom.hlo_top.addWidget(self.hom_roi_size)
-        self.tab_hom.hlo_top.addSpacing(20)
-        self.tab_hom.hlo_top.addWidget(QLabel('Method/output: '))
+        self.tab_hom.hlo_top.addWidget(
+            QLabel('Mask outer mm'))
+        self.tab_hom.hlo_top.addWidget(self.hom_mask_outer_mm)
+        self.tab_hom.hlo_top.addWidget(QLabel('Method: '))
         self.tab_hom.hlo_top.addWidget(self.hom_tab_alt)
         info_txt = (
             'Method with central + quadrants ROI adapted from IPEM Report 32<br><br>'
@@ -1739,11 +1802,13 @@ class ParamsTabXray(ParamsTabCommon):
         vlo_hom_0.addWidget(uir.LabelItalic(
             'Leave distance empty to set ROIs at center of each qadrant.'))
 
-        self.create_tab_hom_flatfield()
+        self.create_tab_hom_flatfield_mammo()
+        self.create_tab_hom_flatfield_aapm()
 
         self.stack_hom = QStackedWidget()
         self.stack_hom.addWidget(widget_hom_0)
         self.stack_hom.addWidget(self.flat_widget)
+        self.stack_hom.addWidget(self.flat_widget_aapm)
         self.tab_hom.hlo.addWidget(self.stack_hom)
 
     def create_tab_noi(self):
@@ -1902,13 +1967,22 @@ class ParamsTabMammo(ParamsTabCommon):
             decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
+        self.hom_mask_outer_mm = QDoubleSpinBox(
+            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
+        self.hom_mask_outer_mm.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_mask_outer_mm'))
+
         self.hom_roi_size_label = QLabel('ROI size (mm)')
         self.tab_hom.hlo_top.addWidget(self.hom_roi_size_label)
         self.tab_hom.hlo_top.addWidget(self.hom_roi_size)
+        self.tab_hom.hlo_top.addSpacing(20)
+        self.tab_hom.hlo_top.addWidget(QLabel('Ignore outer mm'))
+        self.tab_hom.hlo_top.addWidget(self.hom_mask_outer_mm)
         self.tab_hom.hlo_top.addStretch()
-        self.tab_hom.hlo_top.addWidget(uir.InfoTool(flatfield_info_txt, parent=self.main))
+        self.tab_hom.hlo_top.addWidget(uir.InfoTool(
+            flatfield_info_txt, parent=self.main))
 
-        self.create_tab_hom_flatfield()
+        self.create_tab_hom_flatfield_mammo()
         self.tab_hom.hlo.addWidget(self.flat_widget)
 
     def create_tab_var(self):

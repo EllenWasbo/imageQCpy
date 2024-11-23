@@ -137,16 +137,18 @@ def get_rois(image, image_number, input_main):
         if input_main.current_modality == 'Mammo':
             flatfield = True
         elif input_main.current_modality == 'Xray':
-            if paramset.hom_tab_alt == 3:
+            if paramset.hom_tab_alt >= 3:
                 flatfield = True
         if flatfield:
             roi_array = get_roi_hom_flatfield(image_info, paramset)
-            roi_mask = np.full(image_info.shape[0:2], False)
+            roi_mask = None
             if paramset.hom_mask_max:
+                roi_mask = np.full(image_info.shape[0:2], False)
                 roi_mask[image == np.max(image)] = True
             roi_array.append(roi_mask)
-            roi_mask_outer = np.full(image_info.shape[0:2], False)
+            roi_mask_outer = None
             if paramset.hom_mask_outer_mm > 0:
+                roi_mask_outer = np.full(image_info.shape[0:2], False)
                 n_pix = round(paramset.hom_mask_outer_mm / image_info.pix[0])
                 if n_pix > 0:
                     roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
@@ -923,9 +925,19 @@ def get_roi_hom_flatfield(image_info, paramset):
 
     roi_small = get_roi_rectangle(
         image_info.shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
-    roi_var_in_pix = paramset.hom_roi_size_variance / image_info.pix[0]
-    roi_variance = get_roi_rectangle(
-        image_info.shape, roi_width=roi_var_in_pix, roi_height=roi_var_in_pix)
+    variance = False
+    try:
+        if paramset.hom_tab_alt == 3 and paramset.hom_variance:
+            variance = True
+    except AttributeError:  # mammo not having hom_tab_alt
+        variance = paramset.hom_variance
+
+    if variance:
+        roi_var_in_pix = paramset.hom_roi_size_variance / image_info.pix[0]
+        roi_variance = get_roi_rectangle(
+            image_info.shape, roi_width=roi_var_in_pix, roi_height=roi_var_in_pix)
+    else:
+        roi_variance = None
     roi_array = [roi_small, roi_variance]
 
     return roi_array

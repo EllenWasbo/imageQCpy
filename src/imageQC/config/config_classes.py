@@ -432,10 +432,11 @@ class ParamSetXray(ParamSetCommon):
     hom_variance: bool = False
     hom_roi_size_variance: float = 2.
     hom_mask_max: bool = False
-    hom_mask_outer_mm: float = 0.
+    hom_mask_outer_mm: float = 10.
     hom_ignore_roi_percent: int = 0
     hom_deviating_pixels: float = 20.
     hom_deviating_rois: float = 15.
+    hom_anomalous_factor: float = 3.
     noi_percent: int = 90
     mtf_roi_size_x: int = 20.
     mtf_roi_size_y: int = 50.

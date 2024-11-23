@@ -310,6 +310,32 @@ def test_CT_NPS():
     assert np.array_equal(values, np.array([3., 252., 463., 131., 68.]))
 
 
+def test_Xray_Hom():
+    input_main = InputMain(
+        current_modality='Xray',
+        current_test='Hom',
+        current_paramset=cfc.ParamSetXray(hom_tab_alt=4),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Hom']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (path_tests / 'test_inputs' / 'Xray' / 'hom.dcm')
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+
+    vals_0 = np.round(np.array(input_main.results['Hom']['values'][0]))
+    vals_0_exp = np.array([1.088e+03, 9.000e+00, 1.170e+02, 9.100e+01,
+                           8.422e+03, 2.000e+01, 3.000e+00, 1.500e+01,
+                           3.000e+00, 3.400e+01, 3.000e+00, 3.400e+01,
+                           2.000e+00, 1.000e+00])
+
+    assert np.array_equal(vals_0, vals_0_exp)
+
+
 def test_Xray_NPS():
     input_main = InputMain(
         current_modality='Xray',

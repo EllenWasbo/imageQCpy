@@ -11,7 +11,9 @@ import numpy as np
 import pandas as pd
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAction
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAction,
+    QInputDialog, QMessageBox)
 import matplotlib
 import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg, NavigationToolbar2QT)
@@ -98,12 +100,46 @@ class PlotWidget(QWidget):
                 values.append(names)
                 values.append(yvalues)
                 headers.append(['names', 'values'])
+        if len(values) == 0:
+            try:
+                labels = []
+                for i, scatterdict in enumerate(self.plotcanvas.scatters):
+                    if 'label' in scatterdict:
+                        labels.append(scatterdict['label'])
+                    else:
+                        labels.append(f'plot {i}')
+                if len(labels) > 1:
+                    label, ok = QInputDialog.getItem(
+                        self, "Select plot to copy to clipboard",
+                        "Plot:", labels, 0, False)
+                    if ok and label:
+                        idx = labels.index(label)
+                    else:
+                        idx = -1
+                else:
+                    idx = 0
+                if idx >= 0:
+                    scatter = self.plotcanvas.scatters[idx]
+                    if isinstance(scatter['color'], str):
+                        arr = scatter['array']
+                    else:
+                        arr = scatter['color']
+                    xlabels = scatterdict['xlabels']
+                    ylabels = scatterdict['ylabels']
+                    df = pd.DataFrame(arr, index=ylabels, columns=xlabels)
+                    df.to_clipboard(excel=True)
+                    self.main.status_bar.showMessage(
+                        'Values in clipboard', 2000)
+            except:
+                QMessageBox.warning(self, 'Failed copy to clipboard',
+                                    'Failed copying plot to clipboard.')
 
-        df = pd.DataFrame(values)
-        df = df.transpose()
-        df.columns = headers
-        df.to_clipboard(index=False, excel=True)
-        self.main.status_bar.showMessage('Values in clipboard', 2000)
+        if len(values) > 0:
+            df = pd.DataFrame(values)
+            df = df.transpose()
+            df.columns = headers
+            df.to_clipboard(index=False, excel=True)
+            self.main.status_bar.showMessage('Values in clipboard', 2000)
 
 
 class PlotNavigationToolbar(NavigationToolbar2QT):

@@ -538,6 +538,8 @@ def calculate_qc(input_main, wid_auto=None,
                         if 'MTF' in marked[i]:
                             if paramset.mtf_auto_center:
                                 force_new_roi.append('MTF')
+                        if 'Def' in marked[i]:
+                            marked_3d[i].append('Def')
                     elif modality == 'Mammo':
                         if 'CDM' in marked[i]:
                             marked_3d[i].append('CDM')
@@ -2060,7 +2062,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
     Parameters
     ----------
-    matrix : np.array
+    matrix : list of np.2darray
         list length = all images, [] if not marked for 3d else 2d image
     marked_3d : list of list of str
         for each image which 3d tests to perform
@@ -2109,6 +2111,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             prev_pix = 0
             n_imgs = len(images_to_test)
             curr_progress_value = 0
+            detection_matrix = None
             for i, idx in enumerate(images_to_test):
                 try:
                     input_main.progress_modal.setLabelText(
@@ -2223,14 +2226,24 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         }
                     details_dicts.append(details_dict)
 
-                if details_dicts:
-                    details_dicts.append(cdmam_table_dict)
+                    found_this = 1. * found_correct_corner * found_centers
+                    if detection_matrix is None:
+                        detection_matrix = found_this
+                    else:
+                        detection_matrix = detection_matrix + found_this
 
-                res = Results(
-                    headers=headers, values=[0])
-                res = Results(headers=headers, values=[0],
-                              details_dict=details_dicts, pr_image=False,
-                              errmsg=errmsgs)
+            if details_dicts:
+                detection_matrix = detection_matrix / n_imgs
+                cdmam_methods.calculate_fitted_psychometric(
+                    detection_matrix, cdmam_table_dict, paramset.cdm_sigma)
+                details_dicts.append(cdmam_table_dict)
+
+                thk = cdmam_table_dict[
+                    'psychometric_results']['thickness_founds']
+
+            res = Results(headers=headers, values=[0],
+                          details_dict=details_dicts, pr_image=False,
+                          errmsg=errmsgs)
             return res
 
     def Cro(images_to_test):
@@ -2333,6 +2346,62 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 res = Results(headers=headers, values=[values],
                               details_dict=details_dict, pr_image=False,
                               errmsg=errmsgs)
+        return res
+
+    def Def(images_to_test):
+        """Defective pixels."""
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        if len(images_to_test) == 0:
+            res = Results(headers=headers)
+        else:
+            if len(images_to_test) < 3:
+                res = Results(headers=headers, errmsg=[
+                    'At least 3 images required.'])
+            else:
+                errmsgs = []
+                values = [None]
+                details_dict = {}
+
+                np_matrix = np.array([sli for sli in matrix if sli is not None])
+
+                std_pr_pix = np.std(np_matrix, axis=0)
+                roi_array, errmsg = get_rois(
+                    matrix[images_to_test[0]], images_to_test[0], input_main)
+                if roi_array is not None:
+                    rows = np.max(roi_array, axis=1)
+                    cols = np.max(roi_array, axis=0)
+                    std_pr_pix = std_pr_pix[rows][:, cols]
+
+                frac = paramset.def_fraction
+                std_less_than_fraction = np.zeros(std_pr_pix.shape, dtype=bool)
+                std_less_than_fraction[
+                    std_pr_pix < frac*np.median(std_pr_pix)] = True
+                std_is_zero = np.zeros(std_pr_pix.shape, dtype=bool)
+                std_is_zero[std_pr_pix == 0] = True
+                
+                kernel = np.ones((3,3))
+                kernel[1,1] = 0
+                kernel = kernel / 8
+                avg_neighbours = sp.signal.fftconvolve(
+                    std_pr_pix, kernel, mode='same')
+                diff = avg_neighbours - std_pr_pix
+
+                n_zero = np.count_nonzero(std_is_zero)
+                n_less = np.count_nonzero(std_less_than_fraction)
+                values = [n_zero, 100. * n_zero / std_is_zero.size,
+                          n_less, 100. * n_less / std_is_zero.size]
+
+                details_dict = {
+                    'std_pr_pix': std_pr_pix,
+                    'std_less_than_fraction': std_less_than_fraction,
+                    'std_is_zero': std_is_zero,
+                    'neighbours_avg_std': diff
+                    }
+
+                res = Results(headers=headers, values=[values],
+                              details_dict=details_dict,
+                              pr_image=False, errmsg=errmsgs)
+
         return res
 
     def DPR(images_to_test):
@@ -3374,9 +3443,10 @@ def calculate_flatfield_aapm(image2d, mask_outer, image_info, paramset):
     uniformity_arrays = []
     global_uniformity = []
 
+    neighbour = roi_size_in_pix // 2
     for input_array in [sub_valid_part, noise_sub, np.divide(mu, noise_sub)]:
-        uniformity_arrays.append(mmcalc.get_differential_uniformity_map(
-            input_array, 8))
+        uniformity_arrays.append(mmcalc.get_uniformity_map(
+            input_array, neighbour_start=neighbour, neighbour_end=neighbour))
         global_uniformity.append(
             100. * (np.max(input_array) - np.min(input_array))
             / np.mean(input_array))

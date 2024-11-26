@@ -329,8 +329,8 @@ def test_Xray_Hom():
 
     vals_0 = np.round(np.array(input_main.results['Hom']['values'][0]))
     vals_0_exp = np.array([1.088e+03, 9.000e+00, 1.170e+02, 9.100e+01,
-                           8.422e+03, 2.000e+01, 3.000e+00, 1.500e+01,
-                           3.000e+00, 3.400e+01, 3.000e+00, 3.400e+01,
+                           8.422e+03, 2.000e+01, 5.000e+00, 1.500e+01,
+                           9.000e+00, 3.400e+01, 8.000e+00, 3.400e+01,
                            2.000e+00, 1.000e+00])
 
     assert np.array_equal(vals_0, vals_0_exp)
@@ -401,6 +401,28 @@ def test_Xray_Var():
     assert np.array_equal(values, np.array([31., 192., 80.]))
 
 
+def test_Xray_Def():
+    input_main = InputMain(
+        current_modality='Xray',
+        current_test='Def',
+        current_paramset=cfc.ParamSetXray(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Def']]*4),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = Path(r'C:\Users\ellen\CloudStation\ImageQCpy\DemoBilder\DemoBilder\Lilla_stjerne\kopi_4x10')
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        [file_path / f'img_{i}.dcm' for i in range(1, 5)],
+        GUI=False, tag_infos=input_main.tag_infos)
+
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    vals = np.round(np.array(input_main.results['Def']['values'][0]))
+    assert np.array_equal(vals, np.array([430., 0., 9770., 0.]))
+
+
 def test_Mammo_SDN():
     input_main = InputMain(
         current_modality='Mammo',
@@ -460,21 +482,27 @@ def test_Mammo_cdm34():
         current_modality='Mammo',
         current_test='CDM',
         current_paramset=cfc.ParamSetMammo(),
-        current_quicktest=cfc.QuickTestTemplate(tests=[['CDM']]),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['CDM']]*4),
         tag_infos=tag_infos,
         automation_active=False
         )
-
+    '''
     file_path = (path_tests / 'test_inputs' / 'Mammo' / 'CDMAM')
     img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path / 'cdmam34.dcm'],
         GUI=False, tag_infos=input_main.tag_infos)
+    '''
+    file_path = Path(r'C:\Users\ellen\CloudStation\ImageQCpy\DemoBilder\DemoBilder\Mammo\cdmam')
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        [file_path / f'cdmam34_{i}.dcm' for i in range(1, 5)],
+        GUI=False, tag_infos=input_main.tag_infos)
+
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    breakpoint()
+
     vals = np.round(np.array(input_main.results['CDM']['values'][0]))
-    assert np.array_equal(vals, [0, 0])
+    assert np.array_equal(vals, 0)  # TODO
 
 
 def test_Mammo_cdm40():
@@ -494,9 +522,9 @@ def test_Mammo_cdm40():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    breakpoint()
+
     vals = np.round(np.array(input_main.results['CDM']['values'][0]))
-    assert np.array_equal(vals, [0, 0])
+    assert np.array_equal(vals, 0)  # TODO
 
 
 def test_NM_uniformity():

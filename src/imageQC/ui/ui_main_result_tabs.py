@@ -405,6 +405,10 @@ class ResultPlotCanvas(PlotCanvas):
                         self.ax.plot(curve['xvals'], curve['yvals'],
                                      curve['style'], label=curve['label'],
                                      markersize=markersize, alpha=alpha)
+                    if 'xscale' in curve:
+                        self.ax.set_xscale(curve['xscale'])
+                    if 'yscale' in curve:
+                        self.ax.set_yscale(curve['yscale'])
 
                 if x_only_int:
                     xx = list(curve['xvals'])
@@ -419,6 +423,7 @@ class ResultPlotCanvas(PlotCanvas):
                 else:
                     self.ax.xaxis.set_major_locator(
                         matplotlib.ticker.MaxNLocator(integer=True))
+
             if len(self.curves) > 1:
                 self.ax.legend(loc=self.legend_location)
             if None not in self.default_range_x:
@@ -443,15 +448,27 @@ class ResultPlotCanvas(PlotCanvas):
             self.ax.set_aspect(1)
             for scatter in self.scatters:
                 arr = scatter['array']
+                if 'label' in scatter:
+                    label = scatter['label']
+                else:
+                    label = ''
                 r = np.arange(arr.shape[1])
                 p = np.arange(arr.shape[0])
                 R,P = np.meshgrid(r,p)
-                R[arr == True]
-                self.ax.scatter(
-                    R[arr == True], P[arr == True],
-                    s=scatter['size'],
-                    marker=scatter['marker'],
-                    color=scatter['color'])
+                if isinstance(scatter['color'], str):
+                    self.ax.scatter(
+                        R[arr == True], P[arr == True],
+                        s=scatter['size'],
+                        marker=scatter['marker'],
+                        color=scatter['color'], label=label)
+                else:
+                    self.ax.scatter(
+                        R[arr == True], P[arr == True],
+                        s=scatter['size'],
+                        marker=scatter['marker'], label=label,
+                        c=scatter['color'][arr == True], cmap=scatter['cmap'],
+                        vmin=scatter['vmin'], vmax=scatter['vmax'])
+
         else:
             self.ax.axis('off')
 
@@ -521,47 +538,116 @@ class ResultPlotCanvas(PlotCanvas):
         ylabels = [cbox.itemText(i) for i in range(cbox.count())]
         ylabels.reverse()
 
-        if 'include_array' in details_dict:
-            if details_dict['include_array'] is not None:
-                self.scatters.append(
-                    {'xlabels': xlabels, 'ylabels': ylabels,
-                     'array': np.flipud(details_dict['include_array']),
-                     'size': 30, 'marker': 'x', 'color': 'silver'})
-
         def prepare_found_corner_center_plot():
             self.title = 'Correctly found disc in corner (diamond) and at center (circle)'
 
+            if 'include_array' in details_dict:
+                if details_dict['include_array'] is not None:
+                    self.scatters.append(
+                        {'label': 'included',
+                         'xlabels': xlabels, 'ylabels': ylabels,
+                         'array': np.flipud(details_dict['include_array']),
+                         'size': 30, 'marker': 'x', 'color': 'silver'})
+
             self.scatters.append(
-                {'xlabels': xlabels, 'ylabels': ylabels,
+                {'label': 'found correct corner',
+                 'xlabels': xlabels, 'ylabels': ylabels,
                  'array': np.flipud(details_dict['found_correct_corner']),
                  'size': 100, 'marker': 's', 'color': 'green'})
 
             self.scatters.append(
-                {'xlabels': xlabels, 'ylabels': ylabels,
+                {'label': 'found center',
+                 'xlabels': xlabels, 'ylabels': ylabels,
                  'array': np.flipud(details_dict['found_centers']),
                  'size': 30, 'marker': 'o', 'color': 'lightgreen'})
+
+        def prepare_detection_matrix_plot():
+            self.title = 'Detection ratio based on all images'
+
+            include_array = None
+            if 'include_array' in details_dict:
+                if details_dict['include_array'] is not None:
+                    np.flipud(details_dict['include_array'])
+            if include_array is None:
+                include_array = np.ones(
+                    cdmam_table_dict['detection_matrix'].shape, dtype=bool)
+
+            self.scatters.append(
+                {'xlabels': xlabels, 'ylabels': ylabels,
+                 'array': np.flipud(include_array),
+                 'size': 100, 'marker': 'o',
+                 'color': np.flipud(cdmam_table_dict['detection_matrix']),
+                 'cmap': 'nipy_spectral_r', 'vmin': 0.1, 'vmax': 2.})
+
+        def prepare_psychometric_plot():
+            self.title = 'Fitted psychometric curves'
+            psyc_res = cdmam_table_dict['psychometric_results']
+            for i, diam in enumerate(cdmam_table_dict['diameters']):
+                c = COLORS[i % len(COLORS)]
+                xvals = psyc_res['xs'][i]
+                yvals = psyc_res['ys'][i]
+                yfit = psyc_res['yfits'][i]
+                if yfit is not None:
+                    curve = {'label': f'Ø {diam}',
+                             'xvals': xvals,
+                             'yvals': yfit,
+                             'style': '-', 'color': c}
+                    self.curves.append(curve)
+                curve = {'label': '_no_legend_',
+                         'xvals': xvals, 'xscale' : 'log',
+                         'yvals': yvals,
+                         'style': 'o', 'color': c}
+                self.curves.append(curve)
+
+        def prepare_threshold_plot():
+            self.title = 'Threshold thickness'
+
+            psyc_res = cdmam_table_dict['psychometric_results']
+            limits = cdmam_table_dict['EUREF_performance_limits']
+            curve = {'label': 'fit to data',
+                     'xvals': psyc_res['thickness_predicts_fit_d'],
+                     'yvals': psyc_res['thickness_predicts_fit'],
+                     'xscale' : 'log', 'yscale': 'log',
+                     'style': 'ok', 'markersize': 3.}
+            self.curves.append(curve)
+            curve = {'label': 'acceptable',
+                     'xvals': limits['diameters'],
+                     'yvals': limits['acceptable_thresholds_thickness'],
+                     'style': 'r'}
+            self.curves.append(curve)
+            curve = {'label': 'achievalble',
+                     'xvals': limits['diameters'],
+                     'yvals': limits['achievable_thresholds_thickness'],
+                     'style': 'k'}
+            self.curves.append(curve)
+            self.default_range_x = [0.01, 10]
+            self.default_range_y = [0.01, 10]
 
         def prepare_comparison_vs_inp_plot(sel_text):
             self.title = sel_text + '(imageQC found = green, inp found = orange)'
 
             if 'corner' in sel_text:
                 self.scatters.append(
-                    {'xlabels': xlabels, 'ylabels': ylabels,
+                    {'label': 'imageQC',
+                     'xlabels': xlabels, 'ylabels': ylabels,
                      'array': np.flipud(details_dict['found_correct_corner']),
                      'size': 100, 'marker': 's', 'color': 'green'})
                 if 'found_correct_corner_inp' in details_dict:
                     self.scatters.append(
-                        {'xlabels': xlabels, 'ylabels': ylabels,
+                        {'label': 'CDCOM',
+                         'xlabels': xlabels, 'ylabels': ylabels,
                          'array': np.flipud(details_dict['found_correct_corner_inp']),
                          'size': 50, 'marker': 's', 'color': 'orange'})
             if 'center' in sel_text:
                 self.scatters.append(
-                    {'xlabels': xlabels, 'ylabels': ylabels,
+                    {'label': 'imageQC',
+                     'xlabels': xlabels, 'ylabels': ylabels,
                      'array': np.flipud(details_dict['found_centers']),
                      'size': 60, 'marker': 'o', 'color': 'green'})
                 if 'found_centers_inp' in details_dict:
                     self.scatters.append(
-                        {'xlabels': xlabels, 'ylabels': ylabels,
+                        {'label': 'CDCOM',
+                         'xlabels': xlabels, 'ylabels': ylabels,
                          'array': np.flipud(details_dict['found_centers_inp']),
                          'size': 30, 'marker': 'o', 'color': 'orange'})
 
@@ -572,6 +658,12 @@ class ResultPlotCanvas(PlotCanvas):
             sel_text = ''
         if sel_text == 'Found disc at center and in correct corner':
             prepare_found_corner_center_plot()
+        elif 'Detection matrix' in sel_text:
+            prepare_detection_matrix_plot()
+        elif sel_text == 'Fitted psychometric curves':
+            prepare_psychometric_plot()
+        elif sel_text == 'Threshold thickness':
+            prepare_threshold_plot()
         elif 'CDCOM' in sel_text:
             prepare_comparison_vs_inp_plot(sel_text)
 

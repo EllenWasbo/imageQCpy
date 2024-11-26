@@ -9,7 +9,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter, rotate
 from scipy.ndimage import geometric_transform
-from scipy.signal import convolve2d
+from scipy.signal import convolve2d, fftconvolve
 
 
 def get_distance_map_point(shape, center_dx=0., center_dy=0.):
@@ -875,6 +875,8 @@ def get_curve_values(x, y, y_values, force_first_below=False):
         return w * x1 + (1 - w) * x2
 
     result_values = []
+    y = np.array(y)
+    x = np.array(x)
     for yval in y_values:
         idx_above = np.where(y >= yval)
         idx_below = np.where(y < yval)
@@ -893,8 +895,8 @@ def get_curve_values(x, y, y_values, force_first_below=False):
                 else:
                     result_values.append(None)
         except IndexError:
+            # none above or none below
             result_values.append(None)
-
     return result_values
 
 
@@ -1204,6 +1206,7 @@ def get_differential_uniformity_map(image, window_length):
     du_cols = np.zeros(image.shape)
     du_rows = np.zeros(image.shape)
     halfw = window_length // 2
+
     for x in range(sz_x):
         view = np.lib.stride_tricks.sliding_window_view(
             image[:, x], window_length)
@@ -1221,3 +1224,42 @@ def get_differential_uniformity_map(image, window_length):
     du_matrix = np.maximum(du_cols, du_rows)
 
     return du_matrix
+
+
+def get_uniformity_map(input_array, neighbour_start=1, neighbour_end=1):
+    """Calculate uniformity as difference to avg of neighbours vs global avg.
+
+    As defined in AAPM TG150, 2024.
+    If input array comes from a sliding window ROI calculation (convolution)
+    the true neighbours might be too close to evaluate. Thus start, end is
+    possible to set. 1,1 = nearest neighbours
+
+    Parameters
+    ----------
+    image : np.ndarray
+    neighbour_start : int
+        neighbour number to start with
+    neighbour_end : int
+        neighbour number to end with
+
+    Returns
+    -------
+    uniformity_matrix : np.ndarray
+    """
+    halfsz = neighbour_end
+    sz_k = halfsz * 2 + 1
+    kernel = np.ones((sz_k, sz_k))
+    rim = neighbour_end - neighbour_start + 1
+    kernel[rim:-rim, rim:-rim] = 0
+    kernel = 1./np.sum(kernel) * kernel
+
+    neighbour_avgs = fftconvolve(input_array, kernel, mode='same')
+    mask = np.zeros(input_array.shape, dtype=bool)
+    mask[halfsz:-halfsz, halfsz:-halfsz] = True
+
+    uniformity_matrix = input_array - neighbour_avgs
+    uniformity_matrix = 100./ np.mean(input_array) * uniformity_matrix
+    uniformity_matrix[mask == False] = 0
+
+    return uniformity_matrix
+

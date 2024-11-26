@@ -541,6 +541,15 @@ class ImageCanvas(GenericImageCanvas):
                 reset_contours=False
                 )
 
+    def Def(self):
+        if self.main.current_paramset.def_mask_outer_mm > 0:
+            mask = np.where(self.main.current_roi, 0, 1)
+            contour = self.ax.contour(
+                mask, levels=[0.9],
+                colors='blue', alpha=0.5, linewidths=self.linewidth,
+                linestyles='dotted')
+            self.contours.append(contour)
+
     def Dim(self):
         """Draw search ROI for rods and resulting centerpositions if any."""
         self.add_contours_to_all_rois(roi_indexes=[0, 1, 2, 3])
@@ -1052,7 +1061,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 if self.main.current_paramset.hom_tab_alt >= 3:
                     flatfield = True
             if flatfield:
-                self.mark_deviating_pixels()
+                self.mark_pixels()
 
             if self.contours_to_add:
                 for contour_to_add in self.contours_to_add:
@@ -1080,7 +1089,7 @@ class ResultImageCanvas(GenericImageCanvas):
             self.fig.subplots_adjust(.05, .05, 1., 1.)
         self.draw()
 
-    def mark_deviating_pixels(self):
+    def mark_pixels(self):
         if 'Hom' in self.main.results and self.main.current_test == 'Hom':
             if self.current_image.shape == self.main.active_img.shape:
                 try:
@@ -1093,6 +1102,16 @@ class ResultImageCanvas(GenericImageCanvas):
                         for coord in details_dict['deviating_pixel_coordinates']:
                             self.ax.add_patch(patches.Circle(
                                 coord, radius=20, color='r', fill=False))
+        elif 'Def' in self.main.results and self.main.current_test == 'Def':
+            try:
+                details_dict = self.main.results['Def']['details_dict']
+            except KeyError:
+                details_dict = None
+            if details_dict:
+                if 'mark_pixels' in details_dict:
+                    for coord in details_dict['mark_pixels']:
+                        self.ax.add_patch(patches.Circle(
+                            coord, radius=20, color='r', fill=False))
 
     def set_cdm_cell_display(self, xpos, ypos):
         """Set result image to cell closes to xpos, ypos in image."""
@@ -1187,6 +1206,32 @@ class ResultImageCanvas(GenericImageCanvas):
                              xk - radk:xk - radk + sz_k] = kernel
                     self.contours_to_add.append([greens, 'green', '--'])
                     self.contours_to_add.append([reds, 'red', '--'])
+
+    def Def(self):
+        """Defective pixels."""
+        try:
+            details_dict = self.main.results['Def']['details_dict']
+        except KeyError:
+            details_dict = None
+        if details_dict:
+            sel_txt = self.main.tab_xray.def_result_image.currentText()
+            self.title = sel_txt
+
+            try:
+                if sel_txt == 'Stdev per pixel from all images':
+                    self.current_image = details_dict['std_pr_pix']
+                    self.cmap = 'viridis'
+                elif sel_txt == 'Where stdev is zero':
+                    self.current_image = details_dict['std_is_zero']
+                    self.cmap = 'RdYlGn_r'
+                elif sel_txt == 'Where stdav less than fraction of median stdev':
+                    self.current_image = details_dict['std_less_than_fraction']
+                    self.cmap = 'RdYlGn_r'
+                elif sel_txt == 'Neighbours avg stdev minus stdev':
+                    self.current_image = details_dict['neighbours_avg_std']
+                    self.cmap = 'viridis'
+            except KeyError:
+                pass
 
     def Hom(self):
         """Prepare images of Mammo-Homogeneity."""

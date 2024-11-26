@@ -366,7 +366,7 @@ class TreeFileList(QTreeWidget):
     def set_image_or_group_name(self, image_or_group='image'):
         """Set name of selected image for QuickTestTemplate."""
         selrows, _ = self.get_selected_imgs()
-        if len(selrows) != 1:
+        if len(selrows) != 1 and image_or_group == 'image':
             QMessageBox.warning(
                 self, 'Select one image', 'Select only one image')
         else:
@@ -377,7 +377,8 @@ class TreeFileList(QTreeWidget):
                 'Name:                                                            ',
                 text=current_name)
             if proceed:
-                setattr(self.main.imgs[selrows[0]], attribute, text)
+                for row in selrows:
+                    setattr(self.main.imgs[row], attribute, text)
                 self.main.wid_quicktest.flag_edit(True)
                 self.update_file_list()
 

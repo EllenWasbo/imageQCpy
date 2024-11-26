@@ -5,9 +5,9 @@ Collection of methods for SNI and uniformity calculations
 
 @author: ellen
 """
-from time import time
 import numpy as np
 from scipy import ndimage
+from scipy.optimize import curve_fit
 from scipy.signal import (find_peaks, fftconvolve, medfilt2d)
 from skimage.transform import hough_line, hough_line_peaks, resize
 from skimage import draw
@@ -711,3 +711,165 @@ def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):
             'central_disc_found': central_is_min,
             'min_positions': minpos,
             'processed_sub': avgs_sub}
+
+
+def psychometric_curve(t, f, ct):
+    """Calculate psychometric curve from t values and parameters."""
+    mu = 0.19 # um-1 Young et al 2008 (Proc of SPIE, Vol 6913, 69131C-1)
+    c = np.log(1 - np.exp(-mu * t))
+    p = 0.25 + 0.75 / (1 + np.exp(-f * (c - ct)))
+    return p
+
+
+def psychometric_curve_fit(t, p, f_set=None):
+    """Fit t, p to psychometric curve p(t)."""
+    if f_set is None:
+        f0 = 10
+        f_min = 1
+        f_max = 1000
+    else:
+        f_min = 0.99 * f_set
+        f_max = 1.01 * f_set
+        f0 = f_set
+    try:
+        popt, _ = curve_fit(
+            psychometric_curve, t, p, p0=[f0, -5.],
+            bounds=([f_min, -20], [f_max, -0.1])
+            )
+    except (ValueError, RuntimeError):
+        popt = None
+    return popt
+
+
+def third_order_polynomial(x, a, b, c, d):
+    return a + b/x + c/(x**2) + d/(x**3)
+
+
+def third_order_polynomial_fit(x, p):
+    try:
+        popt, _ = curve_fit(
+            third_order_polynomial, x, p, p0=[1., 1., 1., 1.],
+            bounds=([0, 0, 0, 0], [100, 100, 100, 100])
+            )
+    except (ValueError, RuntimeError):
+        popt = None
+    return popt
+
+
+def calculate_fitted_psychometric(detection_matrix, cdmam_table_dict, sigma):
+    """Fit psychometric curves to values in detection matrix.
+
+    Also, add results to cdmam_table_dict.
+
+    Parameters
+    ----------
+    detection_matrix : np.ndarray
+    cdmam_table_dict : dict
+        diameter and thickness info for given phantom
+    """
+    cdmam_table_dict['detection_matrix'] = detection_matrix
+    diameters = cdmam_table_dict['diameters']
+    thickness = np.array(cdmam_table_dict['thickness'])
+    euref_thickness_contast = { 
+        # Table A6.1 in EUREF 4th edition page 162, nominal 28kV, Mo/Mo
+        'thickness': [0.1, 0.5, 1.0, 1.5, 2.0],
+        'contrast': [1.57, 7.6, 14.55, 20.92, 26.76],
+        }
+    euref_scale_r = {
+        # table2 in NUKLEONIKA 2016;61(1):53-59
+        'diameters': [.08, .1, .13, .16, .2, .25, .31, .4, .5, .63, .8, 1.],
+        'rs': [1.4, 1.5, 1.6, 1.68, 1.75, 1.82, 1.88, 1.94, 1.98, 2.01, 2.06, 2.11]
+        }
+
+    include_array = None
+    if isinstance(thickness[0], list):
+        #phantom = 40
+        detection_matrix_smoothed = ndimage.gaussian_filter(
+            detection_matrix, sigma=sigma)
+    else:
+        #phantom = 34
+        corner_index_table = np.array(cdmam_table_dict['corner_index'])
+        include_array = np.zeros(corner_index_table.shape, dtype=bool)
+        include_array[corner_index_table > 0] = True
+        thickness = np.broadcast_to(thickness, (16, 16)).T
+        # avoid smoothing outside included part of array
+        mask = 1.0 * include_array
+        sm = ndimage.gaussian_filter(detection_matrix * mask, sigma=sigma)
+        sm /= ndimage.gaussian_filter(mask, sigma=sigma)
+        sm[np.logical_not(mask)] = 0
+        detection_matrix_smoothed = sm
+
+    xs = []
+    ys = []
+    yfits = []
+    thickness_founds = []
+    thickness_predicts = []
+
+    def fit(diameter_number, f_set=None):
+        yvals = detection_matrix_smoothed[:, diameter_number]
+        xvals = thickness[:, diameter_number]
+        if include_array is not None:
+            xvals = xvals[include_array[:, diameter_number] == True]
+            yvals = yvals[include_array[:, diameter_number] == True]
+
+        popt = None
+        yfit = None
+        threshold_thickness = [None]
+        thickness_predict = 0
+        if np.min(yvals) < 0.5 and np.max(yvals) > 0.8:
+            popt = psychometric_curve_fit(xvals, yvals, f_set=f_set)
+            if popt is not None:
+                f, ct = popt
+                yfit = psychometric_curve(xvals, f, ct)
+                threshold_thickness = mmcalc.get_curve_values(
+                    xvals, yfit, [0.625])
+                r = mmcalc.get_curve_values(
+                    euref_scale_r['rs'],
+                    euref_scale_r['diameters'], [diameters[diameter_number]])
+                '''
+                contrast_auto = mmcalc.get_curve_values(
+                    euref_thickness_contast['contrast'],
+                    euref_thickness_contast['thickness'],
+                    threshold_thickness)
+                contrast_predict = r[0] * contrast_auto[0]
+                thickness_predict = mmcalc.get_curve_values(
+                    euref_thickness_contast['thickness'],
+                    euref_thickness_contast['contrast'],
+                    [contrast_predict])
+                '''
+                if r[0] is not None:  # None if outside range of euref r-scale
+                    thickness_predict = r[0] * threshold_thickness[0]
+
+        return xvals, yvals, popt, yfit, threshold_thickness[0], thickness_predict
+
+    _, _, popt, _, _, _ = fit(8)
+
+    f_set, _ = popt
+    for d in range(len(diameters)):
+        xvals, yvals, _, yfit, thick_found, thick_predict = fit(
+            d, f_set=f_set)
+        xs.append(xvals)
+        ys.append(yvals)
+        yfits.append(yfit)
+        thickness_founds.append(thick_found)
+        thickness_predicts.append(thick_predict)
+    thickness_predicts = np.array(thickness_predicts)
+    idxs = np.where(thickness_predicts > 0)
+    popt = third_order_polynomial_fit(
+        np.array(diameters)[idxs], thickness_predicts[idxs])
+    thickness_predicts_fit = third_order_polynomial(
+        np.array(diameters)[idxs], popt[0], popt[1], popt[2], popt[3])
+
+    cdmam_table_dict['psychometric_results'] = {
+        'xs': xs, 'ys': ys, 'yfits': yfits,
+        'thickness_founds': thickness_founds,
+        'thickness_predicts': thickness_predicts,
+        'thickness_predicts_fit_d': np.array(diameters)[idxs],
+        'thickness_predicts_fit': thickness_predicts_fit}
+    cdmam_table_dict['EUREF_performance_limits'] = {  # table page 147 EUREF 4th edition
+        'diameters': [2, 1, 0.5, 0.25, 0.1],
+        'acceptable_thresholds_contrast': [1.05, 1.4, 2.35, 5.45, 23.],
+        'achievable_thresholds_contrast': [.55, .85, 1.6, 3.8, 15.8],
+        'acceptable_thresholds_thickness': [0.069, 0.091, 0.15, 0.352, 1.68],
+        'achievable_thresholds_thickness': [0.038, 0.056, 0.103, 0.244, 1.1]
+        }

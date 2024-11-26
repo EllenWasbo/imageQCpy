@@ -42,7 +42,7 @@ USER_PREFS_FNAME = 'user_preferences.yaml'
 QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'TTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
-    'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var'],
+    'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var', 'Def'],
     'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'Var', 'RLR', 'Gho', 'MTF',
               'NPS', 'CDM'],
     'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
@@ -207,6 +207,8 @@ HEADERS = {
                          'Large area stdev (noise)', 'AUC horiz/AUC vert']},
         'STP': {'alt0': ['Dose', 'Q', 'Mean pix', 'Stdev pix']},
         'Var': {'alt0': ['Min variance', 'Max variance', 'Median variance']},
+        'Def': {'alt0': ['# std = 0', '% std = 0',
+                         '# std < frac*median', '% std < frac*median']},
         },
     'Mammo': {
         'ROI': {'alt0': roi_headers},

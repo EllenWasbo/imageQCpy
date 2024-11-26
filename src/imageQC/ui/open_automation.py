@@ -103,6 +103,8 @@ def reset_auto_template(auto_template=None, parent_widget=None):
                     file.rename(Path(auto_template.path_input) / file.name)
                 except FileExistsError as err:
                     errmsgs.append(str(err))
+                except:
+                    errmsgs.append(f'Failed moving {file.name}')
             if len(move_dirs) > 0:
                 for folder in move_dirs:
                     if not any(folder.iterdir()):

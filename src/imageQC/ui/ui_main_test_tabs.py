@@ -654,8 +654,46 @@ class ParamsTabCommon(QTabWidget):
         vlo_left.addLayout(flo1)
         self.tab_num.hlo.addWidget(self.num_table_widget)
 
+    def get_coordinates(self):
+        """Add coordinates of True/False pixels to results and update result image."""
+        try:
+            details_dict = self.main.results[self.main.current_test]['details_dict']
+        except KeyError:
+            details_dict = None
+        if details_dict:
+            if isinstance(details_dict, list):
+                details_dict = details_dict[self.main.gui.active_img_no]
+            selects = []
+            keys = []
+            key = None
+            bool_find = True
+            if self.main.current_test == 'Def':
+                selects = ['Std is zero', 'Std is less than fraction of median']
+                keys = ['std_is_zero', 'std_less_than_fraction']
+            if len(selects) > 0:
+                selected, proceed = QInputDialog.getItem(
+                    self.main, "Which matrix",
+                    "Matrix to highlight:", selects, 0, False)
+                if proceed:
+                    idx = selects.index(selected)
+                    key = keys[idx]
+            if key:
+                matrix = details_dict[key]
+                coords = []
+                idxs = np.where(matrix == bool_find)
+                try:
+                    ys = idxs[0]
+                    xs = idxs[1]
+                    coords = [(xs[i], ys[i]) for i in range(xs.size)]
+                    details_dict['mark_pixels'] = coords
+                    self.main.wid_res_image.canvas.mark_pixels()
+                    self.main.wid_res_image.canvas.draw_idle()
+                except IndexError:
+                    pass
+
     def hom_get_coordinates(self):
         """Add coordinates of deviating pixels to results."""
+        #TODO consider merging this into the more general get_coordinates method above
         if 'Hom' in self.main.results:
             try:
                 details_dict = self.main.results['Hom']['details_dict'][
@@ -744,9 +782,11 @@ class ParamsTabCommon(QTabWidget):
                          self.hom_anomalous_factor)
         flo_right.addRow(QLabel('Result plot:'), self.hom_result_plot_aapm)
         flo_right.addRow(QLabel('Result image:'), self.hom_result_image_aapm)
+        '''
         btn_get_coord = QPushButton('Get coordinates of anomalous pixels')
         btn_get_coord.clicked.connect(self.hom_get_coordinates)
         vlo_right.addWidget(btn_get_coord)
+        '''
 
     def create_tab_hom_flatfield_mammo(self):
         """GUI for Mammo flatfield test."""
@@ -1722,6 +1762,7 @@ class ParamsTabXray(ParamsTabCommon):
         self.create_tab_nps()
         self.create_tab_stp()
         self.create_tab_var()
+        self.create_tab_def()
 
         self.addTab(self.tab_hom, "Homogeneity")
         self.addTab(self.tab_noi, "Noise")
@@ -1729,6 +1770,7 @@ class ParamsTabXray(ParamsTabCommon):
         self.addTab(self.tab_nps, "NPS")
         self.addTab(self.tab_stp, "STP")
         self.addTab(self.tab_var, "Variance")
+        self.addTab(self.tab_def, "Defective pixels")
 
         self.flag_ignore_signals = False
 
@@ -1773,8 +1815,17 @@ class ParamsTabXray(ParamsTabCommon):
         self.tab_hom.hlo_top.addWidget(self.hom_tab_alt)
         info_txt = (
             'Method with central + quadrants ROI adapted from IPEM Report 32<br><br>'
-            + 'Flat field test from Mammo:<br>'
-            + flatfield_info_txt)
+            + '<b>Flat field test from Mammo:</b><br>'
+            + flatfield_info_txt
+            + '<br><br>'
+            + '<b>Flat field test based on AAPM TG150:</b><br>'
+            + 'Calculating average and standard deviation for a continuous sliding ROI (using fast fourier transform)<br>'
+            + 'From this, maps of average, noise, SNR and variance pr ROI can be displayed.<br>'
+            + 'Global stastics are tabulated.<br>'
+            + 'Anomalous pixels are detected as specified using the number of standard deviations from average.<br>'
+            + 'The anomalous pixels are not corrected for.<br>'
+            + 'To calculate local uniformity, the neighbour ROIs are found from half the ROI size away as the sliding<br>'
+            + 'window used to calculate the ROI maps causes the true neighbour ROIs to be averaged over close to the same values.')
         self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         self.hom_roi_rotation = QDoubleSpinBox(
@@ -1855,34 +1906,47 @@ class ParamsTabXray(ParamsTabCommon):
     def create_tab_var(self):
         """GUI of tab Variance."""
         super().create_tab_var()
-        '''
-        self.tab_var = ParamsWidget(self, run_txt='Calculate variance image(s)')
 
-        self.var_roi_size = QDoubleSpinBox(
-            decimals=1, minimum=1., maximum=1000, singleStep=0.1)
-        self.var_roi_size.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='var_roi_size'))
-        self.var_percent = QDoubleSpinBox(decimals=1,
-                                          minimum=0.1, maximum=100., singleStep=0.1)
-        self.var_percent.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='var_percent'))
+    def create_tab_def(self):
+        """GUI of tab Noise."""
+        self.tab_def = ParamsWidget(self, run_txt='Find defective pixels')
 
-        self.tab_var.vlo_top.addWidget(uir.LabelItalic(
-            'The variance image can reveal artifacts in the image.<br>'
-            'Adjust ROI size to find artifacts of different sizes.'))
+        self.def_mask_outer_mm = QDoubleSpinBox(
+            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
+        self.def_mask_outer_mm.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='def_mask_outer_mm'))
+        self.def_fraction = QDoubleSpinBox(
+            decimals=2, minimum=0., maximum=100, singleStep=0.1)
+        self.def_fraction.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='def_fraction'))
+        self.def_result_image = QComboBox()
+        self.def_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
 
-        hlo_roi_size = QHBoxLayout()
-        hlo_roi_size.addWidget(QLabel('ROI size (mm)'))
-        hlo_roi_size.addWidget(self.var_roi_size)
-        hlo_roi_size.addWidget(QLabel('if less than 3 pix, 3 pix will be used'))
-        hlo_roi_size.addStretch()
-        hlo_percent = QHBoxLayout()
-        hlo_percent.addWidget(QLabel('Include % of image'))
-        hlo_percent.addWidget(self.var_percent)
-        hlo_percent.addStretch()
-        self.tab_var.vlo.addLayout(hlo_roi_size)
-        self.tab_var.vlo.addLayout(hlo_percent)
-        '''
+        self.tab_def.hlo_top.addWidget(uir.UnderConstruction(
+            txt='Under construction and validation...'))
+        self.tab_def.hlo_top.addWidget(QLabel(
+            'Testing detection of defective pixels using repeated images and standard deviation of repeated pixels'))
+
+        flo1 = QFormLayout()
+        flo1.addRow(
+            QLabel('Mask outer mm'), self.def_mask_outer_mm)
+        flo1.addRow(
+            QLabel('Fraction of median stdev'), self.def_fraction)
+        flo2 = QFormLayout()
+        flo2.addRow(QLabel('Result image: '), self.def_result_image)
+        self.tab_def.hlo.addLayout(flo1)
+        self.tab_def.hlo.addWidget(uir.VLine())
+        self.tab_def.hlo.addLayout(flo2)
+
+        self.def_result_image.addItems(
+            ['Stdev per pixel from all images',
+             'Where stdev is zero',
+             'Where stdav less than fraction of median stdev',
+             'Neighbours avg stdev minus stdev'])
+        btn_mark_coordinates = QPushButton('Mark defective pixels')
+        btn_mark_coordinates.clicked.connect(self.get_coordinates)
+        flo2.addRow(QLabel(''), btn_mark_coordinates)
 
 
 class ParamsTabMammo(ParamsTabCommon):
@@ -2131,6 +2195,11 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_tolerance_angle.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='cdm_tolerance_angle'))
+        self.cdm_sigma = QDoubleSpinBox(
+            decimals=1, minimum=0.,  maximum=2, singleStep=0.1)
+        self.cdm_sigma.editingFinished.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='cdm_sigma'))
 
         self.cdm_result_image = QComboBox()
         self.cdm_result_plot = QComboBox()
@@ -2155,14 +2224,18 @@ class ParamsTabMammo(ParamsTabCommon):
         flo1 = QFormLayout()
         flo1.addRow(QLabel('Accept tolerance for phantom position (degrees)'),
                     self.cdm_tolerance_angle)
+        flo1.addRow(QLabel('Gaussian smooth detection matrix, simga (cells)'),
+                    self.cdm_sigma)
 
+        vlo_left.addWidget(uir.UnderConstruction(
+            txt='Under construction and validation...'))
         vlo_left.addLayout(flo1)
 
         vlo_right = QVBoxLayout()
         self.tab_cdm.hlo.addLayout(vlo_right)
         flo2 = QFormLayout()
         vlo_right.addLayout(flo2)
-        
+
         flo2.addRow(QLabel('Result plot:'), self.cdm_result_plot)
         flo2.addRow(QLabel('Result image:'), self.cdm_result_image)
         vlo_right.addWidget(
@@ -2185,6 +2258,9 @@ class ParamsTabMammo(ParamsTabCommon):
 
         self.cdm_result_plot.addItems(
             ['Found disc at center and in correct corner',
+             'Detection matrix',
+             'Fitted psychometric curves',
+             'Threshold thickness',
              'Compare found corners to .inp from CDCOM',
              'Compare found centers to .inp from CDCOM'])
         self.cdm_result_image.addItems(

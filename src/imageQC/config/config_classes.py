@@ -459,7 +459,8 @@ class ParamSetXray(ParamSetCommon):
     stp_roi_size: float = 11.3
     var_roi_size: float = 2.0
     var_percent: int = 90
-    dea_percent: int = 100
+    def_mask_outer_mm: float = 10.
+    def_fraction: float = 0.1
 
 
 @dataclass
@@ -512,6 +513,7 @@ class ParamSetMammo(ParamSetCommon):
     cdm_threshold_peaks: float = 0.4  # threshold input to hough_line_peaks
     cdm_tolerance_angle: int = 3  # tolerance angulation of phantom relative to image
     cdm_roi_estimate: bool = False  # override roi position with estimate
+    cdm_sigma: float = 0.5  # smooth detection matrix by gaussian, set sigma (unit cells)
 
 @dataclass
 class ParamSetNM(ParamSetCommon):

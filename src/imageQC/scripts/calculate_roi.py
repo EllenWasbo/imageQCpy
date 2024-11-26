@@ -73,6 +73,15 @@ def get_rois(image, image_number, input_main):
     def CTn():  # CT number
         return get_roi_CTn_TTF('ctn', image, image_info, paramset, delta_xya=delta_xya)
 
+    def Def():  # defective pixels Xray
+        roi_array = None
+        if paramset.def_mask_outer_mm > 0:
+            roi_array = np.full(image_info.shape[0:2], False)
+            n_pix = round(paramset.def_mask_outer_mm / image_info.pix[0])
+            if n_pix > 0:
+                roi_array[n_pix:-n_pix, n_pix:-n_pix] = True
+        return roi_array
+
     def Dim():  # CT Dimensions
         roi_this = []
         roi_size_in_pix = 10./image_info.pix[0]  # search radius 10mm

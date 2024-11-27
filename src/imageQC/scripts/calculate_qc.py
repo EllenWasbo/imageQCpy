@@ -2238,10 +2238,16 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     detection_matrix, cdmam_table_dict, paramset.cdm_sigma)
                 details_dicts.append(cdmam_table_dict)
 
-                thk = cdmam_table_dict[
-                    'psychometric_results']['thickness_founds']
+                res_table = cdmam_table_dict['psychometric_results']
+                values = np.array([
+                        res_table['thickness_predicts_fit_d'],
+                        res_table['thickness_founds'],
+                        res_table['thickness_predicts'],
+                        res_table['thickness_predicts_fit']
+                        ])
+                values = values.T
 
-            res = Results(headers=headers, values=[0],
+            res = Results(headers=headers, values=values,
                           details_dict=details_dicts, pr_image=False,
                           errmsg=errmsgs)
             return res

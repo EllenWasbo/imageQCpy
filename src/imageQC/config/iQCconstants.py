@@ -235,7 +235,8 @@ HEADERS = {
             },
         'NPS': {'alt0': ['Average variance', 'Large area signal',
                          'Large area stdev (noise)', 'AUC horiz/AUC vert']},
-        'CDM': {'alt0': ['not implemeted yet']}
+        'CDM': {'alt0': ['Diameter', 'Threshold thickness auto',
+                         'Threshold thickness predicted', 'Fit to predicted']}
          },
     'NM': {
         'ROI': {'alt0': roi_headers},

@@ -332,7 +332,7 @@ class ImageCanvas(GenericImageCanvas):
         self.draw_idle()
 
     def add_crosshair(self):
-        if self.current_image is not None:
+        if self.current_image is not None and not self.main.automation_active:
             nparr = self.current_image
             szy, szx = np.shape(nparr)
             try:

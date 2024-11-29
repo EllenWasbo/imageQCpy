@@ -482,19 +482,14 @@ def test_Mammo_cdm34():
         current_modality='Mammo',
         current_test='CDM',
         current_paramset=cfc.ParamSetMammo(),
-        current_quicktest=cfc.QuickTestTemplate(tests=[['CDM']]*4),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['CDM']]),
         tag_infos=tag_infos,
         automation_active=False
         )
-    '''
-    file_path = (path_tests / 'test_inputs' / 'Mammo' / 'CDMAM')
+
+    file_path = Path(r'C:\Users\ellen\CloudStation\ImageQCpy\DemoBilder\DemoBilder\Mammo\scr_lab1_2023_cdm34')
     img_infos, ignored_files, _ = dcm.read_dcm_info(
-        [file_path / 'cdmam34.dcm'],
-        GUI=False, tag_infos=input_main.tag_infos)
-    '''
-    file_path = Path(r'C:\Users\ellen\CloudStation\ImageQCpy\DemoBilder\DemoBilder\Mammo\cdmam')
-    img_infos, ignored_files, _ = dcm.read_dcm_info(
-        [file_path / f'cdmam34_{i}.dcm' for i in range(1, 5)],
+        [file_path / '101946_34.0kV_41.95mAs.dcm'],
         GUI=False, tag_infos=input_main.tag_infos)
 
     input_main.imgs = img_infos

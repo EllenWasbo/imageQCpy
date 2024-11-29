@@ -2112,6 +2112,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             n_imgs = len(images_to_test)
             curr_progress_value = 0
             detection_matrix = None
+            cancelled = False
             for i, idx in enumerate(images_to_test):
                 try:
                     input_main.progress_modal.setLabelText(
@@ -2231,26 +2232,40 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         detection_matrix = found_this
                     else:
                         detection_matrix = detection_matrix + found_this
+                try:
+                    if input_main.progress_modal.wasCanceled():
+                        cancelled = True
+                        break
+                except AttributeError:
+                    pass
 
-            if details_dicts:
+            if cancelled is False:
                 detection_matrix = detection_matrix / n_imgs
-                cdmam_methods.calculate_fitted_psychometric(
-                    detection_matrix, cdmam_table_dict, paramset.cdm_sigma)
+                cdmam_table_dict['detection_matrix'] = detection_matrix
+                if details_dicts and n_imgs > 3:
+                    cdmam_methods.calculate_fitted_psychometric(
+                        detection_matrix, cdmam_table_dict, paramset.cdm_sigma)
+
+                    res_table = cdmam_table_dict['psychometric_results']
+                    values = np.array([
+                            res_table['thickness_predicts_fit_d'],
+                            res_table['thickness_founds'],
+                            res_table['thickness_predicts'],
+                            res_table['thickness_predicts_fit']
+                            ])
+                    values = values.T
+                else:
+                    values = [[None]*4]
                 details_dicts.append(cdmam_table_dict)
 
-                res_table = cdmam_table_dict['psychometric_results']
-                values = np.array([
-                        res_table['thickness_predicts_fit_d'],
-                        res_table['thickness_founds'],
-                        res_table['thickness_predicts'],
-                        res_table['thickness_predicts_fit']
-                        ])
-                values = values.T
+                res = Results(headers=headers, values=values,
+                              details_dict=details_dicts, pr_image=False,
+                              errmsg=errmsgs)
+            else:
+                res = Results(headers=headers, values=[[None]*4],
+                              errmsg=errmsgs)
 
-            res = Results(headers=headers, values=values,
-                          details_dict=details_dicts, pr_image=False,
-                          errmsg=errmsgs)
-            return res
+        return res
 
     def Cro(images_to_test):
         """PET cross calibration."""

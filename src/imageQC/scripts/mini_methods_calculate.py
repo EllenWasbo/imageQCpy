@@ -174,7 +174,7 @@ def gauss_double_fit(x, y, fwhm1=None, A2_positive=False):
     return popt
 
 
-def polyfit_2d(array_2d, max_order=2):
+def polyfit_2d(array_2d, max_order=2, mask=None):
     """Fit 2d array to polynomial plane.
 
     https://scipython.com/blog/linear-least-squares-fitting-of-a-two-dimensional-data/
@@ -184,6 +184,8 @@ def polyfit_2d(array_2d, max_order=2):
     array_2d : np.array
     max_order : int
         max polynomial order
+    mask : np.array or None
+        bool type array, where to ignore array_2d.
 
     Returns
     -------
@@ -198,10 +200,16 @@ def polyfit_2d(array_2d, max_order=2):
         return basis
     sz_y, sz_x = array_2d.shape
     xs, ys = np.meshgrid(np.arange(sz_x), np.arange(sz_y))
-    basis = get_basis(xs.ravel(), ys.ravel(), max_order)
+    if mask is not None:
+        idxs = np.where(mask.ravel() == False)
+        basis = get_basis(xs.ravel()[idxs], ys.ravel()[idxs], max_order)
+        b = array_2d.ravel()[idxs]
+    else:
+        basis = get_basis(xs.ravel(), ys.ravel(), max_order)
+        b = array_2d.ravel()
     # Linear, least-squares fit.
     A = np.vstack(basis).T
-    b = array_2d.ravel()
+
     c, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
 
     # Calculate the fitted surface from the coefficients, c.

@@ -513,7 +513,7 @@ class ParamSetMammo(ParamSetCommon):
     cdm_threshold_peaks: float = 0.4  # threshold input to hough_line_peaks
     cdm_tolerance_angle: int = 3  # tolerance angulation of phantom relative to image
     cdm_roi_estimate: bool = False  # override roi position with estimate
-    cdm_sigma: float = 0.5  # smooth detection matrix by gaussian, set sigma (unit cells)
+    cdm_sigma: float = 0.75  # smooth detection matrix by gaussian, set sigma (unit cells)
 
 @dataclass
 class ParamSetNM(ParamSetCommon):

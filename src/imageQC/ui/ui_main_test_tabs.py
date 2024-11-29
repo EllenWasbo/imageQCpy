@@ -2124,6 +2124,64 @@ class ParamsTabMammo(ParamsTabCommon):
         """GUI of tab NPS."""
         self.create_tab_nps_xray()
 
+    def cdm_compare(self):
+        sel_txts = [
+            'Import detection matrix Fraction.xls from CDMAM Analyser v1.5.5',
+            'Import .inp from CDCOM for selected file',
+            ]
+        txt, ok = QInputDialog.getItem(
+            self, "Compare detection",
+            "Compare detection matrix to:                     ",
+            sel_txts, 0, False)
+        if ok and txt:
+            if '.inp from CDCOM' in txt:
+                self.cdm_get_compare_inp()
+            elif 'Fraction.xls' in txt:
+                self.cdm_get_compare_fraction_xls()
+
+    def cdm_get_compare_fraction_xls(self):
+        try:
+            details_dict = self.main.results['CDM']['details_dict'][-1]
+        except (IndexError, KeyError):
+            details_dict = None
+            QMessageBox.warning(
+                self, 'Missing results',
+                'The read files will be connected to calculated results, '
+                'none exist. Calculate results and retry.')
+        if details_dict:
+            fname = QFileDialog.getOpenFileName(
+                self, 'Locate Fraction.xls for comparison',
+                filter="Excel files (*.xls);;All files (*)")
+        else:
+            fname = None
+        if fname is not None:
+            path = fname[0]
+            shape = details_dict['detection_matrix'].shape
+            try:
+                dataf = pd.read_excel(path, header=None)
+            except ImportError as err:
+                QMessageBox.warning(
+                    self, 'ImportError', str(err))
+                dataf = None
+            if dataf is not None:
+                dataf = np.rot90(dataf.to_numpy(), k=1)
+                if dataf.shape == shape:
+                    diff = details_dict['detection_matrix'] - dataf
+                    details_dict['diff_Fraction.xls'] = diff
+                    cbox = self.main.tab_mammo.cdm_result_plot
+                    options = [cbox.itemText(i) for i in range(cbox.count())]
+                    opt = 'Detection matrix difference to Fraction.xls'
+                    if opt not in options:
+                        self.cdm_result_plot.addItems([opt])
+                    QMessageBox.information(
+                        self, 'File read',
+                        'Find comparison in Results Plot selecting the '
+                        'plot type.')
+                else:
+                    QMessageBox.warning(
+                        self, 'Wrong shape',
+                        f'Expecting shape {shape}, found shape {dataf.shape}.')
+
     def cdm_get_compare_inp(self):
         imgno = self.main.gui.active_img_no
         try:
@@ -2132,8 +2190,8 @@ class ParamsTabMammo(ParamsTabCommon):
             details_dict = None
             QMessageBox.warning(
                 self, 'Missing results',
-                'The read files will be connected to calculated results, none exist. '
-                'Calculate results and retry.')
+                'The read files will be connected to calculated results, '
+                'none exist. Calculate results and retry.')
         if details_dict:
             fnames = QFileDialog.getOpenFileNames(
                 self, 'Select matrix.inp + matrix2.inp files to compare to',
@@ -2145,14 +2203,16 @@ class ParamsTabMammo(ParamsTabCommon):
             if len(paths) != 2:
                 QMessageBox.warning(
                     self, 'Wrong number of files',
-                    f'Expecting two files, found {len(paths)}. Comparison aborted.')
+                    f'Expecting two files, found {len(paths)}. '
+                    'Comparison aborted.')
             else:
                 proceed = True
                 if Path(paths[0]).name != 'matrix.inp' and Path(paths[1]).name != 'matrix2.inp':
                     question = (
-                        'Expecting matrix.inp and matrix2.inp as filenames. Found other names. '
-                        f'Proceed assuming the first file {Path(paths[0]).name} represent found '
-                        f'corners and the second {Path(paths[1]).name} found centers?')
+                        'Expecting matrix.inp and matrix2.inp as filenames. '
+                        'Found other names. Proceed assuming the first file '
+                        f'{Path(paths[0]).name} represent found corners and '
+                        f'the second {Path(paths[1]).name} found centers?')
                     proceed = messageboxes.proceed_question(self, question)
                 if proceed:
                     dataframes = []
@@ -2167,17 +2227,25 @@ class ParamsTabMammo(ParamsTabCommon):
                         else:
                             QMessageBox.warning(
                                 self, 'Wrong shape',
-                                f'Expecting shape {shape}, found shape {dataf.shape}. '
-                                'Not same phantom version?')
+                                f'Expecting shape {shape}, found shape '
+                                f'{dataf.shape}. Not same phantom version?')
                             break
                     if len(dataframes) == 2:
                         details_dict.update({
                             'found_correct_corner_inp': dataframes[0],
                             'found_centers_inp': dataframes[0]
                             })
+                        cbox = self.main.tab_mammo.cdm_result_plot
+                        opts = [cbox.itemText(i) for i in range(cbox.count())]
+                        opt = 'Compare found corners to .inp from CDCOM'
+                        if opt not in opts:
+                            self.cdm_result_plot.addItems([
+                                opt,
+                                'Compare found centers to .inp from CDCOM'])
                         QMessageBox.information(
                             self, 'Files read',
-                            'Find comparison in Results Plot selecting the plot type.')
+                            'Find comparison in Results Plot selecting the '
+                            'plot type.')
 
     def create_tab_cdm(self):
         """GUI for CDMAM analysis."""
@@ -2196,7 +2264,7 @@ class ParamsTabMammo(ParamsTabCommon):
             lambda: self.param_changed_from_gui(
                 attribute='cdm_tolerance_angle'))
         self.cdm_sigma = QDoubleSpinBox(
-            decimals=1, minimum=0.,  maximum=2, singleStep=0.1)
+            decimals=2, minimum=0.,  maximum=2, singleStep=0.1)
         self.cdm_sigma.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='cdm_sigma'))
@@ -2211,6 +2279,8 @@ class ParamsTabMammo(ParamsTabCommon):
             self.main.wid_res_image.canvas.result_image_draw)
         self.cdm_cbox_diameter.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
+        self.cdm_cbox_diameter.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
         self.cdm_cbox_thickness.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
 
@@ -2252,17 +2322,15 @@ class ParamsTabMammo(ParamsTabCommon):
         vlo_right.addWidget(uir.LabelItalic(
             'Double-click center of cells in the image to display the '
             'processed cell in Result image tab'))
-        btn_compare_inp = QPushButton('Compare score map to .inp from CDCOM')
-        btn_compare_inp.clicked.connect(self.cdm_get_compare_inp)
+        btn_compare_inp = QPushButton('Compare detection matrix to other softwares')
+        btn_compare_inp.clicked.connect(self.cdm_compare)
         vlo_right.addWidget(btn_compare_inp)
 
         self.cdm_result_plot.addItems(
             ['Found disc at center and in correct corner',
              'Detection matrix',
              'Fitted psychometric curves',
-             'Threshold thickness',
-             'Compare found corners to .inp from CDCOM',
-             'Compare found centers to .inp from CDCOM'])
+             'Threshold thickness'])
         self.cdm_result_image.addItems(
             ['Processed sub-image for selected diameter and thickness'])
 

@@ -375,16 +375,14 @@ class ResultPlotCanvas(PlotCanvas):
         if len(self.curves) > 0:
             x_only_int = True
             for curve in self.curves:
-                if 'markersize' in curve:
-                    markersize = curve['markersize']
-                else:
-                    markersize = 6.
+                if 'markersize' not in curve:
+                    curve['markersize'] = 6.
                 if 'style' not in curve:
                     curve['style'] = '-'
                 if 'alpha' not in curve:  # TODO currently have no effect?
-                    alpha = 1.
-                else:
-                    alpha = curve['alpha']
+                    curve['alpha'] = 1.
+                if 'fillstyle' not in curve:
+                    curve['fillstyle'] = 'full'
                 proceed = True
                 try:
                     if curve['xvals'].size != curve['yvals'].size:
@@ -399,12 +397,16 @@ class ResultPlotCanvas(PlotCanvas):
                     if 'color' in curve:
                         self.ax.plot(curve['xvals'], curve['yvals'],
                                      curve['style'], label=curve['label'],
-                                     markersize=markersize, alpha=alpha,
-                                     color=curve['color'])
-                    else:
+                                     markersize=curve['markersize'],
+                                     alpha=curve['alpha'],
+                                     color=curve['color'],
+                                     fillstyle=curve['fillstyle'])
+                    else:  # NB color might be part of style
                         self.ax.plot(curve['xvals'], curve['yvals'],
                                      curve['style'], label=curve['label'],
-                                     markersize=markersize, alpha=alpha)
+                                     markersize=curve['markersize'],
+                                     alpha=curve['alpha'],
+                                     fillstyle=curve['fillstyle'])
                     if 'xscale' in curve:
                         self.ax.set_xscale(curve['xscale'])
                     if 'yscale' in curve:
@@ -528,8 +530,6 @@ class ResultPlotCanvas(PlotCanvas):
 
     def CDM(self):
         """Prepare plot for test CDMAM."""
-        self.xtitle = 'Diameter (mm)'
-        self.ytitle = r'Thickness ($\mu$m)'
         imgno = self.main.gui.active_img_no
         details_dict = self.main.results['CDM']['details_dict'][imgno]
         cdmam_table_dict = self.main.results['CDM']['details_dict'][-1]
@@ -538,8 +538,18 @@ class ResultPlotCanvas(PlotCanvas):
         ylabels = [cbox.itemText(i) for i in range(cbox.count())]
         ylabels.reverse()
 
+        include_array = None
+        if 'include_array' in details_dict:
+            if details_dict['include_array'] is not None:
+                np.flipud(details_dict['include_array'])
+        if include_array is None:
+            include_array = np.ones(
+                cdmam_table_dict['detection_matrix'].shape, dtype=bool)
+
         def prepare_found_corner_center_plot():
             self.title = 'Correctly found disc in corner (diamond) and at center (circle)'
+            self.xtitle = 'Diameter (mm)'
+            self.ytitle = r'Thickness ($\mu$m)'
 
             if 'include_array' in details_dict:
                 if details_dict['include_array'] is not None:
@@ -563,14 +573,8 @@ class ResultPlotCanvas(PlotCanvas):
 
         def prepare_detection_matrix_plot():
             self.title = 'Detection ratio based on all images'
-
-            include_array = None
-            if 'include_array' in details_dict:
-                if details_dict['include_array'] is not None:
-                    np.flipud(details_dict['include_array'])
-            if include_array is None:
-                include_array = np.ones(
-                    cdmam_table_dict['detection_matrix'].shape, dtype=bool)
+            self.xtitle = 'Diameter (mm)'
+            self.ytitle = r'Thickness ($\mu$m)'
 
             self.scatters.append(
                 {'xlabels': xlabels, 'ylabels': ylabels,
@@ -579,9 +583,23 @@ class ResultPlotCanvas(PlotCanvas):
                  'color': np.flipud(cdmam_table_dict['detection_matrix']),
                  'cmap': 'nipy_spectral_r', 'vmin': 0.1, 'vmax': 2.})
 
+        def prepare_comparison_vs_fraction_xls():
+            self.title = 'Detection ratio minus Fraction.xls'
+            self.xtitle = 'Diameter (mm)'
+            self.ytitle = r'Thickness ($\mu$m)'
+            self.scatters.append(
+                {'xlabels': xlabels, 'ylabels': ylabels,
+                 'array': np.flipud(include_array),
+                 'size': 100, 'marker': 'o',
+                 'color': np.flipud(cdmam_table_dict['diff_Fraction.xls']),
+                 'cmap': 'coolwarm', 'vmin': -1., 'vmax': 1.})
+
         def prepare_psychometric_plot():
             self.title = 'Fitted psychometric curves'
+            self.xtitle = r'Thickness ($\mu$m)'
+            self.xtitle = 'Detection probability'
             psyc_res = cdmam_table_dict['psychometric_results']
+            idx_diam = self.main.tab_mammo.cdm_cbox_diameter.currentIndex()
             for i, diam in enumerate(cdmam_table_dict['diameters']):
                 c = COLORS[i % len(COLORS)]
                 xvals = psyc_res['xs'][i]
@@ -591,16 +609,27 @@ class ResultPlotCanvas(PlotCanvas):
                     curve = {'label': f'Ø {diam}',
                              'xvals': xvals,
                              'yvals': yfit,
-                             'style': '-', 'color': c}
+                             'style': ':', 'fillstyle': 'none', 'color': c}
+                    if i == idx_diam:
+                        curve['style'] = '-'
                     self.curves.append(curve)
                 curve = {'label': '_no_legend_',
                          'xvals': xvals, 'xscale' : 'log',
                          'yvals': yvals,
                          'style': 'o', 'color': c}
+                if i == idx_diam:
+                    curve['fillstyle'] = 'full'
                 self.curves.append(curve)
+            self.curves.append({'label': '_no_legend_',
+                      'xvals': [min(cdmam_table_dict['thickness']),
+                                max(cdmam_table_dict['thickness'])],
+                      'yvals': [0.65, 0.65],
+                      'style': '-k' })
 
         def prepare_threshold_plot():
             self.title = 'Threshold thickness'
+            self.xtitle = 'Diameter (mm)'
+            self.ytitle = r'Thickness ($\mu$m)'
 
             psyc_res = cdmam_table_dict['psychometric_results']
             limits = cdmam_table_dict['EUREF_performance_limits']
@@ -608,7 +637,12 @@ class ResultPlotCanvas(PlotCanvas):
                      'xvals': psyc_res['thickness_predicts_fit_d'],
                      'yvals': psyc_res['thickness_predicts_fit'],
                      'xscale' : 'log', 'yscale': 'log',
-                     'style': 'ok', 'markersize': 3.}
+                     'style': ':b'}
+            self.curves.append(curve)
+            curve = {'label': 'fit to data',
+                     'xvals': psyc_res['thickness_predicts_fit_d'],
+                     'yvals': psyc_res['thickness_predicts'],
+                     'style': 'o', 'fillstyle': 'none', 'markersize': 3.}
             self.curves.append(curve)
             curve = {'label': 'acceptable',
                      'xvals': limits['diameters'],
@@ -620,11 +654,13 @@ class ResultPlotCanvas(PlotCanvas):
                      'yvals': limits['achievable_thresholds_thickness'],
                      'style': 'k'}
             self.curves.append(curve)
-            self.default_range_x = [0.01, 10]
-            self.default_range_y = [0.01, 10]
+            self.default_range_x = [0.05, 2]
+            self.default_range_y = [0.05, 5]
 
         def prepare_comparison_vs_inp_plot(sel_text):
             self.title = sel_text + '(imageQC found = green, inp found = orange)'
+            self.xtitle = 'Diameter (mm)'
+            self.ytitle = r'Thickness ($\mu$m)'
 
             if 'corner' in sel_text:
                 self.scatters.append(
@@ -658,7 +694,7 @@ class ResultPlotCanvas(PlotCanvas):
             sel_text = ''
         if sel_text == 'Found disc at center and in correct corner':
             prepare_found_corner_center_plot()
-        elif 'Detection matrix' in sel_text:
+        elif sel_text == 'Detection matrix':
             prepare_detection_matrix_plot()
         elif sel_text == 'Fitted psychometric curves':
             prepare_psychometric_plot()
@@ -666,6 +702,8 @@ class ResultPlotCanvas(PlotCanvas):
             prepare_threshold_plot()
         elif 'CDCOM' in sel_text:
             prepare_comparison_vs_inp_plot(sel_text)
+        elif 'Fraction.xls' in sel_text:
+            prepare_comparison_vs_fraction_xls()
 
     def Cro(self):
         """Prepare plot for test PET cross calibration."""

@@ -342,7 +342,8 @@ class ImageCanvas(GenericImageCanvas):
             if self.main.gui.delta_a == 0:
                 self.ax.axhline(
                     y=szy*0.5 + self.main.gui.delta_y,
-                    color='red', linewidth=linewidth, linestyle='--')
+                    color='red', linewidth=linewidth, linestyle='--',
+                    )
                 self.ax.axvline(
                     x=szx*0.5 + self.main.gui.delta_x,
                     color='red', linewidth=linewidth, linestyle='--')
@@ -368,6 +369,7 @@ class ImageCanvas(GenericImageCanvas):
         remove_crosshair = (
             (self.main.current_test=='DCM')
             or (self.main.current_test=='CDM')
+            or ('InputMain' in str(type(self.main)))
             )
         self.remove_annotations(remove_crosshair=remove_crosshair)
         if remove_crosshair is False:
@@ -540,15 +542,6 @@ class ImageCanvas(GenericImageCanvas):
                 roi_indexes=[i for i in range(nroi, 2 * nroi)],
                 reset_contours=False
                 )
-
-    def Def(self):
-        if self.main.current_paramset.def_mask_outer_mm > 0:
-            mask = np.where(self.main.current_roi, 0, 1)
-            contour = self.ax.contour(
-                mask, levels=[0.9],
-                colors='blue', alpha=0.5, linewidths=self.linewidth,
-                linestyles='dotted')
-            self.contours.append(contour)
 
     def Dim(self):
         """Draw search ROI for rods and resulting centerpositions if any."""
@@ -959,17 +952,14 @@ class ImageCanvas(GenericImageCanvas):
         self.add_contours_to_all_rois(colors=['red', 'blue'])
 
     def Var(self):
-        #  [roi_small, roi_percent, roi_percent_valid, roi_mask, roi_mask_valid]
+        #  [roi1, roi2, roi3, roi_mask_outer, roi_mask_max]
         self.add_contours_to_all_rois(
-            colors=['blue', 'blue'], roi_indexes=[0, 1, 2],
-            linestyles=['solid', 'dotted', 'dashed'])
-        if self.main.current_roi[3] is not None:
-            self.add_contours_to_all_rois(
-                colors=['red'], roi_indexes=[3],
-                filled=True, hatches=['////'], reset_contours=False)
+            colors=['c', 'm', 'y', 'b'], roi_indexes=[0, 1, 2, 3],
+            linestyles=['solid', 'solid', 'solid', 'dotted'])
+        if self.main.current_roi[4] is not None:
             self.add_contours_to_all_rois(
                 colors=['red'], roi_indexes=[4],
-                linestyles=['dashed'], reset_contours=False)
+                filled=True, hatches=['////'], reset_contours=False)
 
 
 class ResultImageCanvas(GenericImageCanvas):
@@ -1210,26 +1200,39 @@ class ResultImageCanvas(GenericImageCanvas):
     def Def(self):
         """Defective pixels."""
         try:
-            details_dict = self.main.results['Def']['details_dict']
+            details_dicts = self.main.results['Def']['details_dict']
         except KeyError:
-            details_dict = None
-        if details_dict:
+            details_dicts = None
+        if details_dicts:
             sel_txt = self.main.tab_xray.def_result_image.currentText()
             self.title = sel_txt
 
             try:
-                if sel_txt == 'Stdev per pixel from all images':
-                    self.current_image = details_dict['std_pr_pix']
-                    self.cmap = 'viridis'
-                elif sel_txt == 'Where stdev is zero':
-                    self.current_image = details_dict['std_is_zero']
+                if sel_txt == 'Pix == Avg of 8 neighbours':
+                    self.current_image = details_dicts[
+                        self.main.gui.active_img_no]['diff_neighbours_is_zero']
                     self.cmap = 'RdYlGn_r'
-                elif sel_txt == 'Where stdav less than fraction of median stdev':
-                    self.current_image = details_dict['std_less_than_fraction']
+                elif sel_txt == 'Pix == Avg of 4 neighbours':
+                    self.current_image = details_dicts[
+                        self.main.gui.active_img_no]['diff_nearest_is_zero']
                     self.cmap = 'RdYlGn_r'
-                elif sel_txt == 'Neighbours avg stdev minus stdev':
-                    self.current_image = details_dict['neighbours_avg_std']
+                elif sel_txt == '# pix == avg of 8 pr 1x1cm':
+                    self.current_image = details_dicts[
+                        self.main.gui.active_img_no]['n_pr_roi_neighbours']
                     self.cmap = 'viridis'
+                elif sel_txt == '# pix == avg of 4 pr 1x1cm':
+                    self.current_image = details_dicts[
+                        self.main.gui.active_img_no]['n_pr_roi_nearest']
+                    self.cmap = 'viridis'
+                elif sel_txt == 'Fraction of images where avg of 8 neighbours':
+                    self.current_image = details_dicts[
+                        -1]['frac_diff_neighbours_is_zero']
+                    self.cmap = 'viridis'
+                elif sel_txt == 'Fraction of images where avg of 4 neighbours':
+                    self.current_image = details_dicts[
+                        -1]['frac_diff_nearest_is_zero']
+                    self.cmap = 'viridis'
+
             except KeyError:
                 pass
 
@@ -1478,10 +1481,11 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.main.gui.active_img_no]
             self.cmap = 'viridis'
             self.title = 'Variance image'
-            if self.main.current_paramset.var_percent < 100:
-                self.title = (
-                    f'{self.title} of central '
-                    f'{self.main.current_paramset.var_percent} %')
-            self.current_image = details_dict['variance_image']
-        except KeyError:
+            if self.main.current_modality == 'Mammo':
+                sel_idx = self.main.tab_mammo.var_result_image.currentIndex()
+            else:
+                sel_idx = self.main.tab_xray.var_result_image.currentIndex()
+            self.current_image = details_dict['variance_image'][sel_idx]
+
+        except (KeyError, IndexError):
             pass

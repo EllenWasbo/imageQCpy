@@ -1541,6 +1541,7 @@ def verify_output_alternative(paramset, testcode=None):
                                 f'Parameters used indicate alternative {alt}')
                             log.append(
                                 f'Output settings indicate alternative {sub_alt}')
+
     status = False if len(log) > 0 else True
 
     return (status, log)

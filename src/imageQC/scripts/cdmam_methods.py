@@ -323,12 +323,17 @@ def find_phantom_34(image, margin, margin_angle, angles_dists_center, paramset):
             phi = np.arctan2(y, x) - (np.pi/4 + diff_angle)
             xs[row, col] = r * np.cos(phi)
             ys[row, col] = r * np.sin(phi)
+
     center_x = 0.5 * (xy_refs[0][0] + xy_refs[1][0])
     center_y = 0.5 * (xy_refs[0][1] + xy_refs[1][1])
     dx = center_x - xs[8, 8] + diagonal / 2
     dy = center_y - ys[8, 8]
     xs = xs + dx
     ys = ys + dy
+
+    if paramset.cdm_rotate_k > 0:
+        xs = np.rot90(xs, k=paramset.cdm_rotate_k)
+        ys = np.rot90(ys, k=paramset.cdm_rotate_k)
 
     roi_dict = {'include_array': include_array, 'phantom': 34,
                 'xs': xs, 'ys':ys,
@@ -341,7 +346,6 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
     errmsgs = []
     roi_estimate = paramset.cdm_roi_estimate
     estimate_x, estimate_y = roi_estimate, roi_estimate
-    rot90_k = 0
 
     # finding vertical line positions
     x_start_phantom, x_end_phantom, xprof = find_phantom_part(
@@ -369,14 +373,10 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
         peaks_pos = peaks[0]
         dists = np.diff(peaks_pos)
         dist = np.median(dists)
-        #if dist is None:
-        #    dist = 9 * px_pr_mm
         idx_sep = np.where(np.logical_and(dists < 1.05 * dist / 2, dists > 0.95 * dist / 2))
-        if len(idx_sep[0]) == 3:
-            if idx_sep[0][-1] > idx_sep[0][0]:  # todo accept also 90/-90 rotation
-                rot90_k = 2  # rotate 180deg
-            y_start = peaks_pos[0] + y_start_phantom
 
+        if len(idx_sep[0]) == 3:
+            y_start = peaks_pos[0] + y_start_phantom
         else:
             errmsgs.append(
                 'Failed to find a grid 21 cells high. '
@@ -396,16 +396,20 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
         xs, ys = np.meshgrid(
             dist * (np.arange(16) + 0.5),
             dist * (np.arange(21) + 0.5))
-        if rot90_k == 2:
+        if paramset.cdm_rotate_k == 2:
             a, b, c = 3, 7, 11
         else:
-            a, b, c = 11, 15, 18
+            a, b, c = 10, 14, 18  # TODO - landscape rotations
+
         ys[a:, :] = ys[a:, :] + 0.5 * dist
         ys[b:, :] = ys[b:, :] + 0.5 * dist
         ys[c:, :] = ys[c:, :] + 0.5 * dist
         # center before rotate
         xs = xs - 8 * dist
         ys = ys - 22.5/2 * dist
+        if paramset.cdm_rotate_k > 0:  # TODO - other rotations
+            xs = np.rot90(xs, k=paramset.cdm_rotate_k)
+            ys = np.rot90(ys, k=paramset.cdm_rotate_k)
 
         diff_angle = np.median(
             [angle for angle, dist in angles_center])
@@ -417,10 +421,6 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
                 phi = np.arctan2(y, x) + diff_angle
                 xs[row, col] = r * np.cos(phi)
                 ys[row, col] = r * np.sin(phi)
-
-        if rot90_k == 2:  # set order of xs an ys similar to rot90_k = 0
-            xs = np.rot90(xs, rot90_k)
-            ys = np.rot90(ys, rot90_k)
 
         xs = xs + 16/2 * dist + x_start
         ys = ys + 22.5/2 * dist + y_start
@@ -438,8 +438,8 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
         ys = np.rot90(ys, 1)
 
         roi_dict = {'phantom': 40, 'xs': xs, 'ys':ys,
-                    'cell_width': dist, 'angle': diff_angle,
-                    'rot90_k': rot90_k}
+                    'cell_width': dist, 'angle': diff_angle}
+
     return roi_dict
 
 
@@ -485,41 +485,19 @@ def get_templates(image, xs, ys, pix, pix_new,
             first_cols = np.where(corner_indexes[row] > 0)[0][:2]
             for col in first_cols:
                 corner_rows_cols[corner_indexes[row][col]-1].append((row, col))
+        if rot90_k == 2:  # TODO other rotations
+            corner_rows_cols.reverse()
         for rows_cols in corner_rows_cols:  # find xy positions of the cells
             sample_xs, sample_ys = [], []
             for row, col in rows_cols:
                 sample_xs.append(round(xs[row, col]))
                 sample_ys.append(round(ys[row, col]))
             corner_xys.append((sample_xs, sample_ys))
-        if rot90_k == 2:
-            corner_xys.revers()
     else:  # v4.0
         wi_factor = 1.3
         wi = round(wi_factor * wi)  # add margin to cell
         width_sub = wi * 2 + 1
-
-        '''Phantom v4.0 week contrast to finetune, better to estimate positions
-        # find corners = top left, top right, btm right, btm left in image
-        # estimate position from 3 first cells of with thickest discs
-        corner_rows_cols = [[], [], [], []]  # for topleft, topr, btmr, btmleft
-        for row in range(2):  # find indexes and sort into which corner
-            for col in range(3):
-                corner_rows_cols[corner_indexes[row][col]].append((row, col))
-        corner_xys_in_image = []
-        for rows_cols in corner_rows_cols:  # find xy positions of the cells
-            sample_xs, sample_ys = [], []
-            for row, col in rows_cols:
-                sample_xs.append(round(xs[row, col]))
-                sample_ys.append(round(ys[row, col]))
-            corner_xys_in_image.append((sample_xs, sample_ys))
-
-        if rot90_k == 0:  # text upside down
-            order = [3, 0, 1, 2]  # corner 0 = btmleft (3)
-        elif rot90_k == 2:  # text correct
-            order = [1, 2, 3, 0]  # corner 0 = topright (1)
-        for i in order:
-            corner_xys.append(corner_xys_in_image[i])
-        '''
+        # Phantom v4.0 week contrast to finetune, better to estimate positions
 
     width_sub_50um = round(width_sub * pix / pix_new)
     cent = round(width_sub_50um/2)
@@ -529,6 +507,9 @@ def get_templates(image, xs, ys, pix, pix_new,
     if phantom == 34:
         diff_expect = width_sub_50um // 4
         off_xy_expect = [(0, -1), (-1, 0), (1, 0), (0, 1)]  # top,lft,rgt,btm
+        if rot90_k == 2:  # TODO other rotations
+            corner_xys.reverse()
+            off_xy_expect.reverse()
         off_xy_expect = diff_expect * np.array(off_xy_expect)
     elif phantom == 40:
         diff_expect = 47  # estimated visually from samples
@@ -553,22 +534,8 @@ def get_templates(image, xs, ys, pix, pix_new,
                     avgs_sub, roi_center)
                 min_yx_corner, _ = mmcalc.get_min_max_pos_2d(
                     avgs_sub, roi_corner)
-            '''
-            else:
-                # avoid grid-lines to affect smoothing
-                sub_masked = np.full(sub.shape, np.median(sub))
-                rim = round(1.2* width_sub_50um * (wi_factor - 1) / 2)
-                sub_masked[rim:-rim, rim:-rim] = sub[rim:-rim, rim:-rim]
+            # else: TODO if finetune also for phantom v4.0
 
-                smooth = ndimage.gaussian_filter(sub_masked, sigma=20)
-                roi_center = get_roi_circle(smooth.shape, (0, 0), 35)
-                roi_corner = get_roi_circle(smooth.shape, 
-                                            off_xy_expect[cc], 35)
-                min_yx_center, _ = mmcalc.get_min_max_pos_2d(
-                    smooth, roi_center)
-                min_yx_corner, _ = mmcalc.get_min_max_pos_2d(
-                    smooth, roi_corner)
-            '''
             off_xs_center.append(min_yx_center[1] - cent)
             off_ys_center.append(min_yx_center[0] - cent)
             off_xs_corner.append(min_yx_corner[1] - cent)
@@ -579,10 +546,9 @@ def get_templates(image, xs, ys, pix, pix_new,
 
     if len(off_xy_corners) == 0 and phantom == 40:
         if phantom == 40:
-            if rot90_k == 2:  # text upside down
-                order = [3, 0, 1, 2]  # corner 0 = btmleft (3)
-            elif rot90_k == 0:  # text correct
-                order = [1, 2, 3, 0]  # corner 0 = topright (1)
+            order = [1, 2, 3, 0]
+            if rot90_k > 0:
+                order = np.roll(order, rot90_k).tolist()
             for i in order:
                 off_xy_corners.append(off_xy_expect[i])
 
@@ -773,37 +739,46 @@ def third_order_polynomial_fit(x, p):
     return popt
 
 
-def calculate_fitted_psychometric(detection_matrix, cdmam_table_dict, sigma):
+def calculate_fitted_psychometric(cdmam_table_dict, sigma):
     """Fit psychometric curves to values in detection matrix.
 
     Also, add results to cdmam_table_dict.
 
     Parameters
     ----------
-    detection_matrix : np.ndarray
     cdmam_table_dict : dict
-        diameter and thickness info for given phantom
+        detection_matrix + diameter and thickness info for given phantom
+    sigma : float
+        Sigma to smooth detecion matrix.
     """
     diameters = cdmam_table_dict['diameters']
     thickness = np.array(cdmam_table_dict['thickness'])
+    detection_matrix = np.copy(cdmam_table_dict['detection_matrix'])
+
+    euref_thickness_contast = {
+        # Table A6.1 in EUREF 4th edition page 162, nominal 28kV, Mo/Mo
+        'thickness': [0.1, 0.5, 1.0, 1.5, 2.0],
+        'contrast': [1.57, 7.6, 14.55, 20.92, 26.76],
+        }
 
     include_array = None
+    detection_matrix_corrected = detection_matrix
     out_diameter_idx_start_stop = []
     if isinstance(thickness[0], np.ndarray):
-        # phantom = 40
+        #phantom = 40
         scale_r = {
             # inversly found from result table vendor software artinis
             'diameters': diameters[::-1],
             'rs': [1.41, 1.44, 1.47, 1.58, 1.61, 1.66, 1.69, 1.75, 1.81, 1.84, 1.88,
                    1.91, 1.95, 2., 2.05, 2.08, 2.1, 2.13, 2.14, 2.16, 2.19]
             }
+        detection_matrix_corrected[detection_matrix < 0.25] = 0.25
         if sigma > 0:
-            detection_matrix_smoothed = ndimage.gaussian_filter(
-                detection_matrix, sigma=sigma)
-        else:
-            detection_matrix_smoothed = detection_matrix
+            detection_matrix_corrected = ndimage.gaussian_filter(
+                detection_matrix_corrected, sigma=sigma)
+
     else:
-        # phantom = 34
+        #phantom = 34
         scale_r = {
             # table2 in NUKLEONIKA 2016;61(1):53-59
             'diameters': [.08, .1, .13, .16, .2, .25, .31, .4, .5, .63, .8, 1.],
@@ -814,12 +789,18 @@ def calculate_fitted_psychometric(detection_matrix, cdmam_table_dict, sigma):
         include_array = np.zeros(corner_index_table.shape, dtype=bool)
         include_array[corner_index_table > 0] = True
         thickness = np.broadcast_to(thickness, (16, 16)).T
-        # avoid smoothing outside included part of array
-        mask = 1.0 * include_array
-        sm = ndimage.gaussian_filter(detection_matrix * mask, sigma=sigma)
-        sm /= ndimage.gaussian_filter(mask, sigma=sigma)
-        sm[np.logical_not(mask)] = 0
-        detection_matrix_smoothed = sm
+        detection_matrix_corrected[
+            np.logical_and(
+                detection_matrix < 0.25, include_array == True)] = 0.25
+        if sigma > 0:
+            # avoid smoothing outside included part of array
+            mask = 1.0 * include_array
+            sm = ndimage.gaussian_filter(detection_matrix_corrected * mask,
+                                         sigma=sigma)
+            sm /= ndimage.gaussian_filter(mask, sigma=sigma)
+            sm[np.logical_not(mask)] = 0
+            detection_matrix_corrected = sm
+    cdmam_table_dict['detection_matrix_corrected'] = detection_matrix_corrected
 
     xs = []
     ys = []
@@ -828,7 +809,7 @@ def calculate_fitted_psychometric(detection_matrix, cdmam_table_dict, sigma):
     thickness_predicts = []
 
     def fit(diameter_number, f_set=None):
-        yvals = detection_matrix_smoothed[:, diameter_number]
+        yvals = detection_matrix_corrected[:, diameter_number]
         xvals = thickness[:, diameter_number]
         if include_array is not None:
             xvals = xvals[include_array[:, diameter_number] == True]
@@ -837,8 +818,8 @@ def calculate_fitted_psychometric(detection_matrix, cdmam_table_dict, sigma):
         popt = None
         yfit = None
         threshold_thickness = [None]
-        thickness_predict = 0
-        if np.min(yvals) < 0.5 and np.max(yvals) > 0.8:
+        thickness_predict = [0]
+        if np.min(yvals) < 0.625 and np.max(yvals) > 0.625:
             popt = psychometric_curve_fit(xvals, yvals, f_set=f_set)
             if popt is not None:
                 f, ct = popt
@@ -852,9 +833,20 @@ def calculate_fitted_psychometric(detection_matrix, cdmam_table_dict, sigma):
 
                 if r[0] is not None and threshold_thickness[0] is not None:
                     # r[0] None if outside range of euref r-scale
-                    thickness_predict = r[0] * threshold_thickness[0]
+                    ##thickness_predict = r[0] * threshold_thickness[0]
+                    
+                    contrast_auto = mmcalc.get_curve_values(
+                        euref_thickness_contast['contrast'],
+                        euref_thickness_contast['thickness'],
+                        threshold_thickness, extrapolate=True)
 
-        return xvals, yvals, popt, yfit, threshold_thickness[0], thickness_predict
+                    contrast_predict = r[0] * contrast_auto[0]
+                    thickness_predict = mmcalc.get_curve_values(
+                        euref_thickness_contast['thickness'],
+                        euref_thickness_contast['contrast'],
+                        [contrast_predict], extrapolate=True)
+
+        return xvals, yvals, popt, yfit, threshold_thickness[0], thickness_predict[0]
 
     _, _, popt, _, _, _ = fit(8)
 
@@ -884,14 +876,14 @@ def calculate_fitted_psychometric(detection_matrix, cdmam_table_dict, sigma):
             diameters = np.array(diameters)
         thickness_predicts_fit = third_order_polynomial(
             diameters, popt[0], popt[1], popt[2], popt[3])
-    
+
         cdmam_table_dict['psychometric_results'] = {
             'xs': xs, 'ys': ys, 'yfits': yfits,
             'thickness_founds': np.array(thickness_founds),
             'thickness_predicts': thickness_predicts,
             'thickness_predicts_fit_d': diameters,
             'thickness_predicts_fit': thickness_predicts_fit}
-    
+
         cdmam_table_dict['EUREF_performance_limits'] = {  # table page 147 EUREF 4th edition
             'diameters': [2, 1, 0.5, 0.25, 0.1],
             'acceptable_thresholds_contrast': [1.05, 1.4, 2.35, 5.45, 23.],

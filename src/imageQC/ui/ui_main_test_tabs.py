@@ -1147,38 +1147,50 @@ class ParamsTabCommon(QTabWidget):
         self.tab_var = ParamsWidget(self, run_txt='Calculate variance image(s)')
 
         self.var_roi_size = QDoubleSpinBox(
-            decimals=1, minimum=0.1, maximum=1000, singleStep=0.1)
+            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
         self.var_roi_size.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='var_roi_size'))
-        self.var_percent = QDoubleSpinBox(decimals=1,
-                                          minimum=0.1, maximum=100., singleStep=0.1)
-        self.var_percent.editingFinished.connect(
-            lambda: self.param_changed_from_gui(attribute='var_percent'))
+        self.var_roi_size2 = QDoubleSpinBox(
+            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
+        self.var_roi_size2.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='var_roi_size2'))
+        self.var_roi_size3 = QDoubleSpinBox(
+            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
+        self.var_roi_size3.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='var_roi_size3'))
+        self.var_mask_outer_mm = QDoubleSpinBox(decimals=1,
+                                          minimum=0.0, maximum=100., singleStep=1.)
+        self.var_mask_outer_mm.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='var_mask_outer_mm'))
+
+        self.var_result_image = QComboBox()
+        self.var_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+        self.var_result_image.addItems([
+            'Variance image ROI 1', 'Variance image ROI 2', 'Variance image ROI 3'])
 
         self.tab_var.vlo_top.addWidget(uir.LabelItalic(
             'The variance image can reveal artifacts in the image.<br>'
-            'Adjust ROI size to find artifacts of different sizes.<br>'
+            'Apply different ROI sizes to find artifacts of different sizes.<br>'
             'Values are only calculated where the full ROI is inside the defined area to analyse.<br>'
-            'I.e. a margin marked by a dashed line will add to the masked area.'))
+            'ROI sizes equal to zero will be ignored. ROI sizes >0, but less than 3 pixels will be set to 3 pixels.'))
 
-        hlo_roi_size = QHBoxLayout()
-        hlo_roi_size.addWidget(QLabel('ROI size (mm)'))
-        hlo_roi_size.addWidget(self.var_roi_size)
-        hlo_roi_size.addWidget(QLabel('if less than 3 pix, 3 pix will be used'))
-        hlo_roi_size.addStretch()
-        hlo_rest = QHBoxLayout()
-        flo_rest = QFormLayout()
-        hlo_rest.addLayout(flo_rest)
-        hlo_rest.addStretch()
-        flo_rest.addRow(QLabel('Include % of image'), self.var_percent)
-        self.tab_var.vlo.addLayout(hlo_roi_size)
-        self.tab_var.vlo.addLayout(hlo_rest)
+        flo = QFormLayout()
+        flo.addRow(QLabel('ROI size 1 (mm)'), self.var_roi_size)
+        flo.addRow(QLabel('ROI size 2 (mm)'), self.var_roi_size2)
+        flo.addRow(QLabel('ROI size 3 (mm)'), self.var_roi_size3)
+        flo.addRow(QLabel('Mask outer mm'), self.var_mask_outer_mm)
+        flo2 = QFormLayout()
+        flo2.addRow(QLabel('Result image: '), self.var_result_image)
+        self.tab_var.hlo.addLayout(flo)
+        self.tab_var.hlo.addWidget(uir.VLine())
+        self.tab_var.hlo.addLayout(flo2)
 
         if modality == 'Mammo':
             self.var_mask_max = QCheckBox()
             self.var_mask_max.toggled.connect(
                 lambda: self.param_changed_from_gui(attribute='var_mask_max'))
-            flo_rest.addRow(QLabel('Mask pixels with max values'),
+            flo.addRow(QLabel('Mask pixels with max values'),
                             self.var_mask_max)
 
     def add_NPS_plot_settings(self):
@@ -1911,42 +1923,31 @@ class ParamsTabXray(ParamsTabCommon):
         """GUI of tab Noise."""
         self.tab_def = ParamsWidget(self, run_txt='Find defective pixels')
 
-        self.def_mask_outer_mm = QDoubleSpinBox(
-            decimals=1, minimum=0., maximum=1000, singleStep=0.1)
-        self.def_mask_outer_mm.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='def_mask_outer_mm'))
-        self.def_fraction = QDoubleSpinBox(
-            decimals=2, minimum=0., maximum=100, singleStep=0.1)
-        self.def_fraction.valueChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='def_fraction'))
+        self.tab_def.hlo_top.addWidget(uir.UnderConstruction(
+            txt='Under construction and validation...'))
+        self.tab_def.vlo.addWidget(QLabel(
+            'Testing detection of defective pixels'))
+        self.tab_def.vlo.addWidget(QLabel(
+            'Counting number of pixels equal to all 8 neighbours '
+            'and to 4 (left,right,top,bottom) neighbour pixels.'))
+        self.tab_def.vlo.addWidget(QLabel(
+            'Supplement table show fraction of selected images where '
+            'a specific pixel equals its average neighbours.'))
+        self.tab_def.vlo.addWidget(QLabel(
+            'Result image can show the specific pixels and number of pixels '
+            'within 1x1 cm that equals its neighbours.'))
+
         self.def_result_image = QComboBox()
         self.def_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
 
-        self.tab_def.hlo_top.addWidget(uir.UnderConstruction(
-            txt='Under construction and validation...'))
-        self.tab_def.hlo_top.addWidget(QLabel(
-            'Testing detection of defective pixels using repeated images and standard deviation of repeated pixels'))
-
-        flo1 = QFormLayout()
-        flo1.addRow(
-            QLabel('Mask outer mm'), self.def_mask_outer_mm)
-        flo1.addRow(
-            QLabel('Fraction of median stdev'), self.def_fraction)
-        flo2 = QFormLayout()
-        flo2.addRow(QLabel('Result image: '), self.def_result_image)
-        self.tab_def.hlo.addLayout(flo1)
-        self.tab_def.hlo.addWidget(uir.VLine())
-        self.tab_def.hlo.addLayout(flo2)
-
+        self.tab_def.hlo.addSpacing(300)
+        self.tab_def.hlo.addWidget(self.def_result_image)
         self.def_result_image.addItems(
-            ['Stdev per pixel from all images',
-             'Where stdev is zero',
-             'Where stdav less than fraction of median stdev',
-             'Neighbours avg stdev minus stdev'])
-        btn_mark_coordinates = QPushButton('Mark defective pixels')
-        btn_mark_coordinates.clicked.connect(self.get_coordinates)
-        flo2.addRow(QLabel(''), btn_mark_coordinates)
+            ['Pix == Avg of 8 neighbours', '# pix == avg of 8 pr 1x1cm',
+             'Fraction of images where avg of 8 neighbours',
+             'Pix == Avg of 4 neighbours', '# pix == avg of 4 pr 1x1cm',
+             'Fraction of images where avg of 4 neighbours',])
 
 
 class ParamsTabMammo(ParamsTabCommon):
@@ -2268,6 +2269,10 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_sigma.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='cdm_sigma'))
+        self.cdm_rotate_k = QComboBox()
+        self.cdm_rotate_k.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='cdm_rotate_k'))
+        self.cdm_rotate_k.addItems(['0', '90', '180', '270'])
 
         self.cdm_result_image = QComboBox()
         self.cdm_result_plot = QComboBox()
@@ -2296,6 +2301,7 @@ class ParamsTabMammo(ParamsTabCommon):
                     self.cdm_tolerance_angle)
         flo1.addRow(QLabel('Gaussian smooth detection matrix, simga (cells)'),
                     self.cdm_sigma)
+        flo1.addRow(QLabel('Image is rotated'), self.cdm_rotate_k)
 
         vlo_left.addWidget(uir.UnderConstruction(
             txt='Under construction and validation...'))
@@ -2329,6 +2335,7 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_result_plot.addItems(
             ['Found disc at center and in correct corner',
              'Detection matrix',
+             'Detection matrix corrected/smoothed',
              'Fitted psychometric curves',
              'Threshold thickness'])
         self.cdm_result_image.addItems(

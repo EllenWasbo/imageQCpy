@@ -469,7 +469,7 @@ class ResultPlotCanvas(PlotCanvas):
                         s=scatter['size'],
                         marker=scatter['marker'], label=label,
                         c=scatter['color'][arr == True], cmap=scatter['cmap'],
-                        vmin=scatter['vmin'], vmax=scatter['vmax'])
+                        norm=scatter['norm'])
 
         else:
             self.ax.axis('off')
@@ -571,8 +571,13 @@ class ResultPlotCanvas(PlotCanvas):
                  'array': np.flipud(details_dict['found_centers']),
                  'size': 30, 'marker': 'o', 'color': 'lightgreen'})
 
-        def prepare_detection_matrix_plot():
+        def prepare_detection_matrix_plot(sel_text):
             self.title = 'Detection ratio based on all images'
+            suff = '_corrected' if 'corrected' in sel_text else ''
+            if suff:
+                self.title = self.title + ' - corrected'
+                if self.main.current_paramset.cdm_sigma > 0:
+                    self.title = self.title + '/smoothed'
             self.xtitle = 'Diameter (mm)'
             self.ytitle = r'Thickness ($\mu$m)'
 
@@ -580,8 +585,11 @@ class ResultPlotCanvas(PlotCanvas):
                 {'xlabels': xlabels, 'ylabels': ylabels,
                  'array': np.flipud(include_array),
                  'size': 100, 'marker': 'o',
-                 'color': np.flipud(cdmam_table_dict['detection_matrix']),
-                 'cmap': 'nipy_spectral_r', 'vmin': 0.1, 'vmax': 2.})
+                 'color': np.flipud(cdmam_table_dict[
+                     f'detection_matrix{suff}']),
+                 'cmap': 'nipy_spectral_r',
+                 'norm': matplotlib.colors.Normalize(vmin=0., vmax=2.)
+                 })
 
         def prepare_comparison_vs_fraction_xls():
             self.title = 'Detection ratio minus Fraction.xls'
@@ -597,7 +605,7 @@ class ResultPlotCanvas(PlotCanvas):
         def prepare_psychometric_plot():
             self.title = 'Fitted psychometric curves'
             self.xtitle = r'Thickness ($\mu$m)'
-            self.xtitle = 'Detection probability'
+            self.ytitle = 'Detection probability'
             psyc_res = cdmam_table_dict['psychometric_results']
             idx_diam = self.main.tab_mammo.cdm_cbox_diameter.currentIndex()
             for i, diam in enumerate(cdmam_table_dict['diameters']):
@@ -616,7 +624,7 @@ class ResultPlotCanvas(PlotCanvas):
                 curve = {'label': '_no_legend_',
                          'xvals': xvals, 'xscale' : 'log',
                          'yvals': yvals,
-                         'style': 'o', 'color': c}
+                         'style': 'o', 'fillstyle': 'none', 'color': c}
                 if i == idx_diam:
                     curve['fillstyle'] = 'full'
                 self.curves.append(curve)
@@ -625,6 +633,7 @@ class ResultPlotCanvas(PlotCanvas):
                                 max(cdmam_table_dict['thickness'])],
                       'yvals': [0.65, 0.65],
                       'style': '-k' })
+            self.default_range_y = [0.0, 1.1]
 
         def prepare_threshold_plot():
             self.title = 'Threshold thickness'
@@ -639,7 +648,7 @@ class ResultPlotCanvas(PlotCanvas):
                      'xscale' : 'log', 'yscale': 'log',
                      'style': ':b'}
             self.curves.append(curve)
-            curve = {'label': 'fit to data',
+            curve = {'label': 'predicted',
                      'xvals': psyc_res['thickness_predicts_fit_d'],
                      'yvals': psyc_res['thickness_predicts'],
                      'style': 'o', 'fillstyle': 'none', 'markersize': 3.}
@@ -694,8 +703,8 @@ class ResultPlotCanvas(PlotCanvas):
             sel_text = ''
         if sel_text == 'Found disc at center and in correct corner':
             prepare_found_corner_center_plot()
-        elif sel_text == 'Detection matrix':
-            prepare_detection_matrix_plot()
+        elif 'Detection matrix' in sel_text:
+            prepare_detection_matrix_plot(sel_text)
         elif sel_text == 'Fitted psychometric curves':
             prepare_psychometric_plot()
         elif sel_text == 'Threshold thickness':
@@ -880,8 +889,8 @@ class ResultPlotCanvas(PlotCanvas):
             self.default_range_y = self.test_values_outside_yrange([-6, 6])
         elif self.main.current_modality == 'Xray':
             if self.main.current_paramset.hom_tab_alt == 4:  # flatfield aapm
-                self.title = ('Profile averaged over all rows or columns minus '
-                              'average of two neighbour pixels in same profile')
+                self.title = ('Profile average minus '
+                              'average of neighbours in same profile')
                 imgno = self.main.gui.active_img_no
                 details_dict = self.main.results['Hom']['details_dict'][imgno]
                 styles = ['-r', '-b']

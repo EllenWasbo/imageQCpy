@@ -273,13 +273,16 @@ class TreeFileList(QTreeWidget):
         proceed = True
         test_codes = []
         if qt_edit:
-            dlg = SelectTestcodeDialog(
-                label='Select tests to run for selected images',
-                modality=self.main.current_modality,
-                current_tests=self.main.imgs[selrows[0]].marked_quicktest)
-            res = dlg.exec()
-            if res:
-                test_codes = dlg.get_checked_testcodes()
+            if len(selrows) > 0:
+                dlg = SelectTestcodeDialog(
+                    label='Select tests to run for selected images',
+                    modality=self.main.current_modality,
+                    current_tests=self.main.imgs[selrows[0]].marked_quicktest)
+                res = dlg.exec()
+                if res:
+                    test_codes = dlg.get_checked_testcodes()
+                else:
+                    proceed = False
             else:
                 proceed = False
 

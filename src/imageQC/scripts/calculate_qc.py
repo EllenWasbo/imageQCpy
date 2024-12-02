@@ -81,13 +81,21 @@ def extract_values(values, columns=[], calculation='='):
             if columns == []:
                 columns = list(range(len(values[0])))
             for row in values:
-                row_vals = [row[col] for col in columns]
+                try:
+                    row_vals = [row[col] for col in columns]
+                except IndexError:
+                    row_vals = [0] * len(columns)
+                    print('Error extracting values. Output template not matching column numbers')
                 selected_values.append(row_vals)
                 allvals.extend(row_vals)
         else:
             if columns == []:
                 columns = list(range(len(values)))
-            vals = [values[col] for col in columns]
+            try:
+                vals = [values[col] for col in columns]
+            except IndexError:
+                vals = [0] * len(columns)
+                print('Error extracting values. Output template not matching column numbers')
             selected_values = vals
             allvals = vals
 
@@ -2004,46 +2012,61 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         if image2d is None:
             res = Results(headers=headers)
         else:
-            roi_size_in_pix = round(paramset.var_roi_size / image_info.pix[0])
-
-            rows = np.max(roi_array[1], axis=1)
-            cols = np.max(roi_array[1], axis=0)
-            sub = image2d[rows][:, cols]
-
             # code adapted from:
             # https://www.imageeprocessing.com/2015/10/edge-detection-using-local-variance.html
-            kernel = np.full((roi_size_in_pix, roi_size_in_pix),
-                             1./(roi_size_in_pix**2))
-            mu = sp.signal.fftconvolve(sub, kernel, mode='valid')
-            ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='valid')
-            variance_sub = ii - mu**2
 
-            # mask max?
-            masked = False
-            variance_sub_masked = None
-            if roi_array[4] is not None:
-                # valid part of full image, ensure same size as valid
-                valid_shape = variance_sub.shape
-                roi_percent_valid = get_roi_rectangle(
-                    image2d.shape,
-                    roi_width=valid_shape[1], roi_height=valid_shape[0])
-                rows_ = np.max(roi_percent_valid, axis=1)
-                cols_ = np.max(roi_percent_valid, axis=0)
-                max_mask_valid_part = roi_array[4][rows_][:, cols_]
-                if np.any(max_mask_valid_part):
-                    variance_sub_masked = np.ma.masked_array(
-                        variance_sub, mask=max_mask_valid_part)
-                    masked = True
-            if masked:
-                values = [np.ma.min(variance_sub_masked),
-                          np.ma.max(variance_sub_masked),
-                          np.ma.median(variance_sub_masked)]
-                details_dict = {'variance_image': variance_sub_masked}
+            if roi_array[3] is None:
+                sub = image2d
             else:
-                values = [np.min(variance_sub),
-                          np.max(variance_sub),
-                          np.median(variance_sub)]
-                details_dict = {'variance_image': variance_sub}
+                rows = np.max(roi_array[3], axis=1)
+                cols = np.max(roi_array[3], axis=0)
+                sub = image2d[rows][:, cols]
+
+            roi_sizes_mm = [paramset.var_roi_size, paramset.var_roi_size2,
+                         paramset.var_roi_size3]
+            values = []
+            details_dict = {'variance_image': []}
+            for roi_sz_mm in roi_sizes_mm:
+                if roi_sz_mm == 0:
+                    values.extend([None] * 3)
+                    details_dict['variance_image'].append(None)
+                else:
+                    roi_sz_pix = round(roi_sz_mm / image_info.pix[0])
+                    if roi_sz_pix < 3:
+                        roi_sz_pix = 3
+
+                    kernel = np.full((roi_sz_pix, roi_sz_pix),
+                                     1./(roi_sz_pix**2))
+                    mu = sp.signal.fftconvolve(sub, kernel, mode='valid')
+                    ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='valid')
+                    variance_sub = ii - mu**2
+
+                    # mask max?
+                    masked = False
+                    variance_sub_masked = None
+                    if roi_array[-1] is not None:
+                        # valid part of full image, ensure same size as valid
+                        valid_shape = variance_sub.shape
+                        roi_mask_outer_valid = get_roi_rectangle(
+                            image2d.shape,
+                            roi_width=valid_shape[1], roi_height=valid_shape[0])
+                        rows_ = np.max(roi_mask_outer_valid, axis=1)
+                        cols_ = np.max(roi_mask_outer_valid, axis=0)
+                        max_mask_valid_part = roi_array[4][rows_][:, cols_]
+                        if np.any(max_mask_valid_part):
+                            variance_sub_masked = np.ma.masked_array(
+                                variance_sub, mask=max_mask_valid_part)
+                            masked = True
+                    if masked:
+                        values.extend([np.ma.min(variance_sub_masked),
+                                  np.ma.max(variance_sub_masked),
+                                  np.ma.median(variance_sub_masked)])
+                        details_dict['variance_image'].append(variance_sub_masked)
+                    else:
+                        values.extend([np.min(variance_sub),
+                                  np.max(variance_sub),
+                                  np.median(variance_sub)])
+                        details_dict['variance_image'].append(variance_sub)
 
             res = Results(headers=headers, values=values,
                           details_dict=details_dict)
@@ -2153,10 +2176,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     cell_width = roi_dict['cell_width']
                     invert = roi_dict['invert']
                     if invert:
-                        image = -image
-                    rot90_k = 0
-                    if 'rot90_k' in roi_dict:
-                        rot90_k = roi_dict['rot90_k']
+                        image = -np.copy(image)
 
                     pix_new = 0.05  # fixed pixelsize of 50 um for analysis
                     if phantom == 34:
@@ -2167,7 +2187,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
                     templates, wi = cdmam_methods.get_templates(
                         image, center_xs, center_ys, pix, pix_new,
-                        cell_width, line_dist, phantom, rot90_k,
+                        cell_width, line_dist, phantom, paramset.cdm_rotate_k,
                         cdmam_table_dict)
                     kernels = cdmam_methods.get_kernels(
                         cdmam_table_dict, pix_new)
@@ -2244,7 +2264,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 cdmam_table_dict['detection_matrix'] = detection_matrix
                 if details_dicts and n_imgs > 3:
                     cdmam_methods.calculate_fitted_psychometric(
-                        detection_matrix, cdmam_table_dict, paramset.cdm_sigma)
+                        cdmam_table_dict, paramset.cdm_sigma)
 
                     res_table = cdmam_table_dict['psychometric_results']
                     values = np.array([
@@ -2372,56 +2392,96 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
     def Def(images_to_test):
         """Defective pixels."""
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
         if len(images_to_test) == 0:
             res = Results(headers=headers)
         else:
-            if len(images_to_test) < 3:
-                res = Results(headers=headers, errmsg=[
-                    'At least 3 images required.'])
-            else:
-                errmsgs = []
-                values = [None]
-                details_dict = {}
+            errmsgs = []
+            values = [None]
+            details_dicts = []
+            
+            kernel = np.ones((3,3))
+            kernel[1,1] = 0
+            kernel = kernel / 8
+            kernel_plus = np.zeros((3,3))
+            kernel_plus[0, 1] = 1
+            kernel_plus[-1, 1] = 1
+            kernel_plus[1, 0] = 1
+            kernel_plus[1, -1] = 1
+            kernel_plus = kernel_plus / 4
 
-                np_matrix = np.array([sli for sli in matrix if sli is not None])
+            values = []
+            n_diff_neighbours_is_zero = np.zeros(
+                matrix[images_to_test[0]][1:-1,1:-1].shape)
+            n_diff_nearest_is_zero = np.copy(n_diff_neighbours_is_zero)
+            idxs_different_shape = []
+            for i, sli in enumerate(matrix):
+                if sli is None:
+                    details_dict = None
+                    values_sli = [None] * len(headers)
+                else:
+                    avg_all_neighbours = sp.signal.fftconvolve(
+                        sli, kernel, mode='valid')
+                    diff_all = avg_all_neighbours - sli[1:-1,1:-1]
+                    diff_neighbours_is_zero = np.zeros(
+                        diff_all.shape, dtype=bool)
+                    diff_neighbours_is_zero[diff_all == 0] = True
 
-                std_pr_pix = np.std(np_matrix, axis=0)
-                roi_array, errmsg = get_rois(
-                    matrix[images_to_test[0]], images_to_test[0], input_main)
-                if roi_array is not None:
-                    rows = np.max(roi_array, axis=1)
-                    cols = np.max(roi_array, axis=0)
-                    std_pr_pix = std_pr_pix[rows][:, cols]
+                    avg_nearest_neighbours = sp.signal.fftconvolve(
+                        sli, kernel_plus, mode='valid')
+                    diff_nearest = avg_nearest_neighbours - sli[1:-1,1:-1]
+                    diff_nearest_is_zero = np.zeros(
+                        diff_nearest.shape, dtype=bool)
+                    diff_nearest_is_zero[diff_nearest == 0] = True
 
-                frac = paramset.def_fraction
-                std_less_than_fraction = np.zeros(std_pr_pix.shape, dtype=bool)
-                std_less_than_fraction[
-                    std_pr_pix < frac*np.median(std_pr_pix)] = True
-                std_is_zero = np.zeros(std_pr_pix.shape, dtype=bool)
-                std_is_zero[std_pr_pix == 0] = True
-                
-                kernel = np.ones((3,3))
-                kernel[1,1] = 0
-                kernel = kernel / 8
-                avg_neighbours = sp.signal.fftconvolve(
-                    std_pr_pix, kernel, mode='same')
-                diff = avg_neighbours - std_pr_pix
+                    pix_pr_cm = round(10./img_infos[i].pix[0])
+                    sum_kernel = np.ones((pix_pr_cm, pix_pr_cm), dtype=int)
+                    n_pr_roi_neighbours = sp.signal.fftconvolve(
+                        diff_neighbours_is_zero, sum_kernel, mode='same')
+                    n_pr_roi_nearest = sp.signal.fftconvolve(
+                        diff_nearest_is_zero, sum_kernel, mode='same')
+                    details_dict = {
+                        'diff_neighbours_is_zero': diff_neighbours_is_zero,
+                        'diff_nearest_is_zero': diff_nearest_is_zero,
+                        'n_pr_roi_neighbours': n_pr_roi_neighbours,
+                        'n_pr_roi_nearest': n_pr_roi_nearest
+                        }
+                    values_sli = [
+                        np.count_nonzero(diff_neighbours_is_zero),
+                        np.count_nonzero(diff_nearest_is_zero)]
+                    if n_diff_neighbours_is_zero.shape != diff_neighbours_is_zero.shape:
+                        idxs_different_shape.append(i)
+                    else:
+                        n_diff_neighbours_is_zero += 1.* diff_neighbours_is_zero
+                        n_diff_nearest_is_zero += 1. * n_diff_nearest_is_zero
+                values.append(values_sli)
+                details_dicts.append(details_dict)
 
-                n_zero = np.count_nonzero(std_is_zero)
-                n_less = np.count_nonzero(std_less_than_fraction)
-                values = [n_zero, 100. * n_zero / std_is_zero.size,
-                          n_less, 100. * n_less / std_is_zero.size]
+            n_images = len(images_to_test)
+            if len(idxs_different_shape) > 0:
+                errmsgs.append(f'Image number {idxs_different_shape} have a '
+                               'different shape compared to first selected '
+                               f'image ({images_to_test[0]}). Ignored when '
+                               'calculating fraction of all selected.')
+                n_images = n_images - len(idxs_different_shape)
 
-                details_dict = {
-                    'std_pr_pix': std_pr_pix,
-                    'std_less_than_fraction': std_less_than_fraction,
-                    'std_is_zero': std_is_zero,
-                    'neighbours_avg_std': diff
-                    }
+            details_dicts.append({
+                'frac_diff_neighbours_is_zero':
+                    1/n_images * n_diff_neighbours_is_zero,
+                'frac_diff_nearest_is_zero':
+                    1/n_images * n_diff_nearest_is_zero
+                })
 
-                res = Results(headers=headers, values=[values],
-                              details_dict=details_dict,
-                              pr_image=False, errmsg=errmsgs)
+            values_sup = []
+            for _, arr in details_dicts[-1].items():
+                values_sup.append(np.max(arr))
+                idxs_max = np.where(arr == np.max(arr))
+                values_sup.append(idxs_max[0].size)
+
+            res = Results(headers=headers, values=values,
+                          headers_sup=headers_sup, values_sup=[values_sup],
+                          details_dict=details_dicts,
+                          pr_image=True, pr_image_sup=False, errmsg=errmsgs)
 
         return res
 

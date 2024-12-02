@@ -861,7 +861,8 @@ def rotate2d_offcenter(array2d, angle, offcenter):
     return rotated_2darray
 
 
-def get_curve_values(x, y, y_values, force_first_below=False):
+def get_curve_values(x, y, y_values, force_first_below=False,
+                     extrapolate=False):
     """Lookup interpolated x values given y values.
 
     Parameters
@@ -872,6 +873,8 @@ def get_curve_values(x, y, y_values, force_first_below=False):
         input y values to calculate corresponding x values. The default is None.
     force_first_below : bool, optional
         return first x-value where y below given y_value. Default is False.
+    extrapolate : bool, optional
+        default is False
 
     Returns
     -------
@@ -903,8 +906,23 @@ def get_curve_values(x, y, y_values, force_first_below=False):
                 else:
                     result_values.append(None)
         except IndexError:
-            # none above or none below
-            result_values.append(None)
+            if idx_above[0].size == 1:  # equal
+                result_values.append(x[idx_above[0]])
+            else:
+                # none above or none below
+                if extrapolate:
+                    # yval closes to first or last - extrapolate from nearest
+                    diff = np.array([y[0], y[-1]]) - yval
+                    if diff[0] < diff[1]:
+                        idx1, idx2 = 0, 1
+                    else:
+                        idx1, idx2 = -2, -1
+                    a = (y[idx2] - y[idx1]) / (x[idx2] - x[idx1])
+                    b = y[idx1] - a * x[idx1]
+                    xval = (yval - b) / a
+                    result_values.append(xval)
+                else:
+                    result_values.append(None)
     return result_values
 
 

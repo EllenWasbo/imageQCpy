@@ -73,15 +73,6 @@ def get_rois(image, image_number, input_main):
     def CTn():  # CT number
         return get_roi_CTn_TTF('ctn', image, image_info, paramset, delta_xya=delta_xya)
 
-    def Def():  # defective pixels Xray
-        roi_array = None
-        if paramset.def_mask_outer_mm > 0:
-            roi_array = np.full(image_info.shape[0:2], False)
-            n_pix = round(paramset.def_mask_outer_mm / image_info.pix[0])
-            if n_pix > 0:
-                roi_array[n_pix:-n_pix, n_pix:-n_pix] = True
-        return roi_array
-
     def Dim():  # CT Dimensions
         roi_this = []
         roi_size_in_pix = 10./image_info.pix[0]  # search radius 10mm
@@ -635,35 +626,44 @@ def get_rois(image, image_number, input_main):
             )
 
     def Var():  # Variance Xray
-        roi_size_in_pix = paramset.var_roi_size / image_info.pix[0]
-        roi_n = round(roi_size_in_pix)
-        roi_small = get_roi_rectangle(
-            img_shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
-        if paramset.var_percent == 100:
-            roi_percent = np.full(img_shape[0:2], True)
-            roi_percent_valid = np.full(img_shape[0:2], False)
-            roi_percent_valid[roi_n:-roi_n, roi_n:-roi_n] = True
-        else:
-            w = 0.01 * paramset.var_percent * img_shape[1]
-            h = 0.01 * paramset.var_percent * img_shape[0]
-            roi_percent = get_roi_rectangle(
-                img_shape, roi_width=w, roi_height=h, offcenter_xy=(0, 0))
-            roi_percent_valid = get_roi_rectangle(
-                img_shape, roi_width=(w - roi_n), roi_height=(h - roi_n),
-                offcenter_xy=(0, 0))
-        roi_mask = None
-        roi_mask_valid = None
+        roi_sizes_mm = [paramset.var_roi_size, paramset.var_roi_size2,
+                     paramset.var_roi_size3]
+        roi_arrays = []
+        for roi_sz_mm in roi_sizes_mm:
+            if roi_sz_mm == 0:
+                roi_arrays.append(None)
+            else:
+                roi_sz_pix = round(roi_sz_mm / image_info.pix[0])
+                if roi_sz_pix < 3:
+                    roi_sz_pix = 3
+                roi_arrays.append(get_roi_rectangle(
+                    img_shape, roi_width=roi_sz_pix, roi_height=roi_sz_pix))
+
+        roi_mask_outer = None
+        if paramset.var_mask_outer_mm > 0:
+            roi_mask_outer = np.full(image_info.shape[0:2], False)
+            n_pix = round(paramset.var_mask_outer_mm / image_info.pix[0])
+            if n_pix > 0:
+                roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
+        roi_arrays.append(roi_mask_outer)
+
+        roi_mask_max = None
+        # roi_mask_valid = None
         try:
             if paramset.var_mask_max:
-                roi_mask = np.full(img_shape[0:2], False)
-                roi_mask[image == np.max(image)] = True
+                roi_mask_max = np.full(img_shape[0:2], False)
+                roi_mask_max[image == np.max(image)] = True
+                '''
                 kernel = np.full((roi_n+1, roi_n+1), 1.0)
                 grow = fftconvolve(roi_mask, kernel, mode='same')
                 roi_mask_valid = np.full(img_shape[0:2], False)
                 roi_mask_valid[grow >= 1] = True
+                '''
         except AttributeError:
             pass
-        return [roi_small, roi_percent, roi_percent_valid, roi_mask, roi_mask_valid]
+        roi_arrays.append(roi_mask_max)
+
+        return roi_arrays
 
     if image is not None:
         try:

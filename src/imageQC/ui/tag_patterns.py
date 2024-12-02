@@ -816,6 +816,8 @@ class TagPatternTreeTestDCM(TagPatternTree):
 
     def edit(self):
         """Edit tag pattern by dialog."""
+        old_temp = copy.deepcopy(
+            self.main.current_paramset.dcm_tagpattern)
         dlg = TagPatternEditDialog(
             initial_pattern=self.current_template,
             modality=self.main.current_modality,
@@ -827,7 +829,17 @@ class TagPatternTreeTestDCM(TagPatternTree):
         if res:
             self.current_template = dlg.get_pattern()
             self.update_data()
-            self.main.current_paramset.dcm_tagpattern = self.current_template
+            old_tags = old_temp.list_tags
+            new_tags = self.current_template.list_tags
+            if old_tags != new_tags:
+                def_outputs = [*self.main.current_paramset.output.tests]
+                if 'DCM' in def_outputs:
+                    QMessageBox.warning(
+                        self, 'Warning',
+                        'Output settings is defined for test DCM in the '
+                        'current Parameter set. Changing which DICOM '
+                        'tags to extract might affect the output related to '
+                        'column number. Consider verify the output settings.')
             self.parent.flag_edit(True)
             self.parent.clear_results_current_test()
             self.current_select = 0

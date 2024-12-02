@@ -193,7 +193,7 @@ HEADERS = {
             'alt3': ['Avg', 'Avg SNR', 'n ROIs',
                      'Deviating avgs', 'Deviating SNRs', 'Deviating ROIs',
                      '% dev ROIs', 'Deviating pixels', '% dev pixels'],
-            'alt4': ['AvgPix', 'AvgNoi', 'AvgSNR', 'MinSNR', 'nAnomalusPix',
+            'alt4': ['AvgPix', 'AvgNoi', 'AvgSNR', 'MinSNR', 'nAnomalousPix',
                      'Max nAnomPrROI',
                      'L Unif', 'G Unif', 'L NoiUnif', 'G NoiUnif', 'L SNRUnif',
                      'G SNRUnif', 'relSDrow', 'relSDcol']
@@ -206,9 +206,11 @@ HEADERS = {
         'NPS': {'alt0': ['Average variance', 'Large area signal',
                          'Large area stdev (noise)', 'AUC horiz/AUC vert']},
         'STP': {'alt0': ['Dose', 'Q', 'Mean pix', 'Stdev pix']},
-        'Var': {'alt0': ['Min variance', 'Max variance', 'Median variance']},
-        'Def': {'alt0': ['# std = 0', '% std = 0',
-                         '# std < frac*median', '% std < frac*median']},
+        'Var': {'alt0': ['Min var 1', 'Max var 1', 'Median var 1',
+                         'Min var 2', 'Max var 2', 'Median var 2',
+                         'Min var 3', 'Max var 3', 'Median var 3']},
+        'Def': {'alt0': ['# equal to avg of 8 neighbours',
+                         '# equal to avg of 4 neighbours']},
         },
     'Mammo': {
         'ROI': {'alt0': roi_headers},
@@ -222,7 +224,9 @@ HEADERS = {
                      'Deviating avgs', 'Deviating SNRs', 'Deviating ROIs',
                      '% dev ROIs', 'Deviating pixels', '% dev pixels']
             },
-        'Var': {'alt0': ['Min variance', 'Max variance', 'Median variance']},
+        'Var': {'alt0': ['Min var 1', 'Max var 1', 'Median var 1',
+                         'Min var 2', 'Max var 2', 'Median var 2',
+                         'Min var 3', 'Max var 3', 'Median var 3']},
         'RLR': {
             'alt0': ['Average', 'Stdev']
             },
@@ -370,7 +374,10 @@ HEADERS_SUP = {
                  'n masked ROIs', 'n masked pixels'],
             'alt4': []
             },
-        'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2', 'sigma_prefilt']}
+        'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2', 'sigma_prefilt']},
+        'Def': {'alt0': [
+            'max def frac 8', 'n max def frac 8',
+            'max def frac 4', 'n max def frac 4']},
         },
     'Mammo': {
        'ROI': {'alt0': roi_headers_sup},

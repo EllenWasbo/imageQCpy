@@ -12,6 +12,10 @@ New functionalities:
 	- Added test for analysing CDMAM v3.4 and v4.0 phantoms. Test is not validated yet and not finished.
 
 Changes:
+- Test Variance (Xray and Mammo):
+	- Variance now calculated for up to three different ROI sizes to highlight artifacts of different dimensions.
+	- Changed from defining ROI by % of image dimensions to outer margin (in mm).
+	- These changes will affect result table. Apologies if you already used this for automation. Normally such changes are avoided if possible. 
 - Window level widget: 
 	- Added button to set window level to (min, max) of central part of image (half the width/height)
 	- Lock window level (checkbox) changed to toggle-button with lock-icon.

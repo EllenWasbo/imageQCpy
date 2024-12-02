@@ -458,7 +458,9 @@ class ParamSetXray(ParamSetCommon):
     nps_plot: int = 0  # default plot 0=pr image, 1=avg, 2=pr image+avg, 3=all img+avg
     stp_roi_size: float = 11.3
     var_roi_size: float = 2.0
-    var_percent: int = 90
+    var_roi_size2: float = 10.0
+    var_roi_size3: float = 0.0
+    var_mask_outer_mm: float = 10.0
     def_mask_outer_mm: float = 10.
     def_fraction: float = 0.1
 
@@ -480,8 +482,10 @@ class ParamSetMammo(ParamSetCommon):
     hom_deviating_pixels: float = 20.
     hom_deviating_rois: float = 15.
     var_roi_size: float = 2.0
-    var_percent: int = 100
+    var_roi_size2: float = 10.0
+    var_roi_size3: float = 0.0
     var_mask_max: bool = False
+    var_mask_outer_mm: float = 0.0
     rlr_roi_size: float = 5.
     rlr_relative_to_right: bool = True  # if false relative to left
     rlr_x_mm: float = 60.  # distance to left or right border
@@ -514,6 +518,8 @@ class ParamSetMammo(ParamSetCommon):
     cdm_tolerance_angle: int = 3  # tolerance angulation of phantom relative to image
     cdm_roi_estimate: bool = False  # override roi position with estimate
     cdm_sigma: float = 0.75  # smooth detection matrix by gaussian, set sigma (unit cells)
+    cdm_rotate_k: int = 0  # rotate image by nx90degrees
+
 
 @dataclass
 class ParamSetNM(ParamSetCommon):

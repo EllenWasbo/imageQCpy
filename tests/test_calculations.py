@@ -481,7 +481,7 @@ def test_Mammo_cdm34():
     input_main = InputMain(
         current_modality='Mammo',
         current_test='CDM',
-        current_paramset=cfc.ParamSetMammo(),
+        current_paramset=cfc.ParamSetMammo(),#cdm_rotate_k=2),
         current_quicktest=cfc.QuickTestTemplate(tests=[['CDM']]),
         tag_infos=tag_infos,
         automation_active=False

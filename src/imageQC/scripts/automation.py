@@ -15,6 +15,8 @@ from datetime import date, datetime
 from time import time
 import shutil
 import webbrowser
+import numpy as np
+import pandas as pd
 
 # imageQC block start
 import imageQC.config.config_func as cff
@@ -733,7 +735,7 @@ def move_rename_file(filepath_orig, filepath_new):
     return (status, errmsg)
 
 
-def test_limits(headers=None, values=None,
+def test_limits(headers=None, values=None, output_file=None, decimal_mark='.',
                 limits_label='', limits_mod_templates=None):
     """Test limits and notify.
 
@@ -785,25 +787,67 @@ def test_limits(headers=None, values=None,
             proceed = False
 
     if proceed:
+        try:
+            data = pd.read_csv(
+                output_file, sep='\t',
+                decimal=decimal_mark,
+                parse_dates=[0],
+                dayfirst=True,
+                on_bad_lines='error',
+                encoding='ISO-8859-1')
+        except:
+            data = None
         for i, header in enumerate(headers):
             float_value = string_to_float(values[i])
-            if float_value is not None:
-                group_idx = limits_template.find_headers_group_index(header)
-                if group_idx > -1:
-                    limits = limits_template.groups_limits[group_idx]
-                    if any(limits):
-                        if limits[0] is not None:
-                            if float_value < limits[0]:
-                                limits_crossed = True
+            group_idx = limits_template.find_headers_group_index(header)
+            if group_idx > -1:
+                limits = limits_template.groups_limits[group_idx]
+                if any(limits):
+                    if limits[0] is not None:
+                        if isinstance(limits[0], str):
+                            yvals = None
+                            if data is None:
                                 msgs.append(
-                                    f'WARNING: {header} {float_value} lower than '
-                                    f'set minimum {limits[0]}')
-                        if limits[1] is not None:
-                            if float_value > limits[1]:
-                                limits_crossed = True
-                                msgs.append(
-                                    f'WARNING: {header} {float_value} higher than '
-                                    f'set maximum {limits[1]}')
+                                    'Failed to read data from output file '
+                                    'for comparison')
+                            else:
+                                try:
+                                    yvals = data[header][:-1]
+                                except (KeyError, IndexError):
+                                    pass
+                            if 'relative' in limits[0]:
+                                if yvals is not None:
+                                    if 'first' in limits[0]:
+                                        comp_value = yvals[0]
+                                    else:
+                                        comp_value = np.median(yvals)
+                                    if limits[1] is not None:
+                                        tol = comp_value * 0.01 * limits[1]
+                                        limits = [comp_value - tol,
+                                                  comp_value + tol]
+                                else:
+                                    limits = [None, None]
+                            else:  # text compare to first
+                                if values[i] != yvals[0]:
+                                    msgs.append(
+                                        f'WARNING: {header} Found text '
+                                        f'{values[i]} not equal to first text '
+                                        f'{yvals[0]}')
+                                limits = [None, None]
+
+                    if float_value is not None and limits[0] is not None:
+                        if float_value < limits[0]:
+                            limits_crossed = True
+                            msgs.append(
+                                f'WARNING: {header} {float_value} '
+                                f'lower than set minimum {limits[0]}')
+
+                    if float_value is not None and limits[1] is not None:
+                        if float_value > limits[1]:
+                            limits_crossed = True
+                            msgs.append(
+                                f'WARNING: {header} {float_value} higher '
+                                f'than set maximum {limits[1]}')
 
     return limits_crossed, msgs
 
@@ -1007,6 +1051,8 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                                     output_headers]):
                                 limits_crossed, msgs = test_limits(
                                     headers=output_headers, values=value_list,
+                                    output_file=auto_template.path_output,
+                                    decimal_mark=paramset.output.decimal_mark,
                                     limits_label=auto_template.limits_and_plot_label,
                                     limits_mod_templates=limits_and_plot_templates[
                                         modality],
@@ -1159,6 +1205,7 @@ def run_template_vendor(auto_template, modality,
                         limits_crossed, msgs = test_limits(
                                 headers=output_headers,
                                 values=print_array[0][1:],
+                                output_file=auto_template.path_output,
                                 limits_label=auto_template.limits_and_plot_label,
                                 limits_mod_templates=limits_and_plot_templates[
                                     modality],

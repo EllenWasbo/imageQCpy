@@ -2299,7 +2299,7 @@ class ParamsTabMammo(ParamsTabCommon):
         flo1 = QFormLayout()
         flo1.addRow(QLabel('Accept tolerance for phantom position (degrees)'),
                     self.cdm_tolerance_angle)
-        flo1.addRow(QLabel('Gaussian smooth detection matrix, simga (cells)'),
+        flo1.addRow(QLabel('Gaussian smooth detection matrix, sigma (cells)'),
                     self.cdm_sigma)
         flo1.addRow(QLabel('Image is rotated'), self.cdm_rotate_k)
 

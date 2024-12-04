@@ -568,6 +568,15 @@ class LimitsAndPlotContent(QWidget):
         self.txt_title.editingFinished.connect(self.flag_edit)
         self.min_tolerance = LimitsAndPlotRow(self, text='Tolerance (min)')
         self.max_tolerance = LimitsAndPlotRow(self, text='Tolerance (max)')
+        self.type_tolerance = QComboBox()
+        self.type_tolerance.addItems([
+            'Value', 'Difference to first value',
+            'Difference to median of previous values',
+            'Value is text, compare to first value'])
+        self.type_tolerance.currentIndexChanged.connect(
+            self.type_tolerance_changed)
+        self.percent_tolerance = QLabel('%')
+        self.percent_tolerance.setVisible(False)
         self.min_range = LimitsAndPlotRow(self, text='Y plot range (min)')
         self.max_range = LimitsAndPlotRow(self, text='Y plot range (max)')
         self.chk_hide = QCheckBox('Hide from plots in results dashboard')
@@ -629,10 +638,13 @@ class LimitsAndPlotContent(QWidget):
         vlo_rows.addLayout(hlo_limits)
         hlo_limits.addWidget(self.min_tolerance)
         hlo_limits.addWidget(self.max_tolerance)
+        hlo_limits.addWidget(self.percent_tolerance)
+        hlo_limits.addWidget(self.type_tolerance)
         hlo_ranges = QHBoxLayout()
         vlo_rows.addLayout(hlo_ranges)
         hlo_ranges.addWidget(self.min_range)
         hlo_ranges.addWidget(self.max_range)
+        hlo_ranges.addStretch()
         hlo_title = QHBoxLayout()
         vlo_rows.addLayout(hlo_title)
         hlo_title.addWidget(QLabel('Plot title'))
@@ -652,8 +664,18 @@ class LimitsAndPlotContent(QWidget):
         sels = self.list_headers.selectedIndexes()
         row = sels[0].row()
         group_idx = self.group_numbers[row]
-        self.parent.current_template.groups_limits[group_idx] = [
-            self.min_tolerance.get_data(), self.max_tolerance.get_data()]
+        if self.type_tolerance.currentIndex() == 0:
+            self.parent.current_template.groups_limits[group_idx] = [
+                self.min_tolerance.get_data(), self.max_tolerance.get_data()]
+        elif self.type_tolerance.currentIndex() == 1:
+            self.parent.current_template.groups_limits[group_idx] = [
+                'relative_first', self.max_tolerance.get_data()]
+        elif self.type_tolerance.currentIndex() == 2:
+            self.parent.current_template.groups_limits[group_idx] = [
+                'relative_median', self.max_tolerance.get_data()]
+        else:
+            self.parent.current_template.groups_limits[group_idx] = [
+                'text', None]
         self.parent.current_template.groups_ranges[group_idx] = [
             self.min_range.get_data(), self.max_range.get_data()]
         self.parent.current_template.groups_hide[group_idx] = self.chk_hide.isChecked()
@@ -983,11 +1005,22 @@ class LimitsAndPlotContent(QWidget):
                 sample_val = None
 
             limits = self.parent.current_template.groups_limits[group_idx]
-            ranges = self.parent.current_template.groups_ranges[group_idx]
-            self.min_tolerance.set_data(limits[0], max_value=max_val,
-                                        decimals=decimals, ref_value=sample_val)
+            if isinstance(limits[0], str):
+                if limits[0] == 'relative_first':
+                    self.type_tolerance.setCurrentIndex(1)
+                elif limits[0] == 'relative_median':
+                    self.type_tolerance.setCurrentIndex(2)
+                else:
+                    self.type_tolerance.setCurrentIndex(3)
+            else:
+                self.type_tolerance.setCurrentIndex(0)
+                self.min_tolerance.set_data(
+                    limits[0], max_value=max_val,
+                    decimals=decimals, ref_value=sample_val)
             self.max_tolerance.set_data(limits[1], max_value=max_val,
                                         decimals=decimals, ref_value=sample_val)
+
+            ranges = self.parent.current_template.groups_ranges[group_idx]
             self.min_range.set_data(ranges[0], max_value=max_val,
                                     decimals=decimals, ref_value=sample_val)
             self.max_range.set_data(ranges[1], max_value=max_val,
@@ -1038,6 +1071,23 @@ class LimitsAndPlotContent(QWidget):
             _ = self.update_header_order()
             self.update_data(set_selected_idx=self.headers.index(selected_header))
             self.parent.flag_edit(True)
+
+    def type_tolerance_changed(self):
+        """Update options when type of tolerance changed."""
+        if self.type_tolerance.currentIndex() == 0:
+            self.min_tolerance.checkbox.setEnabled(True)
+            self.max_tolerance.checkbox.setEnabled(True)
+            self.percent_tolerance.setVisible(False)
+        elif self.type_tolerance.currentIndex() in [1, 2]:
+            self.min_tolerance.set_data(None)
+            self.min_tolerance.checkbox.setEnabled(False)
+            self.max_tolerance.checkbox.setEnabled(True)
+            self.percent_tolerance.setVisible(True)
+        else:  # compare text to first
+            self.min_tolerance.set_data(None)
+            self.min_tolerance.checkbox.setEnabled(False)
+            self.max_tolerance.set_data(None)
+            self.max_tolerance.checkbox.setEnabled(False)
 
 
 class LimitsAndPlotEditDialog(ImageQCDialog):
@@ -1609,11 +1659,13 @@ class AutoTempWidgetBasic(StackWidget):
     def view_file(self, filetype='output'):
         """View output or warning file as txt."""
         if filetype == 'output':
-            if os.path.exists(self.txt_output_path.text()):
-                os.startfile(self.txt_output_path.text())
+            path = Path(self.txt_output_path.text()).resolve()
+            if os.path.exists(path):
+                os.startfile(path)
         elif filetype == 'warning':
-            if os.path.exists(self.txt_warnings_path.text()):
-                os.startfile(self.txt_warnings_path.text())
+            path = Path(self.txt_warnings_path.text()).resolve()
+            if os.path.exists(path):
+                os.startfile(path)
 
     def edit_limits_and_plot(self, add=False):
         """Open dialog to edit limits and plot settings."""
@@ -1939,7 +1991,7 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
             'Follow these steps to bulk-generate automation templates for this:<br>'
             '<ul>'
             '<li>Export result files from modality GE Mammo QAP.</li>'
-            '<li>Create a folder where you want to load and store the QAP files (later refferd to as the input folder).</li>'
+            '<li>Create a folder where you want to load and store the QAP files (later referred to as the input folder).</li>'
             '<li>Create another folder where you want imageQC to store tabulated data.<li>'
             '<li>Copy the text files from the export (from a folder called "basic") to the input folder.<li>'
             '<li>Start creating a new automation template by setting "Input path"</li>'

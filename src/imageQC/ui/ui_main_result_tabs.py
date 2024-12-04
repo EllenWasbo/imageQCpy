@@ -547,7 +547,7 @@ class ResultPlotCanvas(PlotCanvas):
                 cdmam_table_dict['detection_matrix'].shape, dtype=bool)
 
         def prepare_found_corner_center_plot():
-            self.title = 'Correctly found disc in corner (diamond) and at center (circle)'
+            self.title = 'Correctly found disc in corner (square) and at center (circle)'
             self.xtitle = 'Diameter (mm)'
             self.ytitle = r'Thickness ($\mu$m)'
 

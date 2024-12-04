@@ -3525,7 +3525,7 @@ def calculate_flatfield_aapm(image2d, mask_outer, image_info, paramset):
     global_uniformity = []
 
     neighbour = roi_size_in_pix // 2
-    for input_array in [sub_valid_part, noise_sub, np.divide(mu, noise_sub)]:
+    for input_array in [mu, noise_sub, np.divide(mu, noise_sub)]:
         uniformity_arrays.append(mmcalc.get_uniformity_map(
             input_array, neighbour_start=neighbour, neighbour_end=neighbour))
         global_uniformity.append(

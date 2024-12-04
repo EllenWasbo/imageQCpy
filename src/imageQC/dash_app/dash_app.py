@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 from datetime import date, datetime
-
+import numpy as np
 import pandas as pd
 try:
     import dash
@@ -440,7 +440,19 @@ def run_dash_app(dash_settings=None):
                             row=rowno, col=1,
                             )
                     if any(lim_plots.groups_limits[group_idx]):
-                        for lim in lim_plots.groups_limits[group_idx]:
+                        lims = lim_plots.groups_limits[group_idx]
+                        if isinstance(lims[0], str):
+                            if lims[0] == 'text':
+                                lims = [None, None]
+                            elif lims[0] == 'relative_first':
+                                first_val = data[header][0]
+                                tol = first_val * 0.01 * lims[1]
+                                lims = [first_val - tol, first_val + tol]
+                            else:  # 'relative_median'
+                                med_val = np.median(data[header][:-1])
+                                tol = med_val * 0.01 * lims[1]
+                                lims = [med_val - tol, med_val + tol]
+                        for lim in lims:
                             if lim is not None:
                                 fig.add_hline(y=lim, line_dash='dash', line_color='red',
                                               row=rowno, col=1)

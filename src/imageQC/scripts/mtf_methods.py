@@ -125,8 +125,10 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
     details = {}
     errmsg = None
     width, center = mmcalc.get_width_center_at_threshold(LSF, 0.5 * max(LSF))
-    if center is None:
-        errmsg = 'Failed finding center of LSF.'
+    if center is None or width is None:
+        errmsg = (
+            'Failed finding center and/or width of LSF. '
+            'Unexpected input data?')
     else:
         LSF_x = dx * (np.arange(LSF.size) - center)
         A2 = None

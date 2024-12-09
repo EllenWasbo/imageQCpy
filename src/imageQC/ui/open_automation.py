@@ -595,6 +595,7 @@ class OpenAutomationDialog(ImageQCDialog):
         """
         template_list = []
         modalities = [*QUICKTEST_OPTIONS]
+        modalities_filtered = self.list_modalities.get_checked_texts()
         errormsgs = []
         self.templates_displayed_names_all = []
         self.templates_mod = []
@@ -623,19 +624,20 @@ class OpenAutomationDialog(ImageQCDialog):
                         else:
                             arr[-1] = f'-\t{arr[-1]}  (import_only and deactivated)'
                     else:
-                        if temp.active:
-                            if temp.path_input != '':
-                                n_files, err = self.count_files(temp)
-                                if n_files > 0:
-                                    arr[-1] = f'({n_files})\t{arr[-1]}'
+                        if mod in modalities_filtered:
+                            if temp.active:
+                                if temp.path_input != '':
+                                    n_files, err = self.count_files(temp)
+                                    if n_files > 0:
+                                        arr[-1] = f'({n_files})\t{arr[-1]}'
+                                    else:
+                                        arr[-1] = f'-\t{arr[-1]}'
+                                        if err is not None:
+                                            errormsgs.append(f'{err}')
                                 else:
-                                    arr[-1] = f'-\t{arr[-1]}'
-                                    if err is not None:
-                                        errormsgs.append(f'{err}')
+                                    arr[-1] = f'-\t{arr[-1]} (input path unknown)'
                             else:
-                                arr[-1] = f'-\t{arr[-1]} (input path unknown)'
-                        else:
-                            arr[-1] = f'-\t{arr[-1]} (deactivated)'
+                                arr[-1] = f'-\t{arr[-1]} (deactivated)'
 
                     counter = counter + 1
                     self.progress_bar.setValue(counter)
@@ -652,19 +654,20 @@ class OpenAutomationDialog(ImageQCDialog):
                     name = mod + ' - (vendor file) ' + temp.label
                     self.templates_displayed_names_all.append(name)
                     arr.append(name)
-                    if temp.active:
-                        if temp.path_input != '':
-                            n_files, err = self.count_files(temp)
-                            if n_files > 0:
-                                arr[-1] = f'({n_files})\t{arr[-1]}'
+                    if mod in modalities_filtered:
+                        if temp.active:
+                            if temp.path_input != '':
+                                n_files, err = self.count_files(temp)
+                                if n_files > 0:
+                                    arr[-1] = f'({n_files})\t{arr[-1]}'
+                                else:
+                                    arr[-1] = f'-\t{arr[-1]}'
+                                    if err is not None:
+                                        errormsgs.append(f'{err}')
                             else:
-                                arr[-1] = f'-\t{arr[-1]}'
-                                if err is not None:
-                                    errormsgs.append(f'{err}')
-                        else:
-                            arr[-1] = f'-\t{arr[-1]} (input path unknown)'
-                    elif temp.active is False:
-                        arr[-1] = f'-\t{arr[-1]} (deactivated)'
+                                arr[-1] = f'-\t{arr[-1]} (input path unknown)'
+                        elif temp.active is False:
+                            arr[-1] = f'-\t{arr[-1]} (deactivated)'
                     counter = counter + 1
                     self.progress_bar.setValue(counter)
 

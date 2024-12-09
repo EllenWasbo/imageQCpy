@@ -24,6 +24,7 @@ Changes:
 	- Modality filter changed from dropdown list to checkable list. Last used modality filter will be saved to user preferences.
 - CT task based image analysis: improved export options
 - Added prefilter sigma for gaussian fit in supplement table. See more info in Wiki appendix C.
+- Added option for Limits and Plot templates to set limit based on difference to first or median of all previous values. Also comparing text result to first text parameter is an option.
 
 Fixes:
 - When a small image widget due to screen resolution, there were an issue with the extend toolbar-button (>>) not showing all tools. Now fixed.

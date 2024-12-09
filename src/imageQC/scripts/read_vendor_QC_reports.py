@@ -435,7 +435,7 @@ def read_Siemens_PET_dailyQC(txt):
                   phantom_pos_x, phantom_pos_y]
         headers = ['Date', 'ICSname', 'Partial', 'Full', 'TimeAlignment',
                    'Calibration Factor', 'Measured randoms %',
-                   'Scanner Efficiency [cps/Bq/cc]', ' Scatter Ratio %',
+                   'Scanner Efficiency [cps/Bq/cc]', 'Scatter Ratio %',
                    'ECF [Bq*s/ECAT counts]',
                    'Blocks out of range noise',
                    'Blocks out of range efficiency',

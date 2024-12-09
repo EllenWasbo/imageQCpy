@@ -552,6 +552,7 @@ class LimitsAndPlotContent(QWidget):
 
         self.headers = []  # column headers flattened from template.groups
         self.group_numbers = []  # group number for each element in headers
+        self.sample_headers = []  # headers found in sample file
 
         self.cbox_output_paths = QComboBox()
         self.cbox_output_paths.currentIndexChanged.connect(self.update_output_path)
@@ -789,8 +790,8 @@ class LimitsAndPlotContent(QWidget):
             set_sample_headers = set(flatten_output_headers)
         else:
             set_sample_headers = set(self.headers)
-        missing_in_template = list(set_template_headers.difference(set_sample_headers))
-        missing_in_sample = list(set_sample_headers.difference(set_template_headers))
+        missing_in_sample = list(set_template_headers.difference(set_sample_headers))
+        missing_in_template = list(set_sample_headers.difference(set_template_headers))
 
         if len(set_sample_headers) > 0:
             if len(missing_in_template) > 0 and len(missing_in_sample) == 0:
@@ -849,29 +850,61 @@ class LimitsAndPlotContent(QWidget):
                         if res.exec():
                             pass
                 if proceed:
+                    '''
                     if hasattr(self.parent, 'output_headers'):
                         output_paths = self.parent.output_paths
                     else:
                         output_paths = [self.txt_sample_file_path.text()]
+                    '''
+                    details = ['Missing headers in template:']
+                    details.extend(missing_in_template)
+                    details.extend(['', 'Missing in output file(s):'])
+                    details.extend(missing_in_sample)
+                    details.extend(
+                        ['', 'Consider either:',
+                         '- match headers in template to headers in output '
+                         'using Fix Headers Dialog (next pop-up)',
+                         '- manually editing the headers',
+                         '- manually editing the template '
+                         '(limits_and_plot_templates.yaml',
+                         '- recreating the limits and plot template'])
+                    res = messageboxes.MessageBoxWithDetails(
+                        parent=self, title='Mismatching headers',
+                        msg=('Found mismatch between headers found in the Limits '
+                             'and plot template and headers found in the '
+                             'connected automation output files.'),
+                        info=(
+                            'See mismatch headers in details ond optionally '
+                            'correct header names of template in next pop up.'),
+                        details=details)
+                    if res.exec():
+                        pass
+
                     dlg = LimitsAndPlotFixHeadersDialog(
                         self,
                         limits_template=copy.deepcopy(self.parent.current_template),
-                        output_paths=output_paths,
-                        headers_in_output=self.headers,
-                        headers_in_template=flatten_groups
+                        missing_in_template=missing_in_template,
+                        missing_in_output=missing_in_sample
                         )
                     res = dlg.exec()
                     if res:
                         self.parent.current_template = dlg.get_template()
-                        self.headers = dlg.get_headers()
+                        labels = [x.label for x
+                                  in self.parent.templates[
+                                      self.parent.current_modality]]
+                        idx = labels.index(self.parent.current_template.label)
+                        self.parent.templates[self.parent.current_modality][
+                            idx] = copy.deepcopy(self.parent.current_template)
+                        self.update_header_order()
                         self.parent.flag_edit(True)
                     else:
                         QMessageBox.warning(
                             self, 'Mismatch persist',
-                            'The mismatch still persist. To trigger the dailog to fix '
-                            'this template again (the one you just canceled), select '
-                            'another template and then select the current template '
+                            'The mismatch still persist. To trigger the dialog '
+                            'to fix this template again, select another '
+                            'template and then select the current template '
                             'once again.')
+
         self.group_numbers = []
         for idx, group in enumerate(self.parent.current_template.groups):
             self.group_numbers.extend([idx] * len(group))
@@ -887,16 +920,17 @@ class LimitsAndPlotContent(QWidget):
     def update_from_sample_file(self, silent=False):
         """Find headers and sample data from sample file or startup if None."""
         self.headers = []
+        self.sample_headers = []
         self.first_values = None
         headers_as_groups = False
         if os.path.exists(self.txt_sample_file_path.text()):
-            self.headers, self.first_values = get_headers_first_values_in_path(
+            self.sample_headers, self.first_values = get_headers_first_values_in_path(
                 self.txt_sample_file_path.text())
+            self.headers = copy.deepcopy(self.sample_headers)
             self.update_header_order()
             if len(self.headers) == 0:
                 headers_as_groups = True
-            else:
-                _ = self.update_header_order()
+
         elif self.txt_sample_file_path.text() == '':
             headers_as_groups = True
 
@@ -952,7 +986,6 @@ class LimitsAndPlotContent(QWidget):
         if len(self.headers) > 0:
             self.list_headers.addItems(self.headers)
             self.list_headers.setCurrentRow(set_selected_idx)
-            
         else:
             self.reset_data_display()
 
@@ -991,6 +1024,7 @@ class LimitsAndPlotContent(QWidget):
             self.lbl_sample_value.setText(f'Sample value: {sample_val}')
             decimals = 0
             max_val = 100
+            min_val = -100
             try:
                 sample_val = sample_val.replace(',', '.')
                 sample_split = sample_val.split('.')
@@ -1006,19 +1040,41 @@ class LimitsAndPlotContent(QWidget):
 
             limits = self.parent.current_template.groups_limits[group_idx]
             if isinstance(limits[0], str):
+                self.type_tolerance.blockSignals(True)
                 if limits[0] == 'relative_first':
                     self.type_tolerance.setCurrentIndex(1)
                 elif limits[0] == 'relative_median':
                     self.type_tolerance.setCurrentIndex(2)
                 else:
                     self.type_tolerance.setCurrentIndex(3)
+                self.type_tolerance.blockSignals(False)
+                if 'relative' in limits[0]:
+                    self.min_tolerance.set_data(None)
+                    self.min_tolerance.checkbox.setEnabled(False)
+                    self.max_tolerance.checkbox.setEnabled(True)
+                    self.percent_tolerance.setVisible(True)
+                    max_val = 300
+                    min_val = 0
+                    decimals = 1
+                else:
+                    self.min_tolerance.set_data(None)
+                    self.min_tolerance.checkbox.setEnabled(False)
+                    self.max_tolerance.set_data(None)
+                    self.max_tolerance.checkbox.setEnabled(False)
+                    max_val = None
             else:
+                self.type_tolerance.blockSignals(True)
                 self.type_tolerance.setCurrentIndex(0)
+                self.type_tolerance.blockSignals(False)
+                self.percent_tolerance.setVisible(False)
                 self.min_tolerance.set_data(
                     limits[0], max_value=max_val,
                     decimals=decimals, ref_value=sample_val)
-            self.max_tolerance.set_data(limits[1], max_value=max_val,
-                                        decimals=decimals, ref_value=sample_val)
+                min_val = None
+            if max_val is not None:
+                self.max_tolerance.set_data(
+                    limits[1], max_value=max_val, min_value=min_val,
+                    decimals=decimals, ref_value=sample_val)
 
             ranges = self.parent.current_template.groups_ranges[group_idx]
             self.min_range.set_data(ranges[0], max_value=max_val,
@@ -1088,6 +1144,7 @@ class LimitsAndPlotContent(QWidget):
             self.min_tolerance.checkbox.setEnabled(False)
             self.max_tolerance.set_data(None)
             self.max_tolerance.checkbox.setEnabled(False)
+        self.flag_edit(True)
 
 
 class LimitsAndPlotEditDialog(ImageQCDialog):
@@ -1199,8 +1256,8 @@ class LimitsAndPlotEditDialog(ImageQCDialog):
 class LimitsAndPlotFixHeadersDialog(ImageQCDialog):
     """Dialog for editing limits and plot settings."""
 
-    def __init__(self, parent, limits_template=None, output_paths=None, auto_label='',
-                 headers_in_output=None, headers_in_template=None):
+    def __init__(self, parent, limits_template=None,
+                 missing_in_template=None, missing_in_output=None):
         """Initiate LimitsAndPlotFixHeadersDialog.
 
         Parameters
@@ -1208,26 +1265,21 @@ class LimitsAndPlotFixHeadersDialog(ImageQCDialog):
         parent : QWidget
         limits_template : LimitsAndPlotTemplate, optional
             The default is None.
-        output_paths : list of str
-            output paths to edit
-        auto_label : str
-        headers_in_output : list of str
-        headers_in_template : list of str
+        missing_in_output : list of str
+        missing_in_template : list of str
         """
         super().__init__()
-        self.setWindowTitle(
-            'Handle mismatch between headers in output file and Limits and plot '
-            'template')
+        self.setWindowTitle('Fix Headers Dialog')
         vlo = QVBoxLayout()
         self.setLayout(vlo)
         self.parent = parent
         self.current_template = limits_template
-        self.headers_in_output = headers_in_output
-        self.output_paths = output_paths
+        self.missing_in_output = missing_in_output
 
         self.list_output_headers = QListWidget()
-        self.list_output_headers.addItems(headers_in_output)
+        self.list_output_headers.addItems(missing_in_template)
         self.list_template_headers = QListWidget()
+        self.list_template_headers.addItems(missing_in_output)
         self.list_output_headers.setFixedWidth(400)
         self.list_template_headers.setFixedWidth(400)
         self.list_template_headers.setDragDropMode(QAbstractItemView.InternalMove)
@@ -1239,7 +1291,8 @@ class LimitsAndPlotFixHeadersDialog(ImageQCDialog):
             'match the left list.',
             'This sorting will not affect the order of headers neither in the output '
             'path nor the template plot order.',
-            'The sorting is just to find the matches.']
+            'The sorting is just indicate which headers that match.',
+            'Template heaaders can then be changed to the match in output file(s).']
         vlo.addWidget(uir.LabelMultiline(txts=info_txt))
         hlo_lists = QHBoxLayout()
         vlo.addLayout(hlo_lists)
@@ -1248,24 +1301,25 @@ class LimitsAndPlotFixHeadersDialog(ImageQCDialog):
         vlo_list_output = QVBoxLayout()
         hlo_lists.addLayout(vlo_list_output)
         vlo_list_output.addWidget(uir.LabelHeader(
-            f'Headers in output path of automation template {auto_label}', 3))
+            'Headers in output file', 3))
         vlo_list_output.addWidget(self.list_output_headers)
 
         vlo_list_temp = QVBoxLayout()
         hlo_lists.addLayout(vlo_list_temp)
         vlo_list_temp.addWidget(uir.LabelHeader(
-            f'Headers in Limits and plot template {self.current_template.label}', 3))
+            f'Headers in template {self.current_template.label}', 3))
         vlo_list_temp.addWidget(self.list_template_headers)
 
-        self.fill_list_template_headers(headers_in_template)
         vlo.addSpacing(20)
 
+        '''
         btn_replace_output_headers = QPushButton(
             'Replace headers in output file with those in Limits template')
         btn_replace_output_headers.clicked.connect(self.replace_output_headers)
         btn_replace_template_headers = QPushButton(
             'Replace headers in Limits template with those in the output file')
         btn_replace_template_headers.clicked.connect(self.replace_template_headers)
+        '''
 
         hlo_dlg_btns = QHBoxLayout()
         vlo.addLayout(hlo_dlg_btns)
@@ -1277,67 +1331,23 @@ class LimitsAndPlotFixHeadersDialog(ImageQCDialog):
         btn_cancel.clicked.connect(self.reject)
         hlo_dlg_btns.addWidget(btn_cancel)
 
-    def fill_list_template_headers(self, headers):
-        """Fill the lists of headers trying to find matches."""
-        headers_order = [-1 for header in headers]
-        no_match = []
-        for i, header in enumerate(headers):
-            if header in self.headers_in_output:
-                headers_order[i] = self.headers_in_output.index(header)
-            else:
-                no_match.append(header)
-        headers_ordered = ['' for header in headers]
-        for i, header in enumerate(headers):
-            if i in headers_order:
-                headers_ordered[i] = header
-        for header in headers:
-            if header in no_match:
-                idx = headers_ordered.index('')
-                headers_ordered[idx] = header
-        self.list_template_headers.addItems(headers_ordered)
-
     def fix(self):
         """Start fixing the mismatch based on the sorting."""
         headers_template = []
         for x in range(self.list_template_headers.count()):
             headers_template.append(self.list_template_headers.item(x).text())
-        res = messageboxes.QuestionBox(
-            parent=self, title='Correct the mismatch',
-            msg='How to force the same headers of the output file and Limits template?',
-            yes_text='Replace headers in output file',
-            no_text='Replace headers in LimitsAndPlot template')
-        if res.exec():
-            self.replace_output_headers(headers_template)
-        else:
-            self.replace_template_headers(headers_template)
-        self.accept()
+        headers_output = []
+        for x in range(self.list_output_headers.count()):
+            headers_output.append(self.list_output_headers.item(x).text())
 
-    def replace_output_headers(self, headers_template):
-        """Replace headers in output file."""
-        for path in self.output_paths:
-            lines = []
-            with open(path, 'r') as file:
-                lines = file.readlines()
-            if len(lines) > 0:
-                header_line = lines[0]
-                for i, header in enumerate(self.headers_in_output):
-                    if header in header_line:
-                        lines[0] = lines[0].replace(header, headers_template[i])
-                        self.headers_in_output[i] = headers_template[i]
-                with open(path, 'w') as file:
-                    for lin in lines:
-                        file.write(lin)
-        QMessageBox.information(
-            self, 'Headers in output file(s) updated',
-            'Finished replacing headers of output file(s).')
-
-    def replace_template_headers(self, headers_template):
-        """Replace headers in template."""
         for i, old_header in enumerate(headers_template):
-            if old_header != self.headers_in_output[i]:
-                group_idx = self.current_template.find_headers_group_index(old_header)
-                idx = self.current_template.groups[group_idx].index(old_header)
-                self.current_template.groups[group_idx][idx] = self.headers_in_output[i]
+            group_idx = self.current_template.find_headers_group_index(old_header)
+            idx = self.current_template.groups[group_idx].index(old_header)
+            try:
+                self.current_template.groups[group_idx][idx] = headers_output[i]
+            except IndexError:
+                pass
+        self.accept()
 
     def get_template(self):
         """Fetch current template."""

@@ -104,6 +104,32 @@ def get_rois(image, image_number, input_main):
 
         return (roi_this, errmsg)
 
+    def Foc():  # Focal spot size search area (pattern size + 10%)
+        tot_w_mm = 5.1 *  paramset.foc_pattern_size  # assumed max 5x magnification
+        w_tot = tot_w_mm / image_info.pix[0]
+        roi_outer = get_roi_rectangle(
+            img_shape, roi_width=w_tot, roi_height=w_tot, offcenter_xy=(0, 0))
+        w = 2 * paramset.foc_search_margin / image_info.pix[0]
+        roi_inner = get_roi_rectangle(
+            img_shape, roi_width=w, roi_height=w, offcenter_xy=(0, 0))
+        roi_this = [roi_outer, roi_inner]
+        
+        rot_a = paramset.foc_search_angle / 2
+        roi_half = get_roi_rectangle(
+            img_shape, roi_width=w_tot//2, roi_height=w_tot, offcenter_xy=(w_tot//4, 0))
+        roi_half_rot = ndimage.rotate(
+            roi_half.astype(float), rot_a, reshape=False)
+        roi_half_rot = np.round(roi_half_rot)
+        overlap = roi_half_rot + np.fliplr(roi_half_rot)
+        segment = np.zeros(roi_half_rot.shape, dtype=bool)
+        segment[overlap == 2] = True
+        segments_x = np.rot90(segment, k=1)
+        segments_x = segments_x + np.fliplr(segments_x)
+        segments_y = segment + np.flipud(segment)
+        roi_this.extend([segments_x, segments_y])
+
+        return roi_this
+
     def Geo():  # Geometry
         return get_roi_circle_MR(
             image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])
@@ -626,8 +652,7 @@ def get_rois(image, image_number, input_main):
             )
 
     def Var():  # Variance Xray
-        roi_sizes_mm = [paramset.var_roi_size, paramset.var_roi_size2,
-                     paramset.var_roi_size3]
+        roi_sizes_mm = [paramset.var_roi_size, paramset.var_roi_size2]
         roi_arrays = []
         for roi_sz_mm in roi_sizes_mm:
             if roi_sz_mm == 0:

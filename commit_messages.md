@@ -4,6 +4,7 @@ _xxx xx, 2024_
 New functionalities:
 - Xray:
 	- Added option to test Homogeneity according to AAPM TG150 (Flat field test). Find option in the Homogeneity test tab under Methods.
+	- Added option to read focal spot size from star pattern. Test is not fully validated yet.
 - Mammo
 	- Improved functionalities for GE Mammo QAP tests:
 		- Added button to import Mammo QAP files from Automation dialog. Export from modality include all files. The new import function ignore files already analysed.
@@ -13,7 +14,7 @@ New functionalities:
 
 Changes:
 - Test Variance (Xray and Mammo):
-	- Variance now calculated for up to three different ROI sizes to highlight artifacts of different dimensions.
+	- Variance now calculated for two different ROI sizes to highlight artifacts of different dimensions.
 	- Changed from defining ROI by % of image dimensions to outer margin (in mm).
 	- These changes will affect result table. Apologies if you already used this for automation. Normally such changes are avoided if possible. 
 - Window level widget: 

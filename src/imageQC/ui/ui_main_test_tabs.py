@@ -1156,8 +1156,6 @@ class ParamsTabCommon(QTabWidget):
             lambda: self.param_changed_from_gui(attribute='var_roi_size2'))
         self.var_roi_size3 = QDoubleSpinBox(
             decimals=1, minimum=0., maximum=1000, singleStep=0.1)
-        self.var_roi_size3.editingFinished.connect(
-            lambda: self.param_changed_from_gui(attribute='var_roi_size3'))
         self.var_mask_outer_mm = QDoubleSpinBox(decimals=1,
                                           minimum=0.0, maximum=100., singleStep=1.)
         self.var_mask_outer_mm.editingFinished.connect(
@@ -1167,7 +1165,7 @@ class ParamsTabCommon(QTabWidget):
         self.var_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
         self.var_result_image.addItems([
-            'Variance image ROI 1', 'Variance image ROI 2', 'Variance image ROI 3'])
+            'Variance image ROI 1', 'Variance image ROI 2'])
 
         self.tab_var.vlo_top.addWidget(uir.LabelItalic(
             'The variance image can reveal artifacts in the image.<br>'
@@ -1178,7 +1176,6 @@ class ParamsTabCommon(QTabWidget):
         flo = QFormLayout()
         flo.addRow(QLabel('ROI size 1 (mm)'), self.var_roi_size)
         flo.addRow(QLabel('ROI size 2 (mm)'), self.var_roi_size2)
-        flo.addRow(QLabel('ROI size 3 (mm)'), self.var_roi_size3)
         flo.addRow(QLabel('Mask outer mm'), self.var_mask_outer_mm)
         flo2 = QFormLayout()
         flo2.addRow(QLabel('Result image: '), self.var_result_image)
@@ -1774,6 +1771,7 @@ class ParamsTabXray(ParamsTabCommon):
         self.create_tab_nps()
         self.create_tab_stp()
         self.create_tab_var()
+        self.create_tab_foc()
         self.create_tab_def()
 
         self.addTab(self.tab_hom, "Homogeneity")
@@ -1782,7 +1780,9 @@ class ParamsTabXray(ParamsTabCommon):
         self.addTab(self.tab_nps, "NPS")
         self.addTab(self.tab_stp, "STP")
         self.addTab(self.tab_var, "Variance")
-        self.addTab(self.tab_def, "Defective pixels")
+        self.addTab(self.tab_foc, "Focal spot size")
+        if self.main.developer_mode:
+            self.addTab(self.tab_def, "Defective pixels")
 
         self.flag_ignore_signals = False
 
@@ -1918,6 +1918,54 @@ class ParamsTabXray(ParamsTabCommon):
     def create_tab_var(self):
         """GUI of tab Variance."""
         super().create_tab_var()
+
+    def create_tab_foc(self):
+        """GUI for tab Focal spot size."""
+        self.tab_foc = ParamsWidget(self, run_txt='Calculate focal spot size')
+
+        self.tab_foc.hlo_top.addWidget(uir.UnderConstruction(
+            txt='Under construction and validation...'))
+
+        self.foc_pattern_size = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=100., singleStep=0.1)
+        self.foc_pattern_size.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='foc_pattern_size'))
+        self.foc_angle = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=100., singleStep=0.1)
+        self.foc_angle.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='foc_angle'))
+        self.foc_search_margin = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=100., singleStep=0.1)
+        self.foc_search_margin.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='foc_search_margin'))
+        self.foc_search_angle = QDoubleSpinBox(
+            decimals=1, minimum=0.1, maximum=90., singleStep=0.1)
+        self.foc_search_angle.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='foc_search_angle'))
+
+        self.foc_result_plot = QComboBox()
+        self.foc_result_plot.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
+        self.foc_result_plot.addItems(
+            ['Variance map profiles'])
+        self.foc_result_image = QComboBox()
+        self.foc_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+        self.foc_result_image.addItems(
+            ['Variance map within phantom'])
+
+        flo1 = QFormLayout()
+        flo1.addRow(QLabel('Star pattern size (mm)'), self.foc_pattern_size)
+        flo1.addRow(QLabel('Star pattern line angle (deg)'), self.foc_angle)
+        flo1.addRow(QLabel('Search margin (mm)'), self.foc_search_margin)
+        flo1.addRow(QLabel('Angle segment for averaging (deg)'),
+                    self.foc_search_angle)
+        flo2 = QFormLayout()
+        flo2.addRow(QLabel('Result plot'), self.foc_result_plot)
+        flo2.addRow(QLabel('Result image'), self.foc_result_image)
+        self.tab_foc.hlo.addLayout(flo1)
+        self.tab_foc.hlo.addWidget(uir.VLine())
+        self.tab_foc.hlo.addLayout(flo2)
 
     def create_tab_def(self):
         """GUI of tab Noise."""
@@ -2742,7 +2790,7 @@ class ParamsTabNM(ParamsTabCommon):
 
         self.sni_area_ratio = QDoubleSpinBox(
             decimals=2, minimum=0.1, maximum=1., singleStep=0.01)
-        self.sni_area_ratio.valueChanged.connect(
+        self.sni_area_ratio.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='sni_area_ratio'))
         self.sni_ratio_dim = QComboBox()
         self.sni_ratio_dim.addItems(
@@ -2759,7 +2807,7 @@ class ParamsTabNM(ParamsTabCommon):
             lambda: self.param_changed_from_gui(attribute='sni_roi_ratio'))
         self.sni_roi_size = QDoubleSpinBox(
             decimals=0, minimum=16, maximum=1000, singleStep=1)
-        self.sni_roi_size.valueChanged.connect(
+        self.sni_roi_size.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='sni_roi_size'))
         self.sni_roi_outside = QComboBox()
         self.sni_roi_outside.addItems(['ignore', 'move inside'])
@@ -2768,7 +2816,7 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_roi_outside_label = QLabel('For ROIs partly outside large ROI')
         self.sni_scale_factor = QDoubleSpinBox(
             decimals=0, minimum=1, maximum=100, singleStep=1)
-        self.sni_scale_factor.valueChanged.connect(
+        self.sni_scale_factor.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='sni_scale_factor'))
 
         self.sni_sampling_frequency = QDoubleSpinBox(

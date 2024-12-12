@@ -42,7 +42,8 @@ USER_PREFS_FNAME = 'user_preferences.yaml'
 QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'TTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
-    'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var', 'Def'],
+    'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var',
+             'Foc', 'Def'],
     'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'Var', 'RLR', 'Gho', 'MTF',
               'NPS', 'CDM'],
     'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
@@ -206,9 +207,11 @@ HEADERS = {
         'NPS': {'alt0': ['Average variance', 'Large area signal',
                          'Large area stdev (noise)', 'AUC horiz/AUC vert']},
         'STP': {'alt0': ['Dose', 'Q', 'Mean pix', 'Stdev pix']},
-        'Var': {'alt0': ['Min var 1', 'Max var 1', 'Median var 1',
-                         'Min var 2', 'Max var 2', 'Median var 2',
-                         'Min var 3', 'Max var 3', 'Median var 3']},
+        'Var': {'alt0': ['Max var 1', 'Median var 1', 'Max/median var 1',
+                         'Max var 2', 'Median var 2', 'Max/median var 2']},
+        'Foc': {'alt0': ['Star diameter (mm)', 'Magnification',
+                         'Blur diameter x (mm)', 'Blur diameter y (mm)',
+                         'FS x (mm)', 'FS y (mm)']},
         'Def': {'alt0': ['# equal to avg of 8 neighbours',
                          '# equal to avg of 4 neighbours']},
         },
@@ -224,9 +227,8 @@ HEADERS = {
                      'Deviating avgs', 'Deviating SNRs', 'Deviating ROIs',
                      '% dev ROIs', 'Deviating pixels', '% dev pixels']
             },
-        'Var': {'alt0': ['Min var 1', 'Max var 1', 'Median var 1',
-                         'Min var 2', 'Max var 2', 'Median var 2',
-                         'Min var 3', 'Max var 3', 'Median var 3']},
+        'Var': {'alt0': ['Max var 1', 'Median var 1', 'Max/median var 1',
+                         'Max var 2', 'Median var 2', 'Max/median var 2']},
         'RLR': {
             'alt0': ['Average', 'Stdev']
             },

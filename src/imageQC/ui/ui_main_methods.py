@@ -107,6 +107,8 @@ def refresh_img_display(main):
                 main.imgs[main.gui.active_img_no].info_list_modality)
         except AttributeError:
             pass
+        except IndexError:  # maybe after closing images
+            main.wid_image_display.canvas.img_is_missing()
         main.update_roi()
     else:
         main.wid_image_display.canvas.img_is_missing()

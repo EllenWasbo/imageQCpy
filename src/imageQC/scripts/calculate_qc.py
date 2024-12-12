@@ -546,6 +546,8 @@ def calculate_qc(input_main, wid_auto=None,
                         if 'MTF' in marked[i]:
                             if paramset.mtf_auto_center:
                                 force_new_roi.append('MTF')
+                        if 'Foc' in marked[i]:
+                            force_new_roi.append('Foc')
                         if 'Def' in marked[i]:
                             marked_3d[i].append('Def')
                     elif modality == 'Mammo':
@@ -940,6 +942,8 @@ def calculate_qc(input_main, wid_auto=None,
                     input_main.refresh_img_display()
                 if 'TTF' in input_main.results:
                     input_main.refresh_img_display()
+            elif 'Foc' in input_main.results:
+                input_main.refresh_img_display()
             elif 'Rec' in input_main.results:
                 try:
                     input_main.wid_window_level.tb_wl.set_window_level(
@@ -1164,6 +1168,23 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 headers_sup=headers_sup, values_sup=values_sup,
                 values_sup_info=values_sup_info,
                 details_dict=details_dict, errmsg=errmsg)
+
+        return res
+
+    def Foc():
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        # ['Star diameter (mm)', 'Magnification',
+        # 'Blur diameter x (mm)', 'Blur diameter y (mm)',
+        #'FS x (mm)', 'FS y (mm)']
+        if image2d is None:
+            res = Results(headers=headers)
+        else:
+            details_dict, values, errmsgs = calculate_focal_spot_size(
+                image2d, roi_array, image_info, paramset)
+
+            res = Results(
+                headers=headers, values=values,
+                details_dict=details_dict, errmsg=errmsgs)
 
         return res
 
@@ -2015,15 +2036,14 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             # code adapted from:
             # https://www.imageeprocessing.com/2015/10/edge-detection-using-local-variance.html
 
-            if roi_array[3] is None:
+            if roi_array[2] is None:
                 sub = image2d
             else:
-                rows = np.max(roi_array[3], axis=1)
-                cols = np.max(roi_array[3], axis=0)
+                rows = np.max(roi_array[2], axis=1)
+                cols = np.max(roi_array[2], axis=0)
                 sub = image2d[rows][:, cols]
 
-            roi_sizes_mm = [paramset.var_roi_size, paramset.var_roi_size2,
-                         paramset.var_roi_size3]
+            roi_sizes_mm = [paramset.var_roi_size, paramset.var_roi_size2]
             values = []
             details_dict = {'variance_image': []}
             for roi_sz_mm in roi_sizes_mm:
@@ -2045,6 +2065,12 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     masked = False
                     variance_sub_masked = None
                     if roi_array[-1] is not None:
+                        # avoid rois where masked max involved
+                        grow_max = sp.signal.fftconvolve(
+                            1.*roi_array[-1], np.full(kernel.shape, 1), mode='same')
+                        max_mask = np.zeros(roi_array[-1].shape, dtype=bool)
+                        max_mask[grow_max > 1] = True
+
                         # valid part of full image, ensure same size as valid
                         valid_shape = variance_sub.shape
                         roi_mask_outer_valid = get_roi_rectangle(
@@ -2052,20 +2078,22 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                             roi_width=valid_shape[1], roi_height=valid_shape[0])
                         rows_ = np.max(roi_mask_outer_valid, axis=1)
                         cols_ = np.max(roi_mask_outer_valid, axis=0)
-                        max_mask_valid_part = roi_array[4][rows_][:, cols_]
+                        max_mask_valid_part = max_mask[rows_][:, cols_]
+
                         if np.any(max_mask_valid_part):
                             variance_sub_masked = np.ma.masked_array(
                                 variance_sub, mask=max_mask_valid_part)
                             masked = True
+
                     if masked:
-                        values.extend([np.ma.min(variance_sub_masked),
-                                  np.ma.max(variance_sub_masked),
-                                  np.ma.median(variance_sub_masked)])
+                        max_val = np.ma.max(variance_sub_masked)
+                        med_val = np.ma.median(variance_sub_masked)
+                        values.extend([max_val, med_val, max_val/med_val])
                         details_dict['variance_image'].append(variance_sub_masked)
                     else:
-                        values.extend([np.min(variance_sub),
-                                  np.max(variance_sub),
-                                  np.median(variance_sub)])
+                        max_val = np.max(variance_sub)
+                        med_val = np.median(variance_sub)
+                        values.extend([max_val, med_val, max_val/med_val])
                         details_dict['variance_image'].append(variance_sub)
 
             res = Results(headers=headers, values=values,
@@ -3715,7 +3743,152 @@ def calculate_flatfield_mammo(image2d, mask_outer, image_info, paramset):
     return details
 
 
+def calculate_focal_spot_size(image, roi_array, image_info, paramset):
+    """Find star pattern and outer blur-diameter.
 
+    Parameters
+    ----------
+    image : np.2darray.
+    image_info : DcmInfo
+        as defined in scripts/dcm.py
+    paramset : ParamSetXray
+        as defined in config/config_classes.py
+
+    Returns
+    -------
+    details_dict : dict
+    values : list of float or None
+    errmsgs : list of str
+    """
+    values = None
+    errmsgs = []
+    details_dict = {}
+    pix = image_info.pix[0]
+
+    # find center from inner disc of low signal
+    rows_inner = np.max(roi_array[1], axis=1)
+    cols_inner = np.max(roi_array[1], axis=0)
+    sub_inner = image[rows_inner][:, cols_inner]
+    res = mmcalc.find_center_object(sub_inner)
+    proceed = True
+    off_x, off_y = 0, 0
+    if res is None:
+        errmsgs.append('Failed finding center of star pattern.')
+        proceed = False
+    else:
+        center_x, center_y, width_x, width_y = res
+        off_x = center_x - sub_inner.shape[1] // 2
+        off_y = center_y - sub_inner.shape[0] // 2
+        details_dict['off_xy'] = [off_x, off_y]
+
+    if proceed:
+        # shift rois by off_center
+        for i in [0, 2, 3]:
+            roi_array[i] = np.roll(roi_array[i], round(off_x), axis=1)
+            roi_array[i] = np.roll(roi_array[i], round(off_y), axis=0)
+        rows = np.max(roi_array[0], axis=1)
+        cols = np.max(roi_array[0], axis=0)
+        sub_outer = image[rows][:, cols]
+        for i in [0, 2, 3]:
+            roi_array[i] = roi_array[i][rows][:, cols]
+
+        # find outer dimensjon of star pattern
+        dist_map = mmcalc.get_distance_map_point(sub_outer.shape)
+        dists_flat = dist_map.flatten()
+        sort_idxs = np.argsort(dists_flat)
+        dists = pix * dists_flat[sort_idxs]
+        values_flat = sub_outer.flatten()[sort_idxs]
+        in_x = roi_array[2].flatten()[sort_idxs]
+        dists_x = dists[in_x == True]
+        vals_x = values_flat[in_x == True]
+        radi_pattern_mm = paramset.foc_pattern_size / 2
+        dists_x, vals_x = mmcalc.resample_by_binning(
+            vals_x, dists_x, pix, first_step=radi_pattern_mm)  # assume M>1
+        vals_x_sm = sp.ndimage.gaussian_filter(vals_x, sigma=2)
+        diff = np.diff(vals_x_sm)
+        try:
+            lower = np.where(diff < 0.1*np.min(diff))  # first value lower than 10% of min
+            before_lower = vals_x_sm[0:lower[0][0]]
+            positives = np.where(before_lower > 0)
+            first_drop_idx = positives[0][-1]  # last positive
+            radi_pattern_img_mm = dists_x[first_drop_idx]
+            magnification = radi_pattern_img_mm / radi_pattern_mm
+            details_dict['star_diameter_mm'] = radi_pattern_img_mm * 2
+            details_dict['magnification'] = magnification
+        except IndexError:
+            errmsgs.append('Failed finding edge of star pattern.')
+            proceed = False
+
+        if proceed:
+            # crop sub to star pattern
+            in_pattern = np.zeros(sub_outer.shape, dtype=bool)
+            in_pattern[dist_map * pix < radi_pattern_img_mm] = True
+            rows = np.max(in_pattern, axis=1)
+            cols = np.max(in_pattern, axis=0)
+            sub_crop = sub_outer[rows][:, cols]
+            dist_map = dist_map[rows][:, cols]
+            for i in [0, 2, 3]:
+                roi_array[i] = roi_array[i][rows][:, cols]
+
+            # calculate variance map to identify minima
+            kernel_sz_pix = round(2. / image_info.pix[0])  # 2mm kernel
+            kernel = np.full((kernel_sz_pix, kernel_sz_pix),
+                             1./(kernel_sz_pix**2))
+            mu = sp.signal.fftconvolve(sub_crop, kernel, mode='same')
+            ii = sp.signal.fftconvolve(sub_crop ** 2, kernel, mode='same')
+            variance_crop = ii - mu**2
+            perc = np.percentile(variance_crop, 50)
+            variance_crop[variance_crop > perc] = perc
+
+            # find radial profiles and convert variance minima to peaks
+            dists_flat = dist_map.flatten()
+            sort_idxs = np.argsort(dists_flat)
+            dists = pix * dists_flat[sort_idxs]
+            values_flat = variance_crop.flatten()[sort_idxs]
+            blur_diameter_xy = []
+            focal_size_xy = []
+            profiles = []
+            profiles_dists = []
+            line_radians = np.deg2rad(paramset.foc_angle)
+            roi_founds = []
+            for idx in [2, 3]:
+                in_x = roi_array[idx].flatten()[sort_idxs]
+                dists_x = dists[in_x == True]
+                vals_x = values_flat[in_x == True]
+                dists_x, vals_x = mmcalc.resample_by_binning(vals_x, dists_x, pix)
+                vals_x = perc - vals_x
+                profiles.append(vals_x)
+                profiles_dists.append(dists_x)
+                peaks = find_peaks(vals_x)
+                x_peak = dists_x[peaks[0][-1]]  # last peak
+                blur_diameter_xy.append(x_peak * 2)
+                fs = line_radians * (x_peak * 2) / (magnification - 1)
+                focal_size_xy.append(fs)
+                roi_found = roi_array[idx]
+                roi_found[dist_map * pix > x_peak] = False
+                roi_founds.append(roi_found)
+            details_dict['blur_diameter_xy'] = blur_diameter_xy
+            details_dict['focal_size_xy'] = focal_size_xy
+
+            details_dict['variance_cropped'] = variance_crop
+            details_dict['roi_found_x'] = roi_founds[0]
+            details_dict['roi_found_y'] = roi_founds[1]
+
+            details_dict['profiles'] = profiles
+            details_dict['profiles_dists'] = profiles_dists
+
+    try:
+        values = [details_dict['star_diameter_mm'],
+                  details_dict['magnification'],
+                  details_dict['blur_diameter_xy'][0],
+                  details_dict['blur_diameter_xy'][1],
+                  details_dict['focal_size_xy'][0],
+                  details_dict['focal_size_xy'][1]
+                  ]
+    except KeyError:
+        pass
+
+    return details_dict, values, errmsgs
 
 
 def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, background):

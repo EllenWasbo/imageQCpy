@@ -16,7 +16,8 @@ from PyQt5.QtWidgets import QMessageBox
 
 # imageQC block start
 from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
-from imageQC.scripts.calculate_roi import generate_SNI_Siemens_image
+from imageQC.scripts.calculate_roi import (
+    generate_SNI_Siemens_image, get_roi_circle)
 from imageQC.config.iQCconstants import COLORS
 # imageQC block end
 
@@ -560,6 +561,29 @@ class ImageCanvas(GenericImageCanvas):
                             linestyle='dotted',
                             ))
 
+    def Foc(self):
+        missing_result = True
+        if 'Foc' in self.main.results:
+            if 'details_dict' in self.main.results['Foc']:
+                details_dict = self.main.results['Foc'][
+                    'details_dict'][self.main.gui.active_img_no]
+                pix = self.main.imgs[self.main.gui.active_img_no].pix[0]
+                if 'star_diameter_mm' in details_dict:
+                    missing_result = False
+                    off_xy = details_dict['off_xy']
+                    radius = details_dict['star_diameter_mm'] / 2 / pix
+                    roi_pattern = get_roi_circle(
+                        self.main.active_img.shape, off_xy, radius)
+                    mask = np.where(roi_pattern, 0, 1)
+                    contour = self.ax.contour(
+                        mask, levels=[0.9],
+                        colors='blue', alpha=0.5,
+                        linewidths=self.linewidth, linestyles='--')
+                    self.contours.append(contour)
+
+        if missing_result:
+            self.add_contours_to_all_rois()
+
     def Gho(self):
         """Draw Ghosting ROIs."""
         try:
@@ -952,13 +976,13 @@ class ImageCanvas(GenericImageCanvas):
         self.add_contours_to_all_rois(colors=['red', 'blue'])
 
     def Var(self):
-        #  [roi1, roi2, roi3, roi_mask_outer, roi_mask_max]
+        #  [roi1, roi2, roi_mask_outer, roi_mask_max]
         self.add_contours_to_all_rois(
-            colors=['c', 'm', 'y', 'b'], roi_indexes=[0, 1, 2, 3],
-            linestyles=['solid', 'solid', 'solid', 'dotted'])
-        if self.main.current_roi[4] is not None:
+            colors=['c', 'm', 'b'], roi_indexes=[0, 1, 2],
+            linestyles=['solid', 'solid', 'dotted'])
+        if self.main.current_roi[3] is not None:
             self.add_contours_to_all_rois(
-                colors=['red'], roi_indexes=[4],
+                colors=['red'], roi_indexes=[3],
                 filled=True, hatches=['////'], reset_contours=False)
 
 
@@ -1235,6 +1259,22 @@ class ResultImageCanvas(GenericImageCanvas):
 
             except KeyError:
                 pass
+
+    def Foc(self):
+        try:
+            details_dict = self.main.results['Foc']['details_dict'][
+                self.main.gui.active_img_no]
+            self.cmap = 'viridis'
+            self.title = 'Variance image cropped to star pattern'
+            self.current_image = details_dict['variance_cropped']
+
+            self.contours_to_add.append(
+                [details_dict['roi_found_x'], 'r', '-'])
+            self.contours_to_add.append(
+                [details_dict['roi_found_y'], 'b', '-'])
+
+        except (KeyError, IndexError):
+            pass
 
     def Hom(self):
         """Prepare images of Mammo-Homogeneity."""

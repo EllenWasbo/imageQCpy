@@ -459,8 +459,11 @@ class ParamSetXray(ParamSetCommon):
     stp_roi_size: float = 11.3
     var_roi_size: float = 2.0
     var_roi_size2: float = 10.0
-    var_roi_size3: float = 0.0
     var_mask_outer_mm: float = 10.0
+    foc_pattern_size: float = 45.  # star pattern size in mm
+    foc_angle: float = 1.5  # star pattern line angle in degrees
+    foc_search_margin: float = 20.  # mm margin offsenter for pattern
+    foc_search_angle: float = 15.  # angle segment to average radial profile
     def_mask_outer_mm: float = 10.
     def_fraction: float = 0.1
 
@@ -483,7 +486,6 @@ class ParamSetMammo(ParamSetCommon):
     hom_deviating_rois: float = 15.
     var_roi_size: float = 2.0
     var_roi_size2: float = 10.0
-    var_roi_size3: float = 0.0
     var_mask_max: bool = False
     var_mask_outer_mm: float = 0.0
     rlr_roi_size: float = 5.

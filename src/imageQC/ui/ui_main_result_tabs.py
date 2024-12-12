@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QAction, QToolBar, QToolButton, QMenu,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QAbstractScrollArea,
-    QSplitter, QMessageBox, QLabel
+    QSplitter, QLabel
     )
 import matplotlib
 import matplotlib.figure
@@ -30,7 +30,6 @@ from imageQC.config.iQCconstants import ENV_ICON_PATH, COLORS
 from imageQC.scripts import mini_methods_format as mmf
 from imageQC.scripts.mini_methods_calculate import (
     find_median_spectrum, get_avg_NPS_curve)
-from imageQC.config.config_func import load_cdmam
 # imageQC block end
 
 
@@ -841,6 +840,28 @@ class ResultPlotCanvas(PlotCanvas):
             self.ytitle = self.main.results['DCM']['headers'][param_no]
             self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
             self.ax.set_xticks(xvals)
+
+    def Foc(self):
+        self.title = 'Variance map radial profiles processed and inverted'
+        self.xtitle = 'distance to center (mm)'
+        self.ytitle = '50.percentile - variance < 50.percentile'
+        imgno = self.main.gui.active_img_no
+        details_dict = self.main.results['Foc']['details_dict'][imgno]
+        styles = ['-r', '-b']
+        labels = ['x', 'y']
+        profs = details_dict['profiles']
+        xprofs = details_dict['profiles_dists']
+        for i in [0, 1]:
+            self.curves.append(
+                {'label': labels[i], 'xvals': xprofs[i],
+                 'yvals': profs[i], 'style': styles[i]})
+            self.curves.append({
+                'label': '_nolegend_',
+                'xvals': [
+                    details_dict['blur_diameter_xy'][i] / 2,
+                    details_dict['blur_diameter_xy'][i] / 2],
+                'yvals': [0, np.max(profs[i])],
+                'style': '-'+styles[i]})
 
     def Hom(self):
         """Prepare plot for test Hom."""

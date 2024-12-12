@@ -1067,6 +1067,8 @@ class LimitsAndPlotContent(QWidget):
                 self.type_tolerance.setCurrentIndex(0)
                 self.type_tolerance.blockSignals(False)
                 self.percent_tolerance.setVisible(False)
+                self.min_tolerance.checkbox.setEnabled(True)
+                self.max_tolerance.checkbox.setEnabled(True)
                 self.min_tolerance.set_data(
                     limits[0], max_value=max_val,
                     decimals=decimals, ref_value=sample_val)

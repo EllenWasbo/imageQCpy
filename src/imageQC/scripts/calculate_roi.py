@@ -52,6 +52,7 @@ def get_rois(image, image_number, input_main):
     paramset = input_main.current_paramset
     image_info = input_main.imgs[image_number]
     img_shape = np.shape(image)
+
     try:
         delta_xya = [
             input_main.gui.delta_x,
@@ -228,11 +229,11 @@ def get_rois(image, image_number, input_main):
                     else:
                         if 'MainWindow' in str(type(input_main)):
                             if input_main.summed_img is None:  # avoid each time active slice changes
-                                input_main.summed_img, _ = dcm.sum_marked_images(
-                                    input_main.imgs,
-                                    input_main.tree_file_list.get_marked_imgs_current_test(),
-                                    tag_infos=input_main.tag_infos
-                                    )
+                                input_main.summed_img, _ = input_main.sum_marked_images()
+                                    #input_main.imgs,
+                                    #input_main.tree_file_list.get_marked_imgs_current_test(),
+                                    #tag_infos=input_main.tag_infos
+                                    #)
                             summed_img = input_main.summed_img
                         else:
                             summed_img = image
@@ -454,9 +455,9 @@ def get_rois(image, image_number, input_main):
             marked_idxs = input_main.tree_file_list.get_marked_imgs_current_test()
             if len(marked_idxs) > 4:
                 if input_main.summed_img is None:  # only if new active slice
-                    input_main.summed_img, errmsg = dcm.sum_marked_images(
-                        input_main.imgs, marked_idxs,
-                        tag_infos=input_main.tag_infos)
+                    input_main.summed_img, errmsg = input_main.sum_marked_images()
+                        #input_main.imgs, marked_idxs,
+                        #tag_infos=input_main.tag_infos)
                 summed_img = input_main.summed_img
             else:
                 roi_array = None

@@ -999,6 +999,8 @@ class ResultImageCanvas(GenericImageCanvas):
         self.cmap = 'gray'
         self.min_val = None
         self.max_val = None
+        self.min_val_default = None
+        self.max_val_default = None
         self.title = ''
         self.positive_negative = False  # display positive as red, negative as blue
         self.set_min_max = False  # Force window level to be min-max at first display
@@ -1060,8 +1062,13 @@ class ResultImageCanvas(GenericImageCanvas):
                     rmax = round(maximg * 10 ** self.parent.wid_window_level.decimals)
                     self.parent.wid_window_level.min_wl.setRange(rmin, rmax)
                     self.parent.wid_window_level.max_wl.setRange(rmin, rmax)
+                    if self.min_val_default is None:
+                        self.min_val_default = self.min_val
+                    if self.max_val_default is None:
+                        self.max_val_default = self.max_val
                     self.parent.wid_window_level.update_window_level(
-                        self.min_val, self.max_val, cmap=self.cmap)
+                        self.min_val_default, self.max_val_default,
+                        cmap=self.cmap)
                     self.parent.wid_window_level.canvas.plot(
                         self.current_image,
                         decimals=self.parent.wid_window_level.decimals)
@@ -1293,6 +1300,7 @@ class ResultImageCanvas(GenericImageCanvas):
             except (IndexError, KeyError):
                 details_dict = None
             if details_dict:
+                aapm = False
                 if self.main.current_modality == 'Mammo':
                     sel_txt = self.main.tab_mammo.hom_result_image.currentText()
                 else:
@@ -1300,6 +1308,7 @@ class ResultImageCanvas(GenericImageCanvas):
                         sel_txt = self.main.tab_xray.hom_result_image.currentText()
                     else:
                         sel_txt = self.main.tab_xray.hom_result_image_aapm.currentText()
+                        aapm = True
                 self.title = sel_txt
 
                 try:  # flatfield mammo and aapm variants
@@ -1323,6 +1332,9 @@ class ResultImageCanvas(GenericImageCanvas):
                             diff_avgs = details_dict['averages'] - overall_avg
                             self.current_image = 100 / overall_avg * diff_avgs
                         self.positive_negative = True
+                        if aapm:
+                            self.min_val_default = -5
+                            self.max_val_default = 5
                     elif sel_txt == 'Noise pr ROI (% difference from average noise)':
                         overall_avg = np.mean(details_dict['stds'])
                         diff_avgs = details_dict['stds'] - overall_avg
@@ -1340,6 +1352,9 @@ class ResultImageCanvas(GenericImageCanvas):
                         self.positive_negative = True
                     elif sel_txt == 'Local Uniformity map':
                         self.current_image = details_dict['local_uniformities']
+                        if aapm:
+                            self.min_val_default = -0.1
+                            self.max_val_default = 0.1
                     elif sel_txt == 'Local Noise Uniformity map':
                         self.current_image = details_dict['local_noise_uniformities']
                     elif sel_txt == 'Local SNR Uniformity map':

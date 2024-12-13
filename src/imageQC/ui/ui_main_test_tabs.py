@@ -1809,12 +1809,12 @@ class ParamsTabXray(ParamsTabCommon):
 
         self.hom_roi_size = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
-        self.hom_roi_size.valueChanged.connect(
+        self.hom_roi_size.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_size'))
         self.hom_roi_size_label = QLabel('ROI radius (mm)')
         self.hom_mask_outer_mm = QDoubleSpinBox(
             decimals=1, minimum=0., maximum=1000, singleStep=0.1)
-        self.hom_mask_outer_mm.valueChanged.connect(
+        self.hom_mask_outer_mm.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='hom_mask_outer_mm'))
         self.hom_mask_outer_mm.setEnabled(False)
 

@@ -9,6 +9,8 @@ Methods that can be reused in sub - automation processes e.g. task_based_image_q
 
 # imageQC block start
 from imageQC.scripts.calculate_roi import get_rois
+from imageQC.scripts import dcm
+from imageQC.scripts.artifact import apply_artifacts
 # imageQC block end
 
 
@@ -112,3 +114,35 @@ def refresh_img_display(main):
         main.update_roi()
     else:
         main.wid_image_display.canvas.img_is_missing()
+
+
+def sum_marked_images(main):
+    """Sum marked images and apply artifacts if any."""
+    errmsg = None
+    if len(main.artifacts) == 0 and len(main.artifacts_3d) == 0:
+        summed_img, errmsg = dcm.sum_marked_images(
+            main.imgs, main.tree_file_list.get_marked_imgs_current_test(),
+            tag_infos=main.tag_infos)
+    else:
+        marked = main.get_marked_imgs_current_test()
+        summed_img = None
+        for img_no, img_info in enumerate(main.imgs):
+            if img_no in marked:
+                arr, _ = dcm.get_img(
+                    img_info.filepath,
+                    frame_number=img_info.frame_number,
+                    tag_infos=main.tag_infos, overlay=main.gui.show_overlay)
+                if len(img_info.artifacts) > 0:
+                    arr = apply_artifacts(
+                        arr, img_info,
+                        main.artifacts, main.artifacts_3d, img_no)
+                if summed_img is None:
+                    summed_img = arr
+                else:
+                    try:
+                        summed_img = summed_img + arr
+                    except ValueError:
+                        errmsg = 'Failed summing images. Different dimensions?'
+                        break
+    return summed_img, errmsg
+

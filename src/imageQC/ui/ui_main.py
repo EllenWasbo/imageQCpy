@@ -426,6 +426,9 @@ class MainWindow(QMainWindow):
             self.refresh_selected_table_row()
             self.tree_file_list.blockSignals(False)
 
+    def sum_marked_images(self):
+        return ui_main_methods.sum_marked_images(self)
+
     def update_summed_img(self, recalculate_sum=True):
         """Overwrite pixmap in memory with new summed image, refresh GUI."""
         if len(self.imgs) > 0:
@@ -433,9 +436,9 @@ class MainWindow(QMainWindow):
                 self.start_wait_cursor()
                 self.status_bar.showMessage('Calculating sum of marked images...')
 
-                self.summed_img, errmsg = dcm.sum_marked_images(
-                    self.imgs, self.get_marked_imgs_current_test(),
-                    tag_infos=self.tag_infos)
+                self.summed_img, errmsg = self.sum_marked_images()
+                #self.imgs, self.get_marked_imgs_current_test(),
+                #tag_infos=self.tag_infos)
                 self.stop_wait_cursor()
                 self.status_bar.showMessage('Finished summing marked images', 2000)
             if self.summed_img is not None:

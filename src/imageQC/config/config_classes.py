@@ -462,7 +462,7 @@ class ParamSetXray(ParamSetCommon):
     var_mask_outer_mm: float = 10.0
     foc_pattern_size: float = 45.  # star pattern size in mm
     foc_angle: float = 1.5  # star pattern line angle in degrees
-    foc_search_margin: float = 20.  # mm margin offsenter for pattern
+    foc_search_margin: float = 10.  # mm margin offsenter for pattern
     foc_search_angle: float = 15.  # angle segment to average radial profile
     def_mask_outer_mm: float = 10.
     def_fraction: float = 0.1

@@ -1923,8 +1923,8 @@ class ParamsTabXray(ParamsTabCommon):
         """GUI for tab Focal spot size."""
         self.tab_foc = ParamsWidget(self, run_txt='Calculate focal spot size')
 
-        self.tab_foc.hlo_top.addWidget(uir.UnderConstruction(
-            txt='Under construction and validation...'))
+        self.tab_foc.vlo_top.addWidget(uir.LabelItalic(
+            'Find focal spot size from star test pattern object.'))
 
         self.foc_pattern_size = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=100., singleStep=0.1)

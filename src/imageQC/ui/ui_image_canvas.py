@@ -548,7 +548,7 @@ class ImageCanvas(GenericImageCanvas):
         """Draw search ROI for rods and resulting centerpositions if any."""
         self.add_contours_to_all_rois(roi_indexes=[0, 1, 2, 3])
         if 'Dim' in self.main.results:
-            if 'details_dict' in self.main.results['Dim']:
+            try:
                 details_dict = self.main.results['Dim'][
                     'details_dict'][self.main.gui.active_img_no]
                 if 'centers_x' in details_dict:
@@ -560,11 +560,13 @@ class ImageCanvas(GenericImageCanvas):
                             color='r', linewidth=self.linewidth,
                             linestyle='dotted',
                             ))
+            except (KeyError, TypeError):
+                pass
 
     def Foc(self):
         missing_result = True
         if 'Foc' in self.main.results:
-            if 'details_dict' in self.main.results['Foc']:
+            try:
                 details_dict = self.main.results['Foc'][
                     'details_dict'][self.main.gui.active_img_no]
                 pix = self.main.imgs[self.main.gui.active_img_no].pix[0]
@@ -580,6 +582,8 @@ class ImageCanvas(GenericImageCanvas):
                         colors='blue', alpha=0.5,
                         linewidths=self.linewidth, linestyles='--')
                     self.contours.append(contour)
+            except (KeyError, TypeError):
+                pass
 
         if missing_result:
             self.add_contours_to_all_rois()

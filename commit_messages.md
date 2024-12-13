@@ -4,7 +4,7 @@ _xxx xx, 2024_
 New functionalities:
 - Xray:
 	- Added option to test Homogeneity according to AAPM TG150 (Flat field test). Find option in the Homogeneity test tab under Methods.
-	- Added option to read focal spot size from star pattern. Test is not fully validated yet.
+	- Added option to read focal spot size from star test pattern.
 - Mammo
 	- Improved functionalities for GE Mammo QAP tests:
 		- Added button to import Mammo QAP files from Automation dialog. Export from modality include all files. The new import function ignore files already analysed.

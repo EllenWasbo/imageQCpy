@@ -7,13 +7,12 @@ Calculation processes for the different tests.
 """
 import numpy as np
 from scipy import ndimage
-from scipy.signal import (find_peaks, fftconvolve)
+from scipy.signal import find_peaks
 from skimage import feature
 
 # imageQC block start
 import imageQC.scripts.mini_methods_calculate as mmcalc
 from imageQC.scripts.cdmam_methods import find_cdmam
-import imageQC.scripts.dcm as dcm
 # imageQC block end
 
 
@@ -106,13 +105,21 @@ def get_rois(image, image_number, input_main):
         return (roi_this, errmsg)
 
     def Foc():  # Focal spot size search area (pattern size + 10%)
+        # first find center of image part with signal
+        off_x, off_y = 0, 0
+        res = mmcalc.find_center_object(image)
+        if res is not None:
+            center_x, center_y, _, _ = res
+            off_x = center_x - image.shape[1] // 2
+            off_y = center_y - image.shape[0] // 2
+    
         tot_w_mm = 5.1 *  paramset.foc_pattern_size  # assumed max 5x magnification
         w_tot = tot_w_mm / image_info.pix[0]
         roi_outer = get_roi_rectangle(
-            img_shape, roi_width=w_tot, roi_height=w_tot, offcenter_xy=(0, 0))
+            img_shape, roi_width=w_tot, roi_height=w_tot, offcenter_xy=(off_x, off_y))
         w = 2 * paramset.foc_search_margin / image_info.pix[0]
         roi_inner = get_roi_rectangle(
-            img_shape, roi_width=w, roi_height=w, offcenter_xy=(0, 0))
+            img_shape, roi_width=w, roi_height=w, offcenter_xy=(off_x, off_y))
         roi_this = [roi_outer, roi_inner]
         
         rot_a = paramset.foc_search_angle / 2
@@ -124,9 +131,14 @@ def get_rois(image, image_number, input_main):
         overlap = roi_half_rot + np.fliplr(roi_half_rot)
         segment = np.zeros(roi_half_rot.shape, dtype=bool)
         segment[overlap == 2] = True
-        segments_x = np.rot90(segment, k=1)
+        segments_x = ndimage.rotate(segment.astype(float), 90, reshape=False)
+        segments_x = np.round(segments_x).astype(bool)
         segments_x = segments_x + np.fliplr(segments_x)
         segments_y = segment + np.flipud(segment)
+        segments_x = np.roll(segments_x, round(off_x), axis=1)
+        segments_x = np.roll(segments_x, round(off_y), axis=0)
+        segments_y = np.roll(segments_y, round(off_x), axis=1)
+        segments_y = np.roll(segments_y, round(off_y), axis=0)
         roi_this.extend([segments_x, segments_y])
 
         return roi_this

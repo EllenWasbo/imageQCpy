@@ -3779,7 +3779,12 @@ def calculate_focal_spot_size(image, roi_array, image_info, paramset):
         center_x, center_y, width_x, width_y = res
         off_x = center_x - sub_inner.shape[1] // 2
         off_y = center_y - sub_inner.shape[0] // 2
-        details_dict['off_xy'] = [off_x, off_y]
+        
+        cx_img, cy_img, _, _ = mmcalc.find_center_object(1.*roi_array[1])
+        offx_img = cx_img - image.shape[1] // 2
+        offy_img = cy_img - image.shape[0] // 2
+        
+        details_dict['off_xy'] = [off_x + offx_img, off_y + offy_img]
 
     if proceed:
         # shift rois by off_center
@@ -3810,7 +3815,7 @@ def calculate_focal_spot_size(image, roi_array, image_info, paramset):
             lower = np.where(diff < 0.1*np.min(diff))  # first value lower than 10% of min
             before_lower = vals_x_sm[0:lower[0][0]]
             positives = np.where(before_lower > 0)
-            first_drop_idx = positives[0][-1]  # last positive
+            first_drop_idx = positives[0][-1] + 1  # last positive
             radi_pattern_img_mm = dists_x[first_drop_idx]
             magnification = radi_pattern_img_mm / radi_pattern_mm
             details_dict['star_diameter_mm'] = radi_pattern_img_mm * 2

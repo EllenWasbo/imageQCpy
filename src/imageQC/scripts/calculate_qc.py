@@ -2255,6 +2255,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     corners = np.array(
                         cdmam_table_dict['corner_index'])
 
+                    # correctly found corner?
                     for row in range(sz_y):
                         for col in range(sz_x):
                             if phantom == 34:
@@ -2270,16 +2271,22 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         'found_correct_corner': found_correct_corner,
                         'include_array': include_array,
                         'found_centers': found_centers,
+                        'corrected_neighbours': None,
                         'res_table': res_table,
                         'kernels': kernels
                         }
+
+                    found_this = found_correct_corner * found_centers
+                    if paramset.cdm_correct_neighbours:
+                        found_this = cdmam_methods.correct_neighbours(
+                            found_this, include_array=include_array)
+                        details_dict['corrected_neighbours'] = found_this
                     details_dicts.append(details_dict)
 
-                    found_this = 1. * found_correct_corner * found_centers
                     if detection_matrix is None:
-                        detection_matrix = found_this
+                        detection_matrix = 1.*found_this
                     else:
-                        detection_matrix = detection_matrix + found_this
+                        detection_matrix = detection_matrix + 1.*found_this
                 try:
                     if input_main.progress_modal.wasCanceled():
                         cancelled = True
@@ -3891,7 +3898,7 @@ def calculate_focal_spot_size(image, roi_array, image_info, paramset):
                   details_dict['focal_size_xy'][1]
                   ]
     except KeyError:
-        pass
+        values = [None] * 6
 
     return details_dict, values, errmsgs
 

@@ -696,6 +696,64 @@ def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):
             'processed_sub': avgs_sub}
 
 
+def correct_neighbours(founds, include_array=None):
+    """Correct found according to nearest neighbours.
+
+    If True and < 2 of 4 neighbours are True, corrected to False
+    If False and > 2 of 4 neighbours are True, corrected to True
+    If True and 0 of 2 neighbours are True, corrected to False
+    If False and 2 of 2 neighbours are True, corrected to True
+
+    Parameters
+    ----------
+    founds : np.2darray
+        dtype bool. True if found
+    include_array : np.2darray or None
+        dtype bool. True if included
+
+    Returns
+    -------
+    corrected : np.2darray
+    """
+    corrected = np.copy(founds)
+    if include_array is None:
+        include_array_ints = np.ones(founds.shape)
+    else:
+        include_array_ints = 1 * np.copy(include_array)
+    founds_padded = np.pad(founds + include_array_ints, (1, 1), 'constant')
+    neighbours = np.zeros(
+        (4, founds_padded.shape[0], founds_padded.shape[1]), dtype=int)
+    neighbours[0] = np.roll(founds_padded, 1, axis=0)
+    neighbours[1] = np.roll(founds_padded, -1, axis=0)
+    neighbours[2] = np.roll(founds_padded, 1, axis=1)
+    neighbours[3] = np.roll(founds_padded, -1, axis=1)
+    neighbours = neighbours[:,1:-1, 1:-1]
+    n_neighbours = np.sum(neighbours.astype(bool), axis=0)
+    true_neighbours = neighbours - 1
+    true_neighbours[true_neighbours < 0] = 0
+    true_neighbours = true_neighbours.astype(bool)
+    n_trues = np.sum(true_neighbours, axis=0)
+
+    if include_array is not None:
+        n_neighbours[include_array == False] = 0
+        n_trues[include_array == False] = 0
+
+    corrected[np.logical_and(
+        np.logical_and(founds == True, n_trues < 2),
+        n_neighbours > 2)] = False
+    corrected[np.logical_and(
+        np.logical_and(founds == False, n_trues > 2),
+        n_neighbours > 2)] = True
+    corrected[np.logical_and(
+        np.logical_and(founds == True, n_trues == 0),
+        n_neighbours == 2)] = False
+    corrected[np.logical_and(
+        np.logical_and(founds == False, n_trues == 2),
+        n_neighbours == 2)] = True
+
+    return corrected
+
+
 def psychometric_curve(t, f, ct):
     """Calculate psychometric curve from t values and parameters."""
     mu = 0.19 # um-1 Young et al 2008 (Proc of SPIE, Vol 6913, 69131C-1)

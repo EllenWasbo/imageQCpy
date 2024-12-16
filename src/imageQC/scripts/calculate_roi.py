@@ -107,7 +107,8 @@ def get_rois(image, image_number, input_main):
     def Foc():  # Focal spot size search area (pattern size + 10%)
         # first find center of image part with signal
         off_x, off_y = 0, 0
-        res = mmcalc.find_center_object(image)
+        res = mmcalc.find_center_object(
+            image, mask_outer=20./image_info.pix[0])
         if res is not None:
             center_x, center_y, _, _ = res
             off_x = center_x - image.shape[1] // 2

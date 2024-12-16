@@ -2321,6 +2321,10 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_rotate_k.currentIndexChanged.connect(
             lambda: self.param_changed_from_gui(attribute='cdm_rotate_k'))
         self.cdm_rotate_k.addItems(['0', '90', '180', '270'])
+        self.cdm_correct_neighbours = QCheckBox()
+        self.cdm_correct_neighbours.toggled.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='cdm_correct_neighbours'))
 
         self.cdm_result_image = QComboBox()
         self.cdm_result_plot = QComboBox()
@@ -2350,6 +2354,8 @@ class ParamsTabMammo(ParamsTabCommon):
         flo1.addRow(QLabel('Gaussian smooth detection matrix, sigma (cells)'),
                     self.cdm_sigma)
         flo1.addRow(QLabel('Image is rotated'), self.cdm_rotate_k)
+        flo1.addRow(QLabel('Correct founds according to nearest neighbours'),
+                    self.cdm_correct_neighbours)
 
         vlo_left.addWidget(uir.UnderConstruction(
             txt='Under construction and validation...'))
@@ -2382,6 +2388,7 @@ class ParamsTabMammo(ParamsTabCommon):
 
         self.cdm_result_plot.addItems(
             ['Found disc at center and in correct corner',
+             'Found discs corrected for nearest neighbours',
              'Detection matrix',
              'Detection matrix corrected/smoothed',
              'Fitted psychometric curves',

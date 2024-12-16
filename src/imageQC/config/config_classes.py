@@ -521,6 +521,7 @@ class ParamSetMammo(ParamSetCommon):
     cdm_roi_estimate: bool = False  # override roi position with estimate
     cdm_sigma: float = 0.75  # smooth detection matrix by gaussian, set sigma (unit cells)
     cdm_rotate_k: int = 0  # rotate image by nx90degrees
+    cdm_correct_neighbours: bool = True  # correct for results in neighbours
 
 
 @dataclass

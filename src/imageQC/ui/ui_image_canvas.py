@@ -493,6 +493,7 @@ class ImageCanvas(GenericImageCanvas):
 
     def CDM(self):
         """Draw found lines."""
+        self.remove_annotations()
         if self.main.current_roi is not None:
 
             include_array = None

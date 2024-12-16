@@ -570,6 +570,40 @@ class ResultPlotCanvas(PlotCanvas):
                  'array': np.flipud(details_dict['found_centers']),
                  'size': 30, 'marker': 'o', 'color': 'lightgreen'})
 
+        def prepare_found_corrected_plot():
+            self.title = ('Found discs in corner/center, corrected for '
+                          'nearest neighbours (blue background)')
+            self.xtitle = 'Diameter (mm)'
+            self.ytitle = r'Thickness ($\mu$m)'
+
+            if 'include_array' in details_dict:
+                if details_dict['include_array'] is not None:
+                    self.scatters.append(
+                        {'label': 'included',
+                         'xlabels': xlabels, 'ylabels': ylabels,
+                         'array': np.flipud(details_dict['include_array']),
+                         'size': 30, 'marker': 'x', 'color': 'silver'})
+
+            if details_dict['corrected_neighbours'] is not None:
+                uncorrected = (
+                    details_dict['found_centers']
+                    * details_dict['found_correct_corner'])
+                any_corr = (
+                    uncorrected.astype(int)
+                    - details_dict['corrected_neighbours'].astype(int))
+                any_corr = any_corr.astype(bool)
+
+            self.scatters.append(
+                {'label': 'found center',
+                 'xlabels': xlabels, 'ylabels': ylabels,
+                 'array': np.flipud(any_corr),
+                 'size': 100, 'marker': 's', 'color': 'lightblue'})
+            self.scatters.append(
+                {'label': 'found',
+                 'xlabels': xlabels, 'ylabels': ylabels,
+                 'array': np.flipud(details_dict['corrected_neighbours']),
+                 'size': 30, 'marker': 'o', 'color': 'green'})
+
         def prepare_detection_matrix_plot(sel_text):
             self.title = 'Detection ratio based on all images'
             suff = '_corrected' if 'corrected' in sel_text else ''
@@ -702,6 +736,8 @@ class ResultPlotCanvas(PlotCanvas):
             sel_text = ''
         if sel_text == 'Found disc at center and in correct corner':
             prepare_found_corner_center_plot()
+        elif sel_text == 'Found discs corrected for nearest neighbours':
+            prepare_found_corrected_plot()
         elif 'Detection matrix' in sel_text:
             prepare_detection_matrix_plot(sel_text)
         elif sel_text == 'Fitted psychometric curves':

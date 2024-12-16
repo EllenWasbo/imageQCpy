@@ -889,40 +889,44 @@ def get_curve_values(x, y, y_values, force_first_below=False,
     y = np.array(y)
     x = np.array(x)
     for yval in y_values:
-        idx_above = np.where(y >= yval)
-        idx_below = np.where(y < yval)
-        try:
-            idxs = [
-                idx_below[0][0], idx_below[0][-1], idx_above[0][0], idx_above[0][-1]]
-            idxs.sort()
-            first = idxs[1]
-            last = idxs[2]
-            if first + 1 == last:
-                result_values.append(
-                    get_interpolated_x(yval, x[first], x[last], y[first], y[last]))
-            else:
-                if force_first_below:
-                    result_values.append(x[idx_below[0][0]])
+        if yval in y:
+            idxs = np.where(y == yval)
+            result_values.append(x[idxs[0][0]])
+        else:
+            idx_above = np.where(y >= yval)
+            idx_below = np.where(y < yval)
+            try:
+                idxs = [
+                    idx_below[0][0], idx_below[0][-1], idx_above[0][0], idx_above[0][-1]]
+                idxs.sort()
+                first = idxs[1]
+                last = idxs[2]
+                if first + 1 == last:
+                    result_values.append(
+                        get_interpolated_x(yval, x[first], x[last], y[first], y[last]))
                 else:
-                    result_values.append(None)
-        except IndexError:
-            if idx_above[0].size == 1:  # equal
-                result_values.append(x[idx_above[0]])
-            else:
-                # none above or none below
-                if extrapolate:
-                    # yval closes to first or last - extrapolate from nearest
-                    diff = np.array([y[0], y[-1]]) - yval
-                    if diff[0] < diff[1]:
-                        idx1, idx2 = 0, 1
+                    if force_first_below:
+                        result_values.append(x[idx_below[0][0]])
                     else:
-                        idx1, idx2 = -2, -1
-                    a = (y[idx2] - y[idx1]) / (x[idx2] - x[idx1])
-                    b = y[idx1] - a * x[idx1]
-                    xval = (yval - b) / a
-                    result_values.append(xval)
+                        result_values.append(None)
+            except IndexError:
+                if idx_above[0].size == 1:  # equal
+                    result_values.append(x[idx_above[0]])
                 else:
-                    result_values.append(None)
+                    # none above or none below
+                    if extrapolate:
+                        # yval closes to first or last - extrapolate from nearest
+                        diff = np.array([y[0], y[-1]]) - yval
+                        if diff[0] < diff[1]:
+                            idx1, idx2 = 0, 1
+                        else:
+                            idx1, idx2 = -2, -1
+                        a = (y[idx2] - y[idx1]) / (x[idx2] - x[idx1])
+                        b = y[idx1] - a * x[idx1]
+                        xval = (yval - b) / a
+                        result_values.append(xval)
+                    else:
+                        result_values.append(None)
     return result_values
 
 

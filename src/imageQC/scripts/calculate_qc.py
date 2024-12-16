@@ -953,25 +953,28 @@ def calculate_qc(input_main, wid_auto=None,
                 except KeyError:
                     pass
             elif 'CDM' in input_main.results:
-                input_main.tab_mammo.cdm_cbox_diameter.clear()
-                input_main.tab_mammo.cdm_cbox_diameter.addItems(
-                    [str(x) for x in
-                     input_main.results['CDM']['details_dict'][-1]['diameters']])
-                input_main.tab_mammo.cdm_cbox_thickness.clear()
-                thickness = input_main.results[
-                    'CDM']['details_dict'][-1]['thickness']
-                phantom = 40 if isinstance(thickness[0], list) else 34
-                if phantom == 40:
-                    items = [str(idx) for idx in range(16)]
-                    items[0] = items[0] + ' (thickest)'
-                    items[-1] = items[-1] + ' (thinnest)'
-                    row, col = 0, 0
-                else:
-                    items = [str(x) for x in thickness]
-                    row, col = 0, 6
-                input_main.tab_mammo.cdm_cbox_thickness.addItems(items)
-                input_main.tab_mammo.cdm_cbox_diameter.setCurrentIndex(col)
-                input_main.tab_mammo.cdm_cbox_thickness.setCurrentIndex(row)
+                try:
+                    input_main.tab_mammo.cdm_cbox_diameter.clear()
+                    input_main.tab_mammo.cdm_cbox_diameter.addItems(
+                        [str(x) for x in
+                         input_main.results['CDM']['details_dict'][-1]['diameters']])
+                    input_main.tab_mammo.cdm_cbox_thickness.clear()
+                    thickness = input_main.results[
+                        'CDM']['details_dict'][-1]['thickness']
+                    phantom = 40 if isinstance(thickness[0], list) else 34
+                    if phantom == 40:
+                        items = [str(idx) for idx in range(16)]
+                        items[0] = items[0] + ' (thickest)'
+                        items[-1] = items[-1] + ' (thinnest)'
+                        row, col = 0, 0
+                    else:
+                        items = [str(x) for x in thickness]
+                        row, col = 0, 6
+                    input_main.tab_mammo.cdm_cbox_thickness.addItems(items)
+                    input_main.tab_mammo.cdm_cbox_diameter.setCurrentIndex(col)
+                    input_main.tab_mammo.cdm_cbox_thickness.setCurrentIndex(row)
+                except:  # if cancelled
+                    input_main.results['CDM'] = None
             try:
                 input_main.progress_modal.setValue(input_main.progress_modal.maximum())
             except AttributeError:

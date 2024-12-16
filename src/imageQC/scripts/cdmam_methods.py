@@ -789,8 +789,8 @@ def third_order_polynomial(x, a, b, c, d):
 def third_order_polynomial_fit(x, p):
     try:
         popt, _ = curve_fit(
-            third_order_polynomial, x, p, p0=[1., 1., 1., 1.],
-            bounds=([0, 0, 0, 0], [100, 100, 100, 100])
+            third_order_polynomial, x, p, p0=[0.5]*4,
+            bounds=([0]*4, [1.]*4), sigma=p
             )
     except (ValueError, RuntimeError):
         popt = None
@@ -906,10 +906,17 @@ def calculate_fitted_psychometric(cdmam_table_dict, sigma):
 
         return xvals, yvals, popt, yfit, threshold_thickness[0], thickness_predict[0]
 
-    _, _, popt, _, _, _ = fit(8)
+    # estimate f from 3 curves
+    f_set = None
+    f_sets = []
+    for i in [6, 8, 10]:
+        _, _, popt, _, _, _ = fit(i)
+        if popt is not None:
+            f_sets.appen(popt[0])
+    if len(f_sets) > 0:
+        f_set = np.mean(f_sets)
 
-    if popt is not None:
-        f_set, _ = popt
+    if f_set is not None:
         for d in range(len(diameters)):
             xvals, yvals, _, yfit, thick_found, thick_predict = fit(
                 d, f_set=f_set)

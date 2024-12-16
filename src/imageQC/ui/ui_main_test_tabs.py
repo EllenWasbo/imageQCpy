@@ -2299,13 +2299,7 @@ class ParamsTabMammo(ParamsTabCommon):
     def create_tab_cdm(self):
         """GUI for CDMAM analysis."""
         self.tab_cdm = ParamsWidget(self, run_txt='Analyse CDMAM')
-        info_txt = '''
-        <ul>
-        <li>Phantom v3.4 or v4.0 is detected based on grid direction in central 
-        part of phantom.</li>
-        <li>.... test is under construction and validation.</li>
-        </ul>
-        '''
+        info_txt = 'See Wiki/manual for details.'
         self.tab_cdm.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
         self.cdm_tolerance_angle = QDoubleSpinBox(
             decimals=0, minimum=1,  maximum=20, singleStep=1)
@@ -2349,7 +2343,7 @@ class ParamsTabMammo(ParamsTabCommon):
         self.tab_cdm.hlo.addLayout(vlo_left)
         self.tab_cdm.hlo.addWidget(uir.VLine())
         flo1 = QFormLayout()
-        flo1.addRow(QLabel('Accept tolerance for phantom position (degrees)'),
+        flo1.addRow(QLabel('Accept tolerance for phantom rotation (degrees)'),
                     self.cdm_tolerance_angle)
         flo1.addRow(QLabel('Gaussian smooth detection matrix, sigma (cells)'),
                     self.cdm_sigma)

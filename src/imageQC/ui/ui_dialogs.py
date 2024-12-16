@@ -1414,7 +1414,7 @@ class ResetAutoTemplateDialog(ImageQCDialog):
                 'to regard these files as incoming.'))
         vlo.addSpacing(50)
         if self.import_Mammo:
-            vlo.addWidget(QLabel(f'List of date / filenames found:'))
+            vlo.addWidget(QLabel('List of date / filenames found:'))
         else:
             vlo.addWidget(QLabel(f'List of {files_or_folders} in Archive:'))
         vlo.addWidget(self.list_file_or_dirs)

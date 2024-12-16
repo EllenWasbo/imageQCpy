@@ -2301,6 +2301,8 @@ class ParamsTabMammo(ParamsTabCommon):
         self.tab_cdm = ParamsWidget(self, run_txt='Analyse CDMAM')
         info_txt = 'See Wiki/manual for details.'
         self.tab_cdm.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+        self.tab_cdm.hlo_top.addWidget(uir.UnderConstruction(
+            txt='Under validation...'))
         self.cdm_tolerance_angle = QDoubleSpinBox(
             decimals=0, minimum=1,  maximum=20, singleStep=1)
         self.cdm_tolerance_angle.editingFinished.connect(

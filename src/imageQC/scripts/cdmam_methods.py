@@ -912,7 +912,7 @@ def calculate_fitted_psychometric(cdmam_table_dict, sigma):
     for i in [6, 8, 10]:
         _, _, popt, _, _, _ = fit(i)
         if popt is not None:
-            f_sets.appen(popt[0])
+            f_sets.append(popt[0])
     if len(f_sets) > 0:
         f_set = np.mean(f_sets)
 

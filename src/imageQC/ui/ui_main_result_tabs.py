@@ -697,7 +697,7 @@ class ResultPlotCanvas(PlotCanvas):
                      'style': 'k'}
             self.curves.append(curve)
             self.default_range_x = [0.05, 2]
-            self.default_range_y = [0.05, 5]
+            self.default_range_y = [0.01, 5]
 
         def prepare_comparison_vs_inp_plot(sel_text):
             self.title = sel_text + '(imageQC found = green, inp found = orange)'
@@ -2226,7 +2226,6 @@ class ResultPlotCanvas(PlotCanvas):
             self.default_range_x = [0, nyquist_freq]
 
         def plot_filters():
-            suffix_2 = '_2' if show_filter_2 else ''
             xvals = details_dict['eye_filter_small']['r']
             yvals = details_dict['eye_filter_small']['V']
             if 'V2' in details_dict['eye_filter_small']:

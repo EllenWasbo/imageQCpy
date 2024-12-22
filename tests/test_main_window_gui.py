@@ -16,7 +16,7 @@ from imageQC.config.iQCconstants import (
 from imageQC.config.config_func import get_icon_path
 from imageQC.config import config_classes as cfc
 from imageQC.scripts.calculate_qc import calculate_qc
-
+from imageQC.ui.generate_report import GenerateReportDialog
 
 os.environ[ENV_USER_PREFS_PATH] = ''
 os.environ[ENV_CONFIG_FOLDER] = ''
@@ -96,6 +96,25 @@ def test_quicktest_CT_13imgs(qtbot):
         ['max_noise_group3', '4,080']]
 
     assert expected_res == res.values.tolist()
+
+def test_generate_report(qtbot):
+    file_path = path_tests / 'test_inputs' / 'CT' / 'CTP486'
+    files = [x for x in file_path.glob('**/*') if x.is_file()]
+    main = MainWindow()
+    qtbot.addWidget(main)
+    main.open_files(file_list=files)
+    main.tab_ct.setCurrentIndex(QUICKTEST_OPTIONS['CT'].index('Rin'))
+    main.tab_ct.run_current()
+    main.dlg = GenerateReportDialog(main)
+    main.dlg.current_template.elements.append(
+        cfc.ReportElement(variant='result_image', testcode='Rin', width=20,
+                          note='This is a note after', note_pos='after'))
+    main.dlg.current_template.elements.append(
+        cfc.ReportElement(variant='result_table', testcode='Rin', width=50,
+                          text='Result table',
+                          note='This is a note before'))
+    main.dlg.generate_report()
+    assert 1==1
 
 '''
 def test_open_multiframe(qtbot):

@@ -23,9 +23,12 @@ def update_roi(main, clear_results_test=False):
             main.status_bar.showMessage('Updating ROI...')
         except AttributeError:
             pass
-        main.current_roi, errmsg = get_rois(
-            main.active_img,
-            main.gui.active_img_no, main)
+        try:
+            main.current_roi, errmsg = get_rois(
+                main.active_img,
+                main.gui.active_img_no, main)
+        except IndexError:  # might happen after closing images
+            main.current_roi = None
         try:
             main.status_bar.clearMessage()
         except AttributeError:

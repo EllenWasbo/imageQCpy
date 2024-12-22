@@ -73,6 +73,7 @@
 		<file alias="refresh.png">icons\refresh.png</file>
 		<file alias="rename.png">icons\rename.png</file>
 		<file alias="rename_dicom.png">icons\rename_dicom.png</file>
+		<file alias="report.png">icons\report.png</file>
 		<file alias="reset.png">icons\reset.png</file>
 		<file alias="resetZero.png">icons\resetZero.png</file>
 		<file alias="save.png">icons\save.png</file>
@@ -158,6 +159,7 @@
 		<file alias="refresh.png">icons\darkmode\refresh.png</file>
 		<file alias="rename.png">icons\darkmode\rename.png</file>
 		<file alias="rename_dicom.png">icons\darkmode\rename_dicom.png</file>
+		<file alias="report.png">icons\darkmode\report.png</file>
 		<file alias="reset.png">icons\darkmode\reset.png</file>
 		<file alias="resetZero.png">icons\darkmode\resetZero.png</file>
 		<file alias="save.png">icons\darkmode\save.png</file>

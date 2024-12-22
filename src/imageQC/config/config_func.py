@@ -903,6 +903,24 @@ def load_settings(fname='', temp_config_folder=''):
                                         temp, cfc.LimitsAndPlotTemplate())
                                     settings[mod].append(
                                         cfc.LimitsAndPlotTemplate(**upd))
+                                elif fname == 'report_templates':
+                                    elements = []
+                                    for elem in temp['elements']:
+                                        if isinstance(elem, list):
+                                            elements.append([])
+                                            for sub_elem in elem:
+                                                upd = verify_input_dict(
+                                                    sub_elem, cfc.ReportElement())
+                                                elements[-1].append(cfc.ReportElement(**upd))
+                                        else:
+                                            upd = verify_input_dict(
+                                                elem, cfc.ReportElement())
+                                            elements.append(cfc.ReportElement(**upd))
+                                    upd = verify_input_dict(
+                                        temp, cfc.ReportTemplate())
+                                    temp = cfc.ReportTemplate(**upd)
+                                    temp.elements = elements
+                                    settings[mod].append(temp)
 
                                 if 'auto' in fname:
                                     try:

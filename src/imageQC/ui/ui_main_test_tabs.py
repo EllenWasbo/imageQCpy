@@ -21,7 +21,8 @@ from PyQt5.QtWidgets import (
 
 # imageQC block start
 from imageQC.config.iQCconstants import (
-    ENV_ICON_PATH, ALTERNATIVES, ALTERNATIVES_ROI, HALFLIFE, HEADERS, HEADERS_SUP)
+    ENV_ICON_PATH, ALTERNATIVES, ALTERNATIVES_ROI, HALFLIFE,
+    HEADERS, HEADERS_SUP)
 from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
 from imageQC.ui import reusable_widgets as uir
@@ -751,19 +752,17 @@ class ParamsTabCommon(QTabWidget):
 
         self.hom_result_image_aapm = QComboBox()
         self.hom_result_image_aapm.addItems(
-            [
-                'Average pr ROI map',
-                'Noise pr ROI map',
-                'SNR pr ROI map',
-                'Local Uniformity map',
-                'Local Noise Uniformity map',
-                'Local SNR Uniformity map',
-                'Average pr ROI (% difference from global average)',
-                'Noise pr ROI (% difference from average noise)',
-                'SNR pr ROI (% difference from average SNR)',
-                'Anomalous pixels',
-                '# anomalous pixels pr ROI'
-             ])
+            ['Average pr ROI map',
+             'Noise pr ROI map',
+             'SNR pr ROI map',
+             'Local Uniformity map',
+             'Local Noise Uniformity map',
+             'Local SNR Uniformity map',
+             'Average pr ROI (% difference from global average)',
+             'Noise pr ROI (% difference from average noise)',
+             'SNR pr ROI (% difference from average SNR)',
+             'Anomalous pixels',
+             '# anomalous pixels pr ROI'])
         self.hom_result_image_aapm.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
 
@@ -844,17 +843,15 @@ class ParamsTabCommon(QTabWidget):
         
         self.hom_result_image = QComboBox()
         self.hom_result_image.addItems(
-            [
-                'Average pr ROI map',
-                'SNR pr ROI map',
-                'Average variance pr ROI map',
-                'Average pr ROI (% difference from global average)',
-                'SNR pr ROI (% difference from global SNR)',
-                'Pixel values (% difference from global average)',
-                'Deviating ROIs',
-                'Deviating pixels',
-                '# deviating pixels pr ROI'
-             ])
+            ['Average pr ROI map',
+             'SNR pr ROI map',
+             'Average variance pr ROI map',
+             'Average pr ROI (% difference from global average)',
+             'SNR pr ROI (% difference from global SNR)',
+             'Pixel values (% difference from global average)',
+             'Deviating ROIs',
+             'Deviating pixels',
+             '# deviating pixels pr ROI'])
         self.hom_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
 
@@ -1074,12 +1071,12 @@ class ParamsTabCommon(QTabWidget):
             self.main.refresh_results_display)
         self.nps_plot_profile.addItems([
             'horizontal and vertical', 'horizontal', 'vertical', 'radial', 'all'])
-        self.nps_show_image = QComboBox()
-        self.nps_show_image.currentIndexChanged.connect(
+        self.nps_result_image = QComboBox()
+        self.nps_result_image.currentIndexChanged.connect(
             self.main.refresh_results_display)
-        self.nps_show_image.addItems(['2d NPS', 'large area - trend subtracted'])
+        self.nps_result_image.addItems(['2d NPS', 'large area - trend subtracted'])
         self.flo_nps_plot.addRow(QLabel('Show profile'), self.nps_plot_profile)
-        self.flo_nps_plot.addRow(QLabel('Result image'), self.nps_show_image)
+        self.flo_nps_plot.addRow(QLabel('Result image'), self.nps_result_image)
         self.tab_nps.hlo.addWidget(uir.VLine())
         self.tab_nps.hlo.addLayout(self.flo_nps_plot)
 
@@ -1943,10 +1940,10 @@ class ParamsTabXray(ParamsTabCommon):
         self.foc_search_angle.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='foc_search_angle'))
 
-        self.foc_result_plot = QComboBox()
-        self.foc_result_plot.currentIndexChanged.connect(
+        self.foc_plot = QComboBox()
+        self.foc_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
-        self.foc_result_plot.addItems(
+        self.foc_plot.addItems(
             ['Variance map profiles'])
         self.foc_result_image = QComboBox()
         self.foc_result_image.currentIndexChanged.connect(
@@ -1961,7 +1958,7 @@ class ParamsTabXray(ParamsTabCommon):
         flo1.addRow(QLabel('Angle segment for averaging (deg)'),
                     self.foc_search_angle)
         flo2 = QFormLayout()
-        flo2.addRow(QLabel('Result plot'), self.foc_result_plot)
+        flo2.addRow(QLabel('Result plot'), self.foc_plot)
         flo2.addRow(QLabel('Result image'), self.foc_result_image)
         self.tab_foc.hlo.addLayout(flo1)
         self.tab_foc.hlo.addWidget(uir.VLine())
@@ -2217,11 +2214,11 @@ class ParamsTabMammo(ParamsTabCommon):
                 if dataf.shape == shape:
                     diff = details_dict['detection_matrix'] - dataf
                     details_dict['diff_Fraction.xls'] = diff
-                    cbox = self.main.tab_mammo.cdm_result_plot
+                    cbox = self.main.tab_mammo.cdm_plot
                     options = [cbox.itemText(i) for i in range(cbox.count())]
                     opt = 'Detection matrix difference to Fraction.xls'
                     if opt not in options:
-                        self.cdm_result_plot.addItems([opt])
+                        self.cdm_plot.addItems([opt])
                     QMessageBox.information(
                         self, 'File read',
                         'Find comparison in Results Plot selecting the '
@@ -2284,11 +2281,11 @@ class ParamsTabMammo(ParamsTabCommon):
                             'found_correct_corner_inp': dataframes[0],
                             'found_centers_inp': dataframes[0]
                             })
-                        cbox = self.main.tab_mammo.cdm_result_plot
+                        cbox = self.main.tab_mammo.cdm_plot
                         opts = [cbox.itemText(i) for i in range(cbox.count())]
                         opt = 'Compare found corners to .inp from CDCOM'
                         if opt not in opts:
-                            self.cdm_result_plot.addItems([
+                            self.cdm_plot.addItems([
                                 opt,
                                 'Compare found centers to .inp from CDCOM'])
                         QMessageBox.information(
@@ -2323,10 +2320,10 @@ class ParamsTabMammo(ParamsTabCommon):
                 attribute='cdm_correct_neighbours'))
 
         self.cdm_result_image = QComboBox()
-        self.cdm_result_plot = QComboBox()
+        self.cdm_plot = QComboBox()
         self.cdm_cbox_diameter = QComboBox()
         self.cdm_cbox_thickness = QComboBox()
-        self.cdm_result_plot.currentIndexChanged.connect(
+        self.cdm_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
         self.cdm_result_image.currentIndexChanged.connect(
             self.main.wid_res_image.canvas.result_image_draw)
@@ -2362,7 +2359,7 @@ class ParamsTabMammo(ParamsTabCommon):
         flo2 = QFormLayout()
         vlo_right.addLayout(flo2)
 
-        flo2.addRow(QLabel('Result plot:'), self.cdm_result_plot)
+        flo2.addRow(QLabel('Result plot:'), self.cdm_plot)
         flo2.addRow(QLabel('Result image:'), self.cdm_result_image)
         vlo_right.addWidget(
             QLabel('Show processed sub-image in results image for:'))
@@ -2382,7 +2379,7 @@ class ParamsTabMammo(ParamsTabCommon):
         btn_compare_inp.clicked.connect(self.cdm_compare)
         vlo_right.addWidget(btn_compare_inp)
 
-        self.cdm_result_plot.addItems(
+        self.cdm_plot.addItems(
             ['Found disc at center and in correct corner',
              'Found discs corrected for nearest neighbours',
              'Detection matrix',

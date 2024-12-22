@@ -997,7 +997,7 @@ class ResultImageCanvas(GenericImageCanvas):
     def __init__(self, parent, main):
         super().__init__(parent, main)
 
-    def result_image_draw(self):
+    def result_image_draw(self, selected_text=''):
         """Refresh result image."""
         self.ax.clear()
         self.current_image = None
@@ -1015,7 +1015,9 @@ class ResultImageCanvas(GenericImageCanvas):
             if self.main.results[self.main.current_test] is not None:
                 class_method = getattr(self, self.main.current_test, None)
                 if class_method is not None:
-                    class_method()
+                    if not isinstance(selected_text, str):
+                        selected_text = ''
+                    class_method(selected_text)
 
         if self.current_image is not None:
             if self.min_val is None or self.max_val is None:
@@ -1171,7 +1173,7 @@ class ResultImageCanvas(GenericImageCanvas):
                     self.main.tab_mammo.blockSignals(False)
                     self.result_image_draw()
 
-    def CDM(self):
+    def CDM(self, sel_text):
         self.cmap = 'gray'
         try:
             details_dict = self.main.results['CDM']['details_dict'][
@@ -1233,14 +1235,15 @@ class ResultImageCanvas(GenericImageCanvas):
                     self.contours_to_add.append([greens, 'green', '--'])
                     self.contours_to_add.append([reds, 'red', '--'])
 
-    def Def(self):
+    def Def(self, sel_text):
         """Defective pixels."""
         try:
             details_dicts = self.main.results['Def']['details_dict']
         except KeyError:
             details_dicts = None
         if details_dicts:
-            sel_txt = self.main.tab_xray.def_result_image.currentText()
+            if sel_text == '':
+                sel_txt = self.main.tab_xray.def_result_image.currentText()
             self.title = sel_txt
 
             try:
@@ -1272,7 +1275,7 @@ class ResultImageCanvas(GenericImageCanvas):
             except KeyError:
                 pass
 
-    def Foc(self):
+    def Foc(self, sel_text):
         try:
             details_dict = self.main.results['Foc']['details_dict'][
                 self.main.gui.active_img_no]
@@ -1288,7 +1291,7 @@ class ResultImageCanvas(GenericImageCanvas):
         except (KeyError, IndexError):
             pass
 
-    def Hom(self):
+    def Hom(self, sel_txt):
         """Prepare images of Mammo-Homogeneity."""
         flatfield = False
         if self.main.current_modality == 'Mammo':
@@ -1307,12 +1310,15 @@ class ResultImageCanvas(GenericImageCanvas):
             if details_dict:
                 aapm = False
                 if self.main.current_modality == 'Mammo':
-                    sel_txt = self.main.tab_mammo.hom_result_image.currentText()
+                    if sel_txt == '':
+                        sel_txt = self.main.tab_mammo.hom_result_image.currentText()
                 else:
                     if self.main.current_paramset.hom_tab_alt == 3:
-                        sel_txt = self.main.tab_xray.hom_result_image.currentText()
+                        if sel_txt == '':
+                            sel_txt = self.main.tab_xray.hom_result_image.currentText()
                     else:
-                        sel_txt = self.main.tab_xray.hom_result_image_aapm.currentText()
+                        if sel_txt == '':
+                            sel_txt = self.main.tab_xray.hom_result_image_aapm.currentText()
                         aapm = True
                 self.title = sel_txt
 
@@ -1387,7 +1393,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 except KeyError:
                     pass
 
-    def NPS(self):
+    def NPS(self, sel_text):
         """Prepare result image for test NPS."""
         try:
             details_dict = self.main.results['NPS']['details_dict'][
@@ -1401,8 +1407,9 @@ class ResultImageCanvas(GenericImageCanvas):
             if 'NPS_array' in details_dict:
                 self.current_image = details_dict['NPS_array']
         elif self.main.current_modality in ['Xray', 'Mammo']:
-            test_widget = self.main.stack_test_tabs.currentWidget()
-            sel_text = test_widget.nps_show_image.currentText()
+            if sel_text == '':
+                test_widget = self.main.stack_test_tabs.currentWidget()
+                sel_text = test_widget.nps_result_image.currentText()
             if 'NPS' in sel_text:
                 self.title = '2d Noise Power Spectrum - average of all ROIs'
                 if 'NPS_array' in details_dict:
@@ -1412,7 +1419,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 if 'trend_corrected_sub_matrix' in details_dict:
                     self.current_image = details_dict['trend_corrected_sub_matrix']
 
-    def Rin(self):
+    def Rin(self, sel_text):
         """Prepare result image for test Rin."""
         try:
             details_dict = self.main.results['Rin']['details_dict'][
@@ -1427,7 +1434,7 @@ class ResultImageCanvas(GenericImageCanvas):
         if 'processed_image' in details_dict:
             self.current_image = details_dict['processed_image']
 
-    def SNI(self):
+    def SNI(self, sel_txt):
         """Prepare result image for test SNI."""
         if self.main.current_paramset.sni_sum_first:
             try:
@@ -1442,7 +1449,8 @@ class ResultImageCanvas(GenericImageCanvas):
                 details_dict = {}
         if details_dict:
             self.cmap = 'viridis'
-            sel_txt = self.main.tab_nm.sni_result_image.currentText()
+            if sel_txt == '':
+                sel_txt = self.main.tab_nm.sni_result_image.currentText()
             if 'Curvature' in sel_txt:
                 self.title = 'Curvature corrected image'
                 if 'corrected_image' in details_dict:
@@ -1483,7 +1491,7 @@ class ResultImageCanvas(GenericImageCanvas):
                     if max_in_res > 0:
                         self.max_val = max_in_res
 
-    def Uni(self):
+    def Uni(self, sel_text):
         """Prepare result image for test Uni."""
         if self.main.current_paramset.uni_sum_first:
             try:
@@ -1497,15 +1505,17 @@ class ResultImageCanvas(GenericImageCanvas):
             except KeyError:
                 details_dict = {}
         self.cmap = 'viridis'
-        type_img = self.main.tab_nm.uni_result_image.currentIndex()
+        if sel_text == '':
+            sel_text = self.main.tab_nm.uni_result_image.currentText()
+
         set_min_max_avoid_zero = False
-        if type_img == 0:
+        if 'Differential' in  sel_text:
             self.title = 'Differential uniformity map in UFOV (max in x/y direction)'
             if 'du_matrix' in details_dict:
                 self.current_image = details_dict['du_matrix']
                 self.min_val = np.nanmin(self.current_image)
                 self.max_val = np.nanmax(self.current_image)
-        elif type_img == 1:
+        elif 'Processed' in sel_text:
             if 'pix_size' in details_dict:
                 pix_sz = details_dict['pix_size']
                 self.title = f'Processed image {pix_sz:0.2f} mm pr pix, UFOV part'
@@ -1514,7 +1524,7 @@ class ResultImageCanvas(GenericImageCanvas):
             if 'matrix_ufov' in details_dict:
                 self.current_image = details_dict['matrix_ufov']
                 set_min_max_avoid_zero = True
-        elif type_img == 2:
+        elif 'Curvature corrected' in sel_text:
             self.title = 'Curvature corrected image'
             if 'corrected_image' in details_dict:
                 self.current_image = details_dict['corrected_image']
@@ -1522,7 +1532,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 stdev = np.std(self.current_image[self.current_image != 0])
                 self.min_val = mean - stdev
                 self.max_val = mean + stdev
-        elif type_img == 3:
+        elif 'Summed' in sel_text:
             self.title = 'Summed image'
             if 'sum_image' in details_dict:
                 self.current_image = details_dict['sum_image']
@@ -1534,7 +1544,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 non_zero = self.current_image[self.current_image != 0]
                 self.min_val = np.nanmin(non_zero)
 
-    def Var(self):
+    def Var(self, sel_text):
         """Prepare variance image."""
         try:
             details_dict = self.main.results['Var']['details_dict'][
@@ -1542,9 +1552,12 @@ class ResultImageCanvas(GenericImageCanvas):
             self.cmap = 'viridis'
             self.title = 'Variance image'
             if self.main.current_modality == 'Mammo':
-                sel_idx = self.main.tab_mammo.var_result_image.currentIndex()
+                if sel_text == '':
+                    sel_text = self.main.tab_mammo.var_result_image.currentText()
             else:
-                sel_idx = self.main.tab_xray.var_result_image.currentIndex()
+                if sel_text == '':
+                    sel_text = self.main.tab_xray.var_result_image.currentText()
+            sel_idx = 0 if 'ROI 1' in sel_text else 1
             self.current_image = details_dict['variance_image'][sel_idx]
 
         except (KeyError, IndexError):

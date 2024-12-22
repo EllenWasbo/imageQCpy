@@ -135,6 +135,84 @@ def extract_values(values, columns=[], calculation='='):
     return new_values
 
 
+def mtf_multiply_10(row):
+    """Multiply MTF values by 10 to cy/cm (cy/mm default), accept None in values."""
+    new_row = []
+    try:
+        new_row = list(10 * np.array(row))
+    except TypeError:
+        for val in row:
+            if val is not None:
+                new_row.append(10 * val)
+            else:
+                new_row.append(None)
+    return new_row
+
+
+def format_result_table(input_main, test, values, headers):
+    """Format numbers of result_table.
+
+    Used by generate_report."""
+    string_list = []
+    paramset = input_main.current_paramset
+    dm = input_main.current_paramset.output.decimal_mark
+    for r, row in enumerate(values):
+        if any(row):
+            if all([test == 'MTF',
+                    input_main.current_modality == 'CT']):
+                if not paramset.mtf_cy_pr_mm:
+                    row = mtf_multiply_10(row)
+            out_values = extract_values(row)
+            if test == 'DCM':
+                string_list.append(
+                    mmf.val_2_str(
+                        out_values, decimal_mark=dm,
+                        format_same=False,
+                        format_strings=paramset.dcm_tagpattern.list_format)
+                    )
+            else:
+                string_list.append(
+                    mmf.val_2_str(out_values, decimal_mark=dm,
+                                  format_same=False)
+                    )
+
+    return string_list
+
+
+def get_image_names(input_main):
+    """Get set names of images or generate default names (indexed names)."""
+    image_names = [f'img{i}' for i in range(len(input_main.imgs))]
+    if len(input_main.current_quicktest.image_names) > 0:
+        set_names = input_main.current_quicktest.image_names
+        if any(set_names):
+            for i, set_name in enumerate(set_names):
+                if set_name != '' and i < len(image_names):
+                    image_names[i] = set_name
+    return image_names
+
+
+def get_group_names(input_main):
+    """Get set group names for each image or default indexed groups."""
+    uniq_group_ids_all = mm.get_uniq_ordered(
+        input_main.current_group_indicators)
+    group_names = []
+    for i in range(len(input_main.imgs)):
+        group_idx = uniq_group_ids_all.index(
+            input_main.current_group_indicators[i])
+        group_names.append(f'group{group_idx}')
+    if len(input_main.current_quicktest.group_names) > 0:
+        for uniq_id in uniq_group_ids_all:
+            idxs_this_group = mm.get_all_matches(
+                input_main.current_group_indicators, uniq_id)
+            set_names = [input_main.current_quicktest.group_names[idx]
+                         for idx in idxs_this_group]
+            if any(set_names):
+                name = next(s for s in set_names if s)
+                for idx in idxs_this_group:
+                    group_names[idx] = name
+    return group_names
+
+
 def quicktest_output(input_main):
     """Extract results to row or column of strings according to output_temp.
 
@@ -152,44 +230,9 @@ def quicktest_output(input_main):
     string_list = []
     header_list = []
 
-    def mtf_multiply_10(row):
-        """Multiply MTF values by 10 to cy/cm (cy/mm default), accept None in values."""
-        new_row = []
-        try:
-            new_row = list(10 * np.array(row))
-        except TypeError:
-            for val in row:
-                if val is not None:
-                    new_row.append(10 * val)
-                else:
-                    new_row.append(None)
-        return new_row
-
     if input_main.results != {}:
-        n_imgs = len(input_main.imgs)
-        # get set names of images or generate default names (indexed names)
-        image_names = [f'img{i}' for i in range(n_imgs)]
-        if len(input_main.current_quicktest.image_names) > 0:
-            set_names = input_main.current_quicktest.image_names
-            if any(set_names):
-                for i, set_name in enumerate(set_names):
-                    if set_name != '' and i < len(image_names):
-                        image_names[i] = set_name
-        uniq_group_ids_all = mm.get_uniq_ordered(input_main.current_group_indicators)
-        group_names = []
-        for i in range(n_imgs):
-            group_idx = uniq_group_ids_all.index(input_main.current_group_indicators[i])
-            group_names.append(f'group{group_idx}')
-        if len(input_main.current_quicktest.group_names) > 0:
-            for uniq_id in uniq_group_ids_all:
-                idxs_this_group = mm.get_all_matches(
-                    input_main.current_group_indicators, uniq_id)
-                set_names = [input_main.current_quicktest.group_names[idx]
-                             for idx in idxs_this_group]
-                if any(set_names):
-                    name = next(s for s in set_names if s)
-                    for idx in idxs_this_group:
-                        group_names[idx] = name
+        image_names = get_image_names(input_main)
+        group_names = get_group_names(input_main)
         marked = input_main.current_quicktest.tests
         dm = input_main.current_paramset.output.decimal_mark
         paramset = input_main.current_paramset
@@ -1375,11 +1418,11 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         np.min(snrs),
                         details['n_anomalous_pixels'],
                         np.max(details['n_anomalous_pixels_pr_roi']),
-                        np.max(details['local_uniformities']),
+                        np.max(np.abs(details['local_uniformities'])),
                         details['global_uniformity'],
-                        np.max(details['local_noise_uniformities']),
+                        np.max(np.abs(details['local_noise_uniformities'])),
                         details['global_noise_uniformity'],
-                        np.max(details['local_snr_uniformities']),
+                        np.max(np.abs(details['local_snr_uniformities'])),
                         details['global_snr_uniformity'],
                         details['relSDrow'],
                         details['relSDcol']

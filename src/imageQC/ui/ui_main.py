@@ -32,6 +32,7 @@ from imageQC.ui import ui_main_test_tabs
 from imageQC.ui.ui_main_test_tabs_vendor import ParamsTabVendor
 from imageQC.ui import ui_main_result_tabs
 from imageQC.ui import rename_dicom
+from imageQC.ui.generate_report import GenerateReportDialog
 from imageQC.ui import task_based_image_quality
 from imageQC.ui.settings import SettingsDialog
 from imageQC.ui import automation_wizard
@@ -523,7 +524,8 @@ class MainWindow(QMainWindow):
         self.wid_center.reset_delta()
         self.reset_results()
 
-    def update_current_test(self, reset_index=False, refresh_display=True):
+    def update_current_test(self, reset_index=False, refresh_display=True,
+                            set_test=''):
         """Update GUI when selected test change.
 
         Parameters
@@ -537,6 +539,11 @@ class MainWindow(QMainWindow):
             if hasattr(widget, 'currentIndex'):
                 if isinstance(reset_index, bool) and reset_index:
                     widget.setCurrentIndex(0)
+                elif set_test:
+                    if set_test in QUICKTEST_OPTIONS[self.current_modality]:
+                        idx = QUICKTEST_OPTIONS[
+                            self.current_modality].index(set_test)
+                        widget.setCurrentIndex(idx)
                 test_idx = widget.currentIndex()
                 self.current_test = QUICKTEST_OPTIONS[
                     self.current_modality][test_idx]
@@ -860,6 +867,11 @@ class MainWindow(QMainWindow):
         dlg = AddArtifactsDialog(self)
         dlg.exec()
 
+    def run_generate_report(self):
+        """Run generate report."""
+        dlg = GenerateReportDialog(self)
+        dlg.exec()
+
     def run_settings(self, initial_view='', initial_template_label='',
                      paramset_output=False):
         """Display settings dialog."""
@@ -1062,15 +1074,17 @@ class MainWindow(QMainWindow):
         self.cbox_file_list_display.currentIndexChanged.connect(
             self.tree_file_list.update_file_list)
 
-        act_open = QAction(
+        self.act_open = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}open.png'),
             'Open DICOM image(s)', self)
-        act_open.setShortcut('Ctrl+O')
-        act_open.triggered.connect(self.open_files)
-        act_open_adv = QAction(
+        self.act_open.setShortcut('Ctrl+O')
+        self.act_open.triggered.connect(self.open_files)
+        self.act_open_adv = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}openMulti.png'),
             'Open DICOM image(s) with advanced options', self)
-        act_open_adv.triggered.connect(self.open_multi)
+        self.act_open_adv.triggered.connect(self.open_multi)
+        self.act_open.setEnabled(False)  # wait til init finished
+        self.act_open_adv.setEnabled(False)  # wait til init finished
         act_read_header = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}tags.png'),
             'Read DICOM header', self)
@@ -1163,12 +1177,20 @@ class MainWindow(QMainWindow):
             'Add/manage simulated artifact to image(s)...', self)
         act_sim_artifact.triggered.connect(self.run_sim_artifact)
 
+        act_report = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}report.png'),
+            'Generate HTML report...', self)
+        act_report.setShortcut('Ctrl+R')
+        act_report.triggered.connect(self.run_generate_report)
+
         # fill menus
         menu_file = QMenu('&File', self)
         menu_file.addActions([
-            act_open, act_open_adv, act_read_header, act_open_auto, act_wizard_auto,
+            self.act_open, self.act_open_adv, act_read_header, act_open_auto, act_wizard_auto,
             act_rename_dcm, act_task_based_auto,
-            act_sim_artifact, act_close, act_close_all, act_quit])
+            act_sim_artifact, act_report])
+        menu_file.addSeparator()
+        menu_file.addActions([act_close, act_close_all, act_quit])
         menu_bar.addMenu(menu_file)
         menu_settings = QMenu('&Settings', self)
         menu_settings.addAction(act_settings)
@@ -1182,7 +1204,7 @@ class MainWindow(QMainWindow):
 
         # fill toolbar
         tool_bar.addActions([
-            act_open, act_open_adv, act_open_auto, act_wizard_auto, act_dash])
+            self.act_open, self.act_open_adv, act_open_auto, act_wizard_auto, act_dash])
         tool_bar.addSeparator()
         tool_bar.addWidget(self.chk_append)
         tool_bar.addSeparator()
@@ -1197,7 +1219,8 @@ class MainWindow(QMainWindow):
         tool_bar.addWidget(self.cbox_file_list_display)
 
         tool_bar.addWidget(QLabel('             '))
-        tool_bar.addActions([act_reset_split, act_rename_dcm, act_settings])
+        tool_bar.addActions([
+            act_reset_split, act_rename_dcm, act_report, act_settings])
         tool_bar.addWidget(QLabel('             '))
         tool_bar.addAction(self.act_warning)
 
@@ -1218,6 +1241,7 @@ class MainWindow(QMainWindow):
         idx = get_modality_index(self.current_modality)
         self.btns_mode.button(idx).setChecked(True)
         self.gb_modality.setLayout(hlo)
+        self.gb_modality.setEnabled(False)  # wait til init finished
 
     def create_test_tab_CT(self):
         """Initiate GUI for the stacked test tab CT."""
@@ -1246,6 +1270,10 @@ class MainWindow(QMainWindow):
         self.stack_test_tabs.addWidget(self.tab_sr)
         self.stack_test_tabs.addWidget(self.tab_vendor)
         self.stop_wait_cursor()
+        # allow mode change
+        self.act_open.setEnabled(True)
+        self.act_open_adv.setEnabled(True)
+        self.gb_modality.setEnabled(True)
 
     def create_result_tabs(self):
         """Initiate GUI for the stacked result tabs."""

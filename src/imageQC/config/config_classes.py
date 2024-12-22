@@ -1028,6 +1028,45 @@ class LimitsAndPlotTemplate:
 
 
 @dataclass
+class ReportElement:
+    """Class holding results."""
+
+    variant: str = 'html_element'
+    # 'html_table', 'result_table', 'result_plot', 'result_image'
+    text: str = ''  # html content or display text
+    testcode: str = ''  # if coupled to results of specific testcode
+    width: int = 100  # percent width of element
+    result_pr_image: bool = True
+    result_from_image: int = 0  # specify which image to present results from
+    caption: str = ''
+    note: str = ''
+    note_pos: str = 'before'  # or after
+
+
+@dataclass
+class ReportTemplate:
+    """Dataclass for keeping information on how to perform automation."""
+
+    label: str = ''
+    elements: list = field(default_factory=list)
+    htmlhead: str = ''  # To override <head><style> from default
+    footer: str = ''
+
+    def __post_init__(self):
+        """Add default elements."""
+        if len(self.elements) == 0:
+            self.elements = [
+                ReportElement(
+                    text=('<table width="100%"><tr><td><h1>QA Report</h1></td>'
+                          '<td align="right">#IMAGEQCICON</td></tr></table>')),
+                ReportElement(
+                    text=('<div font_size="small" align="right">'
+                          'Report generated #TODAY by #USERNAME '
+                          'using imageQCpy v#VERSION</div>')),
+                ]
+
+
+@dataclass
 class DashSettings:
     """Dataclass for dash settings (display of automation results)."""
 

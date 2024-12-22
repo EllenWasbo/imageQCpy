@@ -531,6 +531,11 @@ CONFIG_FNAMES = {
         'default': iQCconstants_functions.empty_template_dict(
             QUICKTEST_OPTIONS, dummy=cfc.LimitsAndPlotTemplate()),
         },
+    'report_templates': {
+        'saved_as': 'modality_dict',
+        'default': iQCconstants_functions.empty_template_dict(
+            QUICKTEST_OPTIONS, dummy=cfc.ReportTemplate()),
+        },
     'active_users': {
         'saved_as': 'dict',
         'default': {},

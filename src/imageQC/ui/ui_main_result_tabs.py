@@ -340,8 +340,11 @@ class ResultPlotCanvas(PlotCanvas):
             self.color_gray = 'whitesmoke'
             self.color_darkgray = 'lightgray'
 
-    def plot(self):
-        """Refresh plot."""
+    def plot(self, selected_text=''):
+        """Refresh plot.
+
+        If selected_text is set = generate report specific selection.
+        """
         self.ax.clear()
         self.title = ''
         self.xtitle = 'x'
@@ -367,7 +370,7 @@ class ResultPlotCanvas(PlotCanvas):
                         class_method = getattr(self, self.main.current_test, None)
                         if class_method is not None:
                             try:
-                                class_method()
+                                class_method(selected_text)
                             except (KeyError, TypeError):
                                 pass
 
@@ -527,7 +530,7 @@ class ResultPlotCanvas(PlotCanvas):
                 break
         return yrange
 
-    def CDM(self):
+    def CDM(self, sel_text):
         """Prepare plot for test CDMAM."""
         imgno = self.main.gui.active_img_no
         details_dict = self.main.results['CDM']['details_dict'][imgno]
@@ -729,11 +732,12 @@ class ResultPlotCanvas(PlotCanvas):
                          'array': np.flipud(details_dict['found_centers_inp']),
                          'size': 30, 'marker': 'o', 'color': 'orange'})
 
-        test_widget = self.main.stack_test_tabs.currentWidget()
-        try:
-            sel_text = test_widget.cdm_result_plot.currentText()
-        except AttributeError:
-            sel_text = ''
+        if sel_text == '':
+            test_widget = self.main.stack_test_tabs.currentWidget()
+            try:
+                sel_text = test_widget.cdm_plot.currentText()
+            except AttributeError:
+                sel_text = ''
         if sel_text == 'Found disc at center and in correct corner':
             prepare_found_corner_center_plot()
         elif sel_text == 'Found discs corrected for nearest neighbours':
@@ -749,7 +753,7 @@ class ResultPlotCanvas(PlotCanvas):
         elif 'Fraction.xls' in sel_text:
             prepare_comparison_vs_fraction_xls()
 
-    def Cro(self):
+    def Cro(self, sel_text):
         """Prepare plot for test PET cross calibration."""
         self.title = 'z profile'
         self.xtitle = 'Slice position (mm)'
@@ -762,7 +766,7 @@ class ResultPlotCanvas(PlotCanvas):
             {'label': 'used slices', 'xvals': details_dict['used_zpos'],
              'yvals': details_dict['used_roi_averages'], 'style': '-r'})
 
-    def CTn(self):
+    def CTn(self, sel_text):
         """Prepare plot for test CTn."""
 
         def prepare_plot_HU_min_max(percent=False):
@@ -838,11 +842,12 @@ class ResultPlotCanvas(PlotCanvas):
                 self.ax.add_artist(at)
             self.xtitle = 'HU value'
 
-        test_widget = self.main.stack_test_tabs.currentWidget()
-        try:
-            sel_text = test_widget.ctn_plot.currentText()
-        except AttributeError:
-            sel_text = ''
+        if sel_text == '':
+            test_widget = self.main.stack_test_tabs.currentWidget()
+            try:
+                sel_text = test_widget.ctn_plot.currentText()
+            except AttributeError:
+                sel_text = ''
         if 'HU' in sel_text:
             # percent = True if '%' in sel_text else False
             prepare_plot_HU_min_max()  # percent=percent)
@@ -850,7 +855,7 @@ class ResultPlotCanvas(PlotCanvas):
             prepare_plot_linear()
         self.title = sel_text
 
-    def DCM(self):
+    def DCM(self, sel_text):
         """Prepare plot for test DCM."""
         widget = self.main.stack_test_tabs.currentWidget()
         param_no = widget.wid_dcm_pattern.current_select
@@ -877,7 +882,7 @@ class ResultPlotCanvas(PlotCanvas):
             self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
             self.ax.set_xticks(xvals)
 
-    def Foc(self):
+    def Foc(self, sel_text):
         self.title = 'Variance map radial profiles processed and inverted'
         self.xtitle = 'distance to center (mm)'
         self.ytitle = '50.percentile - variance < 50.percentile'
@@ -899,7 +904,7 @@ class ResultPlotCanvas(PlotCanvas):
                 'yvals': [0, np.max(profs[i])],
                 'style': '-'+styles[i]})
 
-    def Hom(self):
+    def Hom(self, sel_text):
         """Prepare plot for test Hom."""
         img_nos = []
         xvals = []
@@ -1007,7 +1012,7 @@ class ResultPlotCanvas(PlotCanvas):
                 pass
             self.default_range_y = self.test_values_outside_yrange([-7, 7])
 
-    def HUw(self):
+    def HUw(self, sel_text):
         """Prepare plot for test HUw."""
         xvals = []
         yvals = []
@@ -1038,7 +1043,7 @@ class ResultPlotCanvas(PlotCanvas):
         self.curves.append(tolmax)
         self.default_range_y = self.test_values_outside_yrange([-6, 6])
 
-    def MTF(self):
+    def MTF(self, sel_text):
         """Prepare plot for test MTF."""
         imgno = self.main.gui.active_img_no
         rowno = imgno
@@ -1609,11 +1614,12 @@ class ResultPlotCanvas(PlotCanvas):
                                 'yvals': yvals,
                                 'style': '-r'})
 
-        test_widget = self.main.stack_test_tabs.currentWidget()
-        try:
-            sel_text = test_widget.mtf_plot.currentText()
-        except AttributeError:
-            sel_text = ''
+        if sel_text == '':
+            test_widget = self.main.stack_test_tabs.currentWidget()
+            try:
+                sel_text = test_widget.mtf_plot.currentText()
+            except AttributeError:
+                sel_text = ''
         try:
             if sel_text == 'MTF':
                 prepare_plot_MTF()
@@ -1637,7 +1643,7 @@ class ResultPlotCanvas(PlotCanvas):
             except AttributeError:
                 pass
 
-    def NPS(self):
+    def NPS(self, sel_text):
         """Prepare plot for test NPS."""
         imgno = self.main.gui.active_img_no
         self.title = 'Noise Power Spectrum'
@@ -1794,11 +1800,12 @@ class ResultPlotCanvas(PlotCanvas):
             except (KeyError, IndexError):
                 pass
 
-        test_widget = self.main.stack_test_tabs.currentWidget()
-        try:
-            sel_text = test_widget.nps_plot.currentText()
-        except AttributeError:
-            sel_text = ''
+        if sel_text == '':
+            test_widget = self.main.stack_test_tabs.currentWidget()
+            try:
+                sel_text = test_widget.nps_plot.currentText()
+            except AttributeError:
+                sel_text = ''
         if 'pr image' in sel_text:
             plot_current_NPS()
         if 'average' in sel_text:
@@ -1807,7 +1814,7 @@ class ResultPlotCanvas(PlotCanvas):
             plot_all_NPS()
         self.title = sel_text
 
-    def Rec(self):
+    def Rec(self, sel_text):
         """Prepare plot for test PET recovery curve."""
         details_dict = self.main.results['Rec']['details_dict']
         test_widget = self.main.stack_test_tabs.currentWidget()
@@ -1878,17 +1885,18 @@ class ResultPlotCanvas(PlotCanvas):
                  'xvals': details_dict['used_zpos_spheres'],
                  'yvals': details_dict['used_roi_maxs'], 'style': '-b'})
 
-        try:
-            sel_text = test_widget.rec_plot.currentText()
-        except AttributeError:
-            sel_text = ''
+        if sel_text == '':
+            try:
+                sel_text = test_widget.rec_plot.currentText()
+            except AttributeError:
+                sel_text = ''
         if 'z-profile' in sel_text:
             plot_z_profile()
         else:
             sel_text = test_widget.rec_type.currentText()
             plot_Rec_curve(sel_text)
 
-    def Rin(self):
+    def Rin(self, sel_text):
         """Prepare plot for test Rin."""
         imgno = self.main.gui.active_img_no
         self.title = 'Radial profile'
@@ -1916,7 +1924,7 @@ class ResultPlotCanvas(PlotCanvas):
         except (KeyError, IndexError):
             pass
 
-    def ROI(self):
+    def ROI(self, sel_text):
         """Prepare plot for test ROI."""
         xvals = []
         yvals = []
@@ -1950,7 +1958,7 @@ class ResultPlotCanvas(PlotCanvas):
         self.ax.xaxis.set_major_formatter(plt.FormatStrFormatter('%.0f'))
         self.ax.set_xticks(xvals)
 
-    def Sli(self):
+    def Sli(self, sel_text):
         """Prepare plot for test Sli."""
         if self.main.current_modality in ['CT', 'MR']:
             self.title = 'Profiles for slice thickness calculations'
@@ -2022,7 +2030,7 @@ class ResultPlotCanvas(PlotCanvas):
             self.xtitle = 'pos (mm)'
             self.ytitle = 'HU' if self.main.current_modality == 'CT' else 'Pixel value'
 
-    def SNI(self):
+    def SNI(self, sel_text):
         """Prepare plot for test NM SNI test."""
         imgno = self.main.gui.active_img_no
         if self.main.current_paramset.sni_sum_first:
@@ -2298,11 +2306,12 @@ class ResultPlotCanvas(PlotCanvas):
                             'yvals': prof_y,
                             'style': ':k'})
 
-        test_widget = self.main.stack_test_tabs.currentWidget()
-        try:
-            sel_text = test_widget.sni_plot.currentText()
-        except AttributeError:
-            sel_text = ''
+        if sel_text == '':
+            test_widget = self.main.stack_test_tabs.currentWidget()
+            try:
+                sel_text = test_widget.sni_plot.currentText()
+            except AttributeError:
+                sel_text = ''
         if 'SNI values each ROI' in sel_text:
             plot_SNI_values_bar()
         elif 'SNI values all images' in sel_text:
@@ -2322,7 +2331,7 @@ class ResultPlotCanvas(PlotCanvas):
         elif 'Filter(s)' in sel_text:
             plot_filters()
 
-    def Spe(self):
+    def Spe(self, sel_text):
         """Prepare plot for test NM Speed test."""
         self.title = 'Scan speed profile'
         self.xtitle = 'Position (mm)'
@@ -2346,7 +2355,7 @@ class ResultPlotCanvas(PlotCanvas):
 
             self.default_range_y = self.test_values_outside_yrange([-7, 7])
 
-    def TTF(self):
+    def TTF(self, sel_text):
         """Prepare plot for test TTF."""
         details_dicts = self.main.results['TTF']['details_dict']
         imgno = self.main.gui.active_img_no
@@ -2581,6 +2590,7 @@ class ResultPlotCanvas(PlotCanvas):
                         'color': COLORS[no % len(COLORS)]
                          })
 
+        #TODO if sel_text == '':
         test_widget = self.main.stack_test_tabs.currentWidget()
         try:
             sel_text = test_widget.ttf_plot.currentText()
@@ -2605,7 +2615,7 @@ class ResultPlotCanvas(PlotCanvas):
             txt_add = f' {materials[sel_material_idxs[0]]}'
         self.title = sel_text + txt_add
 
-    def Uni(self):
+    def Uni(self, sel_text):
         """Prepare plot for test Uni."""
         plot_idx = self.main.tab_nm.uni_plot.currentIndex()
         if plot_idx == 0:
@@ -2689,7 +2699,7 @@ class ResultPlotCanvas(PlotCanvas):
             except IndexError:
                 pass
 
-    def vendor(self):
+    def vendor(self, sel_text):
         """Prepare plot if vendor test results contain details."""
         # Currently only energy spectrum from Siemens gamma camera have this option.
         self.title = 'Energy spectrum'

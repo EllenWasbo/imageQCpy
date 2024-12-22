@@ -2,6 +2,7 @@
 _xxx xx, 2024_
 
 New functionalities:
+- Generate html-report by template.
 - Xray:
 	- Added option to test Homogeneity according to AAPM TG150 (Flat field test). Find option in the Homogeneity test tab under Methods.
 	- Added option to read focal spot size from star test pattern.
@@ -28,6 +29,7 @@ Changes:
 - Added option for Limits and Plot templates to set limit based on difference to first or median of all previous values. Also comparing text result to first text parameter is an option.
 
 Fixes:
+- Disabled open images and mode change until all GUI is initialized to avoid crash if user is too quick to open non-CT images on start-up.
 - When a small image widget due to screen resolution, there were an issue with the extend toolbar-button (>>) not showing all tools. Now fixed.
 - Xray/Mammo Homogeneity (flat field test): Bug from v3.1.2 fixed - Variance map pr ROI now visible again 
 - Removed warnings from pydicom v3.0.1 when reading DICOM images not perfectly following the standard 

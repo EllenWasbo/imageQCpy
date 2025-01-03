@@ -1032,7 +1032,7 @@ class ReportElement:
     """Class holding results."""
 
     variant: str = 'html_element'
-    # 'html_table', 'result_table', 'result_plot', 'result_image'
+    # 'html_table_row', 'result_table', 'result_plot', 'result_image'
     text: str = ''  # html content or display text
     testcode: str = ''  # if coupled to results of specific testcode
     width: int = 100  # percent width of element

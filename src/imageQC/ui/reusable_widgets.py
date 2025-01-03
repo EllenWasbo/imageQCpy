@@ -519,7 +519,7 @@ class ToolBarWindowLevel(QToolBar):
             else:
                 image_sub = image
                 if mode_string == 'min_max_center':
-                    sz_x, sz_y = image.shape
+                    sz_y, sz_x = image.shape
                     image_sub = image[sz_y//4:-sz_y//4,sz_x//4:-sz_x//4]
                 else:
                     patches = []

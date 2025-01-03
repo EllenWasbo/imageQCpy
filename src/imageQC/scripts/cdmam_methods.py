@@ -167,7 +167,7 @@ def get_line_intersections(lines):
     return (xys_pr_row, dx)
 
 
-def find_phantom_part(image, margin, axis=0):
+def find_phantom_part(image, margin, axis=0, pos_profile=None):
     """"Detect phantom in image along axis."""
     prof = np.mean(image, axis=axis)
     in_phantom = np.where(np.logical_and(
@@ -178,11 +178,15 @@ def find_phantom_part(image, margin, axis=0):
     end = end - margin
     sz_y, sz_x = image.shape
     if axis == 0:
+        if pos_profile is None:
+            pos_profile = sz_y // 2
         prof = np.mean(
-            image[sz_y // 2 - 10: sz_y // 2 + 10, start:end], axis=0)
+            image[pos_profile - 10: pos_profile + 10, start:end], axis=0)
     else:
+        if pos_profile is None:
+            pos_profile = sz_x // 2
         prof = np.median(
-            image[start:end, sz_x // 2 - 10: sz_x // 2 + 10], axis=1)
+            image[start:end, pos_profile - 10: pos_profile + 10], axis=1)
     smoothed = ndimage.gaussian_filter1d(prof, 7)
     detrended_profile = prof / (smoothed / np.median(prof))
     minval = np.min(detrended_profile)
@@ -364,8 +368,9 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
                 'centered on assumed phantom.')
             estimate_x = True
 
+    x_off = 0.25 * (x_end_phantom - x_start_phantom) + x_start_phantom
     y_start_phantom, y_end_phantom, yprof = find_phantom_part(
-        image, 5*px_pr_mm, axis=1)
+        image, 5*px_pr_mm, axis=1, pos_profile=round(x_off))
 
     if estimate_y is False:
         peaks = find_peaks(yprof, distance=3.5*px_pr_mm,
@@ -373,7 +378,8 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
         peaks_pos = peaks[0]
         dists = np.diff(peaks_pos)
         dist = np.median(dists)
-        idx_sep = np.where(np.logical_and(dists < 1.05 * dist / 2, dists > 0.95 * dist / 2))
+        idx_sep = np.where(
+            np.logical_and(dists < 1.05 * dist / 2, dists > 0.95 * dist / 2))
 
         if len(idx_sep[0]) == 3:
             y_start = peaks_pos[0] + y_start_phantom

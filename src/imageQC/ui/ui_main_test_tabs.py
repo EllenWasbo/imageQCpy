@@ -2349,9 +2349,6 @@ class ParamsTabMammo(ParamsTabCommon):
         flo1.addRow(QLabel('Image is rotated'), self.cdm_rotate_k)
         flo1.addRow(QLabel('Correct founds according to nearest neighbours'),
                     self.cdm_correct_neighbours)
-
-        vlo_left.addWidget(uir.UnderConstruction(
-            txt='Under construction and validation...'))
         vlo_left.addLayout(flo1)
 
         vlo_right = QVBoxLayout()

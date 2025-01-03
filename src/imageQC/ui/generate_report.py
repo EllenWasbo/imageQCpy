@@ -102,7 +102,7 @@ class GenerateReportDialog(ImageQCDialog):
         self.empty_template = cfc.ReportTemplate()
         self.current_template = copy.deepcopy(self.empty_template)
         self.variants = [
-            'html_table', 'html_element', 'result_table',
+            'html_table_row', 'html_element', 'result_table',
             'result_plot', 'result_image']
         self.edited = False
         self.lbl_edit = QLabel('')
@@ -295,53 +295,76 @@ class GenerateReportDialog(ImageQCDialog):
         flattened_elements = []
         element_rows = []
         element_cols = []
+        element_top_rows = []
         rowno = 0
-        for sub in self.current_template.elements:
-            if isinstance(sub, list):
-                flattened_elements.append(None)
-                flattened_elements.extend(sub)
+        toprow = 0
+        for i, element in enumerate(self.current_template.elements):
+            if isinstance(element, list):
+                pass  # already added
+            elif element.variant == 'html_table_row':
+                flattened_elements.append(element)
+                element_list = self.current_template.elements[i + 1]
+                flattened_elements.extend(element_list)
                 element_rows.append(rowno)
-                element_rows.extend([rowno] * len(sub))
+                element_rows.extend([rowno + 1] * len(element_list))
                 element_cols.append(None)
-                element_cols.extend(list(range(len(sub))))
+                element_cols.extend(list(range(len(element_list))))
+                element_top_rows.extend([toprow] * (len(element_list) + 1))
+                rowno += 2
+                toprow += 1
             else:
-                flattened_elements.append(sub)
+                flattened_elements.append(element)
                 element_rows.append(rowno)
                 element_cols.append(None)
-            add = 1
-            if not isinstance(sub, list):
-                if sub.variant == 'html_table':
-                    add = 0
-            rowno += add
+                element_top_rows.append(toprow)
+                rowno += 1
+                toprow += 1
 
         sel_idxs = self.table.selectedIndexes()
         sel = self.table.selectedItems()
+        row = 0
         if len(sel) > 0:
-            if sel[0].parent() is not None:
-                row = self.table.indexOfTopLevelItem(sel[0].parent())
-                row = row + sel_idxs[0].row()
-            else:
-                row = sel_idxs[0].row()
+            if sel[0].parent() is not None:  # child is selected
+                toprow = self.table.indexOfTopLevelItem(sel[0].parent())
+                row_parent = element_top_rows.index(toprow)
+                row = row_parent + sel[0].parent().indexOfChild(sel[0]) + 1
+            else:  # top level row
+                toprow = sel_idxs[0].row()
+                row = element_top_rows.index(toprow)
         else:
-            row = len(flattened_elements) - 1
-        return (flattened_elements[row], element_rows[row], element_cols[row])
+            row = element_rows[-1]
+
+        try:
+            res = (
+                flattened_elements[row], element_rows[row], element_cols[row])
+        except IndexError:
+            res = (None, -1, None)
+        return res
 
     def clear_template(self):
         self.current_template = copy.deepcopy(self.empty_template)
         self.fill_table()
 
     def add_element(self):
-        sel_elem, row, col = self.get_selected_element()
         dlg = AddEditElementDialog(self, self.variants,
                                    element=cfc.ReportElement())
         if dlg.exec():
             element = dlg.get_element()
-            if sel_elem is None or col is not None:
-                if element == []:
-                    self.current_template.elements.insert(row+1, [])
-                elif element.variant == 'html_table':
-                    self.current_template.elements.insert(row+1, [])
-                    self.current_template.elements.insert(row+1, element)
+            sel_elem, row, col = self.get_selected_element()
+            new_row = row + 1
+            sel_is_table = False
+            try:
+                if sel_elem.variant == 'html_table_row':
+                    new_row = row + 2
+                    sel_is_table = True
+            except AttributeError:
+                pass
+
+            if col is not None or sel_is_table:  # table element selected
+                if element.variant == 'html_table_row':
+                    # force added after previous row
+                    self.current_template.elements[new_row:new_row] = ([
+                        element, []])
                 else:
                     dlg = messageboxes.QuestionBox(
                         parent=self, title='Add element',
@@ -352,27 +375,24 @@ class GenerateReportDialog(ImageQCDialog):
                     if yes:
                         if col is None:
                             col = -1
+                            row += 1
                         self.current_template.elements[row].insert(
                             col+1, element)
                     else:
                         self.current_template.elements.insert(
-                            row+1, element)
+                            new_row, element)
             else:
-                if element == []:
-                    self.current_template.elements.insert(row+1, [])
-                elif element.variant == 'html_table':
-                    self.current_template.elements.insert(row+1, [])
-                    self.current_template.elements.insert(row+1, element)
+                if element.variant == 'html_table_row':
+                    self.current_template.elements[new_row:new_row] = ([
+                        element, []])
                 else:
-                    self.current_template.elements.insert(row+1, element)
+                    self.current_template.elements.insert(new_row, element)
             self.fill_table()
             self.flag_edit()
 
     def edit_element(self):
         sel_elem, row, col = self.get_selected_element()
-        if row is not None:
-            if sel_elem is None:
-                sel_elem = cfc.ReportElement(variant='html_table')
+        if row != -1:
             dlg = AddEditElementDialog(self, self.variants,
                                        element=sel_elem)
             if dlg.exec():
@@ -386,37 +406,96 @@ class GenerateReportDialog(ImageQCDialog):
 
     def add_note(self):
         sel_elem, row, col = self.get_selected_element()
-        if sel_elem is not None:
-            if self.variants != 'html_table':
-                dlg = AddEditNoteDialog(self, sel_elem)
-                if dlg.exec():
-                    element = dlg.get_element()
-                    if col == None:
-                        self.current_template.elements[row] = element
-                    else:
-                        self.current_template.elements[row][col] = element
-                    self.fill_table()
-                    self.flag_edit()
+        if row != -1:
+            dlg = AddEditNoteDialog(self, sel_elem)
+            if dlg.exec():
+                element = dlg.get_element()
+                if col == None:
+                    self.current_template.elements[row] = element
+                else:
+                    self.current_template.elements[row][col] = element
+                self.fill_table()
+                self.flag_edit()
 
     def move_element_up(self):
         sel_elem, row, col = self.get_selected_element()
-        popelem = self.current_template.elements.pop(row)
-        self.current_template.elements.insert(row-1, popelem)
-        self.fill_table()
-        self.flag_edit()
+        if col == 0:  # first row in html_table_row
+            pass
+        elif row == -1:
+            pass
+        else:
+            if col is not None:  # in html_table_row
+                table_list = self.current_template.elements[row]
+                pop_elem = self.current_template.elements[row].pop(col)
+                self.current_template.elements[row].insert(
+                    col - 1, pop_elem)
+            elif sel_elem.variant == 'html_table_row':
+                table_elem = self.current_template.elements.pop(row)
+                table_list = self.current_template.elements.pop(row)
+                new_row = row - 1
+                try:
+                    if isinstance(
+                            self.current_template.elements[row - 1], list):
+                        new_row = row - 2
+                except IndexError:
+                    pass
+                self.current_template.elements.insert(new_row, table_elem)
+                self.current_template.elements.insert(new_row + 1, table_list)
+            else:
+                popelem = self.current_template.elements.pop(row)
+                self.current_template.elements.insert(row - 1, popelem)
+            self.fill_table()
+            self.flag_edit()
 
     def move_element_down(self):
         sel_elem, row, col = self.get_selected_element()
-        popelem = self.current_template.elements.pop(row)
-        self.current_template.elements.insert(row+1, popelem)
-        self.fill_table()
-        self.flag_edit()
+        if row != -1:
+            if col is not None:  # in html_table_row
+                table_list = self.current_template.elements[row]
+                if col >= len(table_list) - 1:
+                    pass  # last in row
+                else:
+                    pop_elem = self.current_template.elements[row].pop(col)
+                    self.current_template.elements[row].insert(
+                        col + 1, pop_elem)
+            elif sel_elem.variant == 'html_table_row':
+                table_elem = self.current_template.elements.pop(row)
+                table_list = self.current_template.elements.pop(row)
+                new_row = row + 1
+                try:
+                    nextelem = self.current_template.elements[row + 1]
+                    if nextelem.variant == 'html_table_row':
+                        new_row = row + 2
+                except IndexError:
+                    pass
+                self.current_template.elements.insert(new_row, table_elem)
+                self.current_template.elements.insert(new_row + 1, table_list)
+            else:
+                popelem = self.current_template.elements.pop(row)
+                self.current_template.elements.insert(row + 1, popelem)
+            self.fill_table()
+            self.flag_edit()
 
     def delete_element(self):
         sel_elem, row, col = self.get_selected_element()
-        self.current_template.elements.pop(row)
-        self.fill_table()
-        self.flag_edit()
+        if row != -1:
+            proceed = True
+            is_table = False
+            if sel_elem.variant == 'html_table_row':
+                is_table = True
+                if len(self.current_template.elements[row + 1]) > 0:
+                    proceed = messageboxes.proceed_question(
+                        self, 'Delete row of elements?')
+
+            if proceed:
+                if col is None:
+                    self.current_template.elements.pop(row)
+                    if is_table:
+                        self.current_template.elements.pop(row)  # also delete list
+                else:
+                    self.current_template.elements[row].pop(col)
+            self.fill_table()
+            self.flag_edit()
 
     def edit_head(self):
         dlg = EditHeadFooterDialog(
@@ -528,10 +607,13 @@ class GenerateReportDialog(ImageQCDialog):
     def fill_table(self):
         """Fill table with original and generated names."""
         self.table.clear()
-        for element in self.current_template.elements:
+        for i, element in enumerate(self.current_template.elements):
             if isinstance(element, list):
-                top_item = QTreeWidgetItem(['Table', '', '', ''])
-                for sub in element:
+                pass  #already added
+            elif element.variant == 'html_table_row':
+                top_item = QTreeWidgetItem([
+                    'html_table_row', '', element.caption, element.note])
+                for sub in self.current_template.elements[i + 1]:
                     row_strings = [sub.variant, sub.testcode,
                                    sub.caption + sub.text, sub.note]
                     child_item = QTreeWidgetItem(row_strings)
@@ -546,15 +628,17 @@ class GenerateReportDialog(ImageQCDialog):
 
     def frame_element(self, html_code, element):
         caption = ''
-        if caption != '':
+        testcode = ''
+        if not isinstance(element, list):
             caption = element.caption
-        elif element.caption == '' and element.testcode != '':
+            testcode = element.testcode
+        if caption == '' and testcode != '':
             if element.text != 'result_table':
                 caption = element.text
 
         if caption:  # frame element
             html_frame = [
-                '<table class="element_frame">',
+                '<br><table class="element_frame">',
                 f'<tr><th>{caption}</th></tr>',
                 f'<tr><td>{html_code}</td></tr>',
                 '</table>']
@@ -571,8 +655,11 @@ class GenerateReportDialog(ImageQCDialog):
             previous_code = ''
             for i, element in enumerate(self.current_template.elements):
                 if isinstance(element, list):
-                    testcodes = [sub.testcode for sub in element
-                                 if sub.testcode != '']
+                    testcodes = []
+                    for sub in element:
+                        if sub.testcode != '':
+                            if sub.testcode not in testcodes:
+                                testcodes.append(sub.testcode)
                     this_code = testcodes
                 else:
                     this_code = element.testcode
@@ -591,7 +678,7 @@ class GenerateReportDialog(ImageQCDialog):
                     names = []
                     for code in testcode:
                         idx = self.test_codes.index(code)
-                        names.append(self.test_names(idx))
+                        names.append(self.test_names[idx])
                     header = ' / '.join(names)
                 else:
                     idx = self.test_codes.index(testcode)
@@ -613,20 +700,27 @@ class GenerateReportDialog(ImageQCDialog):
             html = ['<!DOCTYPE html>','<html>', html_head]
             testcodes = get_header_pr_top_element()
             for i, element in enumerate(self.current_template.elements):
-                html_header = generate_test_header(testcodes[i])
-                if html_header:
-                    html.append(html_header)
-                if isinstance(element, list):
-                    html_this = self.add_table_of_html_elements(element)
-                else:
-                    html_this = self.add_html_element(element)
-                html_this = self.frame_element(html_this, element)
-                html.append(html_this)
                 progress_modal.setLabelText(
                     f'Generating report for element {i}/{max_progress}')
-                progress_modal.setValue(i)
-                if progress_modal.wasCanceled():
-                    break
+                if isinstance(element, list):
+                    pass  # already added
+                else:
+                    html_header = ''
+                    if element.variant == 'html_table_row':
+                        html_this = self.add_table_of_html_elements(
+                            self.current_template.elements[i + 1])
+                        html_header = generate_test_header(testcodes[i + 1])
+                    else:
+                        html_this = self.add_html_element(element)
+                        html_header = generate_test_header(testcodes[i])
+                    if html_this:
+                        if html_header:
+                            html.append(html_header)
+                        html_this = self.frame_element(html_this, element)
+                        html.append(html_this)
+                        progress_modal.setValue(i)
+                    if progress_modal.wasCanceled():
+                        break
             progress_modal.setValue(max_progress)
             footer = self.convert_coded_text(self.current_template.footer)
             html.extend(['<footer>', footer, '</footer>'])
@@ -781,14 +875,16 @@ class GenerateReportDialog(ImageQCDialog):
         return html_this
 
     def add_table_of_html_elements(self, elements):
-        html_this = []
+        html_this = ''
         if len(elements) > 0:
+            html_this = []
             html_this.append('<table><tr>')
             for element in elements:
                 html_this.append('<td>')
                 html_this.append(self.add_html_element(element))
                 html_this.append('</td>')
             html_this.append('</tr></table>')
+            html_this = "\n".join(html_this)
         return html_this
 
     def generate_dicom_hash(self):
@@ -914,8 +1010,7 @@ class AddEditElementDialog(ImageQCDialog):
         btn_close.clicked.connect(self.reject)
         hlo_buttons_btm.addWidget(btn_close)
 
-        if element != cfc.ReportElement():
-            self.update_element()
+        self.update_element()
 
     def update_element(self):
         idx = self.variants.index(self.element.variant)
@@ -998,12 +1093,11 @@ class AddEditElementDialog(ImageQCDialog):
 
     def get_element(self):
         sel = self.cbox_variant.currentIndex()
+        self.element.variant = self.variants[sel]
         if sel == 0:
-            if self.txt_table_header.text() == '':
-                self.element = []
-            else:
-                self.element.variant = self.variants[sel]
-                self.element.caption = self.txt_table_header.text()
+            self.element.caption = self.txt_table_header.text()
+            self.element.text = ''
+            self.element.testcode = ''
         elif sel == 1:
             self.element.text = self.txt_html.toPlainText()
             self.element.caption = self.txt_header.text()

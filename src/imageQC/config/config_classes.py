@@ -40,6 +40,7 @@ class LastModified:
     paramsets_MR: list = field(default_factory=list)
     paramsets_SR: list = field(default_factory=list)
     quicktest_templates: list = field(default_factory=list)
+    report_templates: list = field(default_factory=list)
     auto_common: list = field(default_factory=list)
     auto_templates: list = field(default_factory=list)
     auto_vendor_templates: list = field(default_factory=list)
@@ -1032,8 +1033,8 @@ class ReportElement:
     """Class holding results."""
 
     variant: str = 'html_element'
-    # 'html_table_row', 'result_table', 'result_plot', 'result_image'
-    text: str = ''  # html content or display text
+    # 'html_table_row', 'result_table', 'result_plot', 'result_image', 'image'
+    text: str = ''  # html content or plot/image selection text
     testcode: str = ''  # if coupled to results of specific testcode
     width: int = 100  # percent width of element
     result_pr_image: bool = True
@@ -1050,7 +1051,6 @@ class ReportTemplate:
     label: str = ''
     elements: list = field(default_factory=list)
     htmlhead: str = ''  # To override <head><style> from default
-    footer: str = ''
 
     def __post_init__(self):
         """Add default elements."""

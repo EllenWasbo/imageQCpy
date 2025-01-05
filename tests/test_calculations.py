@@ -326,10 +326,9 @@ def test_Xray_Hom():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-
     vals_0 = np.round(np.array(input_main.results['Hom']['values'][0]))
     vals_0_exp = np.array([1.088e+03, 9.000e+00, 1.170e+02, 9.100e+01,
-                           8.422e+03, 2.000e+01, 5.000e+00, 1.500e+01,
+                           8.422e+03, 2.000e+01, 0.000e+00, 9.000e+00,
                            9.000e+00, 3.400e+01, 8.000e+00, 3.400e+01,
                            2.000e+00, 1.000e+00])
 
@@ -398,7 +397,8 @@ def test_Xray_Var():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(np.array(input_main.results['Var']['values'][0]))
-    assert np.array_equal(values, np.array([31., 192., 80.]))
+    assert np.array_equal(values,
+                          np.array([192.,  81.,   2., 134.,  85.,   2.]))
 
 def test_Xray_Foc():
     input_main = InputMain(
@@ -416,9 +416,8 @@ def test_Xray_Foc():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    breakpoint()
     values = np.round(np.array(input_main.results['Foc']['values'][0]))
-    assert np.array_equal(values, np.array([31., 192., 80.]))
+    assert np.array_equal(values, np.array([85.,  2., 76., 47.,  2.,  1.]))
 
 def test_Xray_Def():
     input_main = InputMain(
@@ -439,7 +438,7 @@ def test_Xray_Def():
 
     calculate_qc.calculate_qc(input_main)
     vals = np.round(np.array(input_main.results['Def']['values'][0]))
-    assert np.array_equal(vals, np.array([430., 0., 9770., 0.]))
+    assert np.array_equal(vals, np.array([15127, 33617]))
 
 
 def test_Mammo_SDN():
@@ -514,9 +513,8 @@ def test_Mammo_cdm34():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-
-    vals = np.round(np.array(input_main.results['CDM']['values'][0]))
-    assert np.array_equal(vals, 0)  # TODO
+    vals = input_main.results['CDM']['values'][0]
+    assert np.array_equal(vals, [None, None, None, None])  # TODO
 
 
 def test_Mammo_cdm40():
@@ -536,9 +534,9 @@ def test_Mammo_cdm40():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
+    vals = input_main.results['CDM']['values'][0]
 
-    vals = np.round(np.array(input_main.results['CDM']['values'][0]))
-    assert np.array_equal(vals, 0)  # TODO
+    assert np.array_equal(vals, [None, None, None, None])  # TODO
 
 
 def test_NM_uniformity():

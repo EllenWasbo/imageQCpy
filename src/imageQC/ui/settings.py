@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from time import ctime
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 import copy
 
 from PyQt5.QtCore import Qt
@@ -18,9 +18,10 @@ from PyQt5.QtWidgets import (
     QApplication, qApp,
     QTreeWidget, QTreeWidgetItem, QStackedWidget,
     QVBoxLayout, QHBoxLayout, QGroupBox, QToolBar,
-    QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox,
+    QLabel, QLineEdit, QPlainTextEdit, QPushButton, QAction, QSpinBox, QCheckBox,
     QListWidget, QMessageBox, QFileDialog
     )
+import yaml
 
 # imageQC block start
 from imageQC.config.iQCconstants import (
@@ -162,6 +163,9 @@ class SettingsDialog(ImageQCDialog):
         add_widget(parent=self.item_shared_settings, snake='quicktest_templates',
                    title='QuickTest templates',
                    widget=QuickTestTemplatesWidget(self))
+        add_widget(parent=self.item_shared_settings, snake='report_templates',
+                   title='Report templates',
+                   widget=ReportTemplatesWidget(self))
 
         proceed = True
         if import_review_mode:
@@ -1102,6 +1106,54 @@ class QuickTestTemplatesWidget(StackWidget):
             self.current_template.group_names = []
 
 
+class ReportTemplatesWidget(StackWidget):
+    """Widget holding Report template settings."""
+
+    def __init__(self, dlg_settings):
+        header = 'Report templates'
+        subtxt = '''Manage templates for printable HTML report.<br>
+        The HTML report is generated based on the selected template and the 
+        currently available results in main window.<br>
+        To create and edit the template content go to the Report tool 
+        (in File menu).'''
+        super().__init__(dlg_settings, header, subtxt,
+                         mod_temp=True, grouped=True)
+        self.fname = 'report_templates'
+        self.empty_template = cfc.ReportTemplate()
+        self.finished_init = False
+
+        if self.import_review_mode is False:
+            self.wid_mod_temp.toolbar.removeAction(self.wid_mod_temp.act_move_modality)
+
+        vlo = QVBoxLayout()
+        self.hlo.addLayout(vlo)
+
+        self.txt_header = QPlainTextEdit(readOnly=True)
+        self.txt_header.setFixedHeight(100)
+        self.txt_elements = QPlainTextEdit(readOnly=True)
+        vlo.addWidget(uir.LabelHeader('Html &lt;head&gt;', 4))
+        vlo.addWidget(self.txt_header)
+        vlo.addWidget(uir.LabelHeader('Report elements', 4))
+        vlo.addWidget(self.txt_elements)
+
+        self.vlo.addWidget(uir.HLine())
+        self.vlo.addWidget(self.status_label)
+
+    def update_data(self):
+        """Update GUI with selected template."""
+        if self.current_template.htmlhead == '':
+            header = '(as default = as displayed using the Report tool)'
+        else:
+            header = self.current_template.htmlhead
+        self.txt_header.setPlainText(header)
+        txt = ''
+        txt = [
+            yaml.safe_dump(asdict(element),
+                           sort_keys=False)
+            for element in self.current_template.elements]
+        self.txt_elements.setPlainText('\n------------\n'.join(txt))
+
+
 @dataclass
 class ImportMain:
     """Class to replace MainWindow + hold imported templates when import_review_mode."""
@@ -1120,6 +1172,7 @@ class ImportMain:
     rename_patterns: dict = field(default_factory=dict)
     digit_templates: dict = field(default_factory=dict)
     quicktest_templates: dict = field(default_factory=dict)
+    report_templates: dict = field(default_factory=dict)
     paramsets: dict = field(default_factory=dict)
     auto_common: cfc.AutoCommon = field(default_factory=cfc.AutoCommon)
     auto_templates: dict = field(default_factory=dict)

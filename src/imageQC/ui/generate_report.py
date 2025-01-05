@@ -51,8 +51,10 @@ default_head = '''
                     padding: 10px;
                     content: "Page " counter(page) " / " counter(pages);}
                 }
-            .print:last-child {
-                page-break-after: auto;}
+            @media print {
+                .pagebreak { page-break-before: always; }
+                :lastchild {page-break-after: auto;}
+                }
             body {
                 font-family: Arial, Verdana, sans-serif;
                 font-size: 200%;
@@ -103,7 +105,7 @@ class GenerateReportDialog(ImageQCDialog):
         self.current_template = copy.deepcopy(self.empty_template)
         self.variants = [
             'html_table_row', 'html_element', 'result_table',
-            'result_plot', 'result_image']
+            'result_plot', 'result_image', 'image']
         self.edited = False
         self.lbl_edit = QLabel('')
         self.plot_canvas = ResultPlotCanvas(self.main)
@@ -151,9 +153,6 @@ class GenerateReportDialog(ImageQCDialog):
         btn_edit_head = QPushButton('Edit <head><style>')
         btn_edit_head.clicked.connect(self.edit_head)
         hlo_select_template.addWidget(btn_edit_head)
-        btn_edit_footer = QPushButton('Edit <footer>')
-        btn_edit_footer.clicked.connect(self.edit_footer)
-        hlo_select_template.addWidget(btn_edit_footer)
         hlo_select_template.addStretch()
 
         vlo.addWidget(QLabel(
@@ -170,6 +169,7 @@ class GenerateReportDialog(ImageQCDialog):
         self.table.setColumnWidth(3, 200)
         self.table.setMinimumHeight(500)
         self.table.setMinimumWidth(970)
+        self.table.setAlternatingRowColors(True)
         hlo_table.addWidget(self.table)
 
         self.toolbar = QToolBar()
@@ -268,18 +268,14 @@ class GenerateReportDialog(ImageQCDialog):
         self.cbox_template.clear()
         labels = [temp.label for temp
                   in self.modality_dict[self.main.current_modality]]
-        if len(labels) > 0:
-            self.cbox_template.addItems(labels)
-            if set_label in labels:
-                set_index = labels.index(set_label)
-            else:
-                set_index = 0
-            self.cbox_template.setCurrentIndex(set_index)
-            self.cbox_template.blockSignals(False)
+        self.cbox_template.addItems(labels)
+        if set_label in labels:
+            set_index = labels.index(set_label)
         else:
-            self.cbox_template.blockSignals(False)
+            set_index = 0
+        self.cbox_template.setCurrentIndex(set_index)
+        self.cbox_template.blockSignals(False)
         self.update_current_template()
-        self.fill_table()
         self.lastload = time()
 
     def flag_edit(self, flag=True):
@@ -498,15 +494,7 @@ class GenerateReportDialog(ImageQCDialog):
             self.flag_edit()
 
     def edit_head(self):
-        dlg = EditHeadFooterDialog(
-            self, self.current_template, head_or_footer='head')
-        if dlg.exec():
-            self.current_template = dlg.get_template()
-            self.flag_edit()
-
-    def edit_footer(self):
-        dlg = EditHeadFooterDialog(
-            self, self.current_template, head_or_footer='footer')
+        dlg = EditHeadDialog(self, self.current_template)
         if dlg.exec():
             self.current_template = dlg.get_template()
             self.flag_edit()
@@ -528,6 +516,7 @@ class GenerateReportDialog(ImageQCDialog):
             except IndexError:
                 self.cbox_template.setCurrentIndex(0)
                 self.current_template = copy.deepcopy(self.empty_template)
+        self.fill_table()
         self.flag_edit(False)
         self.main.stop_wait_cursor()
 
@@ -565,8 +554,6 @@ class GenerateReportDialog(ImageQCDialog):
                 template_id = labels.index(label)
             else:
                 template_id = self.cbox_template.currentIndex()
-            if not before_select_new:
-                template_id -= 1  # first is empty
             self.modality_dict[
                 self.main.current_modality][template_id] = copy.deepcopy(
                     self.current_template)
@@ -586,7 +573,6 @@ class GenerateReportDialog(ImageQCDialog):
                     self.lbl_edit.setText('')
                     self.lastload = time()
                     self.flag_edit(False)
-
                     if new_added:
                         self.fill_template_list(set_label=self.current_template.label)
                 else:
@@ -613,6 +599,7 @@ class GenerateReportDialog(ImageQCDialog):
             elif element.variant == 'html_table_row':
                 top_item = QTreeWidgetItem([
                     'html_table_row', '', element.caption, element.note])
+                top_item.b
                 for sub in self.current_template.elements[i + 1]:
                     row_strings = [sub.variant, sub.testcode,
                                    sub.caption + sub.text, sub.note]
@@ -684,7 +671,7 @@ class GenerateReportDialog(ImageQCDialog):
                     idx = self.test_codes.index(testcode)
                     header = self.test_names[idx]
                 test_header = (
-                    f'<table class="test_header"><tr><th>{header}'
+                    f'<br><table class="test_header"><tr><th>{header}'
                     '</th></tr></table>')
             return test_header
 
@@ -722,8 +709,6 @@ class GenerateReportDialog(ImageQCDialog):
                     if progress_modal.wasCanceled():
                         break
             progress_modal.setValue(max_progress)
-            footer = self.convert_coded_text(self.current_template.footer)
-            html.extend(['<footer>', footer, '</footer>'])
             html.extend(['</body>', '</html>'])
             with open(fname, "w") as html_file:
                 html_file.write("\n".join(html))
@@ -768,10 +753,13 @@ class GenerateReportDialog(ImageQCDialog):
         if element.variant == 'result_plot':
             self.plot_canvas.plot(selected_text=element.text)
             self.plot_canvas.fig.savefig(buffer, format='png')
-        else:  # result_image
+        elif element.variant == 'result_image':
             self.wid_result_image.canvas.result_image_draw(
                 selected_text=element.text)
             self.wid_result_image.canvas.fig.savefig(buffer, format='png')
+        elif element.variant == 'image':
+            self.main.wid_image_display.canvas.fig.savefig(
+                buffer, format='png')
 
         buffer.seek(0)
         img = base64.b64encode(buffer.getbuffer()).decode('utf-8')
@@ -823,6 +811,9 @@ class GenerateReportDialog(ImageQCDialog):
                 html_this = element.text
 
         elif element.variant == 'result_table':
+            self.main.update_current_test(
+                reset_index=False, refresh_display=False,
+                set_test=element.testcode)
             try:
                 suffix = ''
                 if element.text == 'Supplement table':
@@ -857,6 +848,34 @@ class GenerateReportDialog(ImageQCDialog):
                 total_width = element.width
                 width_px = (full_width - 2*margin) * element.width / 100
                 image_names = get_image_names(self.main)
+                for img_no in img_nos:
+                    html_this.append(
+                        '<td valign="middle" align="center">')
+                    self.main.set_active_img(img_no)
+                    html_this.append(
+                        self.add_figure(element, width_px=width_px,
+                                        image_name=image_names[img_no]))
+                    html_this.append('</td>')
+                    total_width += element.width
+                    if total_width > 100:
+                        total_width = element.width
+                        html_this.append('</tr><tr>')
+                html_this.append('</tr></table>')
+                html_this = "\n".join(html_this)
+        elif element.variant == 'image':
+            self.main.update_current_test(
+                reset_index=False, refresh_display=False,
+                set_test='DCM')  # no ROIs annotated
+            img_nos = list(range(len(self.main.imgs)))
+
+            if len(img_nos) > 0:
+                html_this = ['<table class="image_table"><tr>']
+                n_pr_row = element.width
+                
+                single_width = 100 / n_pr_row
+                width_px = (full_width - 2*margin) * single_width / 100
+                image_names = get_image_names(self.main)
+                total_width = single_width
                 for img_no in img_nos:
                     html_this.append(
                         '<td valign="middle" align="center">')
@@ -923,9 +942,11 @@ class AddEditElementDialog(ImageQCDialog):
         wid_table = QWidget()
         wid_html_element = QWidget()
         wid_result_element = QWidget()
+        wid_image_element = QWidget()
         self.stack_variants.addWidget(wid_table)
         self.stack_variants.addWidget(wid_html_element)
         self.stack_variants.addWidget(wid_result_element)
+        self.stack_variants.addWidget(wid_image_element)
         vlo.addWidget(self.stack_variants)
 
         # Stack table
@@ -952,6 +973,9 @@ class AddEditElementDialog(ImageQCDialog):
         btn_dicom_hash = QPushButton('Generate DICOM info content')
         btn_dicom_hash.clicked.connect(self.parent.generate_dicom_hash)
         vlo_html.addWidget(btn_dicom_hash)
+        btn_add_pagebreak = QPushButton('Add pagebreak')
+        btn_add_pagebreak.clicked.connect(self.add_pagebreak)
+        vlo_html.addWidget(btn_add_pagebreak)
         btn_preview = QPushButton('Preview content')
         btn_preview.clicked.connect(self.preview_html_element)
         vlo_html.addWidget(btn_preview)
@@ -999,6 +1023,19 @@ class AddEditElementDialog(ImageQCDialog):
             'where each cell has the set width (%). '
             '"Result from image number" is then ignored.'))
 
+        # Stack image
+        vlo_image = QVBoxLayout()
+        wid_image_element.setLayout(vlo_image)
+        self.n_images_pr_row = QSpinBox()
+        self.n_images_pr_row.setRange(1, 10)
+        flo_image = QFormLayout()
+        vlo_image.addLayout(flo_image)
+        flo_image.addRow(QLabel('Number of images pr row:'),
+                          self.n_images_pr_row)
+        vlo_image.addWidget(uir.LabelItalic(
+            'All images will be included.'))
+        #TODO ' If group names are specified, images will be grouped.'))
+
         hlo_buttons_btm = QHBoxLayout()
         vlo.addLayout(hlo_buttons_btm)
         hlo_buttons_btm.addStretch()
@@ -1016,7 +1053,7 @@ class AddEditElementDialog(ImageQCDialog):
         idx = self.variants.index(self.element.variant)
         self.cbox_variant.setCurrentIndex(idx)
 
-    def update_result_options(self, plot_or_image='plot'):
+    def update_result_options(self, preset_text='', plot_or_image='plot'):
         widget_cbox = getattr(self, f'cbox_{plot_or_image}')
         widget_cbox.clear()
         testcode = self.cbox_testcode.currentText().lower()
@@ -1034,6 +1071,8 @@ class AddEditElementDialog(ImageQCDialog):
                 widget_options.itemText(i) for i
                 in range(widget_options.count())]
             widget_cbox.addItems(options)
+            if preset_text in options:
+                widget_cbox.setCurrentText(preset_text)
 
     def update_variant(self):
         sel = self.cbox_variant.currentIndex()
@@ -1046,6 +1085,9 @@ class AddEditElementDialog(ImageQCDialog):
             self.stack_variants.setCurrentIndex(1)
             self.txt_html.setPlainText(self.element.text)
             self.txt_header.setText(self.element.caption)
+        elif sel == 5:
+            self.stack_variants.setCurrentIndex(3)
+            self.n_images_pr_row.setValue(self.element.width)
         else:
             self.stack_variants.setCurrentIndex(2)
             self.cbox_testcode.setCurrentText(self.element.testcode)
@@ -1058,29 +1100,31 @@ class AddEditElementDialog(ImageQCDialog):
                 self.result_pr_image.setEnabled(False)
                 self.result_from_image.setEnabled(False)
                 self.result_from_image.setEnabled(False)
-            elif sel == 3:
-                self.cbox_plot.setEnabled(True)
-                self.update_result_options(plot_or_image='plot')
+            else:
                 self.result_pr_image.setEnabled(True)
                 self.result_pr_image.setChecked(self.element.result_pr_image)
                 if not self.element.result_pr_image:
                     self.result_from_image.setEnabled(True)
                     self.result_from_image.setValue(
                         self.element.result_from_image)
-            elif sel == 4:
-                self.cbox_result_image.setEnabled(True)
-                self.update_result_options(plot_or_image='result_image')
-                self.result_pr_image.setEnabled(True)
-                self.result_pr_image.setChecked(self.element.result_pr_image)
-                if not self.element.result_pr_image:
-                    self.result_from_image.setEnabled(True)
-                    self.result_from_image.setValue(
-                        self.element.result_from_image)
+                if sel == 3:
+                    self.cbox_plot.setEnabled(True)
+                    self.update_result_options(
+                        self.element.text, plot_or_image='plot')
+                elif sel == 4:
+                    self.cbox_result_image.setEnabled(True)
+                    self.update_result_options(
+                        self.element.text, plot_or_image='result_image')
 
     def update_result_from_image(self):
         self.result_from_image.setEnabled(
             not self.result_pr_image.isChecked())
         self.result_from_image.setValue(self.element.result_from_image)
+
+    def add_pagebreak(self):
+        txt = self.txt_html.toPlainText()
+        txt = txt + '<div class="pagebreak"> </div>'
+        self.txt_html.setPlainText(txt)
 
     def preview_html_element(self):
         sel = self.cbox_variant.currentIndex()
@@ -1102,6 +1146,11 @@ class AddEditElementDialog(ImageQCDialog):
             self.element.text = self.txt_html.toPlainText()
             self.element.caption = self.txt_header.text()
             self.element.testcode = ''
+        elif sel == 5:
+            self.element.text = ''
+            self.element.testcode = ''
+            self.element.caption = 'Images'
+            self.element.width = self.n_images_pr_row.value()
         else:
             self.element.testcode = self.cbox_testcode.currentText()
             self.element.width = self.width.value()
@@ -1170,24 +1219,21 @@ class AddEditNoteDialog(ImageQCDialog):
         return self.element
 
 
-class EditHeadFooterDialog(ImageQCDialog):
-    """Dialog to edit head or footer of report."""
+class EditHeadDialog(ImageQCDialog):
+    """Dialog to edit head of report."""
 
-    def __init__(self, parent, template, head_or_footer='head'):
+    def __init__(self, parent, template):
         super().__init__(parent=parent)
         self.template = template
-        self.head_or_footer = head_or_footer
-        self.setWindowTitle(f'Edit {head_or_footer} of html file template')
+        self.setWindowTitle('Edit <head> of html file template')
         vlo = QVBoxLayout()
         self.setLayout(vlo)
         self.html = QPlainTextEdit(self)
-        if head_or_footer == 'head':
-            if self.template.htmlhead == '':
-                txt = default_head
-            else:
-                txt = self.template.htmlhead
+        self.html.setMinimumSize(600, 600)
+        if self.template.htmlhead == '':
+            txt = default_head
         else:
-            txt = self.template.footer
+            txt = self.template.htmlhead
         self.html.setPlainText(txt)
         vlo.addWidget(self.html)
 
@@ -1205,10 +1251,7 @@ class EditHeadFooterDialog(ImageQCDialog):
         hlo_buttons_btm.addWidget(btn_close)
 
     def get_template(self):
-        if self.head_or_footer == 'head':
-            self.template.htmlhead = self.html.toPlainText()
-        else:
-            self.template.footer = self.html.toPlainText()
+        self.template.htmlhead = self.html.toPlainText()
         return self.template
 
 
@@ -1238,6 +1281,8 @@ class GenerateDicomHashDialog(ImageQCDialog):
             texts=self.parent.tags_active)
         vlo.addWidget(uir.LabelItalic('Available DICOM tags'))
         vlo.addWidget(self.list_tags)
+        self.chk_table = QCheckBox('Generate html-table for tags')
+        vlo.addWidget(self.chk_table)
         btn_copy_code = QPushButton('Copy code for selected tag(s) to clipboard')
         btn_copy_code.clicked.connect(self.copy_code)
         vlo.addWidget(btn_copy_code)
@@ -1252,13 +1297,26 @@ class GenerateDicomHashDialog(ImageQCDialog):
     def get_code(self):
         txt = ''
         sel_texts = self.list_tags.get_checked_texts()
-        if len(sel_texts) > 0:
-            if len(sel_texts) == 1:
-                attr = sel_texts[0]
-                txt = f'{attr}: #DICOM[{attr}][active]'
-            else:
-                txt = [f'{attr}: #DICOM[{attr}][active]<br>'
-                       for attr in sel_texts]
+        if self.chk_table.isChecked():
+            if len(sel_texts) > 0:
+                if len(sel_texts) == 1:
+                    attr = sel_texts[0]
+                    txt = ['<table>', 
+                           f'<tr><td>{attr}:</td><td>#DICOM[{attr}][active]</td></tr>',
+                           '</table>']
+                else:
+                    txt = [f'<tr><td>{attr}:</td><td>#DICOM[{attr}][active]</td></tr>'
+                           for attr in sel_texts]
+                    txt.insert(0, '<table>')
+                    txt.append('</table>')
+        else:
+            if len(sel_texts) > 0:
+                if len(sel_texts) == 1:
+                    attr = sel_texts[0]
+                    txt = f'{attr}: #DICOM[{attr}][active]'
+                else:
+                    txt = [f'{attr}: #DICOM[{attr}][active]<br>'
+                           for attr in sel_texts]
         return txt
 
     def copy_code(self):

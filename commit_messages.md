@@ -1,8 +1,8 @@
 # v3.1.3
-_xxx xx, 2024_
+_Jan 6, 2025_
 
 New functionalities:
-- Generate html-report by template.
+- Generate html/pdf-report from the current result. Save setup as templates.
 - Xray:
 	- Added option to test Homogeneity according to AAPM TG150 (Flat field test). Find option in the Homogeneity test tab under Methods.
 	- Added option to read focal spot size from star test pattern.
@@ -11,7 +11,7 @@ New functionalities:
 		- Added button to import Mammo QAP files from Automation dialog. Export from modality include all files. The new import function ignore files already analysed.
 		- Better explaination for the auto-templates from the info-button in Settings - Automation templates vendor files (Mammo)
 		- Tolerance read from the QAP-files and fixed automatic link to the right tolerance-templates (Limit and plot templates).
-	- Added test for analysing CDMAM v3.4 and v4.0 phantoms. Test is not validated yet and not finished.
+	- Added test for analysing CDMAM v3.4 and v4.0 phantoms. Test is not fully validated yet.
 
 Changes:
 - Test Variance (Xray and Mammo):
@@ -21,7 +21,7 @@ Changes:
 - Window level widget: 
 	- Added button to set window level to (min, max) of central part of image (half the width/height)
 	- Lock window level (checkbox) changed to toggle-button with lock-icon.
-- Crosshair always removed when test DCM is selected.
+- Crosshair always removed when test DCM is selected. I.e. quick option to remove annotations is to select test DCM.
 - Automation dialog:
 	- Modality filter changed from dropdown list to checkable list. Last used modality filter will be saved to user preferences.
 - CT task based image analysis: improved export options
@@ -38,8 +38,8 @@ Fixes:
 
 Code structure:
 - gathered MTF methods from calculate_qc.py and mini_methods_calculate.py into a new file mtf_methods.py
-- gathered NM SNI and uniformity methods from from calculate_qc.py and mini_methods_calculate.py into a new file nm_methods.py
-- started coding for CDMAM analysis, hidden if not in developer mode.
+- gathered NM SNI and uniformity methods from calculate_qc.py and mini_methods_calculate.py into a new file nm_methods.py
+
 
 # v3.1.2
 _Oct 29, 2024_

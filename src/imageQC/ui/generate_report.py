@@ -39,7 +39,7 @@ from imageQC.config.iQCconstants import (
 
 
 # Equivalent A4 paper dimensions in pixels at 300 DPI 2480 pixels x 3508 pixels
-default_head = '''
+DEFAULT_HEAD = '''
     <head>
         <style>
             @page {
@@ -393,7 +393,7 @@ class GenerateReportDialog(ImageQCDialog):
                                        element=sel_elem)
             if dlg.exec():
                 element = dlg.get_element()
-                if col == None:
+                if col is None:
                     self.current_template.elements[row] = element
                 else:
                     self.current_template.elements[row][col] = element
@@ -406,7 +406,7 @@ class GenerateReportDialog(ImageQCDialog):
             dlg = AddEditNoteDialog(self, sel_elem)
             if dlg.exec():
                 element = dlg.get_element()
-                if col == None:
+                if col is None:
                     self.current_template.elements[row] = element
                 else:
                     self.current_template.elements[row][col] = element
@@ -599,7 +599,6 @@ class GenerateReportDialog(ImageQCDialog):
             elif element.variant == 'html_table_row':
                 top_item = QTreeWidgetItem([
                     'html_table_row', '', element.caption, element.note])
-                top_item.b
                 for sub in self.current_template.elements[i + 1]:
                     row_strings = [sub.variant, sub.testcode,
                                    sub.caption + sub.text, sub.note]
@@ -640,7 +639,7 @@ class GenerateReportDialog(ImageQCDialog):
         def get_header_pr_top_element():
             headers = []
             previous_code = ''
-            for i, element in enumerate(self.current_template.elements):
+            for element in self.current_template.elements:
                 if isinstance(element, list):
                     testcodes = []
                     for sub in element:
@@ -683,7 +682,7 @@ class GenerateReportDialog(ImageQCDialog):
             progress_modal = uir.ProgressModal(
                 "Generating report...", "Cancel",
                 0, max_progress, self, minimum_duration=0)
-            html_head = default_head if self.current_template.htmlhead == '' else self.current_template.htmlhead
+            html_head = DEFAULT_HEAD if self.current_template.htmlhead == '' else self.current_template.htmlhead
             html = ['<!DOCTYPE html>','<html>', html_head]
             testcodes = get_header_pr_top_element()
             for i, element in enumerate(self.current_template.elements):
@@ -732,11 +731,11 @@ class GenerateReportDialog(ImageQCDialog):
             html_lines.append('</tr>')
             values_formatted = format_result_table(
                 self.main, testcode, values, headers)
-            for r, row in enumerate(values_formatted):
+            for rowno, row in enumerate(values_formatted):
                 html_lines.append('<tr class="result_table">')
                 if pr_image:
                     html_lines.append(
-                        f'<td class="result_table">{image_names[r]}</td>')
+                        f'<td class="result_table">{image_names[rowno]}</td>')
                 html_lines.extend([f'<td class="result_table">{val}</td>'
                                    for val in row])
                 html_lines.append('</tr>')
@@ -788,18 +787,18 @@ class GenerateReportDialog(ImageQCDialog):
             for sub_txt in text_split[1:]:
                 sub_txt_split = sub_txt.split(']')
                 attr = sub_txt_split[0]
-                no = sub_txt_split[1][1:]
+                nmb = sub_txt_split[1][1:]
                 attr_no = self.tags_active.index(attr)
                 val = '-'
-                if no == 'active':
+                if nmb == 'active':
                     val = self.values_active[attr_no]
                 else:
                     try:
-                        imgno = int(no)
+                        imgno = int(nmb)
                         val = self.get_tag_value(imgno, attr)
                     except TypeError:
                         pass
-                text = text.replace(f'#DICOM[{attr}][{no}]', val)
+                text = text.replace(f'#DICOM[{attr}][{nmb}]', val)
         return text
 
     def add_html_element(self, element, full_width=2480, margin=50):
@@ -871,7 +870,6 @@ class GenerateReportDialog(ImageQCDialog):
             if len(img_nos) > 0:
                 html_this = ['<table class="image_table"><tr>']
                 n_pr_row = element.width
-                
                 single_width = 100 / n_pr_row
                 width_px = (full_width - 2*margin) * single_width / 100
                 image_names = get_image_names(self.main)
@@ -1231,7 +1229,7 @@ class EditHeadDialog(ImageQCDialog):
         self.html = QPlainTextEdit(self)
         self.html.setMinimumSize(600, 600)
         if self.template.htmlhead == '':
-            txt = default_head
+            txt = DEFAULT_HEAD
         else:
             txt = self.template.htmlhead
         self.html.setPlainText(txt)
@@ -1301,7 +1299,7 @@ class GenerateDicomHashDialog(ImageQCDialog):
             if len(sel_texts) > 0:
                 if len(sel_texts) == 1:
                     attr = sel_texts[0]
-                    txt = ['<table>', 
+                    txt = ['<table>',
                            f'<tr><td>{attr}:</td><td>#DICOM[{attr}][active]</td></tr>',
                            '</table>']
                 else:
@@ -1326,4 +1324,3 @@ class GenerateDicomHashDialog(ImageQCDialog):
                 txt = [txt]
             dataf = pd.DataFrame(txt)
             dataf.to_clipboard(index=False, header=False)
-

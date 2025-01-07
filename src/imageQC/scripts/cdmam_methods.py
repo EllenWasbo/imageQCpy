@@ -52,7 +52,6 @@ def detrend_sub(sub, sigma_smooth, median_filter_width):
 
 def get_binary_sub(sub, percentile=25):
     """Get binary of matrix setting threshold to specified percentile value."""
-    sz_x_sub, sz_y_sub = sub.shape
     binary = np.zeros(sub.shape, dtype=bool)
     threshold = np.percentile(sub, percentile)
     binary[sub < threshold] = True
@@ -76,8 +75,7 @@ def find_angles_sub(binary_sub, angle_range, margin, threshold_peaks):
     """
     angle_resolution = np.deg2rad(0.5)
     n_angles = np.ceil(np.diff(angle_range)[0] / angle_resolution)
-    if n_angles < 5:
-        n_angles = 5
+    n_angles = max(n_angles, 5)
     tested_angles = np.linspace(
         angle_range[0], angle_range[1],
         round(n_angles), endpoint=False)
@@ -200,6 +198,7 @@ def find_phantom_part(image, margin, axis=0, pos_profile=None):
 
 
 def find_cdmam(image, image_info, paramset):
+    """Find phantom in image, ignoring signal outside phantom."""
     errmsgs = []
     px_pr_mm = round(1./image_info.pix[0])
     margin = 5 * px_pr_mm
@@ -898,7 +897,7 @@ def calculate_fitted_psychometric(cdmam_table_dict, sigma):
                 if r[0] is not None and threshold_thickness[0] is not None:
                     # r[0] None if outside range of euref r-scale
                     ##thickness_predict = r[0] * threshold_thickness[0]
-                    
+
                     contrast_auto = mmcalc.get_curve_values(
                         euref_thickness_contast['contrast'],
                         euref_thickness_contast['thickness'],

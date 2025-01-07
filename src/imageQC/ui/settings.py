@@ -412,7 +412,7 @@ class SettingsDialog(ImageQCDialog):
             dlg = SettingsDialog(
                 import_main, initial_view='Config folder',
                 width1=self.width1, width2=self.width2,
-                import_review_mode=True, exclude_paramsets=(not paramsets_imported))
+                import_review_mode=True, exclude_paramsets=not paramsets_imported)
             res = dlg.exec()
             if res:
                 import_main = dlg.get_marked()

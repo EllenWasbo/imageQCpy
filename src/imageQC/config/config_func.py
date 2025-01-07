@@ -1213,7 +1213,7 @@ def import_settings(import_main):
     # auto_common
     try:
         if import_main.auto_common.import_path != '':
-            status, path = save_settings(import_main.auto_common, fname='auto_common')
+            _, _ = save_settings(import_main.auto_common, fname='auto_common')
     except AttributeError:
         pass
 

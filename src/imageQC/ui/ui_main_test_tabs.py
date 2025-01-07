@@ -770,14 +770,15 @@ class ParamsTabCommon(QTabWidget):
         self.flat_widget_aapm = QWidget()
         self.flat_widget_aapm.setLayout(hlo_flat_widget)
 
-        hlo_flat_widget.addStretch()
+        flo_left_aapm = QFormLayout()
+        hlo_flat_widget.addLayout(flo_left_aapm)
         hlo_flat_widget.addWidget(uir.VLine())
         vlo_right = QVBoxLayout()
         hlo_flat_widget.addLayout(vlo_right)
         flo_right = QFormLayout()
         vlo_right.addLayout(flo_right)
 
-        flo_right.addRow(QLabel('Anomalous pixels (N stdev from average)'),
+        flo_left_aapm.addRow(QLabel('Anomalous pixels (N stdev from average)'),
                          self.hom_anomalous_factor)
         flo_right.addRow(QLabel('Result plot:'), self.hom_result_plot_aapm)
         flo_right.addRow(QLabel('Result image:'), self.hom_result_image_aapm)
@@ -840,7 +841,6 @@ class ParamsTabCommon(QTabWidget):
                          self.hom_deviating_pixels)
         flo_right.addRow(QLabel('Deviating ROIs (% from average)'),
                          self.hom_deviating_rois)
-        
         self.hom_result_image = QComboBox()
         self.hom_result_image.addItems(
             ['Average pr ROI map',
@@ -2929,8 +2929,10 @@ class ParamsTabNM(ParamsTabCommon):
         f_btm.addRow(self.sni_show_labels, self.sni_plot_low)
         f_btm.addRow(QLabel('NPS sampling frequency (mm-1)'),
                      self.sni_sampling_frequency)
-        f_btm.addRow(QLabel('Plot'), self.sni_plot)
-        f_btm.addRow(QLabel('Result image'), self.sni_result_image)
+        f_btm2 = QFormLayout()
+        vlo_right.addLayout(f_btm2)
+        f_btm2.addRow(QLabel('Plot'), self.sni_plot)
+        f_btm2.addRow(QLabel('Result image'), self.sni_result_image)
         hlo_selected_roi = QHBoxLayout()
         vlo_right.addLayout(hlo_selected_roi)
         hlo_selected_roi.addWidget(QLabel('Selected ROI for plot/image'))

@@ -3,7 +3,7 @@
 ##############################################################################
 #                                                                            #
 # Copyright 2016, John Bieling                                               #
-#   modified 2022 by Ellen Wasbo to fix for Python 3 + fix page links        #
+#   modified 2023 by Ellen Wasbo to fix for Python 3 + fix page links        #
 #                                                                            #
 # This program is free software; you can redistribute it and/or modify       #
 # it under the terms of the GNU General Public License as published by       #
@@ -29,6 +29,9 @@ import re
 import os.path
 
 
+GITHUB_IMG_PATH = "https://github.com/EllenWasbo/wiki_images/blob/main/imageQC"
+LOCAL_IMG_PATH = "file:///C:/Users/ellen/Documents/GitHub/wiki_images/imageQC"
+
 def fix_page_links(html_strings):
     for lineno, line in enumerate(html_strings):
         if 'class="breakbefore"' in line:
@@ -49,7 +52,12 @@ def fix_page_links(html_strings):
             if change:
                 line = 'href="'.join(splitline)
                 html_strings[lineno] = line
+        if GITHUB_IMG_PATH in line:
+            line = line.replace(GITHUB_IMG_PATH, LOCAL_IMG_PATH)
+            line = line.replace("?raw=true", "")
+            html_strings[lineno] = line
     return html_strings
+
 
 def getFilesInDirectory(directory, failOnError=True):
     if os.path.exists(directory):
@@ -77,7 +85,8 @@ def parseFile(path, file):
     # Try to convert the source via pandoc to html, otherwise simply
     # open it and treat as pure html
     try:
-        html = subprocess.check_output("pandoc --ascii -r gfm " + path + file, shell=True)
+        html = subprocess.check_output(
+            "pandoc --ascii --extract-media=downloaded_imgs -r gfm --mathjax " + path + file, shell=True)
     except subprocess.CalledProcessError:
         print(
             f"Could not convert {file} with pandoc from github markdown to html, trying to open it as plain html.")
@@ -169,7 +178,7 @@ def readGlobalWikidocComments(file):
     
             if not "filename" in wikidocConfig:
                 wikidocConfig["filename"] = "wikidoc.pdf"
-    
+            wkhtmltopdfConfig.append("--enable-local-file-access ")
             return (wikidocConfig, wkhtmltopdfConfig)
 
     except Exception as error:

@@ -625,7 +625,7 @@ class ParamSetPET(ParamSetCommon):
         default_factory=lambda: [10., 13., 17., 22., 28., 37.])  # in mm NB increasing
     rec_sphere_dist: float = 57.  # distance center to center of spheres in mm
     rec_sphere_percent: int = 50  # % threshold to evaluate mean from
-    rec_plot: int = 0  # 0 = rec max, 1 rec avg, 2 rec peak, 3 z-profile
+    rec_plot: int = 0  # 0 = table values, 1 = z-profile
     rec_earl: int = 1  # tolerances from 0 = None, 1 = EARL1, 2 = EARL2
     rec_background_volume: int = 9500
     mtf_type: int = 2

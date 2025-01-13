@@ -1192,7 +1192,7 @@ def run_template_vendor(auto_template, modality,
                     proceed = False
                 else:
                     if res['status'] is False:
-                        log.append(f'\t {res["errmmsg"]} {file}')
+                        log.append(f'\t {res["errmsg"]} {file}')
                         proceed = False
                 if proceed:
                     status, print_array = append_auto_res_vendor(

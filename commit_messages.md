@@ -1,3 +1,12 @@
+# v3.1.4
+_Jan XX, 2025_
+
+Fixes from v3.1.3
+- CDMAM plots sets aspect ratio to 1, caused subsequent plots to be strange if very different axis scales. The aspect ratio is now reset an all new plots.
+- Fixed error when reading CDMAM v3.4 phantom y-position
+- Fixed error on generate report: Adding images as element with specific number of images pr row - now corredtly adding new row after N images
+- Fixed updating Result plot and image when new selection for specific tests where trouble when introduced report_generator and its flexibility from v3.1.3.
+
 # v3.1.3
 _Jan 6, 2025_
 

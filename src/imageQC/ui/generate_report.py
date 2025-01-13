@@ -47,7 +47,6 @@ DEFAULT_HEAD = '''
                 height: 3508px;
                 margin: 50px;
                 @bottom-right {
-                    font-size: 40px;
                     padding: 10px;
                     content: "Page " counter(page) " / " counter(pages);}
                 }
@@ -873,8 +872,7 @@ class GenerateReportDialog(ImageQCDialog):
                 single_width = 100 / n_pr_row
                 width_px = (full_width - 2*margin) * single_width / 100
                 image_names = get_image_names(self.main)
-                total_width = single_width
-                for img_no in img_nos:
+                for idx, img_no in enumerate(img_nos):
                     html_this.append(
                         '<td valign="middle" align="center">')
                     self.main.set_active_img(img_no)
@@ -882,9 +880,8 @@ class GenerateReportDialog(ImageQCDialog):
                         self.add_figure(element, width_px=width_px,
                                         image_name=image_names[img_no]))
                     html_this.append('</td>')
-                    total_width += element.width
-                    if total_width > 100:
-                        total_width = element.width
+                    next_col_no = (idx + 1) % n_pr_row
+                    if next_col_no == 0:
                         html_this.append('</tr><tr>')
                 html_this.append('</tr></table>')
                 html_this = "\n".join(html_this)
@@ -1063,6 +1060,8 @@ class AddEditElementDialog(ImageQCDialog):
                     attrib = attrib + '_aapm'
             except AttributeError:
                 pass
+        elif testcode == 'rec':
+            attrib = 'rec_type'
         widget_options = getattr(widget_params, attrib, None)
         if widget_options is not None:
             options = [

@@ -345,20 +345,22 @@ class ResultPlotCanvas(PlotCanvas):
 
         If selected_text is set = generate report specific selection.
         """
+        if not isinstance(selected_text, str):
+            selected_text = ''
         self.ax.clear()
         self.title = ''
         self.xtitle = 'x'
         self.ytitle = 'y'
         self.default_range_x = [None, None]
         self.default_range_y = [None, None]
-        self.legend_location = 'upper right'
+        self.legend_location = 'best'
         self.bars = []
         self.curves = []
         self.scatters = []
         if self.main.current_test == 'vendor':
             try:
                 _ = self.main.results['vendor']['details']
-                self.vendor()
+                self.vendor(selected_text)
             except KeyError:
                 pass
         else:
@@ -376,6 +378,8 @@ class ResultPlotCanvas(PlotCanvas):
 
         if len(self.curves) > 0:
             x_only_int = True
+            self.ax.set_xscale('linear')  # reset if previous other than lin
+            self.ax.set_yscale('linear')
             for curve in self.curves:
                 if 'markersize' not in curve:
                     curve['markersize'] = 6.
@@ -434,12 +438,14 @@ class ResultPlotCanvas(PlotCanvas):
                 self.ax.set_xlim(self.default_range_x)
             if None not in self.default_range_y:
                 self.ax.set_ylim(self.default_range_y)
+            self.ax.set_aspect('auto')
         elif len(self.bars) > 0:
             try:
                 for bar in self.bars:
                     self.ax.bar(bar['names'], bar['values'])
                     self.ax.set_xticklabels(bar['names'], rotation=60,
                                             ha='right', rotation_mode='anchor')
+                    self.ax.set_aspect('auto')
             except ValueError:
                 pass
                 # seen when in results, results and options change, #TODO better avoid
@@ -1653,24 +1659,24 @@ class ResultPlotCanvas(PlotCanvas):
 
         if self.main.current_modality in ['Xray', 'Mammo']:
             test_widget = self.main.stack_test_tabs.currentWidget()
-            sel_text = test_widget.nps_plot_profile.currentText()
+            sel_prof = test_widget.nps_plot_profile.currentText()
             profile_keys = []
             info_texts = []
             styles = []
-            if sel_text == 'all':
+            if sel_prof  == 'all':
                 profile_keys = ['radial_profile', 'u_profile', 'v_profile']
                 info_texts = [' radial', ' horizontal', ' vertical']
                 styles = ['-b', '-m', '-c']
             else:
-                if sel_text == 'radial':
+                if sel_prof == 'radial':
                     profile_keys = ['radial_profile']
                     info_texts.append(' radial')
                     styles.append('-b')
-                if 'horizontal' in sel_text:
+                if 'horizontal' in sel_prof:
                     profile_keys.append('u_profile')
                     info_texts.append(' horizontal')
                     styles.append('-m')
-                if 'vertical' in sel_text:
+                if 'vertical' in sel_prof:
                     profile_keys.append('v_profile')
                     info_texts.append(' vertical')
                     styles.append('-c')
@@ -1819,12 +1825,15 @@ class ResultPlotCanvas(PlotCanvas):
         details_dict = self.main.results['Rec']['details_dict']
         test_widget = self.main.stack_test_tabs.currentWidget()
 
-        def plot_Rec_curve(title):
+        def plot_Rec_curve(sel_text):
             """Plot Rec values together with EARL tolerances."""
-            self.title = title
+            self.title = sel_text
             self.xtitle = 'Sphere diameter (mm)'
             roi_sizes = self.main.current_paramset.rec_sphere_diameters
-            rec_type = test_widget.rec_type.currentIndex()
+            wid_rec_type = test_widget.rec_type
+            rec_types = [wid_rec_type.itemText(i) for i
+                         in range(wid_rec_type.count())]
+            rec_type = rec_types.index(sel_text)
             self.curves.append(
                 {'label': 'measured values', 'xvals': roi_sizes,
                  'yvals': details_dict['values'][rec_type][:-1], 'style': '-bo'})
@@ -1888,12 +1897,14 @@ class ResultPlotCanvas(PlotCanvas):
         if sel_text == '':
             try:
                 sel_text = test_widget.rec_plot.currentText()
+                if 'z-profile' in sel_text:
+                    plot_z_profile()  # not an option if generate_report
+                    sel_text = ''
+                else:
+                    sel_text = test_widget.rec_type.currentText()
             except AttributeError:
                 sel_text = ''
-        if 'z-profile' in sel_text:
-            plot_z_profile()
-        else:
-            sel_text = test_widget.rec_type.currentText()
+        if sel_text != '':
             plot_Rec_curve(sel_text)
 
     def Rin(self, sel_text):
@@ -2706,7 +2717,7 @@ class ResultPlotCanvas(PlotCanvas):
         self.xtitle = 'Energy (keV)'
         self.ytitle = 'Counts'
         details_list = self.main.results['vendor']['details']
-        colors = ['b', 'lime', 'c', 'r', 'm', 'darkorange']
+        colors = ['b', 'r', 'c', 'm', 'lime', 'darkorange']
         for i, details in enumerate(details_list):
             col_i = i % len(colors)
             self.curves.append(

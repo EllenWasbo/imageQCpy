@@ -28,15 +28,15 @@ def fix_cropped_sub(image, x, y, wi):
         sub[0:-y1,:] = np.median(sub)
     elif y2 >= image.shape[0]:
         cropped = image[y1:, x1:x2]
-        sub[0:cropped.shape[1], :] = cropped
+        sub[0:cropped.shape[0], :] = cropped
         sub[cropped.shape[1]:, :] = np.median(cropped)
     elif x1 < 0:
         sub[:,-x1:] = image[y1:y2, 0:x2]
         sub[:,0:-x1] = np.median(sub)
     elif x2 >= image.shape[1]:
         cropped = image[y1:y2, x1:]
-        sub[:, 0:cropped.shape[0]] = cropped
-        sub[:, cropped.shape[0]:] = np.median(cropped)
+        sub[:, 0:cropped.shape[1]] = cropped
+        sub[:, cropped.shape[1]:] = np.median(cropped)
 
     return sub
 
@@ -265,26 +265,27 @@ def find_phantom_34(image, margin, margin_angle, angles_dists_center, paramset):
 
     # search corner of phantom at top mid and btm mid part
     x_start, x_end, x_prof = find_phantom_part(image, margin)
+    y_start, y_end, y_prof = find_phantom_part(image, 0, axis=1)
     width = x_end - x_start
-    ys = [margin, sz_y//4]  # top
+    ys = [y_start, sz_y // 4, y_end - sz_y // 4, y_end]  # top
     xs = [x_start + width // 4, x_end - width // 4]  # mid
     subs = [
         image[ys[0]:ys[1], xs[0]:xs[1]],
-        image[-ys[1]:-ys[0], xs[0]:xs[1]]]
+        image[ys[2]:ys[3], xs[0]:xs[1]]]
     lines = [[], []]  # [(x0, y0), slope] for two groups (perpendicular)
 
     for sub_no, sub in enumerate(subs):
         # find lines
         sub = detrend_sub(sub, margin, 3)
         sub_binary = get_binary_sub(sub)
-        y_start = ys[0] if sub_no == 0 else sz_y - ys[1]
+        y0 = ys[0] if sub_no == 0 else ys[2]
         lines = []
         for angle in [np.pi / 4, - np.pi / 4]:
             test_range = [angle - margin_angle, angle + margin_angle]
             angles, dists = find_angles_sub(
                 sub_binary, test_range, margin,
                 paramset.cdm_threshold_peaks)
-            lines_this = get_lines([*zip(angles, dists)], xs, y_start)
+            lines_this = get_lines([*zip(angles, dists)], xs, y0)
             lines.append(lines_this)
         intercept_xys_pr_row, dx = get_line_intersections(lines)
 

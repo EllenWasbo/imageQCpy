@@ -1092,6 +1092,10 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.mark_pixels()
 
             if self.contours_to_add:
+                try:
+                    self.linewidth = self.main.gui.annotations_line_thick
+                except AttributeError:
+                    pass  # default
                 for contour_to_add in self.contours_to_add:
                     mask = np.where(contour_to_add[0], 0, 1)
                     contour = self.ax.contour(

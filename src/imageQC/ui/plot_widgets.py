@@ -12,7 +12,7 @@ import pandas as pd
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAction,
+    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAction, QLabel,
     QInputDialog, QMessageBox)
 import matplotlib
 import matplotlib.figure
@@ -61,7 +61,12 @@ class PlotWidget(QWidget):
         vlo_tb.addWidget(tb_plot_copy)
         vlo_tb.addWidget(tb_plot)
         vlo_tb.addStretch()
-        self.hlo.addWidget(self.plotcanvas)
+
+        tb_message = PlotNavigationToolbarMessage(self.plotcanvas, self)
+        vlo_plot = QVBoxLayout()
+        vlo_plot.addWidget(tb_message)
+        vlo_plot.addWidget(self.plotcanvas)
+        self.hlo.addLayout(vlo_plot)
         self.setLayout(self.hlo)
 
     def copy_curves(self):
@@ -126,8 +131,11 @@ class PlotWidget(QWidget):
                         arr = scatter['color']
                     xlabels = scatterdict['xlabels']
                     ylabels = scatterdict['ylabels']
+                    if decimal_mark == ',':
+                        ylabels = [lbl.replace('.', ',') for lbl in ylabels]
+                        xlabels = [lbl.replace('.', ',') for lbl in xlabels]
                     df = pd.DataFrame(arr, index=ylabels, columns=xlabels)
-                    df.to_clipboard(excel=True)
+                    df.to_clipboard(excel=True, decimal=decimal_mark)
                     self.main.status_bar.showMessage(
                         'Values in clipboard', 2000)
             except:
@@ -140,6 +148,41 @@ class PlotWidget(QWidget):
             df.columns = headers
             df.to_clipboard(index=False, excel=True)
             self.main.status_bar.showMessage('Values in clipboard', 2000)
+
+
+class PlotNavigationToolbarMessage(QToolBar):
+    """Toolbar to show values of scatter plot by color."""
+
+    def __init__(self, canvas, window):
+        super().__init__()
+        self.window = window
+        self.canvas = canvas
+        self.xypos = QLabel('')
+        self.xypos.setMinimumWidth(500)
+        self.addWidget(self.xypos)
+
+        canvas.mpl_connect('motion_notify_event', self.on_move)
+
+    def on_move(self, event):
+        """When mouse cursor is moving in the canvas."""
+        if event.inaxes:
+            self.xypos.setText('')
+            try:
+                if len(self.canvas.scatters) > 0:
+                    txt = ''
+                    x = round(event.xdata)
+                    y = round(event.ydata)
+                    xlabel = self.canvas.scatters[0]['xlabels'][x]
+                    ylabel = self.canvas.scatters[0]['ylabels'][y]
+                    txt = f'x {xlabel}, y {ylabel} '
+                    for scatter in self.canvas.scatters:
+                        if not isinstance(scatter['color'], str):
+                            val = scatter['color'][y][x]
+                            if isinstance(val, float):
+                                txt = txt + f' value = {val:.3f}'
+                    self.xypos.setText(txt)
+            except (AttributeError, KeyError, IndexError):
+                pass
 
 
 class PlotNavigationToolbar(NavigationToolbar2QT):

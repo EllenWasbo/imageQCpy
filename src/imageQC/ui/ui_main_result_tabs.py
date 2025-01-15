@@ -633,16 +633,28 @@ class ResultPlotCanvas(PlotCanvas):
                  'norm': matplotlib.colors.Normalize(vmin=0., vmax=2.)
                  })
 
-        def prepare_comparison_vs_fraction_xls():
-            self.title = 'Detection ratio minus Fraction.xls'
+        def prepare_comparison_vs_fraction_xls(sel_text):
+            self.title = sel_text
             self.xtitle = 'Diameter (mm)'
             self.ytitle = r'Thickness ($\mu$m)'
-            self.scatters.append(
-                {'xlabels': xlabels, 'ylabels': ylabels,
-                 'array': np.flipud(include_array),
-                 'size': 100, 'marker': 'o',
-                 'color': np.flipud(cdmam_table_dict['diff_Fraction.xls']),
-                 'cmap': 'coolwarm', 'vmin': -1., 'vmax': 1.})
+            if 'diff' in sel_text:
+                self.scatters.append(
+                    {'xlabels': xlabels, 'ylabels': ylabels,
+                     'array': np.flipud(include_array),
+                     'size': 100, 'marker': 'o',
+                     'color': np.flipud(cdmam_table_dict['diff_Fraction.xls']),
+                     'cmap': 'coolwarm', #'vmin': -1., 'vmax': 1.
+                     'norm': matplotlib.colors.Normalize(vmin=-1., vmax=1.)
+                     })
+            else:
+                self.scatters.append(
+                    {'xlabels': xlabels, 'ylabels': ylabels,
+                     'array': np.flipud(include_array),
+                     'size': 100, 'marker': 'o',
+                     'color': np.flipud(cdmam_table_dict['Fraction.xls']),
+                     'cmap': 'nipy_spectral_r',
+                     'norm': matplotlib.colors.Normalize(vmin=0., vmax=2.)
+                     })
 
         def prepare_psychometric_plot():
             self.title = 'Fitted psychometric curves'
@@ -748,16 +760,17 @@ class ResultPlotCanvas(PlotCanvas):
             prepare_found_corner_center_plot()
         elif sel_text == 'Found discs corrected for nearest neighbours':
             prepare_found_corrected_plot()
+        elif 'CDCOM' in sel_text:
+            prepare_comparison_vs_inp_plot(sel_text)
+        elif 'Fraction.xls' in sel_text:
+            prepare_comparison_vs_fraction_xls(sel_text)
         elif 'Detection matrix' in sel_text:
             prepare_detection_matrix_plot(sel_text)
         elif sel_text == 'Fitted psychometric curves':
             prepare_psychometric_plot()
         elif sel_text == 'Threshold thickness':
             prepare_threshold_plot()
-        elif 'CDCOM' in sel_text:
-            prepare_comparison_vs_inp_plot(sel_text)
-        elif 'Fraction.xls' in sel_text:
-            prepare_comparison_vs_fraction_xls()
+        
 
     def Cro(self, sel_text):
         """Prepare plot for test PET cross calibration."""

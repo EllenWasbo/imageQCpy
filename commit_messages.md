@@ -1,5 +1,15 @@
+# v3.1.5
+_XXX XX, 2025_
+
+New functionalities:
+- Value of scatter plots by color shown in toolbar when mouse-over (e.g. detection matrix and similar of CDMAM test)
+
+Fixes
+- More robust CDMAM v3.4 phantom reading of position
+- CDMAM - Result plot with imported fraction.xls now updated when selected
+
 # v3.1.4
-_Jan XX, 2025_
+_Jan 13, 2025_
 
 Fixes from v3.1.3
 - CDMAM plots sets aspect ratio to 1, caused subsequent plots to be strange if very different axis scales. The aspect ratio is now reset an all new plots.

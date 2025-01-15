@@ -167,7 +167,12 @@ def get_line_intersections(lines):
 
 def find_phantom_part(image, margin, axis=0, pos_profile=None):
     """"Detect phantom in image along axis."""
-    prof = np.mean(image, axis=axis)
+    mid = image.shape[axis] // 2
+    npix_mean = 50
+    if axis == 0:  # x prof
+        prof = np.mean(image[mid-npix_mean:mid+npix_mean, :], axis=axis)
+    else:  # y prof
+        prof = np.mean(image[:, mid-npix_mean:mid+npix_mean], axis=axis)
     in_phantom = np.where(np.logical_and(
         prof < np.median(prof)*1.1,
         prof > np.median(prof)*0.9))

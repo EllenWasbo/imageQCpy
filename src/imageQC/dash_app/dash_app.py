@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 try:
     import dash
+    # TODO from dash import dcc, html when bootstrap ready
     import dash_core_components as dcc
     import dash_html_components as html
     from dash.dependencies import Input, Output, ALL

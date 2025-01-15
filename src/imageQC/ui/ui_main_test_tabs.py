@@ -2214,11 +2214,13 @@ class ParamsTabMammo(ParamsTabCommon):
                 if dataf.shape == shape:
                     diff = details_dict['detection_matrix'] - dataf
                     details_dict['diff_Fraction.xls'] = diff
+                    details_dict['Fraction.xls'] = dataf
                     cbox = self.main.tab_mammo.cdm_plot
                     options = [cbox.itemText(i) for i in range(cbox.count())]
                     opt = 'Detection matrix difference to Fraction.xls'
                     if opt not in options:
-                        self.cdm_plot.addItems([opt])
+                        opt2 = 'Fraction.xls with same axes'
+                        self.cdm_plot.addItems([opt, opt2])
                     QMessageBox.information(
                         self, 'File read',
                         'Find comparison in Results Plot selecting the '

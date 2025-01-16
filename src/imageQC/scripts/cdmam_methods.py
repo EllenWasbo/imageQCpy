@@ -808,7 +808,7 @@ def third_order_polynomial_fit(x, p):
     return popt
 
 
-def calculate_fitted_psychometric(cdmam_table_dict, sigma):
+def calculate_fitted_psychometric(cdmam_table_dict, paramset):
     """Fit psychometric curves to values in detection matrix.
 
     Also, add results to cdmam_table_dict.
@@ -817,9 +817,9 @@ def calculate_fitted_psychometric(cdmam_table_dict, sigma):
     ----------
     cdmam_table_dict : dict
         detection_matrix + diameter and thickness info for given phantom
-    sigma : float
-        Sigma to smooth detecion matrix.
+    paramset: ParamsetMammo.
     """
+    sigma = paramset.cdm_sigma
     diameters = cdmam_table_dict['diameters']
     thickness = np.array(cdmam_table_dict['thickness'])
     detection_matrix = np.copy(cdmam_table_dict['detection_matrix'])
@@ -841,6 +841,7 @@ def calculate_fitted_psychometric(cdmam_table_dict, sigma):
             'rs': [1.41, 1.44, 1.47, 1.58, 1.61, 1.66, 1.69, 1.75, 1.81, 1.84, 1.88,
                    1.91, 1.95, 2., 2.05, 2.08, 2.1, 2.13, 2.14, 2.16, 2.19]
             }
+
         detection_matrix_corrected[detection_matrix < 0.25] = 0.25
         if sigma > 0:
             detection_matrix_corrected = ndimage.gaussian_filter(
@@ -858,6 +859,7 @@ def calculate_fitted_psychometric(cdmam_table_dict, sigma):
         include_array = np.zeros(corner_index_table.shape, dtype=bool)
         include_array[corner_index_table > 0] = True
         thickness = np.broadcast_to(thickness, (16, 16)).T
+
         detection_matrix_corrected[
             np.logical_and(
                 detection_matrix < 0.25, include_array == True)] = 0.25

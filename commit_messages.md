@@ -1,8 +1,9 @@
 # v3.1.5
-_XXX XX, 2025_
+_ Jan 16, 2025_
 
 New functionalities:
 - Value of scatter plots by color shown in toolbar when mouse-over (e.g. detection matrix and similar of CDMAM test)
+- CDMAM: Added options on how to handle whether center discs are found for the cells
 
 Fixes
 - More robust CDMAM v3.4 phantom reading of position

@@ -2209,6 +2209,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             n_imgs = len(images_to_test)
             curr_progress_value = 0
             detection_matrix = None
+            detection_matrix_centers = None
             cancelled = False
             for i, idx in enumerate(images_to_test):
                 try:
@@ -2322,17 +2323,32 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         'kernels': kernels
                         }
 
-                    found_this = found_correct_corner * found_centers
+                    if paramset.cdm_center_disc_option == 1:
+                        found_this = found_correct_corner * found_centers
+                    else:
+                        found_this = found_correct_corner
                     if paramset.cdm_correct_neighbours:
                         found_this = cdmam_methods.correct_neighbours(
                             found_this, include_array=include_array)
                         details_dict['corrected_neighbours'] = found_this
-                    details_dicts.append(details_dict)
 
                     if detection_matrix is None:
                         detection_matrix = 1.*found_this
                     else:
                         detection_matrix = detection_matrix + 1.*found_this
+
+                    if paramset.cdm_center_disc_option == 2:
+                        if paramset.cdm_correct_neighbours:
+                            found_centers = cdmam_methods.correct_neighbours(
+                                found_centers, include_array=include_array)
+                            details_dict['corrected_neighbours_centers'] = found_centers
+                        if detection_matrix_centers is None:
+                            detection_matrix_centers = 1.*found_centers
+                        else:
+                            detection_matrix_centers = (
+                                detection_matrix_centers + 1.*found_centers)
+
+                    details_dicts.append(details_dict)
                 try:
                     if input_main.progress_modal.wasCanceled():
                         cancelled = True
@@ -2342,10 +2358,25 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
             if cancelled is False:
                 detection_matrix = detection_matrix / n_imgs
+                if paramset.cdm_center_disc_option == 2:
+                    detection_matrix_centers = detection_matrix_centers / n_imgs
+                    
+                    cdmam_table_dict['detection_matrix_corners'] = np.copy(
+                        detection_matrix)
+                    cdmam_table_dict['detection_matrix_centers'] = np.copy(
+                        detection_matrix_centers)
+                    detection_matrix[np.logical_and(
+                        detection_matrix < 0.25,
+                        include_array == True)] = 0.25
+                    detection_matrix_centers[np.logical_and(
+                        detection_matrix_centers < 0.25,
+                        include_array == True)] = 0.25
+                    detection_matrix = detection_matrix * detection_matrix_centers
+                    cdmam_table_dict['detection_matrix'] = detection_matrix
                 cdmam_table_dict['detection_matrix'] = detection_matrix
                 if details_dicts and n_imgs > 3:
                     cdmam_methods.calculate_fitted_psychometric(
-                        cdmam_table_dict, paramset.cdm_sigma)
+                        cdmam_table_dict, paramset)
 
                     res_table = cdmam_table_dict['psychometric_results']
                     values = np.array([

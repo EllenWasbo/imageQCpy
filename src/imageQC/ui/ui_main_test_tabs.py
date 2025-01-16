@@ -2320,6 +2320,15 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_correct_neighbours.toggled.connect(
             lambda: self.param_changed_from_gui(
                 attribute='cdm_correct_neighbours'))
+        self.cdm_center_disc_option = QComboBox()
+        self.cdm_center_disc_option.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='cdm_center_disc_option'))
+        self.cdm_center_disc_option.addItems([
+            'do not use',
+            'corner = False if center = False',
+            'multiply corner/center detection matrix'
+            ])
 
         self.cdm_result_image = QComboBox()
         self.cdm_plot = QComboBox()
@@ -2352,6 +2361,9 @@ class ParamsTabMammo(ParamsTabCommon):
         flo1.addRow(QLabel('Correct founds according to nearest neighbours'),
                     self.cdm_correct_neighbours)
         vlo_left.addLayout(flo1)
+        flo1_2 = QFormLayout()
+        flo1_2.addRow(QLabel('Center reading'),self.cdm_center_disc_option)
+        vlo_left.addLayout(flo1_2)
 
         vlo_right = QVBoxLayout()
         self.tab_cdm.hlo.addLayout(vlo_right)
@@ -2382,6 +2394,8 @@ class ParamsTabMammo(ParamsTabCommon):
             ['Found disc at center and in correct corner',
              'Found discs corrected for nearest neighbours',
              'Detection matrix',
+             'Detection matrix corners (option multiply)',
+             'Detection matrix centers (option multiply)',
              'Detection matrix corrected/smoothed',
              'Fitted psychometric curves',
              'Threshold thickness'])

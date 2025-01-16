@@ -615,11 +615,20 @@ class ResultPlotCanvas(PlotCanvas):
 
         def prepare_detection_matrix_plot(sel_text):
             self.title = 'Detection ratio based on all images'
-            suff = '_corrected' if 'corrected' in sel_text else ''
-            if suff:
+            if 'corner' in sel_text:
+                self.title = self.title + ' - corner discs'
+                suff = '_corners'
+            elif 'center' in sel_text:
+                self.title = self.title +  ' - center discs'
+                suff = '_centers'
+            elif 'corrected' in sel_text:
                 self.title = self.title + ' - corrected'
                 if self.main.current_paramset.cdm_sigma > 0:
                     self.title = self.title + '/smoothed'
+                suff = '_corrected'
+            else:
+                suff = ''
+
             self.xtitle = 'Diameter (mm)'
             self.ytitle = r'Thickness ($\mu$m)'
 

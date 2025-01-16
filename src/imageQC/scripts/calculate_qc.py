@@ -2380,10 +2380,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
                     res_table = cdmam_table_dict['psychometric_results']
                     values = np.array([
-                            res_table['thickness_predicts_fit_d'],
-                            res_table['thickness_founds'],
-                            res_table['thickness_predicts'],
-                            res_table['thickness_predicts_fit']
+                            np.flip(res_table['thickness_predicts_fit_d']),
+                            np.flip(res_table['thickness_founds']),
+                            np.flip(res_table['thickness_predicts']),
+                            np.flip(res_table['thickness_predicts_fit'])
                             ])
                     values = values.T
                 else:

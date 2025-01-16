@@ -581,8 +581,23 @@ class ResultPlotCanvas(PlotCanvas):
 
         def prepare_found_corrected_plot():
             if details_dict['corrected_neighbours'] is not None:
-                self.title = ('Found discs in corner/center, corrected for '
-                              'nearest neighbours (blue background)')
+                
+                if self.main.current_paramset.cdm_center_disc_option == 1:
+                    self.title = ('Found discs in corner/center, corrected for '
+                                  'nearest neighbours (blue background)')
+                    uncorrected = (
+                        details_dict['found_centers']
+                        * details_dict['found_correct_corner'])
+                else:
+                    self.title = ('Found discs in corner, corrected for '
+                                  'nearest neighbours (blue background)')
+                    uncorrected = details_dict['found_correct_corner']
+
+                any_corr = (
+                    uncorrected.astype(int)
+                    - details_dict['corrected_neighbours'].astype(int))
+                any_corr = any_corr.astype(bool)
+
                 self.xtitle = 'Diameter (mm)'
                 self.ytitle = r'Thickness ($\mu$m)'
 
@@ -593,14 +608,6 @@ class ResultPlotCanvas(PlotCanvas):
                              'xlabels': xlabels, 'ylabels': ylabels,
                              'array': np.flipud(details_dict['include_array']),
                              'size': 30, 'marker': 'x', 'color': 'silver'})
-
-                uncorrected = (
-                    details_dict['found_centers']
-                    * details_dict['found_correct_corner'])
-                any_corr = (
-                    uncorrected.astype(int)
-                    - details_dict['corrected_neighbours'].astype(int))
-                any_corr = any_corr.astype(bool)
 
                 self.scatters.append(
                     {'label': 'found center',

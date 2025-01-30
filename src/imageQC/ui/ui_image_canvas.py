@@ -1230,12 +1230,35 @@ class ResultImageCanvas(GenericImageCanvas):
                         corner_idx += 1
 
                     yk, xk = res['min_positions'][corner_idx]
+                    y1 = max([0, yk - radk])
+                    y2 = min([yk - radk + sz_k, sz_sub])
+                    x1 = max([0, xk - radk])
+                    x2 = min([xk - radk + sz_k, sz_sub])
+                    ky1, ky2, kx1, kx2 = 0, sz_k, 0, sz_k
+                    if greens[y1:y2,x1:x2].shape != kernel.shape:
+                        if yk - radk < 0:
+                            ky1 = - (yk - radk)
+                        if xk - radk < 0:
+                            kx1 = - (xk - radk)
+                        if yk - radk + sz_k > sz_sub:
+                            ky2 = sz_k - ((yk - radk + sz_k) - sz_sub)
+                        if xk - radk + sz_k > sz_sub:
+                            kx2 = sz_k - ((xk - radk + sz_k) - sz_sub)
+                    try:
+                        if details_dict['found_correct_corner'][idx_thick, idx_diam]:
+                            greens[y1:y2,x1:x2] = kernel[ky1:ky2,kx1:kx2]
+                        else:
+                            reds[y1:y2,x1:x2] = kernel[ky1:ky2,kx1:kx2]
+                    except ValueError:
+                        pass
+                    '''
                     if details_dict['found_correct_corner'][idx_thick, idx_diam]:
                         greens[yk - radk:yk - radk + sz_k,
                                xk - radk:xk - radk + sz_k] = kernel
                     else:
                         reds[yk - radk:yk - radk + sz_k,
                              xk - radk:xk - radk + sz_k] = kernel
+                    '''
                     self.contours_to_add.append([greens, 'green', '--'])
                     self.contours_to_add.append([reds, 'red', '--'])
 

@@ -2208,8 +2208,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             prev_pix = 0
             n_imgs = len(images_to_test)
             curr_progress_value = 0
-            detection_matrix = None
-            detection_matrix_centers = None
             cancelled = False
             for i, idx in enumerate(images_to_test):
                 try:
@@ -2243,112 +2241,11 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                                           'Different pixel sizes.')
                             roi_dict = None
                 if roi_dict is not None:
-                    include_array = None
-                    if 'include_array' in roi_dict:
-                        include_array = roi_dict['include_array']
-                    center_xs = roi_dict['xs']
-                    center_ys = roi_dict['ys']
-                    cell_width = roi_dict['cell_width']
-                    invert = roi_dict['invert']
-                    if invert:
-                        image = -np.copy(image)
+                    res = cdmam_methods.read_cdmam_image(
+                        image, img_infos[idx],
+                        roi_dict, cdmam_table_dict, paramset)
+                    details_dicts.append(res)
 
-                    pix_new = 0.05  # fixed pixelsize of 50 um for analysis
-                    if phantom == 34:
-                        line_dist = (cell_width * np.cos(np.pi / 4)**2) / 2
-                    else:
-                        line_dist = cell_width / 2
-                    line_dist = round((pix / pix_new) * line_dist)
-
-                    templates, wi = cdmam_methods.get_templates(
-                        image, center_xs, center_ys, pix, pix_new,
-                        cell_width, line_dist, phantom, paramset.cdm_rotate_k,
-                        cdmam_table_dict)
-                    kernels = cdmam_methods.get_kernels(
-                        cdmam_table_dict, pix_new)
-
-                    sz_y, sz_x = center_xs.shape
-                    res_table = []
-
-                    nn = 0
-                    include = True
-                    for row in range(sz_y):
-                        res_table.append([])
-                        for col in range(sz_x):
-                            res_table[-1].append([])
-                            if phantom == 34:
-                                include = include_array[row, col]
-                            if include:
-                                try:
-                                    input_main.progress_modal.setValue(
-                                        curr_progress_value +
-                                        round((100/n_imgs) * nn / (sz_y*sz_x)))
-                                except AttributeError:
-                                    pass
-                                x = round(center_xs[row, col])
-                                y = round(center_ys[row, col])
-                                sub = image[y - wi:y + wi, x - wi:x + wi]
-                                if sub.shape[0] != sub.shape[1]:
-                                    sub = cdmam_methods.fix_cropped_sub(
-                                        image, x, y, wi)
-                                res = cdmam_methods.read_cdmam_sub(
-                                    sub, phantom, line_dist,
-                                    templates, kernels[col])
-                                res_table[row][col] = res
-                                nn += 1
-
-                    found_correct_corner = np.zeros((sz_y, sz_x), dtype=bool)
-                    found_centers = np.zeros((sz_y, sz_x), dtype=bool)
-                    corners = np.array(
-                        cdmam_table_dict['corner_index'])
-
-                    # correctly found corner?
-                    for row in range(sz_y):
-                        for col in range(sz_x):
-                            if phantom == 34:
-                                include = include_array[row, col]
-                            if include:
-                                found_correct_corner[row, col] = (
-                                    res_table[row][col]['corner_index']
-                                    == corners[row, col])
-                                found_centers[row, col] = (
-                                    res_table[row][col]['central_disc_found'])
-
-                    details_dict = {
-                        'found_correct_corner': found_correct_corner,
-                        'include_array': include_array,
-                        'found_centers': found_centers,
-                        'corrected_neighbours': None,
-                        'res_table': res_table,
-                        'kernels': kernels
-                        }
-
-                    if paramset.cdm_center_disc_option == 1:
-                        found_this = found_correct_corner * found_centers
-                    else:
-                        found_this = found_correct_corner
-                    if paramset.cdm_correct_neighbours:
-                        found_this = cdmam_methods.correct_neighbours(
-                            found_this, include_array=include_array)
-                        details_dict['corrected_neighbours'] = found_this
-
-                    if detection_matrix is None:
-                        detection_matrix = 1.*found_this
-                    else:
-                        detection_matrix = detection_matrix + 1.*found_this
-
-                    if paramset.cdm_center_disc_option == 2:
-                        if paramset.cdm_correct_neighbours:
-                            found_centers = cdmam_methods.correct_neighbours(
-                                found_centers, include_array=include_array)
-                            details_dict['corrected_neighbours_centers'] = found_centers
-                        if detection_matrix_centers is None:
-                            detection_matrix_centers = 1.*found_centers
-                        else:
-                            detection_matrix_centers = (
-                                detection_matrix_centers + 1.*found_centers)
-
-                    details_dicts.append(details_dict)
                 try:
                     if input_main.progress_modal.wasCanceled():
                         cancelled = True
@@ -2357,23 +2254,15 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     pass
 
             if cancelled is False:
-                detection_matrix = detection_matrix / n_imgs
-                if paramset.cdm_center_disc_option == 2:
-                    detection_matrix_centers = detection_matrix_centers / n_imgs
-                    
-                    cdmam_table_dict['detection_matrix_corners'] = np.copy(
-                        detection_matrix)
-                    cdmam_table_dict['detection_matrix_centers'] = np.copy(
-                        detection_matrix_centers)
-                    detection_matrix[np.logical_and(
-                        detection_matrix < 0.25,
-                        include_array == True)] = 0.25
-                    detection_matrix_centers[np.logical_and(
-                        detection_matrix_centers < 0.25,
-                        include_array == True)] = 0.25
-                    detection_matrix = detection_matrix * detection_matrix_centers
-                    cdmam_table_dict['detection_matrix'] = detection_matrix
-                cdmam_table_dict['detection_matrix'] = detection_matrix
+                if 'include_array' in roi_dict:
+                    include_array = roi_dict['include_array']
+                else:
+                    include_array = None
+                dict_updates = cdmam_methods.sum_detection_matrix(
+                    details_dicts, include_array,
+                    paramset.cdm_center_disc_option)
+
+                cdmam_table_dict.update(dict_updates)
                 if details_dicts and n_imgs > 3:
                     cdmam_methods.calculate_fitted_psychometric(
                         cdmam_table_dict, paramset)

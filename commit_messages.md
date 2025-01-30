@@ -1,3 +1,10 @@
+# v3.1.6
+_Jan 30, 2025_
+
+Changes:
+- Report generator: Display of single images now possible and fixes to single image results displays.
+- CDMAM4.0: finetuned expected position of discs (based on median offset of center disc of 10 central thickest discs
+
 # v3.1.5
 _ Jan 16, 2025_
 

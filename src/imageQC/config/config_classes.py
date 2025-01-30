@@ -437,7 +437,7 @@ class ParamSetXray(ParamSetCommon):
     hom_ignore_roi_percent: int = 0
     hom_deviating_pixels: float = 20.
     hom_deviating_rois: float = 15.
-    hom_anomalous_factor: float = 3.
+    hom_anomalous_factor: float = 5.
     noi_percent: int = 90
     mtf_roi_size_x: int = 20.
     mtf_roi_size_y: int = 50.
@@ -1036,7 +1036,8 @@ class ReportElement:
     """Class holding results."""
 
     variant: str = 'html_element'
-    # 'html_table_row', 'result_table', 'result_plot', 'result_image', 'image'
+    # 0'html_table_row', 1'html_element', 2'result_table',
+    # 3'result_plot', 4'result_image', 5'image'
     text: str = ''  # html content or plot/image selection text
     testcode: str = ''  # if coupled to results of specific testcode
     width: int = 100  # percent width of element

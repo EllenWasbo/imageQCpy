@@ -864,14 +864,25 @@ class GenerateReportDialog(ImageQCDialog):
             self.main.update_current_test(
                 reset_index=False, refresh_display=False,
                 set_test='DCM')  # no ROIs annotated
-            img_nos = list(range(len(self.main.imgs)))
+            if element.result_pr_image:
+                if element.result_from_image < len(self.main.imgs):
+                    img_nos = [element.result_from_image]
+                else:
+                    img_nos = []
+            else:
+                img_nos = list(range(len(self.main.imgs)))
 
-            if len(img_nos) > 0:
+            image_names = get_image_names(self.main)
+            if len(img_nos) == 1:
+                self.main.set_active_img(img_nos[0])
+                html_this = self.add_figure(element,
+                                image_name=image_names[img_nos[0]])
+            elif len(img_nos) > 1:
                 html_this = ['<table class="image_table"><tr>']
                 n_pr_row = element.width
                 single_width = 100 / n_pr_row
                 width_px = (full_width - 2*margin) * single_width / 100
-                image_names = get_image_names(self.main)
+                
                 for idx, img_no in enumerate(img_nos):
                     html_this.append(
                         '<td valign="middle" align="center">')
@@ -1010,7 +1021,7 @@ class AddEditElementDialog(ImageQCDialog):
         flo_result.addRow(QLabel('Width (%):'), self.width)
         flo_result.addRow(QLabel('Result from image number:'),
                           self.result_from_image)
-        flo_result.addRow(QLabel('Result for each image'),
+        flo_result.addRow(QLabel('Result output is pr image'),
                           self.result_pr_image)
         vlo_result.addWidget(uir.LabelItalic(
             'If "Result for each image" is checked together with plot/image '
@@ -1021,15 +1032,19 @@ class AddEditElementDialog(ImageQCDialog):
         # Stack image
         vlo_image = QVBoxLayout()
         wid_image_element.setLayout(vlo_image)
-        self.n_images_pr_row = QSpinBox()
-        self.n_images_pr_row.setRange(1, 10)
+        self.image_width = QSpinBox()
         flo_image = QFormLayout()
         vlo_image.addLayout(flo_image)
-        flo_image.addRow(QLabel('Number of images pr row:'),
-                          self.n_images_pr_row)
-        vlo_image.addWidget(uir.LabelItalic(
-            'All images will be included.'))
-        #TODO ' If group names are specified, images will be grouped.'))
+        self.image_number = QSpinBox()
+        self.image_number.setRange(0, maximg)
+        self.single_image = QCheckBox('')
+        self.single_image.stateChanged.connect(
+            self.update_single_image)
+        self.lbl_image_width = QLabel('Number of images pr row:')
+        flo_image.addRow(QLabel('Single image (else all)'),
+                          self.single_image)
+        flo_image.addRow(QLabel('Image number:'), self.image_number)
+        flo_image.addRow(self.lbl_image_width, self.image_width)
 
         hlo_buttons_btm = QHBoxLayout()
         vlo.addLayout(hlo_buttons_btm)
@@ -1084,7 +1099,7 @@ class AddEditElementDialog(ImageQCDialog):
             self.txt_header.setText(self.element.caption)
         elif sel == 5:
             self.stack_variants.setCurrentIndex(3)
-            self.n_images_pr_row.setValue(self.element.width)
+            self.update_single_image(initialize=True)
         else:
             self.stack_variants.setCurrentIndex(2)
             self.cbox_testcode.setCurrentText(self.element.testcode)
@@ -1096,8 +1111,8 @@ class AddEditElementDialog(ImageQCDialog):
                 self.cbox_table.setEnabled(True)
                 self.result_pr_image.setEnabled(False)
                 self.result_from_image.setEnabled(False)
-                self.result_from_image.setEnabled(False)
             else:
+                self.result_from_image.setEnabled(True)
                 self.result_pr_image.setEnabled(True)
                 self.result_pr_image.setChecked(self.element.result_pr_image)
                 if not self.element.result_pr_image:
@@ -1117,6 +1132,33 @@ class AddEditElementDialog(ImageQCDialog):
         self.result_from_image.setEnabled(
             not self.result_pr_image.isChecked())
         self.result_from_image.setValue(self.element.result_from_image)
+
+    def update_single_image(self, initialize=False):
+        if initialize:
+            self.single_image.setChecked(self.element.result_pr_image)
+        self.image_number.setEnabled(self.single_image.isChecked())
+        if self.single_image.isChecked():
+            if len(self.parent.main.imgs) == 0:
+                maximg = 100
+            else:
+                maximg = len(self.parent.main.imgs) - 1
+            self.image_number.setRange(0, maximg)
+            self.image_number.setValue(self.element.result_from_image)
+            self.image_width.setRange(3, 100)
+            self.lbl_image_width.setText('Width (%):')
+            if self.element.width < 20:
+                self.image_width.setValue(100)
+            else:
+                if initialize:
+                    self.image_width.setValue(self.element.width)
+        else:
+            self.image_width.setRange(1, 10)
+            self.lbl_image_width.setText('Number of images pr row:')
+            if self.element.width > 10:
+                self.image_width.setValue(10)
+            else:
+                if initialize:
+                    self.image_width.setValue(self.element.width)
 
     def add_pagebreak(self):
         txt = self.txt_html.toPlainText()
@@ -1147,7 +1189,9 @@ class AddEditElementDialog(ImageQCDialog):
             self.element.text = ''
             self.element.testcode = ''
             self.element.caption = 'Images'
-            self.element.width = self.n_images_pr_row.value()
+            self.element.width = self.image_width.value()
+            self.element.result_pr_image = self.single_image.isChecked()
+            self.element.result_from_image = self.image_number.value()
         else:
             self.element.testcode = self.cbox_testcode.currentText()
             self.element.width = self.width.value()

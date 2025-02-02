@@ -1,5 +1,5 @@
 # v3.1.7
-_Feb XX, 2025_
+_Feb 02, 2025_
 
 New functionalities:
 - NM: Added test Sweep AutoQC (under validation). This test takes projection images from the Extrinsic Sweep Verification test (Siemens, AutoQC) and calculates

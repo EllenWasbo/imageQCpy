@@ -616,6 +616,8 @@ def calculate_qc(input_main, wid_auto=None,
                         if 'MTF' in marked[i]:
                             if paramset.mtf_auto_center:
                                 force_new_roi.append('MTF')
+                        if 'Swe' in marked[i]:
+                            marked_3d[i].append('Swe')
                     elif modality == 'SPECT':
                         if 'MTF' in marked[i]:
                             if paramset.mtf_type > 0:
@@ -1582,9 +1584,10 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 elif paramset.mtf_type == 2:
                     details, errmsg = mtf_methods.calculate_MTF_2d_line_edge(
                         sub, image_info.pix[0], paramset, mode='line', pr_roi=True)
-                else:  # type 3 edge
+                elif paramset.mtf_type == 3:  # edge
                     details, errmsg = mtf_methods.calculate_MTF_2d_line_edge(
                         sub, image_info.pix[0], paramset, mode='edge')
+
                 prefix = 'g' if paramset.mtf_gaussian else 'd'
                 try:
                     if isinstance(details, list):  # paramset.mtf_type 0 or 2
@@ -2975,6 +2978,44 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             res = Results(values=values, headers=headers, errmsg=errmsg, pr_image=True)
         return res
 
+    def Swe(images_to_test):
+        """NM sweep test."""
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
+        if len(images_to_test) == 132:
+            roi_array, errmsg = get_rois(matrix[0], 0, input_main)
+            details_dicts, errmsgs = calculate_NM_sweep(
+                matrix, img_infos, roi_array, paramset)
+            try:
+                values = (
+                    details_dicts[0]['uni_values'] +
+                    details_dicts[1]['uni_values'])
+                values_sup = [
+                    np.median(details_dicts[0]['fwhm_matrix']),
+                    np.median(details_dicts[1]['fwhm_matrix']),
+                    details_dicts[0]['fwhm_iu_ufov'],
+                    details_dicts[0]['fwhm_iu_cfov'],
+                    details_dicts[1]['fwhm_iu_ufov'],
+                    details_dicts[1]['fwhm_iu_cfov'],
+                    details_dicts[0]['diff_max_ufov'],
+                    details_dicts[0]['diff_max_cfov'],
+                    details_dicts[1]['diff_max_ufov'],
+                    details_dicts[1]['diff_max_cfov'],
+                    ]
+
+                res = Results(headers=headers, values=[values],
+                              headers_sup=headers_sup, values_sup=[values_sup],
+                              details_dict=details_dicts,
+                              pr_image=False, pr_image_sup=False,
+                              errmsg=errmsgs)
+            except KeyError:
+                res = Results(headers=headers, errmsg=errmsgs)
+        else:
+            errmsg = 'Test failed: Expecting 132 images AutoQC Sweep verification'
+            res = Results(headers=headers, errmsg=errmsg)
+
+        return res
+
     def TTF(images_to_test):
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
@@ -3867,6 +3908,95 @@ def calculate_focal_spot_size(image, roi_array, image_info, paramset):
         values = [None] * 6
 
     return details_dict, values, errmsgs
+
+
+def calculate_NM_sweep(matrix, img_infos, roi_array, paramset):
+    """Calculate 2d map from Auto QC sweep test.
+
+    Parameters
+    ----------
+    matrix : list of np.2darray
+        132 images expected
+    img_infos : list of DcmInfo
+        DcmInfo as defined in scripts/dcm.py
+    roi_array : list of numpy.ndarray
+    paramset : ParamSetNM
+
+    Returns
+    -------
+    details_dicts : list of dict
+        one dict pr detector
+        fwhm_matrix, diff_matrix
+    errmsg : list of str
+    """
+    details_dicts = []
+    errmsgs = None
+    top, bottom = 55, 202  # ufov = 0.9
+    cfov_ys, cfov_xs = ([10, -10], [5, -5])  # cfov 0.75 (pixels y, lines/images x)
+    first_last_sum = [[1, 66], [67, 132]]  # images to sum
+    first_last = [[4, 63], [70, 129]]  # image numbers where line source clear
+    n_avg = 3  # TODO - in paramset
+
+    def get_fwhm_center_pr_image(image):
+        fwhm_col = []
+        center_col = []
+        for row in range(top, bottom):
+            profile = np.sum(image[row-n_avg:row+n_avg], axis=0)
+            fwhm, center = mmcalc.get_width_center_at_threshold(
+                profile, np.max(profile)/2)
+            fwhm_col.append(fwhm)
+            center_col.append(center)
+        diff_center_col = np.array(center_col) - np.mean(center_col)
+        return np.array(fwhm_col), diff_center_col
+
+    def get_intrinsic_uniformity(array):
+        return (np.max(array) - np.min(array)) / np.mean(array)
+
+    for det in range(2):
+        first_sum, last_sum = first_last_sum[det]
+        sum_matrix = np.zeros(matrix[0].shape)
+        for i in range(first_sum, last_sum):
+            sum_matrix = sum_matrix + matrix[i]
+        uni_res = nm_methods.calculate_NM_uniformity(
+            sum_matrix, roi_array, img_infos[0].pix[0], 0)
+
+        first, last = first_last[det]
+        fwhm_matrix = np.zeros((bottom-top, last-first))
+        diff_matrix = np.zeros((bottom-top, last-first))
+        for i in range(first, last):
+            fwhm_arr, diff_center_arr = get_fwhm_center_pr_image(matrix[i])
+            fwhm_matrix[:,i-first] = fwhm_arr
+            diff_matrix[:,i-first] = diff_center_arr
+
+        fwhm_matrix = img_infos[0].pix[0]*fwhm_matrix
+        diff_matrix = img_infos[0].pix[0]*diff_matrix
+        fwhm_iu_ufov = get_intrinsic_uniformity(fwhm_matrix)
+        fwhm_iu_cfov = get_intrinsic_uniformity(
+            fwhm_matrix[cfov_ys[0]:cfov_ys[1], cfov_xs[0]:cfov_xs[1]])
+        diff_max_ufov = np.max(np.abs(diff_matrix))
+        diff_max_cfov = np.max(np.abs(
+            diff_matrix[cfov_ys[0]:cfov_ys[1], cfov_xs[0]:cfov_xs[1]]))
+
+        # expand pixels pr image to same shape as ufov
+        aspect = (
+            uni_res['du_matrix'].shape[1] / uni_res['du_matrix'].shape[0])
+        resize_x = round(aspect * fwhm_matrix.shape[0])  # resize when draw
+
+        details_dict = {
+            'fwhm_matrix': fwhm_matrix,
+            'diff_matrix': diff_matrix,
+            'fwhm_iu_ufov': fwhm_iu_ufov, 'fwhm_iu_cfov': fwhm_iu_cfov,
+            'diff_max_ufov': diff_max_ufov, 'diff_max_cfov': diff_max_cfov,
+            'resize_x': resize_x,
+            'sum_matrix': sum_matrix,
+            'ufov_matrix': uni_res['matrix_ufov'],
+            'du_matrix': uni_res['du_matrix'],
+            'uni_pix_size': uni_res['pix_size'],
+            'uni_values': uni_res['values'],
+            }
+        details_dicts.append(details_dict)
+
+    return (details_dicts, errmsgs)
 
 
 def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, background):

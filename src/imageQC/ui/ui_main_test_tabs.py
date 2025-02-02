@@ -2576,11 +2576,13 @@ class ParamsTabNM(ParamsTabCommon):
         self.create_tab_mtf()
         self.create_tab_spe()
         self.create_tab_bar()
+        self.create_tab_swe()
         self.addTab(self.tab_uni, "Uniformity")
         self.addTab(self.tab_sni, "SNI")
         self.addTab(self.tab_mtf, "Spatial resolution")
         self.addTab(self.tab_spe, "Scan speed")
         self.addTab(self.tab_bar, "Bar phantom")
+        self.addTab(self.tab_swe, "Sweep AutoQC")
 
         self.flag_ignore_signals = False
 
@@ -2966,7 +2968,8 @@ class ParamsTabNM(ParamsTabCommon):
         self.mtf_roi_size_y.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_roi_size_y'))
         self.mtf_auto_center = QCheckBox(
-            'Auto center ROI on object signal (ignored if MTF method is edge)')
+            'Auto center ROI on object signal '
+            '(ignored if MTF method is edge/sweep)')
         self.mtf_auto_center.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='mtf_auto_center'))
         self.mtf_plot.addItems(['Centered xy profiles', 'Line fit',
@@ -3095,6 +3098,53 @@ class ParamsTabNM(ParamsTabCommon):
         hlo_roi.addWidget(self.bar_roi_size)
         hlo_roi.addStretch()
         self.tab_bar.vlo.addLayout(hlo_roi)
+
+    def create_tab_swe(self):
+        """GUI of tab Sweep."""
+        self.tab_swe = ParamsWidget(
+            self, run_txt='Calculate sweep test')
+
+        self.tab_swe.hlo_top.addWidget(uir.LabelItalic(
+            'Calculate FWHM matrix and linearity from AutoQC sweep images'))
+        info_txt = '''
+        The projection images from Extrinsic Sweep Verification test 
+        (Siemens gamma camera, Auto QC)<br>
+        can be used to evaluate linearity and resolution differences in 
+        addition to uniformity.<br>
+        <br>
+        FWHM for the lines are calculated for each row in each image where 
+        the line is inside UFOV.<br>
+        For each row in the images, the average of 7 rows is used 
+        to find the FWHM and center postion of the line source.<br>
+        A 2d map is calculated for UFOV for both FWHM and difference from 
+        average center position pr image (source position).<br>
+        <br>
+        Also, the sum of all but the first image for both detectors is 
+        calculated to find the uniformity metrics according to NEMA.
+        '''
+        self.tab_swe.hlo_top.addWidget(uir.UnderConstruction(
+            txt='Under validation...'))
+        self.tab_swe.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+
+        self.swe_result_image = QComboBox()
+        self.swe_result_image.addItems(
+            [
+                'FWHM detector 1',
+                'FWHM detector 2',
+                'Difference from average line position detector 1',
+                'Difference from average line position detector 2',
+                'Sum detector 1', 'Sum detector 2',
+                'Processed sum-image (6.4mm pix, smoothed) UFOV detector 1',
+                'Processed sum-image (6.4mm pix, smoothed) UFOV detector 2',
+                'Differential uniformity map detector 1',
+                'Differential uniformity map detector 2'
+             ])
+        self.swe_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+        self.tab_swe.hlo.addStretch()
+        self.tab_swe.hlo.addWidget(uir.VLine())
+        self.tab_swe.hlo.addWidget(QLabel('Result image: '))
+        self.tab_swe.hlo.addWidget(self.swe_result_image)
 
 
 class ParamsTabSPECT(ParamsTabCommon):

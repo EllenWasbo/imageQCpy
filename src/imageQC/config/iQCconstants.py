@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when major changes, B when new exe release (to come),
 #   C new python release (or small fix to exe)
-VERSION = '3.1.6'
+VERSION = '3.1.7'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -46,7 +46,7 @@ QUICKTEST_OPTIONS = {
              'Foc', 'Def'],
     'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'Var', 'RLR', 'Gho', 'MTF',
               'NPS', 'CDM'],
-    'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar'],
+    'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar', 'Swe'],
     'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Rin'],
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec', 'MTF'],
     'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF'],
@@ -94,7 +94,8 @@ ALTERNATIVES = {
             'ROI grid, size by full ratio',
             'ROI grid, size by number of pixels',
             'ROIs matched Siemens gamma camera'],
-        'MTF': ['Point', 'One line source', 'Two perpendicular line sources', 'Edge']
+        'MTF': ['Point', 'One line source', 'Two perpendicular line sources',
+                'Edge']
         },
     'SPECT': {
         'ROI': ALTERNATIVES_ROI,
@@ -270,6 +271,12 @@ HEADERS = {
             'alt2': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt3': ['FWHM', 'FWTM'],
             },
+        'Swe': {
+            'alt0': ['IU_UFOV % 1', 'DU_UFOV % 1',
+                     'IU_CFOV % 1', 'DU_CFOV % 1',
+                     'IU_UFOV % 2', 'DU_UFOV % 2',
+                     'IU_CFOV % 2', 'DU_CFOV % 2'],
+            },
         },
     'SPECT': {
         'ROI': {'alt0': roi_headers},
@@ -410,6 +417,14 @@ HEADERS_SUP = {
             'alt1': ['A1', 'sigma1', 'sigma_prefilt'],
             'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
             'alt3': ['A1', 'sigma1', 'sigma_prefilt'],
+            },
+        'Swe': {
+            'alt0': [
+                'Median FWHM 1', 'Median FWHM 2',
+                'FWHM IU_UFOV 1', 'FWHM IU_CFOV 1',
+                'FWHM IU_UFOV 2', 'FWHM IU_CFOV 2',
+                'Off max UFOV 1', 'Off max CFOV 1',
+                'Off max UFOV 2', 'Off max CFOV 2',]
             },
         },
     'SPECT': {

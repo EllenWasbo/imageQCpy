@@ -13,6 +13,7 @@ import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib import patches
 from PyQt5.QtWidgets import QMessageBox
+from skimage.transform import resize
 
 # imageQC block start
 from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
@@ -1517,6 +1518,44 @@ class ResultImageCanvas(GenericImageCanvas):
                         if len(row) > 0])
                     if max_in_res > 0:
                         self.max_val = max_in_res
+
+    def Swe(self, sel_text):
+        try:
+            details_dicts = self.main.results['Swe']['details_dict']
+        except KeyError:
+            details_dicts = []
+        if sel_text == '':
+            sel_text = self.main.tab_nm.swe_result_image.currentText()
+        idx = 0 if '1' in sel_text else 1
+        self.title = sel_text
+        resize_x = details_dicts[0]['resize_x']
+
+        def resize_aspect(img):
+            res_img = resize(img, (img.shape[0], resize_x),
+                             anti_aliasing=False, order=0)
+            return res_img
+
+        if 'FWHM' in sel_text:
+            self.cmap = 'viridis'
+            self.current_image = resize_aspect(
+                details_dicts[idx]['fwhm_matrix'])
+            self.min_val = np.nanmin(self.current_image[self.current_image>0])
+            self.max_val = np.nanmax(self.current_image)
+        elif 'line position' in sel_text:
+            self.positive_negative = True
+            self.current_image = resize_aspect(
+                details_dicts[idx]['diff_matrix'])
+            self.min_val = -3.
+            self.max_val = 3.
+        elif 'Sum detector' in sel_text:
+            self.cmap = 'viridis'
+            self.current_image = details_dicts[idx]['sum_matrix']
+        elif 'Processed' in sel_text:
+            self.cmap = 'viridis'
+            self.current_image = details_dicts[idx]['ufov_matrix']
+        elif 'Differential' in sel_text:
+            self.cmap = 'viridis'
+            self.current_image = details_dicts[idx]['du_matrix']
 
     def Uni(self, sel_text):
         """Prepare result image for test Uni."""

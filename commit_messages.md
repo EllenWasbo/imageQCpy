@@ -1,9 +1,20 @@
+# v3.1.7
+_Feb XX, 2025_
+
+New functionalities:
+- NM: Added test Sweep AutoQC (under validation). This test takes projection images from the Extrinsic Sweep Verification test (Siemens, AutoQC) and calculates
+	- resolution (FWHM) as a 2d map
+	- linearity 2d map = difference from average x-position of line source pr image
+	- independent calculation of uniformity from sum of images pr detector (as does the AutoQC vendor software)
+
 # v3.1.6
 _Jan 30, 2025_
 
 Changes:
 - Report generator: Display of single images now possible and fixes to single image results displays.
-- CDMAM4.0: finetuned expected position of discs (based on median offset of center disc of 10 central thickest discs
+- CDMAM4.0: 
+	- finetuned expected position of discs (based on median offset of center disc of 10 central thickest discs
+	- restructured code, more code moved from calculate_qc.py to cdmam_methods.py
 
 # v3.1.5
 _ Jan 16, 2025_

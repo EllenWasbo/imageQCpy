@@ -654,6 +654,11 @@ def get_rois(image, image_number, input_main):
         roi_size_in_pix = paramset.stp_roi_size / image_info.pix[0]
         return get_roi_circle(img_shape, tuple(delta_xya[0:2]), roi_size_in_pix)
 
+    def Swe():  # uniformity part
+        return get_ratio_NM(
+            image, image_info, mask_corner=0, ufov_ratio=0.9, cfov_ratio=0.75
+            )
+
     def TTF():
         return get_roi_CTn_TTF('ttf', image, image_info, paramset, delta_xya=delta_xya)
 

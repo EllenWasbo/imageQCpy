@@ -1,3 +1,16 @@
+# v3.1.8
+_Feb 05, 2026_
+
+Changes:
+- CDMAM:
+	- New attempts to better fit to disc positions when these are inaccurately positioned. Now summing cells of different images (if available) to find positions from thickest discs of relatively small size.
+	- Added option to correct for center disc found to min of detection matrix for centers and corners
+	- Added option to set search radius for minimum average for the discs. Default is 3 pixels as hardcoded before.
+	- Added template visualization (yellow) in cell-processed image in addition to found/not found (green/red) center and corner.
+- Reading DICOM images with missing required tags - missing tags are guessed. Error message print to cmd-window before fix.
+Bugfixes:
+- Button to refresh image display no longer crashing the program...
+
 # v3.1.7
 _Feb 02, 2025_
 

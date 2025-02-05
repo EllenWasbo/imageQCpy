@@ -2212,11 +2212,12 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             n_imgs = len(images_to_test)
             curr_progress_value = 0
             cancelled = False
+            roi_dicts = [None for i in range(len(matrix))]
             for i, idx in enumerate(images_to_test):
                 try:
                     input_main.progress_modal.setLabelText(
-                        f'Calculating image {i}/{n_imgs}')
-                    curr_progress_value = round(100 * i/n_imgs)
+                        f'Finding cell positions image {i}/{n_imgs}')
+                    curr_progress_value = round(30 * i/n_imgs)
                     input_main.progress_modal.setValue(
                          curr_progress_value)
                 except AttributeError:
@@ -2243,18 +2244,51 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                             errmsg.append(f'\tImage {idx}: '
                                           'Different pixel sizes.')
                             roi_dict = None
-                if roi_dict is not None:
-                    res = cdmam_methods.read_cdmam_image(
-                        image, img_infos[idx],
-                        roi_dict, cdmam_table_dict, paramset)
-                    details_dicts.append(res)
-
+                roi_dicts[idx] = roi_dict
                 try:
                     if input_main.progress_modal.wasCanceled():
                         cancelled = True
                         break
                 except AttributeError:
                     pass
+
+            if cancelled is False:
+                # set templates and kernels
+                try:
+                    input_main.progress_modal.setLabelText(
+                        'Finding disc templates')
+                except AttributeError:
+                    pass
+                pix_new = 0.05  # fixed pixelsize of 50 um for analysis
+                pix = img_infos[0].pix[0]
+                templates, wi, line_dist = cdmam_methods.get_templates(
+                    matrix, roi_dicts, pix, pix_new,
+                    paramset.cdm_rotate_k, cdmam_table_dict,
+                    paramset.cdm_search_margin)
+                kernels = cdmam_methods.get_kernels(cdmam_table_dict, pix_new)
+
+                for i, idx in enumerate(images_to_test):
+                    try:
+                        input_main.progress_modal.setLabelText(
+                            f'Finding discs of image {i}/{n_imgs}')
+                        curr_progress_value = 40 + round(60 * i/n_imgs)
+                        input_main.progress_modal.setValue(
+                             curr_progress_value)
+                    except AttributeError:
+                        pass
+                    if roi_dicts[i] is not None:
+                        res = cdmam_methods.read_cdmam_image(
+                            matrix[idx], img_infos[idx],
+                            roi_dicts[i], cdmam_table_dict, paramset,
+                            templates, kernels, wi, line_dist)
+                        details_dicts.append(res)
+
+                    try:
+                        if input_main.progress_modal.wasCanceled():
+                            cancelled = True
+                            break
+                    except AttributeError:
+                        pass
 
             if cancelled is False:
                 if 'include_array' in roi_dict:

@@ -1214,6 +1214,7 @@ class ResultImageCanvas(GenericImageCanvas):
                     kernel = (details_dict['kernels'][idx_diam] > 0)
                     greens = np.zeros((sz_sub, sz_sub), dtype=bool)
                     reds = np.zeros((sz_sub, sz_sub), dtype=bool)
+                    yellows = np.zeros((sz_sub, sz_sub), dtype=bool)
 
                     sz_k = kernel.shape[0]
                     radk = sz_k // 2
@@ -1252,16 +1253,19 @@ class ResultImageCanvas(GenericImageCanvas):
                             reds[y1:y2,x1:x2] = kernel[ky1:ky2,kx1:kx2]
                     except ValueError:
                         pass
-                    '''
-                    if details_dict['found_correct_corner'][idx_thick, idx_diam]:
-                        greens[yk - radk:yk - radk + sz_k,
-                               xk - radk:xk - radk + sz_k] = kernel
+
+                    if res['end'] != 0:
+                        for i in range(0,5):
+                            yellows = yellows + details_dict['templates'][i][
+                                res['start']:res['end'], 
+                                res['start']:res['end']]
                     else:
-                        reds[yk - radk:yk - radk + sz_k,
-                             xk - radk:xk - radk + sz_k] = kernel
-                    '''
-                    self.contours_to_add.append([greens, 'green', '--'])
-                    self.contours_to_add.append([reds, 'red', '--'])
+                        for i in range(0,5):
+                            yellows = yellows + details_dict['templates'][i]
+                    
+                    self.contours_to_add.append([yellows, 'yellow', '-'])
+                    self.contours_to_add.append([greens, 'green', '-'])
+                    self.contours_to_add.append([reds, 'red', '-'])
 
     def Def(self, sel_text):
         """Defective pixels."""

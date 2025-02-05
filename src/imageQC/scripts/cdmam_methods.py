@@ -472,143 +472,145 @@ def get_roi_circle(shape, delta_xy, radius):
     return inside
 
 
-def find_offset_discs(sub, kernel, phantom, width_sub_50um, line_dist_50um,
-                      corner_expected=None):
+def find_offset_disc(sub, kernel, search_radius, xy_expected=(0, 0)):
     """Search offset of center and optionally corner disc compared to expected.
 
     Parameters
     ----------
     sub : np.ndarray
-        part of image corresponding to one cell of CDMAM phantom
+        sub resized and finetuned to center
     kernel : np.ndarray
         kernel for calculating averages
-    phantom : int
-        34 or 40
-    width_sub_50um : int
-        number of pixels to resize to 50um
-    line_dist_50um : int
-        number of pixels between cell border lines
-    corner_expected : tuple, optional
-        x, y expected offset. The default is None.
+    search_radius : int
+        roi_radius to search for disc
+    xy_expected : tuple, optional
+        x, y expected offset from center. The default is (0, 0) = center.
 
     Returns
     -------
-    off_xy_center : tuple
-    off_xy_corner : tuple or None
+    off_xy : tuple
     """
-    sub = resize(sub, (width_sub_50um, width_sub_50um),
-                 anti_aliasing=True)
-    cent = round(width_sub_50um/2)
-    dx, dy = finetune_center_cell(sub, phantom, line_dist_50um)
-    sub = np.roll(sub, (-dy, -dx), axis=(0, 1))
+    cent = round(sub.shape[0]/2)
     avgs_sub = fftconvolve(sub, kernel, mode='same')
-    roi_center = get_roi_circle(avgs_sub.shape, (0, 0), 30)
-    min_yx_center, _ = mmcalc.get_min_max_pos_2d(
-        avgs_sub, roi_center)
-    off_xy_center = (min_yx_center[1] - cent, min_yx_center[0] - cent)
-    if corner_expected is not None:
-        roi_corner = get_roi_circle(avgs_sub.shape, corner_expected, 30)
-        min_yx_corner, _ = mmcalc.get_min_max_pos_2d(
-            avgs_sub, roi_corner)
-        off_xy_corner = (min_yx_corner[1] - cent, min_yx_corner[0] - cent)
-    else:
-        off_xy_corner = None
+    roi = get_roi_circle(avgs_sub.shape, xy_expected, search_radius)
+    min_yx, _ = mmcalc.get_min_max_pos_2d(avgs_sub, roi)
+    off_xy = (min_yx[1] - cent, min_yx[0] - cent)
 
-    return off_xy_center, off_xy_corner
+    return off_xy
 
 
-def get_templates(image, xs, ys, pix, pix_new,
-                  cell_width, line_dist_50um, phantom, rot90_k, tables):
-    """Find xy-offset of corner disc from sample cell with good visibility.
+def get_templates(matrix, roi_dicts, pix, pix_new,
+                  rot90_k, tables, radius_search):
+    """Find xy-offset of discs from sample cell with good visibility.
 
     Create templates where to search for minimum values.
+    With more than three images fewer cells are used as samples.
     """
+    cell_width = roi_dicts[0]['cell_width']
+    phantom = roi_dicts[0]['phantom']
+
+    if phantom == 34:
+        line_dist = (cell_width * np.cos(np.pi / 4)**2) / 2
+    else:
+        line_dist = cell_width / 2
+    line_dist = round((pix / pix_new) * line_dist)
+
     wi = round(cell_width / 2)
     wi_factor = 1
-
-    corner_indexes = np.array(tables['corner_index'])
-    corner_xys = []
-    kernel = get_roi_circle((15, 15), (0, 0), 15)
-    kernel = 1./np.sum(kernel) * kernel
     if phantom == 34:
         width_sub = wi * 2 + 1
-        
-        # find corners = top, left, right, bottom
-        # estimate position from 2 first cells of rows with thickest discs
-        # exact position seems related to which corner, not rotation symmetric
-        corner_rows_cols = [[], [], [], []]  # for top, left, rgt, btm
-        for row in range(4):  # find indexes and sort into which corner
-            first_cols = np.where(corner_indexes[row] > 0)[0][:2]
-            for col in first_cols:
-                corner_rows_cols[corner_indexes[row][col]-1].append((row, col))
-        if rot90_k == 2:  # TODO other rotations
-            corner_rows_cols.reverse()
-        for rows_cols in corner_rows_cols:  # find xy positions of the cells
-            sample_xs, sample_ys = [], []
-            for row, col in rows_cols:
-                sample_xs.append(round(xs[row, col]))
-                sample_ys.append(round(ys[row, col]))
-            corner_xys.append((sample_xs, sample_ys))
     else:  # v4.0
         wi_factor = 1.3
         wi = round(wi_factor * wi)  # add margin to cell
         width_sub = wi * 2 + 1
-        # Phantom v4.0 week contrast to finetune corners, only center
-
     width_sub_50um = round(width_sub * pix / pix_new)
-    off_xy_center = (0, 0)
-    off_xy_expect = []
-    off_xs_center, off_ys_center = [], []
-    off_xy_corners = []
+
+    corner_indexes = np.array(tables['corner_index'])
+    corner_xys = []  # list of list of xy (tuples) for each corner index
+
+    is_used = [image is not None for image in matrix]
+    n_images = np.sum(is_used)
+
+    pr_image = False if n_images > 1 else True
+
+    corner_rows_cols = [[], [], [], []]  # for the 4 corners
     if phantom == 34:
+        radius_kernel = 15
         diff_expect = width_sub_50um // 4
         off_xy_expect = [(0, -1), (-1, 0), (1, 0), (0, 1)]  # top,lft,rgt,btm
+        # when seen with no rotation
+        # exact position seems related to which corner, not rotation symmetric
+        # estimate position from 2 first cells of rows with thickest discs
+        for row in range(4):  # find indexes and sort into which corner
+            # corner index = 0 means not used cell for v3.4
+            first_cols = np.where(corner_indexes[row] > 0)[0][:2]
+            for col in first_cols:
+                corner_rows_cols[
+                    corner_indexes[row][col]-1].append((row, col))
+        #[[(0,6), (3,3)], [(0,7), (1,5), (2,4)], [(3,4)], [(1,6), (2,5)]]
+
         if rot90_k == 2:  # TODO other rotations
-            corner_xys.reverse()
-            off_xy_expect.reverse()
-        off_xy_expect = diff_expect * np.array(off_xy_expect)
+            corner_rows_cols.reverse()
 
-        for cc, (x, y) in enumerate(corner_xys):
-            off_xs_corner, off_ys_corner = [], []
-            for i in range(len(x)):
-                sub = image[y[i] - wi:y[i] + wi, x[i] - wi:x[i] + wi]
-                off_xy_center, off_xy_corner = find_offset_discs(
-                    sub, kernel, phantom, width_sub_50um, line_dist_50um,
-                    corner_expected=off_xy_expect[cc])
-                off_xs_center.append(off_xy_center[0])
-                off_ys_center.append(off_xy_center[1])
-                off_xs_corner.append(off_xy_corner[0])
-                off_ys_corner.append(off_xy_corner[1])
-
-            off_xy_corners.append(
-                (round(np.mean(off_xs_corner)), round(np.mean(off_ys_corner))))
-            off_xy_center = (round(np.mean(off_xs_center)),
-                             round(np.mean(off_ys_center)))
-    elif phantom == 40:
-        diff_expect = 47  # estimated visually from samples
-        off_xy_expect = [(-1, -1), (1, -1), (1, 1), (-1, 1)]  # topl,topr,btmr,btml
-        off_xy_expect = diff_expect * np.array(off_xy_expect)
-        x = [round(val) for val in xs[0][5:15]]  # middle of thickest
-        y = [round(val) for val in ys[0][5:15]]
-        for col in range(len(x)):
-            sub = image[y[col] - wi:y[col] + wi, x[col] - wi:x[col] + wi]
-            off_xy_center, _ = find_offset_discs(
-                sub, kernel, phantom, width_sub_50um, line_dist_50um,
-                corner_expected=None)
-            off_xs_center.append(off_xy_center[0])
-            off_ys_center.append(off_xy_center[1])
-        off_xy_center = (round(np.median(off_xs_center)),
-                         round(np.median(off_ys_center)))
-        off_xy_expect = off_xy_expect + np.array(off_xy_center)
+    else:  # v4.0
+        radius_kernel = 7
+        diff_expect = 47  # first guess estimated visually from samples
+        off_xy_expect = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+        # find corners = toplft, toprgt, btmrgt, btmlft seen with thickest as top row
+        corner_rows_cols = [
+            [(0,-5), (0,-4)], #0s
+            [(0,-6), (0,-3)], #1s
+            [(1,-7), (1,-4)], #2s
+            [(1,-6), (0,-7)]] #3s
+        # corner idxs first two rows:
+        # [..., 2, 2, 3, 1, 0, 0, 1, 0, 0]
+        # [..., 1, 3, 2, 3, 0, 2, 1, 2, 1]
 
         order = [1, 2, 3, 0]
         if rot90_k > 0:
             order = np.roll(order, rot90_k).tolist()
-        for i in order:
-            off_xy_corners.append(off_xy_expect[i])
+            off_xy_expect_rot = []
+            for i in order:
+                off_xy_expect_rot.append(off_xy_expect[i])
+            off_xy_expect = off_xy_expect_rot
+    if pr_image is False:
+        # only first for each corner]
+        corner_rows_cols = [[cells[0]] for cells in corner_rows_cols]
+    off_xy_expect = diff_expect * np.array(off_xy_expect)
 
-    # create the templates
-    radius_search = 3  # 150 um cirle radius
+    off_xy_center = (0, 0)
+    off_xs_center, off_ys_center = [], []
+
+    kernel = get_roi_circle(
+        (radius_kernel, radius_kernel), (0, 0), radius_kernel)
+    kernel = 1./np.sum(kernel) * kernel
+
+    cent = round(width_sub_50um/2)
+    sum_center = np.zeros((width_sub_50um, width_sub_50um))
+    sum_corners = [np.copy(sum_center) for i in range(4)]
+    for idx, image in enumerate(matrix):
+        if image is not None:
+            for corner_idx, rows_cols in enumerate(corner_rows_cols):
+                x = [round(roi_dicts[idx]['xs'][r, c]) for r, c in rows_cols]
+                y = [round(roi_dicts[idx]['ys'][r, c]) for r, c in rows_cols]
+                for i in range(len(x)):
+                    sub = image[y[i] - wi:y[i] + wi, x[i] - wi:x[i] + wi]
+                    sub = resize(sub, (width_sub_50um, width_sub_50um),
+                                 anti_aliasing=True)
+                    dx, dy = finetune_center_cell(sub, phantom, line_dist)
+                    sub = np.roll(sub, (-dy, -dx), axis=(0, 1))
+                    sum_center = sum_center + sub
+                    sum_corners[corner_idx] = sum_corners[corner_idx] + sub
+
+    off_xy_center = find_offset_disc(
+        sum_center, kernel, 30, xy_expected=(0, 0))
+    off_xy_corners = []
+    for i, sum_corner in enumerate(sum_corners):
+        off_xy_corner = find_offset_disc(
+            sum_corner, kernel, 30, xy_expected=off_xy_expect[i])
+        off_xy_corners.append(off_xy_corner)
+
+    # create the templates with circle rois by given search radius
     templates = [get_roi_circle(
         (width_sub_50um, width_sub_50um), off_xy_center, radius_search)]
     for off_xy in off_xy_corners:
@@ -637,7 +639,7 @@ def get_templates(image, xs, ys, pix, pix_new,
         mask = mask + 1 * templates[-1]
     templates.append(mask.astype(bool))
 
-    return templates, wi
+    return templates, wi, line_dist
 
 
 def get_kernels(tables, pix_new):
@@ -704,7 +706,7 @@ def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):
         ld, ks = 0, 0
         if phantom == 34:
             sub[disc_templates[-2] == True] = np.median(sub)
-            fit = mmcalc.polyfit_2d(sub, mask=disc_templates[-1])
+            fit = mmcalc.polyfit_2d(sub, max_order=1, mask=disc_templates[-1])
             sub = sub - fit
             avgs_sub = fftconvolve(sub, kernel, mode='same')
         elif phantom == 40:
@@ -712,21 +714,23 @@ def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):
             ld = line_dist
             sub_cropped = sub[cent-ld:cent+ld,cent-ld:cent+ld]
             mask = disc_templates[-1][cent-ld:cent+ld,cent-ld:cent+ld]
-            fit = mmcalc.polyfit_2d(sub_cropped, mask=mask)
+            fit = mmcalc.polyfit_2d(sub_cropped, max_order=1, mask=mask)
             sub_cropped = sub_cropped - fit
             avgs_sub = fftconvolve(sub_cropped, kernel, mode='valid')
             ks = round(kernel.shape[1] // 2)
 
         minvals = []
         minpos = []
+        start, end = 0, 0
+        if phantom == 40:
+            start = cent - ld + ks
+            end = start + avgs_sub.shape[0]
         for template in disc_templates[:5]:
             if phantom == 34:
                 min_yx, _ = mmcalc.get_min_max_pos_2d(
                     avgs_sub, template)
                 minpos.append(min_yx)
             elif phantom == 40:
-                start = cent - ld + ks
-                end = start + avgs_sub.shape[0]
                 min_yx, _ = mmcalc.get_min_max_pos_2d(
                     avgs_sub, template[start:end,start:end])
                 minpos.append(min_yx)
@@ -745,13 +749,16 @@ def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):
             'corner_index': idx_min,
             'central_disc_found': central_is_min,
             'min_positions': minpos,
-            'processed_sub': avgs_sub
+            'processed_sub': avgs_sub,
+            'start': start, 'end': end
             }
 
     return res
 
 
-def read_cdmam_image(image, image_info, roi_dict, cdmam_table_dict, paramset):
+def read_cdmam_image(image, image_info, roi_dict,
+                     cdmam_table_dict, paramset,
+                     templates, kernels, wi, line_dist):
     """Read cdmam results for an image.
 
     Parameters
@@ -775,6 +782,7 @@ def read_cdmam_image(image, image_info, roi_dict, cdmam_table_dict, paramset):
     if roi_dict['invert']:
         image = -np.copy(image)
 
+    '''
     pix_new = 0.05  # fixed pixelsize of 50 um for analysis
     pix = image_info.pix[0]
     if phantom == 34:
@@ -789,6 +797,7 @@ def read_cdmam_image(image, image_info, roi_dict, cdmam_table_dict, paramset):
         cell_width, line_dist, phantom, paramset.cdm_rotate_k,
         cdmam_table_dict)
     kernels = get_kernels(cdmam_table_dict, pix_new)
+    '''
     sz_y, sz_x = center_xs.shape
 
     res_table = []
@@ -861,7 +870,7 @@ def read_cdmam_image(image, image_info, roi_dict, cdmam_table_dict, paramset):
         'found_centers': found_centers,
         'corrected_neighbours': None,
         'res_table': res_table,
-        'kernels': kernels
+        'kernels': kernels, 'templates': templates
         }
 
     if paramset.cdm_center_disc_option == 1:
@@ -875,7 +884,7 @@ def read_cdmam_image(image, image_info, roi_dict, cdmam_table_dict, paramset):
 
     details_dict['detection_matrix'] = 1.*found_this
 
-    if paramset.cdm_center_disc_option == 2:
+    if paramset.cdm_center_disc_option >= 2:
         if paramset.cdm_correct_neighbours:
             found_centers = correct_neighbours(
                 found_centers, include_array=include_array)
@@ -959,17 +968,17 @@ def sum_detection_matrix(details_dicts, include_array, cdm_center_disc_option):
     detection_matrix = details_dicts[0]['detection_matrix']
     detection_matrix_centers = None
     update_dict = {}
-    if cdm_center_disc_option == 2:
+    if cdm_center_disc_option >= 2:
         detection_matrix_centers = details_dicts[0]['detection_matrix_centers']
     for dd in details_dicts[1:]:
         detection_matrix = (
             detection_matrix + dd['detection_matrix'])
-        if cdm_center_disc_option == 2:
+        if cdm_center_disc_option >= 2:
             detection_matrix_centers = (
                 detection_matrix_centers + dd['detection_matrix_centers'])
     n_imgs = len(details_dicts)
     detection_matrix = detection_matrix / n_imgs
-    if cdm_center_disc_option == 2:
+    if cdm_center_disc_option >= 2:
         detection_matrix_centers = detection_matrix_centers / n_imgs
 
         update_dict['detection_matrix_corners'] = np.copy(
@@ -982,7 +991,11 @@ def sum_detection_matrix(details_dicts, include_array, cdm_center_disc_option):
         detection_matrix_centers[np.logical_and(
             detection_matrix_centers < 0.25,
             include_array == True)] = 0.25
-        detection_matrix = detection_matrix * detection_matrix_centers
+        if cdm_center_disc_option == 2:
+            detection_matrix = detection_matrix * detection_matrix_centers
+        elif cdm_center_disc_option == 3:
+            detection_matrix = np.minimum(
+                detection_matrix, detection_matrix_centers)
         update_dict['detection_matrix'] = detection_matrix
     update_dict['detection_matrix'] = detection_matrix
 

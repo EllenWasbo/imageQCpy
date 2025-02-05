@@ -2307,6 +2307,11 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_tolerance_angle.editingFinished.connect(
             lambda: self.param_changed_from_gui(
                 attribute='cdm_tolerance_angle'))
+        self.cdm_search_margin = QDoubleSpinBox(
+            decimals=0, minimum=2,  maximum=20, singleStep=1)
+        self.cdm_search_margin.editingFinished.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='cdm_search_margin'))
         self.cdm_sigma = QDoubleSpinBox(
             decimals=2, minimum=0.,  maximum=2, singleStep=0.1)
         self.cdm_sigma.editingFinished.connect(
@@ -2327,7 +2332,8 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_center_disc_option.addItems([
             'do not use',
             'corner = False if center = False',
-            'multiply corner/center detection matrix'
+            'multiply corner/center detection matrix',
+            'min af corner/center detection matrix'
             ])
 
         self.cdm_result_image = QComboBox()
@@ -2346,6 +2352,7 @@ class ParamsTabMammo(ParamsTabCommon):
             self.main.wid_res_image.canvas.result_image_draw)
 
         self.cdm_chk_show_kernel = QCheckBox('Show kernel for found discs')
+        self.cdm_chk_show_kernel.setChecked(True)
         self.cdm_chk_show_kernel.toggled.connect(
             self.main.wid_res_image.canvas.result_image_draw)
 
@@ -2355,6 +2362,7 @@ class ParamsTabMammo(ParamsTabCommon):
         flo1 = QFormLayout()
         flo1.addRow(QLabel('Accept tolerance for phantom rotation (degrees)'),
                     self.cdm_tolerance_angle)
+        flo1.addRow(QLabel('Search radius (n x 50um)'), self.cdm_search_margin)
         flo1.addRow(QLabel('Gaussian smooth detection matrix, sigma (cells)'),
                     self.cdm_sigma)
         flo1.addRow(QLabel('Image is rotated'), self.cdm_rotate_k)
@@ -2394,8 +2402,8 @@ class ParamsTabMammo(ParamsTabCommon):
             ['Found disc at center and in correct corner',
              'Found discs corrected for nearest neighbours',
              'Detection matrix',
-             'Detection matrix corners (option multiply)',
-             'Detection matrix centers (option multiply)',
+             'Detection matrix corners (option min or multiply)',
+             'Detection matrix centers (option min or multiply)',
              'Detection matrix corrected/smoothed',
              'Fitted psychometric curves',
              'Threshold thickness'])

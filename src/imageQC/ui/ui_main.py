@@ -673,9 +673,9 @@ class MainWindow(QMainWindow):
         """Method in ui_main_methods.py."""
         ui_main_methods.refresh_results_display(self, update_table=update_table)
 
-    def refresh_img_display(self):
+    def refresh_img_display(self, force_home=False):
         """Method in ui_main_methods.py."""
-        ui_main_methods.refresh_img_display(self)
+        ui_main_methods.refresh_img_display(self, force_home=force_home)
 
     def refresh_selected_table_row(self):
         """Set selected results table row to the same as image selected file."""

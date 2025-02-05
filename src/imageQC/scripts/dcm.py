@@ -81,6 +81,21 @@ def fix_sop_class(elem, **kwargs):
 
     return elem
 
+def fix_required_tags(pyd):
+    try:
+        _ = pyd.PhotometricInterpretation
+    except AttributeError:
+        pyd.add_new([0x0028,0x0004], 'CS', 'MONOCHROME1')
+    try:
+        _ = pyd.PixelRepresentation
+    except AttributeError:
+        pyd.add_new([0x0028,0x0103], 'US', 1)
+    try:
+        _ = pyd.SamplesPerPixel
+    except AttributeError:
+        pyd.add_new([0x0028,0x0002], 'US', 1)
+    return pyd
+
 
 def read_dcm(file, stop_before_pixels=True):
     """Read DICOM and catch errors.
@@ -709,14 +724,28 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
                 try:
                     pixarr = pydicom.pixels.pixel_array(pyd)
                 except AttributeError as err2:
+                    print(err2)
                     if 'Transfer Syntax UID' in str(err2):
                         pyd.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
                         try:  # try again
                             pixarr = pydicom.pixels.pixel_array(pyd)
                         except:
                             pass
+                    elif 'required' in str(err2):
+                        pyd = fix_required_tags(pyd)
+                        try:
+                            pixarr = pydicom.pixels.pixel_array(pyd)
+                        except:
+                            pass
             elif 'TransferSyntaxUID' in str(err):
                 pyd.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
+                try:
+                    pixarr = pyd.pixel_array
+                except:
+                    pass
+            elif 'required' in str(err):
+                print(err)
+                pyd = fix_required_tags(pyd)
                 try:
                     pixarr = pyd.pixel_array
                 except:

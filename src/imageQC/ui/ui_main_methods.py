@@ -100,11 +100,11 @@ def refresh_results_display(main, update_table=True):
             main.wid_res_image.canvas.result_image_draw()
 
 
-def refresh_img_display(main):
+def refresh_img_display(main, force_home=False):
     """Refresh image related gui."""
     if main.active_img is not None:
         main.current_roi = None
-        main.wid_image_display.canvas.img_draw()
+        main.wid_image_display.canvas.img_draw(force_home=force_home)
         try:
             main.wid_window_level.canvas.plot(main.active_img)
             main.wid_dcm_header.refresh_img_info(

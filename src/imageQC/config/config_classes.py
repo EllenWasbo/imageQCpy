@@ -523,9 +523,11 @@ class ParamSetMammo(ParamSetCommon):
     cdm_sigma: float = 0.75  # smooth detection matrix by gaussian, set sigma (unit cells)
     cdm_rotate_k: int = 0  # rotate image by nx90degrees
     cdm_correct_neighbours: bool = True  # correct for results in neighbours
-    cdm_center_disc_option: int = 2
+    cdm_center_disc_option: int = 3
+    cdm_search_margin: int = 3  # number of pixels for the search for min
     # 0=ignore center, 1=correct for center pr image,
     # 2=separate detection matrix for corner and center - multiplied
+    # 3=separate detection matrix for corner and center - minimum
 
 
 @dataclass

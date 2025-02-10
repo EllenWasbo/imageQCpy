@@ -1043,8 +1043,8 @@ class ReportElement:
     text: str = ''  # html content or plot/image selection text
     testcode: str = ''  # if coupled to results of specific testcode
     width: int = 100  # percent width of element
-    result_pr_image: bool = True
-    result_from_image: int = 0  # specify which image to present results from
+    all_images: bool = True  # include all (available) images
+    image_number: int = 0  # specify which image to present results from
     caption: str = ''
     note: str = ''
     note_pos: str = 'before'  # or after

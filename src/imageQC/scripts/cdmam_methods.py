@@ -589,7 +589,7 @@ def get_templates(matrix, roi_dicts, pix, pix_new,
     sum_center = np.zeros((width_sub_50um, width_sub_50um))
     sum_corners = [np.copy(sum_center) for i in range(4)]
     for idx, image in enumerate(matrix):
-        if image is not None:
+        if image is not None and roi_dicts[idx] is not None:
             for corner_idx, rows_cols in enumerate(corner_rows_cols):
                 x = [round(roi_dicts[idx]['xs'][r, c]) for r, c in rows_cols]
                 y = [round(roi_dicts[idx]['ys'][r, c]) for r, c in rows_cols]
@@ -1133,7 +1133,7 @@ def calculate_fitted_psychometric(cdmam_table_dict, paramset):
                 f, ct = popt
                 yfit = psychometric_curve(xvals, f, ct)
                 threshold_thickness = mmcalc.get_curve_values(
-                    xvals, yfit, [0.625])
+                    xvals, yfit, [0.625], extrapolate=True)
 
                 r = mmcalc.get_curve_values(
                     scale_r['rs'],

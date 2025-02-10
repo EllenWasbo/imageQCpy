@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "force_home"
+search_string = "extrapolate=Tr"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

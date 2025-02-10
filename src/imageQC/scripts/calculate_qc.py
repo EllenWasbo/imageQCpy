@@ -252,7 +252,6 @@ def quicktest_output(input_main):
 
         for test in output_all_actual:
             output_subs = output_all_actual[test]
-
             res_pr_image = True
 
             # for each sub-output for current test
@@ -671,7 +670,7 @@ def calculate_qc(input_main, wid_auto=None,
                 if main_type in ['MainWindow', 'TaskBasedImageQualityDialog']:
                     try:
                         input_main.progress_modal.setLabelText(
-                            f'Reading/calculating image {i}/{n_img}')
+                            f'Reading image {i}/{n_img}')
                         input_main.progress_modal.setValue(
                              curr_progress_val + round(100 * i/n_analyse))
                     except AttributeError:
@@ -1406,7 +1405,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     res = Results(
                         headers=headers, values=values,
                         headers_sup=headers_sup, values_sup=values_sup,
-                        details_dict=details)
+                        details_dict=details, alternative=alt)
         elif flatfield_aapm:
             if image2d is not None:
                 details = calculate_flatfield_aapm(
@@ -1432,7 +1431,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
                     res = Results(
                         headers=headers, values=values,
-                        details_dict=details)
+                        details_dict=details, alternative=alt)
 
         if res is None:
             res = Results(headers=headers, values=values,
@@ -2229,6 +2228,9 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     roi_dict, err_this = get_rois(image, idx, input_main)
                     if err_this:
                         errmsg.append(f'\tImage {idx}: {errmsg}')
+                    elif roi_dict is None:
+                        msg = 'Failed reading cell positions. Image ignored.'
+                        errmsg.append(f'\tImage {idx}: {msg}')
                     if roi_dict is not None:
                         phantom = 34 if 'include_array' in roi_dict else 40
                         if prev_phantom == 0:
@@ -2271,7 +2273,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     try:
                         input_main.progress_modal.setLabelText(
                             f'Finding discs of image {i}/{n_imgs}')
-                        curr_progress_value = 40 + round(60 * i/n_imgs)
+                        curr_progress_value = 35 + round(60 * i/n_imgs)
                         input_main.progress_modal.setValue(
                              curr_progress_value)
                     except AttributeError:
@@ -2291,6 +2293,12 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         pass
 
             if cancelled is False:
+                try:
+                    input_main.progress_modal.setLabelText(
+                        'Finishing calculations...')
+                    input_main.progress_modal.setValue(95)
+                except AttributeError:
+                    pass
                 if 'include_array' in roi_dict:
                     include_array = roi_dict['include_array']
                 else:
@@ -2322,7 +2330,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             else:
                 res = Results(headers=headers, values=[[None]*4],
                               errmsg=errmsgs)
-
+            try:
+                input_main.progress_modal.setValue(98)
+            except AttributeError:
+                pass
         return res
 
     def Cro(images_to_test):

@@ -1,5 +1,15 @@
+# v3.1.9
+_Feb 10, 2025_
+
+Changes:
+- Mammo - CDMAM: small fixes (less nan in result table by allowing for extrapolation) and adjusting progress-bar
+- Generate report: Fixes to confusing behaviour single vs all images/results. Apologies if established templates need adjustments. 
+
+Bugfixes:
+- Xray/Mammo - Homogeneity: fixed error when generating QuickTest results (automation output and export to clipboard)
+
 # v3.1.8
-_Feb 05, 2026_
+_Feb 05, 2025_
 
 Changes:
 - CDMAM:

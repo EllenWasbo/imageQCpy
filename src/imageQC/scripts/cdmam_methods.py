@@ -694,7 +694,7 @@ def finetune_center_cell(sub, phantom, line_dist):
     return (round(dx), round(dy))
 
 
-def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):
+def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):#, fit2d):
     """Calculate results for sub in CDMAM."""
     if sub is None:
         res = None
@@ -706,13 +706,15 @@ def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):
         ld, ks = 0, 0
         if phantom == 34:
             sub[disc_templates[-2] == True] = np.median(sub)
+            #if fit2d:
             fit = mmcalc.polyfit_2d(sub, max_order=1, mask=disc_templates[-1])
             sub = sub - fit
             avgs_sub = fftconvolve(sub, kernel, mode='same')
         elif phantom == 40:
             cent = round(sub.shape[0] // 2)
-            ld = line_dist
+            ld = line_dist - 4  # -4 to avoid line signal
             sub_cropped = sub[cent-ld:cent+ld,cent-ld:cent+ld]
+            #if fit2d:
             mask = disc_templates[-1][cent-ld:cent+ld,cent-ld:cent+ld]
             fit = mmcalc.polyfit_2d(sub_cropped, max_order=1, mask=mask)
             sub_cropped = sub_cropped - fit
@@ -817,6 +819,7 @@ def read_cdmam_image(image, image_info, roi_dict,
                     sub = fix_cropped_sub(image, x, y, wi)
                 res = read_cdmam_sub(
                     sub, phantom, line_dist, templates, kernels[col])
+                #paramset.cdm_fit)
                 res_table[row][col] = res
                 nn += 1
     '''Mutliprocessing (failed being faster)
@@ -1119,6 +1122,10 @@ def calculate_fitted_psychometric(cdmam_table_dict, paramset):
     def fit(diameter_number, f_set=None):
         yvals = detection_matrix_corrected[:, diameter_number]
         xvals = thickness[:, diameter_number]
+        r = mmcalc.get_curve_values(
+            scale_r['rs'],
+            scale_r['diameters'], [diameters[diameter_number]])
+
         if include_array is not None:
             xvals = xvals[include_array[:, diameter_number] == True]
             yvals = yvals[include_array[:, diameter_number] == True]
@@ -1134,25 +1141,24 @@ def calculate_fitted_psychometric(cdmam_table_dict, paramset):
                 yfit = psychometric_curve(xvals, f, ct)
                 threshold_thickness = mmcalc.get_curve_values(
                     xvals, yfit, [0.625], extrapolate=True)
+        if threshold_thickness[0] is None:
+            if np.min(yvals) >= 0.625:  # all above
+                threshold_thickness[0] = np.min(xvals)
+            elif np.max(yvals) <= 0.625:  # all below
+                threshold_thickness[0] = np.max(xvals)
 
-                r = mmcalc.get_curve_values(
-                    scale_r['rs'],
-                    scale_r['diameters'], [diameters[diameter_number]])
-
-                if r[0] is not None and threshold_thickness[0] is not None:
-                    # r[0] None if outside range of euref r-scale
-                    ##thickness_predict = r[0] * threshold_thickness[0]
-
-                    contrast_auto = mmcalc.get_curve_values(
-                        euref_thickness_contast['contrast'],
-                        euref_thickness_contast['thickness'],
-                        threshold_thickness, extrapolate=True)
-
-                    contrast_predict = r[0] * contrast_auto[0]
-                    thickness_predict = mmcalc.get_curve_values(
-                        euref_thickness_contast['thickness'],
-                        euref_thickness_contast['contrast'],
-                        [contrast_predict], extrapolate=True)
+        if r[0] is not None and threshold_thickness[0] is not None:
+            # r[0] None if outside range of euref r-scale
+            ##thickness_predict = r[0] * threshold_thickness[0]
+            contrast_auto = mmcalc.get_curve_values(
+                euref_thickness_contast['contrast'],
+                euref_thickness_contast['thickness'],
+                threshold_thickness, extrapolate=True)
+            contrast_predict = r[0] * contrast_auto[0]
+            thickness_predict = mmcalc.get_curve_values(
+                euref_thickness_contast['thickness'],
+                euref_thickness_contast['contrast'],
+                [contrast_predict], extrapolate=True)
 
         return xvals, yvals, popt, yfit, threshold_thickness[0], thickness_predict[0]
 

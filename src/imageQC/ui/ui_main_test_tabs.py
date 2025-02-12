@@ -1834,7 +1834,25 @@ class ParamsTabXray(ParamsTabCommon):
             + 'Anomalous pixels are detected as specified using the number of standard deviations from average.<br>'
             + 'The anomalous pixels are not corrected for.<br>'
             + 'To calculate local uniformity, the neighbour ROIs are found from half the ROI size away as the sliding<br>'
-            + 'window used to calculate the ROI maps causes the true neighbour ROIs to be averaged over close to the same values.')
+            + 'window used to calculate the ROI maps causes the true neighbour ROIs to be averaged over close to the same values.<br>'
+            + 'Correlated noise is calculated as relativee standard deviation of averaged profiles in x and y directions.'
+            + '<br><br>'
+            + '<ul>'
+            + '<li><b>AvgPix</b>: Average of the average map</li>'
+            + '<li><b>AvgNoi</b>: Average of the noise map</li>'
+            + '<li><b>AvgSNR</b>: Average of the Signal to Noise map</li>'
+            + '<li><b>MinSNR</b>: Minimum in the Signal to Noise map</li>'
+            + '<li><b>nAnomalousPix:</b> Number of anomalous pixels i.e. with noise higher than N stdev</li>'
+            + '<li><b>Max nAnomPrROI:</b> Maximum number of anomalous pixels pr sliding ROI</li>'
+            + '<li><b>L Unif:</b> Absolute maximum of Local Uniformity map (%)</li>'
+            + '<li><b>G Unif:</b> Global Uniformity of average map (%) = 100. * (max - min) / average </li>'
+            + '<li><b>L NoiUnif:</b> Absolute maximum of Local Noise Uniformity map (%)</li>'
+            + '<li><b>G NoiUnif:</b> Global Uniformity of noise map (%)</li>'
+            + '<li><b>L SNRUnif:</b> Absolute maximum of Local SNR Uniformity map (%)</li>'
+            + '<li><b>G SNRUnif:</b> Global Uniformity of SNR map (%)</li>'
+            + '<li><b>relSDrow:</b> Relative stdev for averaged x-profile</li>'
+            + '<li><b>relSDcol:</b> Relative stdev for averaged y-profile</li>'
+            + '</ul>')
         self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         self.hom_roi_rotation = QDoubleSpinBox(
@@ -2266,7 +2284,7 @@ class ParamsTabMammo(ParamsTabCommon):
                     dataframes = []
                     shape = details_dict['found_correct_corner'].shape
                     for path in paths:
-                        dataf = pd.read_csv(path, sep='\s+', header=None)
+                        dataf = pd.read_csv(path, sep='\\s+', header=None)
                         dataf = dataf.to_numpy()
                         if dataf.shape == shape:
                             found_array = np.zeros(shape, dtype=bool)
@@ -2335,6 +2353,9 @@ class ParamsTabMammo(ParamsTabCommon):
             'multiply corner/center detection matrix',
             'min af corner/center detection matrix'
             ])
+        #self.cdm_fit = QCheckBox()
+        #self.cdm_fit.toggled.connect(
+        #    lambda: self.param_changed_from_gui(attribute='cdm_fit'))
 
         self.cdm_result_image = QComboBox()
         self.cdm_plot = QComboBox()
@@ -2366,6 +2387,7 @@ class ParamsTabMammo(ParamsTabCommon):
         flo1.addRow(QLabel('Gaussian smooth detection matrix, sigma (cells)'),
                     self.cdm_sigma)
         flo1.addRow(QLabel('Image is rotated'), self.cdm_rotate_k)
+        #flo1.addRow(QLabel('Fit skew in cells (linear fit)'), self.cdm_fit)
         flo1.addRow(QLabel('Correct founds according to nearest neighbours'),
                     self.cdm_correct_neighbours)
         vlo_left.addLayout(flo1)

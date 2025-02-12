@@ -712,14 +712,14 @@ class GenerateReportDialog(ImageQCDialog):
                 html_file.write("\n".join(html))
             webbrowser.open(url='file://' + fname, new=1)
 
-    def result_table_to_html(self, headers, values, pr_image, width, testcode):
+    def result_table_to_html(self, headers, values, pr_image, element):
         html_lines = []
         if len(values) > 0:
             html_lines.append(
-                f'<table class="result_table" style="width:{width}%">')
+                f'<table class="result_table" style="width:{element.width}%">')
             html_lines.append('<tr class="result_table">')
             image_names = []
-            if pr_image:
+            if pr_image and element.include_image_name == True:
                 html_lines.append('<th class="result_table">Image</th>')
                 image_names = get_image_names(self.main)
                 marked_this = self.main.get_marked_imgs_current_test()
@@ -729,10 +729,10 @@ class GenerateReportDialog(ImageQCDialog):
                                for header in headers])
             html_lines.append('</tr>')
             values_formatted = format_result_table(
-                self.main, testcode, values, headers)
+                self.main, element.testcode, values, headers)
             for rowno, row in enumerate(values_formatted):
                 html_lines.append('<tr class="result_table">')
-                if pr_image:
+                if pr_image and element.include_image_name == True:
                     html_lines.append(
                         f'<td class="result_table">{image_names[rowno]}</td>')
                 html_lines.extend([f'<td class="result_table">{val}</td>'
@@ -767,8 +767,8 @@ class GenerateReportDialog(ImageQCDialog):
             wtxt = f'width="{element.width}%" '
         html_code = (
             f'<img {wtxt}src="data:image/png;base64,{img}">')
-        if image_name != '':
-            html_code = f'{html_code}<br>{image_name}'
+        if image_name != '' and element.include_image_name:
+            html_code = f'{html_code}<br><div style="text-align: center;">{image_name}</div>'
 
         return html_code
 
@@ -821,7 +821,7 @@ class GenerateReportDialog(ImageQCDialog):
                 values = self.main.results[testcode][f'values{suffix}']
                 pr_image = self.main.results[testcode][f'pr_image{suffix}']
                 html_this = self.result_table_to_html(
-                    headers, values, pr_image, element.width, testcode)
+                    headers, values, pr_image, element)#.width, testcode)
             except KeyError:
                 pass
         elif element.variant in ['result_plot', 'result_image']:
@@ -1012,17 +1012,20 @@ class AddEditElementDialog(ImageQCDialog):
         self.image_number_results.setRange(0, maximg)
         self.all_images_results = QCheckBox()
         self.all_images_results.stateChanged.connect(self.update_all_checked)
+        self.include_image_name_results = QCheckBox()
         flo_result = QFormLayout()
         vlo_result.addLayout(flo_result)
         flo_result.addRow(QLabel('Test:'), self.cbox_testcode)
         flo_result.addRow(QLabel('Result table:'), self.cbox_table)
         flo_result.addRow(QLabel('Result plot:'), self.cbox_plot)
         flo_result.addRow(QLabel('Result image:'), self.cbox_result_image)
-        flo_result.addRow(QLabel('Width (%):'), self.width_results)
-        flo_result.addRow(QLabel('Result from image number:'),
-                          self.image_number_results)
         flo_result.addRow(QLabel('Results from each marked image'),
                           self.all_images_results)
+        flo_result.addRow(QLabel('Result from image number:'),
+                          self.image_number_results)
+        flo_result.addRow(QLabel('Include image name(s)'),
+                          self.include_image_name_results)
+        flo_result.addRow(QLabel('Width (%):'), self.width_results)
         vlo_result.addWidget(uir.LabelItalic(
             'If "Result from each marked image" is checked with plot/image '
             'result, a table will be generated <br>'
@@ -1038,9 +1041,12 @@ class AddEditElementDialog(ImageQCDialog):
         self.image_number.setRange(0, maximg)
         self.all_images = QCheckBox('')
         self.all_images.stateChanged.connect(self.update_all_checked)
+        self.include_image_name = QCheckBox()
         self.lbl_width_image = QLabel('Number of images pr row:')
         flo_image.addRow(QLabel('All images'), self.all_images)
         flo_image.addRow(QLabel('Image number:'), self.image_number)
+        flo_image.addRow(QLabel('Include image name(s)'),
+                          self.include_image_name)
         flo_image.addRow(self.lbl_width_image, self.width_image)
 
         hlo_buttons_btm = QHBoxLayout()
@@ -1108,6 +1114,8 @@ class AddEditElementDialog(ImageQCDialog):
                 self.cbox_table.setEnabled(True)
                 self.all_images_results.setEnabled(False)
                 self.image_number_results.setEnabled(False)
+                self.include_image_name_results.setChecked(
+                    self.element.include_image_name)
             else:
                 self.update_all_checked(initialize=True)
                 if sel == 3:
@@ -1125,13 +1133,15 @@ class AddEditElementDialog(ImageQCDialog):
         variant = self.cbox_variant.currentIndex()
         wid_all = self.all_images if variant == 5 else self.all_images_results
         wid_nmb = self.image_number if variant == 5 else self.image_number_results
+        wid_incl = self.include_image_name if variant == 5 else self.include_image_name_results
 
         if initialize is True:
             wid_all.setEnabled(True)
             wid_all.setChecked(self.element.all_images)
-            wid_nmb.setEnabled(not wid_all.isChecked())
-        else:
-            wid_nmb.setEnabled(not wid_all.isChecked())
+        wid_nmb.setEnabled(not wid_all.isChecked())
+
+        if initialize is True:
+            wid_incl.setChecked(self.element.include_image_name)
 
         if wid_all.isChecked():
             if len(self.parent.main.imgs) == 0:
@@ -1151,7 +1161,7 @@ class AddEditElementDialog(ImageQCDialog):
         else:
             if variant == 5:
                 self.width_image.setRange(3, 100)
-                self.lbl_width_image.setText('Width (%):')
+                self.lbl_width_image.setText('Width (%) in cell:')
                 if self.element.width < 20:
                     self.width_image.setValue(100)
                 else:
@@ -1192,19 +1202,21 @@ class AddEditElementDialog(ImageQCDialog):
             self.element.width = self.width_image.value()
             self.element.all_images = self.all_images.isChecked()
             self.element.image_number = self.image_number.value()
+            self.element.include_image_name = self.include_image_name.isChecked()
         else:
             self.element.testcode = self.cbox_testcode.currentText()
             self.element.width = self.width_results.value()
+            self.element.include_image_name = (
+                self.include_image_name_results.isChecked())
             if sel == 2:
                 self.element.text = self.cbox_table.currentText()
-            elif sel == 3:
-                self.element.text = self.cbox_plot.currentText()
+            else:
                 self.element.all_images = self.all_images_results.isChecked()
                 self.element.image_number = self.image_number_results.value()
-            elif sel == 4:
-                self.element.text = self.cbox_result_image.currentText()
-                self.element.all_images = self.all_images_results.isChecked()
-                self.element.image_number = self.image_number_results.value()
+                if sel == 3:
+                    self.element.text = self.cbox_plot.currentText()
+                elif sel == 4:
+                    self.element.text = self.cbox_result_image.currentText()
 
         return self.element
 

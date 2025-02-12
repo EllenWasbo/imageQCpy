@@ -524,10 +524,11 @@ class ParamSetMammo(ParamSetCommon):
     cdm_rotate_k: int = 0  # rotate image by nx90degrees
     cdm_correct_neighbours: bool = True  # correct for results in neighbours
     cdm_center_disc_option: int = 3
-    cdm_search_margin: int = 3  # number of pixels for the search for min
     # 0=ignore center, 1=correct for center pr image,
     # 2=separate detection matrix for corner and center - multiplied
     # 3=separate detection matrix for corner and center - minimum
+    cdm_search_margin: int = 3  # number of pixels for the search for min
+    #cdm_fit_order: int = 1  # order of 2d fit for signal outside template for each cell
 
 
 @dataclass
@@ -1045,6 +1046,7 @@ class ReportElement:
     width: int = 100  # percent width of element
     all_images: bool = True  # include all (available) images
     image_number: int = 0  # specify which image to present results from
+    include_image_name: bool = True
     caption: str = ''
     note: str = ''
     note_pos: str = 'before'  # or after

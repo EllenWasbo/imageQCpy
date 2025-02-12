@@ -1,3 +1,15 @@
+# v3.1.10
+_Feb 12, 2025_
+
+Changes:
+- Generate report: Added option to include/exclude image name for plot/image. Image name now centered on plot/image
+- Xray Homogeneity: Added more explanation to the result table content in the information dialogue.
+- CDMAM: v4.0 - cropped cells 4pix=200um from cell-grid (border) to avoid that border pixel-values affecting result
+
+Fixes:
+- Annotations lagging for matplotlib 3.10 now fixed
+
+
 # v3.1.9
 _Feb 10, 2025_
 

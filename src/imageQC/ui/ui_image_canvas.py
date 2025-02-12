@@ -300,7 +300,10 @@ class ImageCanvas(GenericImageCanvas):
                     except ValueError:
                         pass
             except (AttributeError, NotImplementedError):
-                pass
+                try:
+                    contour.remove()  # matplotlib v3.10(?), collections depricated
+                except AttributeError:
+                    pass
         self.contours = []
 
         for scatter in self.scatters:

@@ -209,13 +209,11 @@ def polyfit_2d(array_2d, max_order=2, mask=None):
         b = array_2d.ravel()
     # Linear, least-squares fit.
     A = np.vstack(basis).T
-
     c, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
 
     # Calculate the fitted surface from the coefficients, c.
     fitted_2darray = np.sum(c[:, None, None] * np.array(get_basis(xs, ys, max_order))
                             .reshape(len(basis), *xs.shape), axis=0)
-
     return fitted_2darray
 
 

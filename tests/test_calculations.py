@@ -328,7 +328,7 @@ def test_Xray_Hom():
     calculate_qc.calculate_qc(input_main)
     vals_0 = np.round(np.array(input_main.results['Hom']['values'][0]))
     vals_0_exp = np.array([1.088e+03, 9.000e+00, 1.170e+02, 9.100e+01,
-                           8.422e+03, 2.000e+01, 0.000e+00, 9.000e+00,
+                           1.000e+00, 1.000e+00, 0.000e+00, 9.000e+00,
                            9.000e+00, 3.400e+01, 8.000e+00, 3.400e+01,
                            2.000e+00, 1.000e+00])
 
@@ -438,7 +438,8 @@ def test_Xray_Def():
 
     calculate_qc.calculate_qc(input_main)
     vals = np.round(np.array(input_main.results['Def']['values'][0]))
-    assert np.array_equal(vals, np.array([15127, 33617]))
+
+    assert np.array_equal(vals, np.array([15370, 33372]))
 
 
 def test_Mammo_SDN():

@@ -369,6 +369,7 @@ def apply_artifacts(image, image_info, artifacts, artifacts_3d, image_number):
                                     image.shape,
                                     center_dx=off_xy[0], center_dy=off_xy[1])
                                 dist_map_mm = image_info.pix[0] * dist_map_pix
+                                #artifact sigma == source distance
                                 arr = mmcalc.point_source_func(
                                     dist_map_mm, 1., artifact.sigma)
                                 artifact_array = artifact_array * arr/np.max(arr)

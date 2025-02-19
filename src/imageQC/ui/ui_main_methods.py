@@ -134,7 +134,8 @@ def sum_marked_images(main):
                 arr, _ = dcm.get_img(
                     img_info.filepath,
                     frame_number=img_info.frame_number,
-                    tag_infos=main.tag_infos, overlay=main.gui.show_overlay)
+                    tag_infos=main.tag_infos, overlay=main.gui.show_overlay,
+                    rotate_k=main.gui.rotate_k)
                 if len(img_info.artifacts) > 0:
                     arr = apply_artifacts(
                         arr, img_info,

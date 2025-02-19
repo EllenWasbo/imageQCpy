@@ -10,6 +10,8 @@ import argparse
 import os
 from pathlib import Path
 import logging
+# import cProfile
+# import pstats
 
 from PyQt5.QtGui import QPixmap, QFont, QFontMetrics, QPalette, QColor
 from PyQt5.QtWidgets import QApplication, QSplashScreen
@@ -244,3 +246,11 @@ if __name__ == '__main__':
         main_non_ui()
     else:
         main_ui()
+        '''
+        with cProfile.Profile() as profile:
+            main_ui()
+
+        p = pstats.Stats(profile)
+        p.sort_stats(pstats.SortKey.CUMULATIVE)
+        p.print_stats(100)
+        '''

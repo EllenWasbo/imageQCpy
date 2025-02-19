@@ -681,7 +681,8 @@ def get_modality(modalityStr):
 
 
 def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
-            NM_count=False, get_window_level=False, overlay=True):
+            NM_count=False, get_window_level=False, overlay=True,
+            rotate_k=0):
     """Read pixmap from filepath int numpy array prepeared for display.
 
     Parameters
@@ -853,7 +854,8 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
         # for testing:
         #import scipy as sp
         #npout = sp.ndimage.rotate(npout, 2, reshape=False)
-        #npout = np.rot90(npout, k=2)
+        if rotate_k != 0:
+            npout = np.rot90(npout, k=rotate_k)
 
     return (npout, tag_strings)
 

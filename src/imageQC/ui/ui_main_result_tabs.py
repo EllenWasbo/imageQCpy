@@ -452,7 +452,7 @@ class ResultPlotCanvas(PlotCanvas):
         elif len(self.scatters) > 0:
             first = self.scatters[0]
             self.ax.set_xticks(np.arange(len(first['xlabels'])))
-            self.ax.set_xticklabels(first['xlabels'])
+            self.ax.set_xticklabels(first['xlabels'], rotation=45)
             self.ax.set_yticks(np.arange(len(first['ylabels'])))
             self.ax.set_yticklabels(first['ylabels'])
             self.ax.set_aspect(1)

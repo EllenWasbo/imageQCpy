@@ -1,3 +1,18 @@
+# v3.1.11
+_Feb 19, 2025_
+
+Changes to the CDMAM test:
+- Speed up on calculations and roi display
+- Different image orientations now possible and verified.
+- Center reading option "Multiply center/corner detection matrix" removed (regarded as not reasonable option). Minimum center/corner detection matrix set to default.
+
+Changes to Generate report:
+- Added option to duplicate report elements
+- Fixed error when selecting image number 0 for result_plot/result_image
+
+Fixes:
+- Fixed 'cannot remove Artist' error from v3.1.10
+
 # v3.1.10
 _Feb 12, 2025_
 

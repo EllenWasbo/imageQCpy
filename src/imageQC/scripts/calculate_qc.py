@@ -6,7 +6,7 @@ Calculation processes for the different tests.
 @author: Ellen Wasbø
 """
 from __future__ import annotations
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime
 import copy
 import warnings
@@ -690,7 +690,8 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_patterns=tag_patterns,
                             tag_infos=tag_infos, NM_count=NM_count[i],
                             get_window_level=any(auto_template_label),
-                            overlay=overlay
+                            overlay=overlay,
+                            rotate_k=input_main.gui.rotate_k
                             )
                         try:
                             if len(input_main.imgs[i].artifacts) > 0:
@@ -745,7 +746,8 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_patterns=[group_pattern],
                             tag_infos=tag_infos,
                             get_window_level=any(auto_template_label),
-                            overlay=overlay
+                            overlay=overlay,
+                            rotate_k=input_main.gui.rotate_k
                             )
                         try:
                             if len(input_main.imgs[i].artifacts) > 0:
@@ -911,7 +913,9 @@ def calculate_qc(input_main, wid_auto=None,
                         elif isinstance(results_dict[test].errmsg, str):
                             errmsgs.append(results_dict[test].errmsg)
 
-                    input_main.results[test] = asdict(results_dict[test])
+                    #input_main.results[test] = asdict(results_dict[test])
+                    input_main.results[test] = results_dict[test].__dict__
+                    # __dict__ a lot faster than asdict e.g. for CDMAM results
 
             # For test DCM
             if any(read_tags) and 'DCM' in flattened_marked and cancelled is False:
@@ -979,7 +983,8 @@ def calculate_qc(input_main, wid_auto=None,
             widget = input_main.stack_test_tabs.currentWidget()
             widget.setCurrentIndex(idx_set_test)
             input_main.current_test = set_current_test
-            input_main.refresh_results_display()
+            if input_main.current_test != 'CDM':
+                input_main.refresh_results_display()
             # refresh image display if result contain rois to display
             if input_main.current_modality == 'CT':
                 if 'MTF' in input_main.results and paramset.mtf_type == 2:
@@ -1017,6 +1022,7 @@ def calculate_qc(input_main, wid_auto=None,
                     input_main.tab_mammo.cdm_cbox_thickness.addItems(items)
                     input_main.tab_mammo.cdm_cbox_diameter.setCurrentIndex(col)
                     input_main.tab_mammo.cdm_cbox_thickness.setCurrentIndex(row)
+                    input_main.refresh_results_display()
                 except:  # if cancelled
                     input_main.results['CDM'] = None
             try:
@@ -2199,7 +2205,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         """Read CDMAM for multiple images."""
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         #headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
-
         if len(images_to_test) == 0:
             res = Results(headers=headers)
         else:
@@ -2215,7 +2220,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             for i, idx in enumerate(images_to_test):
                 try:
                     input_main.progress_modal.setLabelText(
-                        f'Finding cell positions image {i}/{n_imgs}')
+                        f'Finding cell positions in image {i}/{n_imgs}')
                     curr_progress_value = round(30 * i/n_imgs)
                     input_main.progress_modal.setValue(
                          curr_progress_value)
@@ -2334,6 +2339,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 input_main.progress_modal.setValue(98)
             except AttributeError:
                 pass
+
         return res
 
     def Cro(images_to_test):

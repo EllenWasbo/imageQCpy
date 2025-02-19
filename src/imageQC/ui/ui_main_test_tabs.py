@@ -2350,8 +2350,7 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_center_disc_option.addItems([
             'do not use',
             'corner = False if center = False',
-            'multiply corner/center detection matrix',
-            'min af corner/center detection matrix'
+            'min af corner and center detection matrix'
             ])
         #self.cdm_fit = QCheckBox()
         #self.cdm_fit.toggled.connect(

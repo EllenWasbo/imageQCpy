@@ -567,6 +567,7 @@ class AddArtifactsDialog(ImageQCDialog):
         hlo_buttons_btm.addWidget(btn_close)
 
         self.update_form()
+        self.update_applied()
 
     def get_img_names(self):
         """Get names similar to the file list in main window."""
@@ -1749,7 +1750,8 @@ class ProjectionPlotDialog(ImageQCDialog):
                     img_info.filepath,
                     frame_number=img_info.frame_number, tag_infos=tag_infos,
                     tag_patterns=tag_patterns,
-                    overlay=self.main.gui.show_overlay
+                    overlay=self.main.gui.show_overlay,
+                    rotate_k=self.main.gui.rotate_k
                     )
                 if len(img_info.artifacts) > 0:
                     image = apply_artifacts(

@@ -181,11 +181,17 @@ class GenerateReportDialog(ImageQCDialog):
         act_add = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
             'Add element to report template', self)
-        act_add.triggered.connect(self.add_element)
+        act_add.triggered.connect(
+            lambda: self.add_element(duplicate=False))
         act_edit = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
             'Edit element', self)
         act_edit.triggered.connect(self.edit_element)
+        act_duplicate = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}duplicate.png'),
+            'Duplicate selected element', self)
+        act_duplicate.triggered.connect(
+            lambda: self.add_element(duplicate=True))
         act_note = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}file.png'),
             'Add (or edit) note to element', self)
@@ -208,7 +214,7 @@ class GenerateReportDialog(ImageQCDialog):
             act_add_template.setEnabled(False)
 
         self.toolbar.addActions(
-            [act_clear, act_add, act_edit, act_note,
+            [act_clear, act_add, act_edit, act_duplicate, act_note,
              act_up, act_down, act_delete])
 
         hlo_dlg_btns = QHBoxLayout()
@@ -340,11 +346,19 @@ class GenerateReportDialog(ImageQCDialog):
         self.current_template = copy.deepcopy(self.empty_template)
         self.fill_table()
 
-    def add_element(self):
-        dlg = AddEditElementDialog(self, self.variants,
-                                   element=cfc.ReportElement())
-        if dlg.exec():
-            element = dlg.get_element()
+    def add_element(self, duplicate=False):
+        element = None
+        if duplicate is False or duplicate is None:
+            dlg = AddEditElementDialog(self, self.variants,
+                                       element=cfc.ReportElement())
+            if dlg.exec():
+                element = dlg.get_element()
+        sel_elem, row, col = self.get_selected_element()
+        if duplicate:
+            if sel_elem is None:
+                duplicate = False
+
+        if element or duplicate:
             sel_elem, row, col = self.get_selected_element()
             new_row = row + 1
             sel_is_table = False
@@ -356,32 +370,51 @@ class GenerateReportDialog(ImageQCDialog):
                 pass
 
             if col is not None or sel_is_table:  # table element selected
-                if element.variant == 'html_table_row':
-                    # force added after previous row
-                    self.current_template.elements[new_row:new_row] = ([
-                        element, []])
-                else:
-                    dlg = messageboxes.QuestionBox(
-                        parent=self, title='Add element',
-                        msg='Add element to selected table or as next element?',
-                        yes_text='Add to table',
-                        no_text='Add as next element')
-                    yes = dlg.exec()
-                    if yes:
-                        if col is None:
-                            col = -1
-                            row += 1
-                        self.current_template.elements[row].insert(
-                            col+1, element)
-                    else:
+                if duplicate:
+                    if sel_is_table:  # duplicate html_table_row and sub elements
+                        sel_table_copy = copy.deepcopy(
+                            self.current_template.elements[row])
+                        sel_table_copy2 = copy.deepcopy(
+                            self.current_template.elements[row+1])
+                        breakpoint()
                         self.current_template.elements.insert(
-                            new_row, element)
-            else:
-                if element.variant == 'html_table_row':
-                    self.current_template.elements[new_row:new_row] = ([
-                        element, []])
+                            new_row, sel_table_copy)
+                        self.current_template.elements.insert(
+                            new_row+1, sel_table_copy2)
+                    else:  # duplicate sub element
+                        self.current_template.elements[row].insert(
+                            col+1, copy.deepcopy(sel_elem))
                 else:
-                    self.current_template.elements.insert(new_row, element)
+                    if element.variant == 'html_table_row':
+                        # force added after previous row
+                        self.current_template.elements[new_row:new_row] = ([
+                            element, []])
+                    else:
+                        dlg = messageboxes.QuestionBox(
+                            parent=self, title='Add element',
+                            msg='Add element to selected table or as next element?',
+                            yes_text='Add to table',
+                            no_text='Add as next element')
+                        yes = dlg.exec()
+                        if yes:
+                            if col is None:
+                                col = -1
+                                row += 1
+                            self.current_template.elements[row].insert(
+                                col+1, element)
+                        else:
+                            self.current_template.elements.insert(
+                                new_row, element)
+            else:
+                if duplicate:
+                    self.current_template.elements.insert(
+                        new_row, copy.deepcopy(sel_elem))
+                else:
+                    if element.variant == 'html_table_row':
+                        self.current_template.elements[new_row:new_row] = ([
+                            element, []])
+                    else:
+                        self.current_template.elements.insert(new_row, element)
             self.fill_table()
             self.flag_edit()
 
@@ -835,7 +868,7 @@ class GenerateReportDialog(ImageQCDialog):
                     img_nos = list(range(len(self.main.imgs)))
                 else:
                     img_nos = marked_this
-            elif element.image_number:
+            else:  # specific image_number:
                 img_nos = [element.image_number]
             image_names = get_image_names(self.main)
             if len(img_nos) == 1:
@@ -1162,11 +1195,10 @@ class AddEditElementDialog(ImageQCDialog):
             if variant == 5:
                 self.width_image.setRange(3, 100)
                 self.lbl_width_image.setText('Width (%) in cell:')
-                if self.element.width < 20:
-                    self.width_image.setValue(100)
+                if initialize is True:
+                    self.width_image.setValue(self.element.width)
                 else:
-                    if initialize is True:
-                        self.width_image.setValue(self.element.width)
+                    self.width_image.setValue(100)
 
         wid_nmb.setValue(self.element.image_number)
 

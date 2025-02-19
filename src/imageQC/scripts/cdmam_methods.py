@@ -87,6 +87,13 @@ def find_angles_sub(binary_sub, angle_range, margin, threshold_peaks):
     return (angles, dists)
 
 
+def get_min_pos_2d(image, roi_array):
+    arr = np.copy(image)
+    arr[roi_array == False] = np.max(arr)
+    min_idx = np.where(arr == np.min(arr))
+
+    return (min_idx[0][0], min_idx[1][0])
+
 def get_lines(angles_and_dists, x_start_end, y_start):
     """Find line expressions from (angle, dist) pairs.
 
@@ -268,6 +275,9 @@ def find_phantom_34(image, margin, margin_angle, angles_dists_center, paramset):
     sz_y, sz_x = image.shape
     errmsgs = []
 
+    if paramset.cdm_rotate_k != 0:
+        image = np.rot90(image, k=paramset.cdm_rotate_k)
+
     # search corner of phantom at top mid and btm mid part
     x_start, x_end, x_prof = find_phantom_part(image, margin)
     y_start, y_end, y_prof = find_phantom_part(image, 0, axis=1)
@@ -341,8 +351,22 @@ def find_phantom_34(image, margin, margin_angle, angles_dists_center, paramset):
     ys = ys + dy
 
     if paramset.cdm_rotate_k > 0:
-        xs = np.rot90(xs, k=paramset.cdm_rotate_k)
-        ys = np.rot90(ys, k=paramset.cdm_rotate_k)
+        if paramset.cdm_rotate_k == 2:
+            xs = image.shape[1] - xs
+            ys = image.shape[0] - ys
+        if paramset.cdm_rotate_k in [1, 3]:
+            xxs = np.copy(xs)
+            xs = np.copy(ys)
+            ys = xxs
+            if paramset.cdm_rotate_k == 3:
+                #xs = image.shape[0] - xs
+                ys = image.shape[1] - ys
+                xs = np.flip(xs)
+                ys = np.flip(ys)
+            else:
+                xs = image.shape[0] - xs
+                xs = np.flip(xs)
+                ys = np.flip(ys)
 
     roi_dict = {'include_array': include_array, 'phantom': 34,
                 'xs': xs, 'ys':ys,
@@ -356,9 +380,10 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
     roi_estimate = paramset.cdm_roi_estimate
     estimate_x, estimate_y = roi_estimate, roi_estimate
 
-    # finding vertical line positions
+    # finding vertical line positions (long axis)
+    axis = 0 if paramset.cdm_rotate_k in [0, 2] else 1
     x_start_phantom, x_end_phantom, xprof = find_phantom_part(
-        image, 5*px_pr_mm, axis=0)
+        image, 5*px_pr_mm, axis=axis)
     if estimate_x is False:
         peaks = find_peaks(xprof, distance=7*px_pr_mm,
                            height=0.5*np.max(xprof))
@@ -374,8 +399,9 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
             estimate_x = True
 
     x_off = 0.25 * (x_end_phantom - x_start_phantom) + x_start_phantom
+    axis = 1 if paramset.cdm_rotate_k in [0, 2] else 0
     y_start_phantom, y_end_phantom, yprof = find_phantom_part(
-        image, 5*px_pr_mm, axis=1, pos_profile=round(x_off))
+        image, 5*px_pr_mm, axis=axis, pos_profile=round(x_off))
 
     if estimate_y is False:
         peaks = find_peaks(yprof, distance=3.5*px_pr_mm,
@@ -404,23 +430,28 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
         y_start = mid_y - 22.5/2 * dist
 
     if dist and y_start:
+        if paramset.cdm_rotate_k in [2, 3]:
+            a, b, c = 3, 7, 11
+        else:
+            a, b, c = 10, 14, 18
+
         xs, ys = np.meshgrid(
             dist * (np.arange(16) + 0.5),
             dist * (np.arange(21) + 0.5))
-        if paramset.cdm_rotate_k == 2:
-            a, b, c = 3, 7, 11
-        else:
-            a, b, c = 10, 14, 18  # TODO - landscape rotations
-
         ys[a:, :] = ys[a:, :] + 0.5 * dist
         ys[b:, :] = ys[b:, :] + 0.5 * dist
         ys[c:, :] = ys[c:, :] + 0.5 * dist
         # center before rotate
         xs = xs - 8 * dist
         ys = ys - 22.5/2 * dist
-        if paramset.cdm_rotate_k > 0:  # TODO - other rotations
-            xs = np.rot90(xs, k=paramset.cdm_rotate_k)
-            ys = np.rot90(ys, k=paramset.cdm_rotate_k)
+
+        if paramset.cdm_rotate_k in [2, 3]:
+            xs = np.rot90(xs, k=2)
+            ys = np.rot90(ys, k=2)
+        if paramset.cdm_rotate_k in [1, 3]:  # landscape
+            xxs = np.copy(ys)
+            ys = np.flip(xs)
+            xs = xxs
 
         diff_angle = np.median(
             [angle for angle, dist in angles_center])
@@ -433,8 +464,12 @@ def find_phantom_40(image, px_pr_mm, angle_margin, angles_center, paramset):
                 xs[row, col] = r * np.cos(phi)
                 ys[row, col] = r * np.sin(phi)
 
-        xs = xs + 16/2 * dist + x_start
-        ys = ys + 22.5/2 * dist + y_start
+        if paramset.cdm_rotate_k in [0, 2]:  # portrait
+            xs = xs + 16/2 * dist + x_start
+            ys = ys + 22.5/2 * dist + y_start
+        else:
+            xs = xs + 22.5/2 * dist + y_start
+            ys = ys + 16/2 * dist + x_start
 
         # finetune centering based on a central cell
         xx, yy = round(xs[8][8]), round(ys[8][8])
@@ -493,7 +528,8 @@ def find_offset_disc(sub, kernel, search_radius, xy_expected=(0, 0)):
     cent = round(sub.shape[0]/2)
     avgs_sub = fftconvolve(sub, kernel, mode='same')
     roi = get_roi_circle(avgs_sub.shape, xy_expected, search_radius)
-    min_yx, _ = mmcalc.get_min_max_pos_2d(avgs_sub, roi)
+    #min_yx, _ = mmcalc.get_min_max_pos_2d(avgs_sub, roi)
+    min_yx = get_min_pos_2d(avgs_sub, roi)
     off_xy = (min_yx[1] - cent, min_yx[0] - cent)
 
     return off_xy
@@ -526,7 +562,6 @@ def get_templates(matrix, roi_dicts, pix, pix_new,
     width_sub_50um = round(width_sub * pix / pix_new)
 
     corner_indexes = np.array(tables['corner_index'])
-    corner_xys = []  # list of list of xy (tuples) for each corner index
 
     is_used = [image is not None for image in matrix]
     n_images = np.sum(is_used)
@@ -549,8 +584,13 @@ def get_templates(matrix, roi_dicts, pix, pix_new,
                     corner_indexes[row][col]-1].append((row, col))
         #[[(0,6), (3,3)], [(0,7), (1,5), (2,4)], [(3,4)], [(1,6), (2,5)]]
 
+        order = [0, 1, 2, 3]
         if rot90_k == 2:  # TODO other rotations
-            corner_rows_cols.reverse()
+            order.reverse()
+        elif rot90_k == 1:
+            order = [1, 3, 0, 2]
+        elif rot90_k == 3:
+            order = [2, 0, 3, 1]
 
     else:  # v4.0
         radius_kernel = 7
@@ -567,25 +607,23 @@ def get_templates(matrix, roi_dicts, pix, pix_new,
         # [..., 1, 3, 2, 3, 0, 2, 1, 2, 1]
 
         order = [1, 2, 3, 0]
-        if rot90_k > 0:
-            order = np.roll(order, rot90_k).tolist()
-            off_xy_expect_rot = []
-            for i in order:
-                off_xy_expect_rot.append(off_xy_expect[i])
-            off_xy_expect = off_xy_expect_rot
+        order = np.roll(order, rot90_k).tolist()
+
+    off_xy_expect_rot = []
+    for i in order:
+        off_xy_expect_rot.append(off_xy_expect[i])
+    off_xy_expect = off_xy_expect_rot
+
     if pr_image is False:
         # only first for each corner]
         corner_rows_cols = [[cells[0]] for cells in corner_rows_cols]
     off_xy_expect = diff_expect * np.array(off_xy_expect)
-
     off_xy_center = (0, 0)
-    off_xs_center, off_ys_center = [], []
 
     kernel = get_roi_circle(
         (radius_kernel, radius_kernel), (0, 0), radius_kernel)
     kernel = 1./np.sum(kernel) * kernel
 
-    cent = round(width_sub_50um/2)
     sum_center = np.zeros((width_sub_50um, width_sub_50um))
     sum_corners = [np.copy(sum_center) for i in range(4)]
     for idx, image in enumerate(matrix):
@@ -637,6 +675,10 @@ def get_templates(matrix, roi_dicts, pix, pix_new,
             (width_sub_50um, width_sub_50um), off_xy, radius_masks)
     if phantom == 34:
         mask = mask + 1 * templates[-1]
+    for i in range(1, width_sub_50um, 2):  # reduce points for linear fit
+        mask[i, :] = 1
+        mask[:, i] = 1
+
     templates.append(mask.astype(bool))
 
     return templates, wi, line_dist
@@ -706,7 +748,6 @@ def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):#, fit2d):
         ld, ks = 0, 0
         if phantom == 34:
             sub[disc_templates[-2] == True] = np.median(sub)
-            #if fit2d:
             fit = mmcalc.polyfit_2d(sub, max_order=1, mask=disc_templates[-1])
             sub = sub - fit
             avgs_sub = fftconvolve(sub, kernel, mode='same')
@@ -714,7 +755,6 @@ def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):#, fit2d):
             cent = round(sub.shape[0] // 2)
             ld = line_dist - 4  # -4 to avoid line signal
             sub_cropped = sub[cent-ld:cent+ld,cent-ld:cent+ld]
-            #if fit2d:
             mask = disc_templates[-1][cent-ld:cent+ld,cent-ld:cent+ld]
             fit = mmcalc.polyfit_2d(sub_cropped, max_order=1, mask=mask)
             sub_cropped = sub_cropped - fit
@@ -729,11 +769,12 @@ def read_cdmam_sub(sub, phantom, line_dist, disc_templates, kernel):#, fit2d):
             end = start + avgs_sub.shape[0]
         for template in disc_templates[:5]:
             if phantom == 34:
-                min_yx, _ = mmcalc.get_min_max_pos_2d(
-                    avgs_sub, template)
+                #min_yx, _ = mmcalc.get_min_max_pos_2d(avgs_sub, template)
+                min_yx = get_min_pos_2d(avgs_sub, template)
                 minpos.append(min_yx)
             elif phantom == 40:
-                min_yx, _ = mmcalc.get_min_max_pos_2d(
+                #min_yx, _ = mmcalc.get_min_max_pos_2d(
+                min_yx = get_min_pos_2d(
                     avgs_sub, template[start:end,start:end])
                 minpos.append(min_yx)
             minvals.append(avgs_sub[min_yx[0], min_yx[1]])
@@ -779,29 +820,11 @@ def read_cdmam_image(image, image_info, roi_dict,
         include_array = roi_dict['include_array']
     center_xs = roi_dict['xs']
     center_ys = roi_dict['ys']
-    cell_width = roi_dict['cell_width']
     phantom = roi_dict['phantom']
     if roi_dict['invert']:
         image = -np.copy(image)
 
-    '''
-    pix_new = 0.05  # fixed pixelsize of 50 um for analysis
-    pix = image_info.pix[0]
-    if phantom == 34:
-        line_dist = (cell_width * np.cos(np.pi / 4)**2) / 2
-    else:
-        line_dist = cell_width / 2
-    line_dist = round((pix / pix_new) * line_dist)
-
-    # TODO generate templates and kernels once for all images?
-    templates, wi = get_templates(
-        image, center_xs, center_ys, pix, pix_new,
-        cell_width, line_dist, phantom, paramset.cdm_rotate_k,
-        cdmam_table_dict)
-    kernels = get_kernels(cdmam_table_dict, pix_new)
-    '''
     sz_y, sz_x = center_xs.shape
-
     res_table = []
     nn = 0
     include = True
@@ -873,7 +896,8 @@ def read_cdmam_image(image, image_info, roi_dict,
         'found_centers': found_centers,
         'corrected_neighbours': None,
         'res_table': res_table,
-        'kernels': kernels, 'templates': templates
+        'kernels': kernels, 'templates': templates,
+        'roi_dict':roi_dict
         }
 
     if paramset.cdm_center_disc_option == 1:
@@ -887,7 +911,7 @@ def read_cdmam_image(image, image_info, roi_dict,
 
     details_dict['detection_matrix'] = 1.*found_this
 
-    if paramset.cdm_center_disc_option >= 2:
+    if paramset.cdm_center_disc_option == 2:
         if paramset.cdm_correct_neighbours:
             found_centers = correct_neighbours(
                 found_centers, include_array=include_array)
@@ -971,17 +995,17 @@ def sum_detection_matrix(details_dicts, include_array, cdm_center_disc_option):
     detection_matrix = details_dicts[0]['detection_matrix']
     detection_matrix_centers = None
     update_dict = {}
-    if cdm_center_disc_option >= 2:
+    if cdm_center_disc_option == 2:
         detection_matrix_centers = details_dicts[0]['detection_matrix_centers']
     for dd in details_dicts[1:]:
         detection_matrix = (
             detection_matrix + dd['detection_matrix'])
-        if cdm_center_disc_option >= 2:
+        if cdm_center_disc_option == 2:
             detection_matrix_centers = (
                 detection_matrix_centers + dd['detection_matrix_centers'])
     n_imgs = len(details_dicts)
     detection_matrix = detection_matrix / n_imgs
-    if cdm_center_disc_option >= 2:
+    if cdm_center_disc_option == 2:
         detection_matrix_centers = detection_matrix_centers / n_imgs
 
         update_dict['detection_matrix_corners'] = np.copy(
@@ -994,11 +1018,8 @@ def sum_detection_matrix(details_dicts, include_array, cdm_center_disc_option):
         detection_matrix_centers[np.logical_and(
             detection_matrix_centers < 0.25,
             include_array == True)] = 0.25
-        if cdm_center_disc_option == 2:
-            detection_matrix = detection_matrix * detection_matrix_centers
-        elif cdm_center_disc_option == 3:
-            detection_matrix = np.minimum(
-                detection_matrix, detection_matrix_centers)
+        detection_matrix = np.minimum(
+            detection_matrix, detection_matrix_centers)
         update_dict['detection_matrix'] = detection_matrix
     update_dict['detection_matrix'] = detection_matrix
 
@@ -1108,8 +1129,9 @@ def calculate_fitted_psychometric(cdmam_table_dict, paramset):
             mask = 1.0 * include_array
             sm = ndimage.gaussian_filter(detection_matrix_corrected * mask,
                                          sigma=sigma)
+            mask[mask == 0] = 0.0001  # to avoide divide by zero warning
             sm /= ndimage.gaussian_filter(mask, sigma=sigma)
-            sm[np.logical_not(mask)] = 0
+            sm[include_array == False] = 0
             detection_matrix_corrected = sm
     cdmam_table_dict['detection_matrix_corrected'] = detection_matrix_corrected
 

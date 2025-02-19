@@ -64,7 +64,17 @@ def get_rois(image, image_number, input_main):
         return get_roi_NM_bar(image, image_info, paramset)
 
     def CDM():  # CDMAM detect grid
-        return find_cdmam(image, image_info, paramset)  # ([lines, binary], errmsgs)
+        roi_this = None
+        if 'CDM' in input_main.results:
+            if input_main.results['CDM'] is not None:
+                try:
+                    roi_this = input_main.results[
+                        'CDM']['details_dict'][image_number]['roi_dict']
+                except (KeyError, AttributeError, IndexError):
+                    pass
+        if roi_this is None:
+            roi_this = find_cdmam(image, image_info, paramset)
+        return roi_this
 
     def Cro():  # PET Crosscalibration
         roi_size_in_pix = paramset.cro_roi_size / image_info.pix[0]

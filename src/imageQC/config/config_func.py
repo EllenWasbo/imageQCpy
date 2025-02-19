@@ -729,6 +729,10 @@ def load_paramsets(fnames, path):
                             upd = verify_input_dict(doc['gho_table'],
                                                     cfc.PositionTable())
                             doc['gho_table'] = cfc.PositionTable(**upd)
+                            if 'cdm_center_disc_option' in doc:
+                                if doc['cdm_center_disc_option'] == 3:
+                                    doc['cdm_center_disc_option'] = 2
+                                    # opt 3 removed
                         elif modality == 'PET':
                             if 'rec_table' in doc:
                                 upd = verify_input_dict(

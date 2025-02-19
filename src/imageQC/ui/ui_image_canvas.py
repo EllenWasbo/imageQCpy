@@ -302,7 +302,7 @@ class ImageCanvas(GenericImageCanvas):
             except (AttributeError, NotImplementedError):
                 try:
                     contour.remove()  # matplotlib v3.10(?), collections depricated
-                except AttributeError:
+                except(AttributeError, NotImplementedError):
                     pass
         self.contours = []
 
@@ -497,40 +497,29 @@ class ImageCanvas(GenericImageCanvas):
 
     def CDM(self):
         """Draw found lines."""
-        self.remove_annotations()
+        #self.remove_annotations()
         if self.main.current_roi is not None:
-
-            include_array = None
-            if 'include_array' in self.main.current_roi:
-                include_array = self.main.current_roi['include_array']
             center_xs = self.main.current_roi['xs']
             center_ys = self.main.current_roi['ys']
-            box_width = self.main.current_roi['cell_width']
-            wi = box_width // 10
-            sz_y, sz_x = center_xs.shape
-
-            idx_diam = self.main.tab_mammo.cdm_cbox_diameter.currentIndex()
-            idx_thick = self.main.tab_mammo.cdm_cbox_thickness.currentIndex()
-
-            for row in range(sz_y):
-                for col in range(sz_x):
-                    include = True
-                    if include_array is not None:
-                        include = include_array[row, col]
-                    if include:
-                        if row == idx_thick and col == idx_diam:
-                            color = 'blue'
-                        else:
-                            color = 'green'
-                        x, y = center_xs[row, col], center_ys[row, col]
-                        self.ax.add_artist(matplotlib.lines.Line2D(
-                            [x - wi, x + wi], [y, y],
-                            color=color, linewidth=0.5*self.linewidth
-                            ))
-                        self.ax.add_artist(matplotlib.lines.Line2D(
-                            [x, x], [y - wi, y + wi],
-                            color=color, linewidth=0.5*self.linewidth
-                            ))
+            xs = center_xs.flatten()
+            ys = center_ys.flatten()
+            if 'include_array' in self.main.current_roi:
+                include_array = self.main.current_roi['include_array']
+                if include_array is not None:
+                    include = include_array.flatten()
+                    idxs = np.where(include == True)
+                    xs = xs[idxs]
+                    ys = ys[idxs]
+            self.scatters = []
+            scatter = self.ax.scatter(xs, ys, s=40, c='green', marker='+')
+            self.scatters.append(scatter)
+            if 'CDM' in self.main.results:
+                idx_diam = self.main.tab_mammo.cdm_cbox_diameter.currentIndex()
+                idx_thick = self.main.tab_mammo.cdm_cbox_thickness.currentIndex()
+                x = center_xs[idx_thick, idx_diam]
+                y = center_ys[idx_thick, idx_diam]
+                scatter = self.ax.scatter(x, y, s=40, c='blue', marker='+')
+                self.scatters.append(scatter)
 
     def CTn(self):
         """Draw CTn ROI."""
@@ -1191,12 +1180,23 @@ class ResultImageCanvas(GenericImageCanvas):
         if details_dict:
             idx_diam = self.main.tab_mammo.cdm_cbox_diameter.currentIndex()
             idx_thick = self.main.tab_mammo.cdm_cbox_thickness.currentIndex()
-
             res = details_dict['res_table'][idx_thick][idx_diam]
-
-            self.main.wid_image_display.canvas.roi_draw()
-
             if res:
+                annotate = self.main.gui.annotations
+                if annotate:
+                    img_canvas = self.main.wid_image_display.canvas
+                    try:
+                        scatter_sel = img_canvas.scatters[-1]
+                        scatter_sel.remove()
+                        x = self.main.current_roi['xs'][idx_thick, idx_diam]
+                        y = self.main.current_roi['ys'][idx_thick, idx_diam]
+                        scatter = img_canvas.ax.scatter(
+                            x, y, s=40, c='blue', marker='+')
+                        img_canvas.scatters[1] = scatter
+                        img_canvas.draw_idle()
+                    except:
+                        img_canvas.roi_draw()
+
                 self.current_image = res['processed_sub']
                 self.min_val = np.min(self.current_image)
                 self.max_val = np.max(self.current_image)

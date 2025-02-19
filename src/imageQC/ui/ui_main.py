@@ -17,7 +17,7 @@ from PyQt5.QtGui import QIcon, QScreen
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtWidgets import (
     QApplication, qApp, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QSplitter, QGroupBox, QTabWidget,
+    QStackedWidget, QSplitter, QGroupBox, QTabWidget, QPushButton,
     QLabel, QCheckBox, QButtonGroup, QRadioButton, QComboBox, QMenu, QAction,
     QMessageBox, QFileDialog, QScrollArea
     )
@@ -82,6 +82,9 @@ class GuiVariables():
     annotations_font_size: int = 14
     show_axis: bool = False
     show_overlay: bool = True
+
+    # for testing
+    rotate_k: int = 0
 
 
 class MainWindow(QMainWindow):
@@ -392,7 +395,8 @@ class MainWindow(QMainWindow):
                 self.active_img, _ = dcm.get_img(
                     self.imgs[self.gui.active_img_no].filepath,
                     frame_number=self.imgs[self.gui.active_img_no].frame_number,
-                    tag_infos=self.tag_infos, overlay=self.gui.show_overlay)
+                    tag_infos=self.tag_infos, overlay=self.gui.show_overlay,
+                    rotate_k=self.gui.rotate_k)
             if self.active_img is not None:
                 # apply artifacts if any
                 try:
@@ -471,7 +475,8 @@ class MainWindow(QMainWindow):
             self.active_img, _ = dcm.get_img(
                 self.imgs[self.gui.active_img_no].filepath,
                 frame_number=self.imgs[self.gui.active_img_no].frame_number,
-                tag_infos=self.tag_infos, overlay=self.gui.show_overlay)
+                tag_infos=self.tag_infos, overlay=self.gui.show_overlay,
+                rotate_k=self.gui.rotate_k)
         except IndexError:
             pass
 
@@ -1223,6 +1228,18 @@ class MainWindow(QMainWindow):
             act_reset_split, act_rename_dcm, act_report, act_settings])
         tool_bar.addWidget(QLabel('             '))
         tool_bar.addAction(self.act_warning)
+
+        self.btn_rotate = QPushButton('0')
+        self.btn_rotate.clicked.connect(self.rotate_select)
+        if self.developer_mode:
+            tool_bar.addWidget(QLabel('Rotate k:'))
+            tool_bar.addWidget(self.btn_rotate)
+
+    def rotate_select(self):
+        self.gui.rotate_k += 1
+        if self.gui.rotate_k == 4:
+            self.gui.rotate_k = 0
+        self.btn_rotate.setText(str(self.gui.rotate_k))
 
     def create_modality_selector(self):
         """Groupbox with modality selection."""

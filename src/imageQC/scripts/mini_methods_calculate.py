@@ -400,7 +400,8 @@ def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None,
         profile values
     """
     # sort pixel values from center
-    dist_map = get_distance_map_point(array_2d.shape, center_dx=-0.5, center_dy=-0.5)
+    dist_map = get_distance_map_point(
+        array_2d.shape, center_dx=-0.5, center_dy=-0.5)
     dists_flat = dist_map.flatten()
     sort_idxs = np.argsort(dists_flat)
     dists = pix * dists_flat[sort_idxs]
@@ -421,7 +422,8 @@ def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None,
         values = values_temp
 
     radial_profile_x, radial_profile = resample_by_binning(
-        values, dists_cut, step_size, first_step=start_dist)
+        values, dists_cut, step_size, first_step=start_dist,
+        max_x=stop_dist)
 
     if ignore_negative:
         radial_profile[radial_profile < 0] = 0
@@ -959,11 +961,11 @@ def resample(input_y, input_x, step, first_step=0, n_steps=None):
 
 
 def resample_by_binning(input_y, input_x, step, bin_size=None,
-                        first_step=0, n_steps=None):
+                        first_step=0, n_steps=None, max_x=None):
     """Resample input_y with regular step.
 
-    Binning -slower than resample method, but smoother because averaging over step size.
-    Use if step size might be larger than original.
+    Binning -slower than resample method, but better for noisy data due to
+    averaging over step size. Use if step size might be larger than original.
 
     Parameters
     ----------
@@ -978,6 +980,9 @@ def resample_by_binning(input_y, input_x, step, bin_size=None,
         first value of x to output
     n_steps : int, optional
         number of values in new_x / new_y
+    max_x: float
+        ignored if n_steps set
+        else last bin is bin with max_x
 
     Returns
     -------
@@ -987,11 +992,14 @@ def resample_by_binning(input_y, input_x, step, bin_size=None,
     input_y = np.array(input_y)
     input_x = np.array(input_x)
     if n_steps is None:
-        n_steps = (np.max(input_x) - first_step) // step
+        if max_x is None:
+            max_x = np.max(input_x)
+        n_steps = (max_x - first_step) // step
     new_x = step * np.arange(n_steps) + first_step
     new_y = []
     if bin_size is None:
         bin_size = step
+
     n_values_this = []
     for this_x in new_x:
         values_this = input_y[np.logical_and(

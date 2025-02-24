@@ -344,7 +344,7 @@ def apply_artifacts(image, image_info, artifacts, artifacts_3d, image_number):
                                 roi_array = ndimage.rotate(
                                     roi_array.astype(float), -artifact.rotation,
                                     reshape=False)
-                                roi_array = np.round(roi_array)
+                            roi_array = np.round(roi_array)
                 elif artifact.type_3d:
                     labels = [art_3d[0] for art_3d in artifacts_3d]
                     idx = labels.index(artifact.label)

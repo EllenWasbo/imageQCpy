@@ -1,3 +1,15 @@
+# v3.1.12
+_Feb 24, 2025_
+
+Changes:
+- Generate report: Notes now also possible to be used per element within html_table_row element
+- NM test SNI: speed up on calculations (removing repetitive steps)
+- Plot widget - added toolbar button to set x/y-ranges to min/max in current data.
+
+Fixes:
+- Fixed another 'cannot remove Artist' error - different behaviour different matplotlib versions
+- NM test SNI: Fixed tabulated results when low/high-pass filter (tabulated values for high-pass filter used to be copy of low_pass filter)
+
 # v3.1.11
 _Feb 19, 2025_
 

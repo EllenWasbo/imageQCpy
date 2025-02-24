@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "cdm_center_disc_option"
+search_string = "breakpoint"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

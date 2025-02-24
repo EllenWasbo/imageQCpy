@@ -318,13 +318,17 @@ class ResultPlotWidget(PlotWidget):
     """Widget for display of results as plot."""
 
     def __init__(self, main, plotcanvas):
-        super().__init__(main, plotcanvas)
+        super().__init__(main, plotcanvas, include_min_max_button=True)
 
         toolb = QToolBar()
         self.tool_resultsize = ToolMaximizeResults(main)
         toolb.addWidget(self.tool_resultsize)
         toolb.setOrientation(Qt.Vertical)
         self.hlo.addWidget(toolb)
+
+    def min_max_curves(self):
+        """Set ranges to min-max of x and y according to content."""
+        self.plotcanvas.plot(ranges_min_max=True)
 
 
 class ResultPlotCanvas(PlotCanvas):
@@ -340,7 +344,7 @@ class ResultPlotCanvas(PlotCanvas):
             self.color_gray = 'whitesmoke'
             self.color_darkgray = 'lightgray'
 
-    def plot(self, selected_text=''):
+    def plot(self, selected_text='', ranges_min_max=False):
         """Refresh plot.
 
         If selected_text is set = generate report specific selection.
@@ -407,12 +411,22 @@ class ResultPlotCanvas(PlotCanvas):
                                      alpha=curve['alpha'],
                                      color=curve['color'],
                                      fillstyle=curve['fillstyle'])
-                    else:  # NB color might be part of style
-                        self.ax.plot(curve['xvals'], curve['yvals'],
-                                     curve['style'], label=curve['label'],
-                                     markersize=curve['markersize'],
-                                     alpha=curve['alpha'],
-                                     fillstyle=curve['fillstyle'])
+                    else:
+                        try:
+                            self.ax.plot(curve['xvals'], curve['yvals'],
+                                         curve['style'], label=curve['label'],
+                                         markersize=curve['markersize'],
+                                         alpha=curve['alpha'],
+                                         fillstyle=curve['fillstyle'])
+                        except ValueError:
+                            self.ax.plot(curve['xvals'], curve['yvals'],
+                                         color=curve['style'][1:-1],
+                                         marker=curve['style'][-1],
+                                         linestyle=curve['style'][0],
+                                         label=curve['label'],
+                                         markersize=curve['markersize'],
+                                         alpha=curve['alpha'],
+                                         fillstyle=curve['fillstyle'])
                     if 'xscale' in curve:
                         self.ax.set_xscale(curve['xscale'])
                     if 'yscale' in curve:
@@ -434,10 +448,37 @@ class ResultPlotCanvas(PlotCanvas):
 
             if len(self.curves) > 1:
                 self.ax.legend(loc=self.legend_location)
+            if ranges_min_max:
+                self.default_range_x = [None, None]
+                self.default_range_y = [None, None]
+                for curve in self.curves:
+                    min_x = np.min(curve['xvals'])
+                    max_x = np.max(curve['xvals'])
+                    min_y = np.min(curve['yvals'])
+                    max_y = np.max(curve['yvals'])
+                    if None in self.default_range_x:
+                        self.default_range_x = [min_x, max_x]
+                        self.default_range_y = [min_y, max_y]
+                    else:
+                        self.default_range_x[0] = min(
+                            [min_x, self.default_range_x[0]])
+                        self.default_range_x[1] = max(
+                            [max_x, self.default_range_x[1]])
+                        self.default_range_y[0] = min(
+                            [min_y, self.default_range_y[0]])
+                        self.default_range_y[1] = max(
+                            [max_y, self.default_range_y[1]])
+
             if None not in self.default_range_x:
-                self.ax.set_xlim(self.default_range_x)
+                try:
+                    self.ax.set_xlim(self.default_range_x)
+                except ValueError:
+                    pass
             if None not in self.default_range_y:
-                self.ax.set_ylim(self.default_range_y)
+                try:
+                    self.ax.set_ylim(self.default_range_y)
+                except ValueError:
+                    pass
             self.ax.set_aspect('auto')
         elif len(self.bars) > 0:
             try:
@@ -2130,19 +2171,20 @@ class ResultPlotCanvas(PlotCanvas):
             self.title = 'Structured Noise Index, values from result table'
             self.ytitle = 'SNI'
             self.xtitle = 'Image number'
-            labels = self.main.results['SNI']['headers']
+            labels = copy.deepcopy(self.main.results['SNI']['headers'])
+            values = copy.deepcopy(self.main.results['SNI']['values'])
             img_nos = []
             colors = ['red', 'blue', 'green', 'cyan'] + [self.color_k] * 4
             styles = ['-', '-', '-', '-', '-', '--', ':', '-.']
 
             try:
                 yvals_all = [[] for label in labels]
-                for i, row in enumerate(self.main.results['SNI']['values']):
+                for i, row in enumerate(values):
                     if len(row) > 0:
                         img_nos.append(i)
                         for j, val in enumerate(row):
                             yvals_all[j].append(val)
-                if self.main.current_paramset.sni_type == 0:
+                if self.main.current_paramset.sni_alt == 0:
                     yvals_all.pop(0)  # do not include max in plot
                     labels.pop(0)
                 xvals = img_nos
@@ -2154,7 +2196,7 @@ class ResultPlotCanvas(PlotCanvas):
                 pass
 
         def plot_filtered_NPS():
-            """Plot filtered NPS + NPS structure for selected ROI +quantum noise txt."""
+            """Plot filtered NPS + NPS structure for selected ROI +quantum noise."""
             self.default_range_x = [0, nyquist_freq]
             roi_idx = self.main.tab_nm.sni_selected_roi.currentIndex()
             if self.main.current_paramset.sni_type > 0:
@@ -2173,8 +2215,7 @@ class ResultPlotCanvas(PlotCanvas):
                 self.curves.append(
                     {'label': 'NPS with eye filter',
                      'xvals': xvals, 'yvals': yvals, 'style': '-b'})
-                self.default_range_y = [0, 1.4 * np.median(
-                    details_dict_roi['quantum_noise'])]
+                self.default_range_y = [0, 1.4 * np.max(yvals[2:])]
 
                 self.curves.append(
                     {'label': 'NPS',
@@ -2213,7 +2254,7 @@ class ResultPlotCanvas(PlotCanvas):
                     yvals = details_dict_roi['rNPS']
                     if roi_no == 0:
                         self.default_range_y = [0, 1.4 * np.median(
-                            details_dict_roi['quantum_noise'])]
+                            details_dict_roi['rNPS_quantum_noise'])]
                     xvals = details_dict_roi['freq']
                     self.curves.append(
                         {'label': f'NPS ROI {roi_names[roi_no]}',
@@ -2234,7 +2275,7 @@ class ResultPlotCanvas(PlotCanvas):
                     yvals = dd['rNPS']
                     if roi_no == 0:
                         self.default_range_y = [0, 1.4 * np.median(
-                            details_dict_roi['quantum_noise'])]
+                            details_dict_roi['rNPS_quantum_noise'])]
                     xvals = dd['freq']
                     self.curves.append(
                         {'label': '_no_legend_',
@@ -2250,8 +2291,9 @@ class ResultPlotCanvas(PlotCanvas):
                 self.default_range_x = [0, nyquist_freq]
 
         def plot_filtered_max_avg():
+            self.default_range_x = [0, nyquist_freq]
             suffix_2 = '_2' if show_filter_2 else ''
-            xvals = details_dict['pr_roi'][0]['freq']
+            xvals = details_dict['pr_roi'][2]['freq']  # freq for small ROIs
             yvals = details_dict[f'avg_rNPS_filt{suffix_2}_small']
             self.curves.append(
                 {'label': 'avg NPS with filter',
@@ -2265,13 +2307,13 @@ class ResultPlotCanvas(PlotCanvas):
             self.curves.append(
                 {'label': 'max NPS with filter',
                  'xvals': xvals, 'yvals': yvals, 'style': ':b'})
+            self.default_range_y = [0, 1.05 * np.max(yvals)]
             yvals = details_dict['pr_roi'][idx_max + 2][f'rNPS_struct_filt{suffix_2}']
             self.curves.append(
                 {'label': 'max structured NPS with filter',
                  'xvals': xvals, 'yvals': yvals, 'style': ':r'})
             name = roi_names[idx_max + 2]
             self.title = f'Filtered NPS and NPS structure for {name} (max) and avg'
-            self.default_range_x = [0, nyquist_freq]
 
         def plot_filters():
             xvals = details_dict['eye_filter_small']['r']

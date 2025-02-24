@@ -376,7 +376,6 @@ class GenerateReportDialog(ImageQCDialog):
                             self.current_template.elements[row])
                         sel_table_copy2 = copy.deepcopy(
                             self.current_template.elements[row+1])
-                        breakpoint()
                         self.current_template.elements.insert(
                             new_row, sel_table_copy)
                         self.current_template.elements.insert(
@@ -935,14 +934,39 @@ class GenerateReportDialog(ImageQCDialog):
 
     def add_table_of_html_elements(self, elements):
         html_this = ''
+
+        def add_note_row(notes, notes_pos, note_pos='before'):
+            html_row = ['<tr>']
+            for i, note in enumerate(notes):
+                if notes_pos[i] == note_pos:
+                    html_row.append(
+                        f'<td style="text-align: center;">{note}</td>')
+                else:
+                    html_row.append('<td></td>')
+            html_row.append('</tr>')
+            return ''.join(html_row)
+
         if len(elements) > 0:
             html_this = []
             html_this.append('<table><tr>')
+
+            notes = [element.note for element in elements]
+            note_pos = [element.note_pos for element in elements]
+            if any(notes) and 'before' in note_pos:
+                html_this.append(add_note_row(
+                    notes, note_pos, note_pos='before'))
+
             for element in elements:
                 html_this.append('<td>')
                 html_this.append(self.add_html_element(element))
                 html_this.append('</td>')
-            html_this.append('</tr></table>')
+            html_this.append('</tr>')
+
+            if any(notes) and 'after' in note_pos:
+                html_this.append(add_note_row(
+                    notes, note_pos, note_pos='after'))
+            html_this.append('</table>')
+
             html_this = "\n".join(html_this)
         return html_this
 

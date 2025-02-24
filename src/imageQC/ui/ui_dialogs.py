@@ -557,7 +557,11 @@ class AddArtifactsDialog(ImageQCDialog):
             QIcon(f'{os.environ[ENV_ICON_PATH]}import.png'),
             'Import artifacts from file.', self)
         act_import.triggered.connect(self.import_all)
-        toolbar_btm.addActions([act_save_all, act_import])
+        act_reset_all = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}reset.png'),
+            'Reset (delete) all current artifacts', self)
+        act_reset_all.triggered.connect(self.reset_all)
+        toolbar_btm.addActions([act_save_all, act_import, act_reset_all])
 
         hlo_buttons_btm = QHBoxLayout()
         vlo.addLayout(hlo_buttons_btm)
@@ -991,8 +995,26 @@ class AddArtifactsDialog(ImageQCDialog):
             QMessageBox.warning(self, 'Nothing to save',
                                 'No artifact to save.')
 
+    def reset_all(self):
+        quest = ('Reset (delete) all artifact(s)?')
+        res = messageboxes.QuestionBox(
+            self, title='Reset artifacts?', msg=quest,
+            yes_text='Yes', no_text='No')
+        if res.exec() == 1:
+            self.main.artifacts = []
+            self.image_delete_artifacts(delete_all=True)
+            self.update_labels()
+            self.update_applied()
+
     def import_all(self):
         """Import saved artifacts."""
+        if self.main.artifacts:
+            quest = ('Reset (delete) current artifact(s) before import?')
+            res = messageboxes.QuestionBox(
+                self, title='Reset artifacts?', msg=quest,
+                yes_text='Yes', no_text='No')
+            if res.exec() == 1:
+                self.reset_all()
         fname = QFileDialog.getOpenFileName(
             self, 'Open saved artifacts',
             filter="YAML file (*.yaml)")

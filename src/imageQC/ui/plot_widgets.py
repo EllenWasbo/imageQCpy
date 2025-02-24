@@ -40,7 +40,7 @@ class PlotDialog(ImageQCDialog):
 class PlotWidget(QWidget):
     """Widget with plot."""
 
-    def __init__(self, main, plotcanvas):
+    def __init__(self, main, plotcanvas, include_min_max_button=False):
         super().__init__()
         self.main = main
 
@@ -55,8 +55,15 @@ class PlotWidget(QWidget):
             QIcon(f'{os.environ[ENV_ICON_PATH]}copy.png'),
             'Copy curve as table to clipboard', self)
         act_copy.triggered.connect(self.copy_curves)
+        if include_min_max_button:
+            act_min_max = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}minmax.png'),
+                'Set x and y ranges to min/max of content', self)
+            act_min_max.triggered.connect(self.min_max_curves)
+            tb_plot_copy.addActions([act_copy, act_min_max])
+        else:
+            tb_plot_copy.addActions([act_copy])
         tb_plot_copy.setOrientation(Qt.Vertical)
-        tb_plot_copy.addActions([act_copy])
 
         vlo_tb.addWidget(tb_plot_copy)
         vlo_tb.addWidget(tb_plot)
@@ -68,6 +75,9 @@ class PlotWidget(QWidget):
         vlo_plot.addWidget(self.plotcanvas)
         self.hlo.addLayout(vlo_plot)
         self.setLayout(self.hlo)
+
+    def min_max_curves(self):
+        pass  # included in widgets with include_min_max_button = True
 
     def copy_curves(self):
         """Copy contents of curves to clipboard."""

@@ -309,7 +309,7 @@ class ImageCanvas(GenericImageCanvas):
         for scatter in self.scatters:
             try:
                 scatter.remove()
-            except ValueError:
+            except (ValueError, NotImplementedError):
                 pass
         self.scatters = []
 

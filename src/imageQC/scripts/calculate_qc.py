@@ -1917,6 +1917,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             res = Results(
                 headers=headers, values=values,
                 headers_sup=headers_sup, values_sup=values_sup,
+                alternative=alt,
                 details_dict=details_dict, errmsg=errmsg)
 
         return res

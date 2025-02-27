@@ -205,6 +205,8 @@ class ParamsTabCommon(QTabWidget):
                         paramset.roi_table)
                     self.roi_table_widget.table.update_table()
                 elif field.name == 'sni_channels_table':
+                    self.sni_channels_table_widget.current_table = copy.deepcopy(
+                        paramset.sni_channels_table)
                     self.sni_channels_table_widget.update_table()
 
         if self.main.current_modality == 'Xray':
@@ -2439,7 +2441,8 @@ class GroupBoxCorrectPointSource(QGroupBox):
 
     def __init__(self, parent, testcode='uni',
                  chk_pos_x=None, chk_pos_y=None,
-                 chk_radius=None, wid_radius=None):
+                 chk_radius=None, wid_radius=None,
+                 wid_n_sample_noise=None):
         super().__init__('Correct for point source curvature')
         testcode = testcode.lower()
         self.parent = parent
@@ -2447,6 +2450,9 @@ class GroupBoxCorrectPointSource(QGroupBox):
         if testcode == 'sni':
             self.toggled.connect(
                 lambda: parent.update_sni_display_options(attribute='sni_correct'))
+            wid_n_sample_noise.valueChanged.connect(
+                lambda: parent.param_changed_from_gui(
+                    attribute='sni_n_sample_noise'))
         else:
             self.toggled.connect(
                 lambda: parent.param_changed_from_gui(
@@ -2476,6 +2482,12 @@ class GroupBoxCorrectPointSource(QGroupBox):
         hlo_lock_dist.addWidget(chk_radius)
         hlo_lock_dist.addWidget(wid_radius)
         hlo_lock_dist.addWidget(QLabel('mm'))
+        if testcode == 'sni':
+            hlo_n = QHBoxLayout()
+            vlo_gb.addLayout(hlo_n)
+            hlo_n.addWidget(QLabel('Sample quantum noise repeats'))
+            hlo_n.addWidget(wid_n_sample_noise)
+            hlo_n.addWidget(QLabel('(ignored if ref.image)'))
 
 
 class WidgetReferenceImage(QWidget):
@@ -2822,7 +2834,7 @@ class ParamsTabNM(ParamsTabCommon):
         expected quantum noise NPS is subtracted. A frequency filter is applied.<br>
         <br>
         The original suggestion by Nelson et al (2014) was to use two large and 6<br>
-        small ROIs. There are different options for the small ROIs.<br>
+        small ROIs. Later it has been suggested to use a grid of smaller overlapping ROIs.<br>
         <br>
         For the option to correct for point source curvature, the quantum noise is <br>
         based on counts in image. For calibration images (Siemens) this is not <br>
@@ -2878,6 +2890,8 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_radius.valueChanged.connect(
             lambda: self.param_changed_from_gui(
                 attribute='sni_radius', update_roi=False))
+        self.sni_n_sample_noise = QDoubleSpinBox(
+            decimals=0, minimum=1, maximum=10, singleStep=1)
         self.sni_ref_image = QComboBox()
         #DELETE?self.sni_ref_image_fit = QCheckBox(
         #    'If point source correction, use reference image to correct.')
@@ -2888,7 +2902,8 @@ class ParamsTabNM(ParamsTabCommon):
         self.sni_correct = GroupBoxCorrectPointSource(
             self, testcode='sni',
             chk_pos_x=self.sni_correct_pos_x, chk_pos_y=self.sni_correct_pos_y,
-            chk_radius=self.sni_lock_radius, wid_radius=self.sni_radius)
+            chk_radius=self.sni_lock_radius, wid_radius=self.sni_radius,
+            wid_n_sample_noise=self.sni_n_sample_noise)
 
         self.sni_channels = BoolSelectTests(
             self, attribute='sni_channels',
@@ -2903,7 +2918,8 @@ class ParamsTabNM(ParamsTabCommon):
             lambda: self.param_changed_from_gui(attribute='sni_eye_filter_c'))
 
         self.sni_channels_table_widget = SimpleTableWidget(
-            self, 'sni_channels_table', ['Start frequency', 'Width', 'Flat top ratio'],
+            self, 'sni_channels_table', [
+                'Start frequency (/mm)', 'Width (/mm)', 'Flat top ratio'],
             row_labels=['Low', 'High'],
             min_vals=[0.0, None, 0.0], max_vals=[None, None, 1.0])
 

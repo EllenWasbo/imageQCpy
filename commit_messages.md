@@ -1,3 +1,13 @@
+# v3.1.13
+_Feb 27, 2025_
+
+Changes:
+- NM test SNI (options withdrawn as regarded not usedful - sorry if these options were in use with automation - recommended to recalculate previous results):
+	- Option with ROIs placed as Siemens gamma camer PMTs removed (ROIs should be overlapping / large enough - this option no longer recommended
+	- Option using ratio from integral of radial profiles no longer ignore negative values (no artefakts should be zero i.e. include both positive/negative noise)
+	- Filter low/high set as default and default frequencies as two filters up to ~0.2 pr mm (approximate nyquist frequency with pixel size 2.5 mm) (0/0.1/0.6 + 0.05/0.15/0.6)
+	- Added option to average quantum noise NPS over N repeated poisson noise simulations pr image (option only used and available for point source correction without reference image)
+
 # v3.1.12
 _Feb 24, 2025_
 
@@ -8,7 +18,7 @@ Changes:
 
 Fixes:
 - Fixed another 'cannot remove Artist' error - different behaviour different matplotlib versions
-- NM test SNI: Fixed tabulated results when low/high-pass filter (tabulated values for high-pass filter used to be copy of low_pass filter)
+- NM test SNI: Fixed errors in tabulated results
 
 # v3.1.11
 _Feb 19, 2025_

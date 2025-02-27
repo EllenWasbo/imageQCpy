@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when major changes, B when new exe release (to come),
 #   C new python release (or small fix to exe)
-VERSION = '3.1.12'
+VERSION = '3.1.13'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -92,8 +92,8 @@ ALTERNATIVES = {
         'SNI': [
             '6 small ROIs',
             'ROI grid, size by full ratio',
-            'ROI grid, size by number of pixels',
-            'ROIs matched Siemens gamma camera'],
+            'ROI grid, size by number of pixels'],
+            #'ROIs matched Siemens gamma camera'],
         'MTF': ['Point', 'One line source', 'Two perpendicular line sources',
                 'Edge']
         },

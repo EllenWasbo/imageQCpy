@@ -556,11 +556,12 @@ class ParamSetNM(ParamSetCommon):
     sni_correct_pos_y: bool = False
     sni_lock_radius: bool = False
     sni_radius: float = 0.1
+    sni_n_sample_noise: int = 1  # number times to sample estimated poisson noise
     sni_sum_first: bool = False
     sni_eye_filter_c: float = 28.
-    sni_channels: bool = False   # use channels
+    sni_channels: bool = True   # use channels
     sni_channels_table: list[float] = field(
-        default_factory=lambda: [[0.0, 0.15, 0.5], [0.1, 0.4, 0.5]])
+        default_factory=lambda: [[0.0, 0.1, 0.6], [0.05, 0.15, 0.6]])
     sni_scale_factor: int = 1  # 1 = no scale, 2 = merge 2x2
     sni_ref_image: str = ''  # file name (without path and extension)
     #DELETE? sni_ref_image_fit: bool = False  # True = curvature fit based on ref image

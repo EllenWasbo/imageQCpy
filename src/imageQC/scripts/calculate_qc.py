@@ -2157,7 +2157,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
 
     try:
         result = locals()[test_code]()
-    except (KeyError, IndexError):
+    except (KeyError, IndexError, TypeError):
         result = None
 
     return result

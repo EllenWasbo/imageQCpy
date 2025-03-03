@@ -854,7 +854,8 @@ def test_limits(headers=None, values=None, output_file=None, decimal_mark='.',
 
 def run_template(auto_template, modality, paramsets, qt_templates, digit_templates,
                  limits_and_plot_templates,
-                 tag_infos, parent_widget=None):
+                 tag_infos, parent_widget=None,
+                 artifacts=None, artifacts_apply=None):
     """Find new images, generate img_dict, sort by date/sortpattern.
 
     Parameters
@@ -883,6 +884,10 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
         list of TagInfo as defined in config_classes.py
     parent_widget : widget, optional
         Widget to recieve messages. The default is None i.e. print messages to console.
+    artifacts: list or None
+        list of available artifacts
+    artifacts_apply: list or None
+        list of applied artifacts (labels) pr image
 
     Returns
     -------
@@ -1039,7 +1044,13 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
                             input_main_this.results = {}
                             input_main_this.current_group_indicators = []
                             input_main_this.errmsgs = []
-
+                            if artifacts and artifacts_apply:
+                                input_main_this.artifacts = artifacts
+                                for idx, img_info in enumerate(input_main_this.imgs):
+                                    try:
+                                        img_info.artifacts = artifacts_apply[idx]
+                                    except IndexError:
+                                        pass
                             calculate_qc(
                                 input_main_this, wid_auto=parent_widget,
                                 auto_template_label=auto_template.label,

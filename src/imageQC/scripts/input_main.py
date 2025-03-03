@@ -40,6 +40,8 @@ class InputMain:
     tag_infos: list = field(default_factory=list)
     digit_templates: dict = field(default_factory=dict)
     imgs: list = field(default_factory=list)
+    artifacts: list = field(default_factory=list)
+    artifacts_3d: list = field(default_factory=list)
     results: dict = field(default_factory=dict)
     errmsgs: list = field(default_factory=list)
     current_group_indicators: list = field(default_factory=list)

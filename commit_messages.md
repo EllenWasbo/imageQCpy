@@ -1,3 +1,12 @@
+#v3.1.14
+_Mar 03, 2025_
+
+- NM test SNI - changed default settings again (working on optimization):
+	- sampling frequency 0.004 
+	- SNI area ratio increased to 0.97
+	- grid of ROIs with ROI size 128
+	- if correct for point source default sampling noise 5 times for averaging NPS quantum noise
+
 # v3.1.13
 _Feb 27, 2025_
 

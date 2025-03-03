@@ -544,19 +544,19 @@ class ParamSetNM(ParamSetCommon):
     uni_radius: float = 0.1
     uni_sum_first: bool = False
     uni_scale_factor: int = 0  # 0 = Auto, 1= no scale, 2... = scale factor
-    sni_area_ratio: float = 0.9
-    sni_type: int = 0  # 0 as Nelson 2014, 1= grid roi_ratio, 2 grid roi_size, 3 Siemens
+    sni_area_ratio: float = 0.97
+    sni_type: int = 2  # 0 as Nelson 2014, 1= grid roi_ratio, 2 grid roi_size, 3 Siemens
     sni_roi_ratio: float = 0.2  # relative to sni_area defined by sni_area_ratio
     sni_roi_size: int = 128  # number of pixels
     sni_roi_outside: int = 0  # alternatives ignore/move
-    sni_sampling_frequency: float = 0.01
+    sni_sampling_frequency: float = 0.004
     sni_ratio_dim: int = 0  # calculate ratio 2d integral (0) or radial profile (1)
     sni_correct: bool = False
     sni_correct_pos_x: bool = False
     sni_correct_pos_y: bool = False
     sni_lock_radius: bool = False
     sni_radius: float = 0.1
-    sni_n_sample_noise: int = 1  # number times to sample estimated poisson noise
+    sni_n_sample_noise: int = 5  # number times to sample estimated poisson noise
     sni_sum_first: bool = False
     sni_eye_filter_c: float = 28.
     sni_channels: bool = True   # use channels
@@ -565,7 +565,7 @@ class ParamSetNM(ParamSetCommon):
     sni_scale_factor: int = 1  # 1 = no scale, 2 = merge 2x2
     sni_ref_image: str = ''  # file name (without path and extension)
     #DELETE? sni_ref_image_fit: bool = False  # True = curvature fit based on ref image
-    sni_alt: int = 0  # alternative (HEADERS) - depende on _type and _channels
+    sni_alt: int = 3  # alternative (HEADERS) - depende on _type and _channels
     mtf_type: int = 1  # [Point, line (default), Two lines, edge]
     mtf_roi_size_x: float = 50.
     mtf_roi_size_y: float = 50.

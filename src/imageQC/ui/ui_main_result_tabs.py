@@ -2213,7 +2213,7 @@ class ResultPlotCanvas(PlotCanvas):
                 yvals = details_dict_roi[f'rNPS_filt{suffix_2}']
                 xvals = details_dict_roi['freq']
                 self.curves.append(
-                    {'label': 'NPS with eye filter',
+                    {'label': 'NPS with filter',
                      'xvals': xvals, 'yvals': yvals, 'style': '-b'})
                 self.default_range_y = [0, 1.4 * np.max(yvals[2:])]
 
@@ -2222,7 +2222,7 @@ class ResultPlotCanvas(PlotCanvas):
                      'xvals': xvals, 'yvals': details_dict_roi['rNPS'],
                      'style': ':b'})
                 self.curves.append(
-                    {'label': 'NPS structured noise with eye filter',
+                    {'label': 'NPS structured noise with filter',
                      'xvals': xvals,
                      'yvals': details_dict_roi[f'rNPS_struct_filt{suffix_2}'],
                      'style': '-r'})

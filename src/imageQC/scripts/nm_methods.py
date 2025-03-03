@@ -338,7 +338,7 @@ def get_eye_filter(roi_size, pix, paramset):
         V : filter values
         """
         start, L, flat_ratio = start_L_flat_ratio
-        t = L * (1-flat_ratio)
+        t = L * (1 - flat_ratio)
         V = np.ones(r.shape)
         V[r < start + t/2] = 0.5 * (1 + np.cos(2 * np.pi/t * (
             r[r < start + t/2] - start - t/2)))
@@ -353,31 +353,19 @@ def get_eye_filter(roi_size, pix, paramset):
 
     freq = np.fft.fftfreq(roi_size, d=pix)
     freq = freq[:freq.size//2]  # from center
-    if paramset.sni_channels:
-        V = tukey_filter_func(freq, paramset.sni_channels_table[0])
-    else:
-        V = eye_filter_func(freq, paramset.sni_eye_filter_c)
-    eye_filter_1d = {'r': freq, 'V': 1/np.max(V) * V}
-    if paramset.sni_channels:
-        V2 = tukey_filter_func(freq, paramset.sni_channels_table[1])
-        if np.max(V2) > 0:
-            eye_filter_1d['V2'] = 1/np.max(V2) * V2
-        else:
-            print('Failed creating eye filter for high channel. Filter-table:')
-            print(paramset.sni_channels_table)
 
     unit = freq[1] - freq[0]
     dists = mmcalc.get_distance_map_point(
         (roi_size, roi_size))
     if paramset.sni_channels:
         eye_filter_2d = tukey_filter_func(
-            unit*dists, paramset.sni_channels_table[0])
+            unit * dists, paramset.sni_channels_table[0])
     else:
         eye_filter_2d = eye_filter_func(unit*dists, paramset.sni_eye_filter_c)
     eye_filter_2d = 1/np.max(eye_filter_2d) * eye_filter_2d
     if paramset.sni_channels:
         eye_filter_2d_2 = tukey_filter_func(
-            unit*dists, paramset.sni_channels_table[1])
+            unit * dists, paramset.sni_channels_table[1])
         eye_filter_2d = [eye_filter_2d, eye_filter_2d_2]
 
     # precalculate distance map to avoid repeated argsort calls for each ROI
@@ -394,9 +382,29 @@ def get_eye_filter(roi_size, pix, paramset):
     idxs_combine = np.round(dists / paramset.sni_sampling_frequency)
     idxs_unique = np.unique(idxs_combine)
 
-    return {'filter_2d': eye_filter_2d, 'curve': eye_filter_1d, 'unit': unit,
-            'sort_idxs': sort_idxs,
-            'idxs_combine': idxs_combine, 'idxs_unique': idxs_unique}
+    eye_filter_dict = {
+        'filter_2d': eye_filter_2d, 'unit': unit,
+        'sort_idxs': sort_idxs,
+        'idxs_combine': idxs_combine, 'idxs_unique': idxs_unique}
+
+    # add curve for plotting (radial profil of eye_filter_2d)
+    if paramset.sni_channels:
+        yvals, yvals_2 = get_radial_profile_speed(
+            eye_filter_2d, eye_filter_dict)
+    else:
+        yvals = get_radial_profile_speed(
+            [eye_filter_2d], eye_filter_dict)
+        yvals = yvals[0]
+        yvals_2 = None
+    freq = paramset.sni_sampling_frequency * (
+        np.arange(idxs_unique.size) + np.min(idxs_unique[0]))
+    eye_filter_1d = {'r': freq, 'V': 1/np.max(yvals) * yvals}
+    if yvals_2 is not None:
+        eye_filter_1d.update({'V2': 1/np.max(yvals_2) * yvals_2})
+
+    eye_filter_dict.update({'curve': eye_filter_1d})
+
+    return eye_filter_dict
 
 
 def get_radial_profile_speed(arrays, eye_filter_dict, ignore_negative=False):

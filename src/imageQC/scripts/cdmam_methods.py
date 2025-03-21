@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Collection of methods for SNI and uniformity calculations
- for gamma camera in ImageQC.
+Collection of methods for CDMAM calculations.
 
 @author: ellen
 """

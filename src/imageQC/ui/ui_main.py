@@ -341,7 +341,12 @@ class MainWindow(QMainWindow):
                 self.current_modality = self.imgs[0].modality
                 self.update_mode()
             if self.wid_window_level.tb_wl.act_wl_update.isChecked() is False:
-                self.wid_window_level.tb_wl.set_window_level('dcm', set_tools=True)
+                if self.current_modality in ['Xray', 'Mammo']:
+                    wl_string = 'min_max_center'
+                else:
+                    wl_string = 'dcm'
+                self.wid_window_level.tb_wl.set_window_level(
+                    wl_string, set_tools=True)
 
         if self.wid_quicktest.gb_quicktest.isChecked():
             self.wid_quicktest.set_current_template_to_imgs()

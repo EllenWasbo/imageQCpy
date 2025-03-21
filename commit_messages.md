@@ -1,7 +1,16 @@
+#v3.1.15
+_Mar 21, 2025_
+
+Set default window level for Xray and Mammo to center min/max (else from DICOM).
+
+NM test SNI:
+- temporary set option to set sampling noise for point source to 0 = estimate quantum noise from mean of corrected.
+- added reference calibration AutoQC file to test files.
+
 #v3.1.14
 _Mar 03, 2025_
 
-- NM test SNI - changed default settings again (working on optimization):
+- NM test SNI - changed default settings again (working on optimization, probably not last changes):
 	- sampling frequency 0.004 
 	- SNI area ratio increased to 0.97
 	- grid of ROIs with ROI size 128

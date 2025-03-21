@@ -465,6 +465,7 @@ class ParamSetXray(ParamSetCommon):
     foc_angle: float = 1.5  # star pattern line angle in degrees
     foc_search_margin: float = 10.  # mm margin offsenter for pattern
     foc_search_angle: float = 15.  # angle segment to average radial profile
+    pha_alt: int = 0  # which phantom to use (ALTERNATIVE['Xray']['Pha'])
     def_mask_outer_mm: float = 10.
     def_fraction: float = 0.1
 

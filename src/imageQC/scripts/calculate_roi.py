@@ -466,6 +466,10 @@ def get_rois(image, image_number, input_main):
 
         return roi_array
 
+    def Pha():  ## Specific phantom
+        roi_array = None  #TODO
+        return roi_array
+
     def PIU():  # MR
         return get_roi_circle_MR(
             image, image_info, paramset, test_code, (delta_xya[0], delta_xya[1])

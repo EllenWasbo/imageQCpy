@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when major changes, B when new exe release (to come),
 #   C new python release (or small fix to exe)
-VERSION = '3.1.13'
+VERSION = '3.1.15'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -43,7 +43,7 @@ QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'TTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
     'Xray': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'MTF', 'NPS', 'STP', 'Var',
-             'Foc', 'Def'],
+             'Foc', 'Pha', 'Def'],
     'Mammo': ['DCM', 'ROI', 'Num', 'SDN', 'Hom', 'Var', 'RLR', 'Gho', 'MTF',
               'NPS', 'CDM'],
     'NM': ['DCM', 'ROI', 'Num', 'Uni', 'SNI', 'MTF', 'Spe', 'Bar', 'Swe'],
@@ -83,6 +83,7 @@ ALTERNATIVES = {
                 'Central + quadrants ROI, avg + % difference from overall average',
                 'Flat field test from Mammo',
                 'Flat field test AAPM TG150'],
+        'Pha': ['TOR 18-FG', 'TOR CDR']
         },
     'Mammo': {
        'ROI': ALTERNATIVES_ROI,

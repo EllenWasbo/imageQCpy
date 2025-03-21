@@ -1771,6 +1771,7 @@ class ParamsTabXray(ParamsTabCommon):
         self.create_tab_stp()
         self.create_tab_var()
         self.create_tab_foc()
+        self.create_tab_pha()
         self.create_tab_def()
 
         self.addTab(self.tab_hom, "Homogeneity")
@@ -1781,6 +1782,7 @@ class ParamsTabXray(ParamsTabCommon):
         self.addTab(self.tab_var, "Variance")
         self.addTab(self.tab_foc, "Focal spot size")
         if self.main.developer_mode:
+            self.addTab(self.tab_pha, "Phantom")
             self.addTab(self.tab_def, "Defective pixels")
 
         self.flag_ignore_signals = False
@@ -2013,6 +2015,30 @@ class ParamsTabXray(ParamsTabCommon):
              'Fraction of images where avg of 8 neighbours',
              'Pix == Avg of 4 neighbours', '# pix == avg of 4 pr 1x1cm',
              'Fraction of images where avg of 4 neighbours',])
+
+    def create_tab_pha(self):
+        """GUI of tab Phantom."""
+        self.tab_pha = ParamsWidget(self, run_txt='Calculate')
+
+        self.tab_pha.hlo_top.addWidget(uir.UnderConstruction(
+            txt='Under construction and validation...'))
+        
+        self.pha_tab_alt = QComboBox()
+        self.pha_tab_alt.addItems(ALTERNATIVES['Xray']['Pha'])
+        self.pha_tab_alt.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='pha_alt'))
+
+        self.tab_pha.hlo_top.addWidget(QLabel('Phantom: '))
+        self.tab_pha.hlo_top.addWidget(self.pha_tab_alt)
+        '''
+        self.pha_result_image = QComboBox()
+        self.pha_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+
+        self.tab_def.hlo.addSpacing(300)
+        self.tab_def.hlo.addWidget(self.def_result_image)
+        self.def_result_image.addItems([])
+        '''
 
 
 class ParamsTabMammo(ParamsTabCommon):
@@ -2891,7 +2917,7 @@ class ParamsTabNM(ParamsTabCommon):
             lambda: self.param_changed_from_gui(
                 attribute='sni_radius', update_roi=False))
         self.sni_n_sample_noise = QDoubleSpinBox(
-            decimals=0, minimum=1, maximum=10, singleStep=1)
+            decimals=0, minimum=0, maximum=10, singleStep=1)
         self.sni_ref_image = QComboBox()
         #DELETE?self.sni_ref_image_fit = QCheckBox(
         #    'If point source correction, use reference image to correct.')

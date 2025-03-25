@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when major changes, B when new exe release (to come),
 #   C new python release (or small fix to exe)
-VERSION = '3.1.15'
+VERSION = '3.1.16'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -214,6 +214,10 @@ HEADERS = {
         'Foc': {'alt0': ['Star diameter (mm)', 'Magnification',
                          'Blur diameter x (mm)', 'Blur diameter y (mm)',
                          'FS x (mm)', 'FS y (mm)']},
+        'Pha': {
+                'alt0': [],
+                'alt1': []
+                },
         'Def': {'alt0': ['# equal to avg of 8 neighbours',
                          '# equal to avg of 4 neighbours']},
         },

@@ -450,6 +450,10 @@ class ParamSetXray(ParamSetCommon):
     mtf_auto_center: bool = False
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
     mtf_auto_center_mask_outer: int = 30  # mask outer mm
+    mtf_auto_center_thresholds: list[float] = field(
+        default_factory=lambda: [25., 0.1, 10., 0.5])
+        # min_size (mm), roi_size fraction of min_size, max/mean variance threshold,
+        # threshold fraction for finding peaks
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     nps_roi_size: int = 256
     nps_n_sub: int = 5
@@ -466,6 +470,7 @@ class ParamSetXray(ParamSetCommon):
     foc_search_margin: float = 10.  # mm margin offsenter for pattern
     foc_search_angle: float = 15.  # angle segment to average radial profile
     pha_alt: int = 0  # which phantom to use (ALTERNATIVE['Xray']['Pha'])
+    pha_mask_outer_mm: float = 10.0
     def_mask_outer_mm: float = 10.
     def_fraction: float = 0.1
 
@@ -510,6 +515,10 @@ class ParamSetMammo(ParamSetCommon):
     mtf_auto_center: bool = False
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
     mtf_auto_center_mask_outer: int = 30  # mask outer mm
+    mtf_auto_center_thresholds: list[float] = field(
+        default_factory=lambda: [25., 0.1, 10., 0.5])
+        # min_size (mm), roi_size fraction of min_size, max/mean variance threshold,
+        # threshold fraction for finding peaks
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     nps_roi_size: int = 256
     nps_n_sub: int = 5
@@ -692,6 +701,10 @@ class ParamSetMR(ParamSetCommon):
     mtf_auto_center: bool = False
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
     mtf_auto_center_mask_outer: int = 10  # mask outer mm
+    mtf_auto_center_thresholds: list[float] = field(
+        default_factory=lambda: [25., 0.1, 10., 0.5])
+        # min_size (mm), roi_size fraction of min_size, max/mean variance threshold,
+        # threshold fraction for finding peaks
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
 
 

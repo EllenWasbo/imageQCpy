@@ -7,8 +7,8 @@ Calculation processes for the different tests.
 """
 import numpy as np
 from scipy import ndimage
-from scipy.signal import find_peaks
-from skimage import feature
+from scipy.signal import find_peaks, fftconvolve
+from skimage.transform import hough_line, hough_line_peaks
 
 # imageQC block start
 import imageQC.scripts.mini_methods_calculate as mmcalc
@@ -123,7 +123,7 @@ def get_rois(image, image_number, input_main):
             center_x, center_y, _, _ = res
             off_x = center_x - image.shape[1] // 2
             off_y = center_y - image.shape[0] // 2
-    
+
         tot_w_mm = 5.1 *  paramset.foc_pattern_size  # assumed max 5x magnification
         w_tot = tot_w_mm / image_info.pix[0]
         roi_outer = get_roi_rectangle(
@@ -132,7 +132,7 @@ def get_rois(image, image_number, input_main):
         roi_inner = get_roi_rectangle(
             img_shape, roi_width=w, roi_height=w, offcenter_xy=(off_x, off_y))
         roi_this = [roi_outer, roi_inner]
-        
+
         rot_a = paramset.foc_search_angle / 2
         roi_half = get_roi_rectangle(
             img_shape, roi_width=w_tot//2, roi_height=w_tot, offcenter_xy=(w_tot//4, 0))
@@ -315,11 +315,12 @@ def get_rois(image, image_number, input_main):
             if paramset.mtf_auto_center:
                 mask_outer_pix = round(
                     paramset.mtf_auto_center_mask_outer / image_info.pix[0])
-                rect_dict = find_rectangle_object(image, mask_outer=mask_outer_pix)
+                centers_of_edges_xy = find_rectangle_object(
+                    image, mask_outer=mask_outer_pix, pix=image_info.pix[0],
+                    thresholds=paramset.mtf_auto_center_thresholds)
 
                 roi_this = []
-                if rect_dict['centers_of_edges_xy'] is not None:
-                    centers_of_edges_xy = rect_dict['centers_of_edges_xy']
+                if centers_of_edges_xy is not None:
                     cent = [image.shape[1] // 2, image.shape[0] // 2]
                     off_xy = [
                         [xy[0] - cent[0], xy[1] - cent[1]]
@@ -347,6 +348,8 @@ def get_rois(image, image_number, input_main):
                                 offcenter_xy=off_xy[i]
                                 )
                             )
+                else:
+                    roi_this = [None]
 
                 if mask_outer_pix > 0:
                     inside = np.full(img_shape, False)
@@ -383,7 +386,7 @@ def get_rois(image, image_number, input_main):
                         np.array(yxmax) - 0.5 * np.array(image.shape)))
 
                 elif paramset.mtf_type == 2:  # perpendicular line sources
-                    res = find_lines(image)
+                    res = find_line_sources(image)
                     if len(res[0]) == 2 and len(res[1]) == 2:
                         roi_this = []
                         for i in [1, 0]:  # 1 first for line in xdir = y profile
@@ -467,8 +470,23 @@ def get_rois(image, image_number, input_main):
         return roi_array
 
     def Pha():  ## Specific phantom
-        roi_array = None  #TODO
-        return roi_array
+        roi_this = None
+        if 'Pha' in input_main.results:
+            if input_main.results['Pha'] is not None:
+                try:
+                    roi_this = input_main.results[
+                        'Pha']['details_dict'][image_number]['roi_dict']
+                except (KeyError, AttributeError, IndexError):
+                    pass
+        if roi_this is None:
+            roi_mask_outer = None
+            if paramset.pha_mask_outer_mm > 0:
+                roi_mask_outer = np.full(image_info.shape[0:2], False)
+                n_pix = round(paramset.var_mask_outer_mm / image_info.pix[0])
+                if n_pix > 0:
+                    roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
+            roi_this = roi_mask_outer
+        return roi_this
 
     def PIU():  # MR
         return get_roi_circle_MR(
@@ -1738,7 +1756,76 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
     return ({'h_lines': h_lines, 'v_lines': v_lines}, errmsg)
 
 
-def find_rectangle_object(image, mask_outer=0):
+def find_edges(binary_sub, angle_resolution, angle_range,
+               threshold_peaks, min_distance):
+    """Find edges in binary image.
+
+    Parameters
+    ----------
+    binary_sub : np.2darray of type bool
+    angle_resolution : float
+        in degrees
+    angle_range : list
+        start stop degrees
+    threshold_peaks : float
+        fraction of max peak to evaluate
+    min_distance : float
+
+    Returns
+    -------
+    lines : list of [(x, y), slope, intercept]
+    """
+    angle_resolution_rad = np.deg2rad(angle_resolution)
+    angle_range_rad = np.deg2rad(angle_range)
+    n_angles = np.ceil(np.diff(angle_range_rad)[0] / angle_resolution_rad)
+    tested_angles = np.linspace(
+        angle_range_rad[0], angle_range_rad[1],
+        round(n_angles), endpoint=False)
+    hspace, theta, d = hough_line(binary_sub, theta=tested_angles)
+    threshold_peaks = threshold_peaks * np.max(hspace)
+    _, angles, dists = hough_line_peaks(hspace, theta, d,
+                                        threshold=threshold_peaks,
+                                        min_distance=min_distance)
+    lines = []
+    for i, angle in enumerate(angles):
+        x, y = dists[i] * np.array([np.cos(angle), np.sin(angle)])
+        slope = np.tan(angle + np.pi / 2)
+        intercept = y - slope * x
+        line = [(x, y), slope, intercept]
+        lines.append(line)
+    return lines
+
+
+def find_intercepts(lines, lines2):
+    """Find interception points of set of lines.
+
+    Parameters
+    ----------
+    lines : list
+        list of [(x, y), slope, intercept]
+    lines2 : list
+        as lines but in other directions
+
+    Returns
+    -------
+    corners_xy : list of tuples
+
+    """
+    corners_xy = []
+    for line1 in lines:
+        for line2 in lines2:
+            # y = ax + b, y = cx + d
+            # intercept_x = (d-b) / (a-c)
+            # intercept_y = a * intercept_x + b
+            intercept_x = (line2[2] - line1[2]) / (line1[1] - line2[1])
+            intercept_y = line1[1] * intercept_x + line1[2]
+            corners_xy.append([intercept_x, intercept_y])
+    return corners_xy
+
+
+def find_rectangle_object(image, mask_outer=0, pix=1.,
+                          thresholds=[25., 0.1, 10., 0.5, 0.7]):
+    
     """Detect rectangle in image.
 
     Parameters
@@ -1746,112 +1833,92 @@ def find_rectangle_object(image, mask_outer=0):
     image : np.array
     mask_outer : int
         mask outer pixels and ignore signal there
+    pix : float
+        mm/pix
+    thresholds: list of float
+        as defined in 
+        config_classes.ParamSet(Xray,Mammo,MR).mtf_auto_center_thresholds
+        min_size (mm)
+        roi_size fraction of min_size
+        max/mean variance threshold
+        threshold (fraction) for finding peaks
+        threshold (fraction) for finding lines
 
     Returns
     -------
-    dict:
-        centers_of_edges_xy : list of list
-            for each edge (top, right, btm, left) [x, y]
-            longest/most central edge if not full rect in image
-        corners_xy : list of list
-            [toplft, toprgt, btmrgt, btmlft] [x, y]
-            None if not 4 corners
+    centers_of_edges_xy
+        list of [x, y] for each edge (top, right, btm, left)
     """
     centers_of_edges_xy = None
-    corners_xy = None
+    min_size=round(thresholds[0] / pix)
 
-    # find corners by thresholded matrix (min max found from inner quarter)
-    x_h = image.shape[1] // 2
-    x_q = x_h // 2
-    y_h = image.shape[0] // 2
-    y_q = y_h // 2
-    inner_img = image[y_h - y_q:y_h + y_q, x_h - x_q:x_h + x_q]
-    threshold = 0.5 * (np.min(inner_img) + np.max(inner_img))
-    image_binary = np.zeros(image.shape)
-    image_binary[image > threshold] = 1.
+    # prepare binary image based on thresholded variance image
+    roi_sz = round(thresholds[1] * min_size)  # roi for variance image
     inside = np.full(image.shape, False)
     if mask_outer > 0:
         inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
-        image_binary[inside == False] = 1.
+    kernel = np.full((roi_sz, roi_sz), 1./(roi_sz ** 2))
+    mu = fftconvolve(image, kernel, mode='same')
+    ii = fftconvolve(image ** 2, kernel, mode='same')
+    variance_image = ii - mu**2
+    variance_image[inside == False] = 0
+    max_var = np.max(variance_image)
+    mean_var = np.mean(variance_image[inside == True])
+    binary_image = np.zeros(variance_image.shape, dtype=bool)
+    binary_image[variance_image > max_var * thresholds[3]] = True
 
-    corn = feature.corner_peaks(
-        feature.corner_fast(image_binary, 10),
-        min_distance=10
-        )
+    # find edge_positions
+    peaks_pos = []
+    for i in range(2):
+        profile = np.sum(binary_image, axis=i)[mask_outer+1:-mask_outer-1]
+        peaks = find_peaks(profile, distance=min_size,
+                       height=thresholds[3]*np.max(profile))
+        peaks_pos.append(peaks[0])
+    n_peaks = [len(peaks_pos[0]), len(peaks_pos[1])]
 
-    if corn.shape[1] != 2 or corn.shape[0] != 4:  # try negative high signal
-        if corn.shape[1] != 2:
-            image_binary = np.logical_not(image_binary).astype(int)
-        else:  # corn.shape[0] != 4
-            image_binary = np.zeros(image.shape)
-            image_binary[image < threshold] = 1.
-            image_binary[inside == False] = 1.
-        corn = feature.corner_peaks(
-            feature.corner_fast(image_binary, 10),
-            min_distance=10
-            )
+    find_intersections = True if max_var/mean_var > thresholds[2] else False
+    # avoid spending time on homogeneous images
+    xs = []
+    ys = []
+    if max(n_peaks) == 2 and min(n_peaks) > 0:
+        xs = peaks_pos[0]
+        ys = peaks_pos[1]
 
-    if corn.shape[1] == 2:
-        ys = np.array([c[0] for c in corn])
-        xs = np.array([c[1] for c in corn])
-        if corn.shape[0] == 4:
-            # sort corners in toplft, toprgt, btmrgt, btmlft
-            # first sort top to btm
-            ys_sortidx = np.argsort(ys)
-            ys_sort = ys[ys_sortidx]
-            xs_sort = xs[ys_sortidx]
-            # top lft to rgt
-            if xs_sort[0] > xs_sort[1]:
-                xs_sort = np.append(np.flip(xs_sort[:2]), xs_sort[2:])
-                ys_sort = np.append(np.flip(ys_sort[:2]), ys_sort[2:])
-            # btm rgt to lft
-            if xs_sort[3] > xs_sort[2]:
-                xs_sort = np.append(xs_sort[:2], np.flip(xs_sort[2:]))
-                ys_sort = np.append(ys_sort[:2], np.flip(ys_sort[2:]))
+        if len(xs) == 2 and len(ys) == 2:  # full rectangle
+            find_intersections = True
+        elif len(xs) == 2 and len(ys) == 1:  # missing top or btm of rect
+            centers_of_edges_xy = [np.array(
+                [0.5*np.sum(xs), ys[0]]) + mask_outer + 1]
+            find_intersections = False
+        elif len(ys) == 2 and len(xs) == 1:  # missing lft or rgt of rect
+            centers_of_edges_xy = [np.array(
+                [xs[0], 0.5*np.sum(ys)]) + mask_outer + 1]
+            find_intersections = False
 
-            xs_diff = np.diff(np.append(xs_sort, xs_sort[0]))
-            ys_diff = np.diff(np.append(ys_sort, ys_sort[0]))
+    if find_intersections:
+        lines = find_edges(
+            binary_image, 2, [-30, 30], thresholds[3], min_size)
+        if len(lines) == 2:
+            lines2 = find_edges(
+                binary_image, 2, [60, 120], thresholds[3], min_size)
+            corners_xy = find_intercepts(lines, lines2)
+            if len(corners_xy) == 4:
+                corners_xy.sort(key=lambda x: x[1])
+                xs = [x[0] for x in corners_xy]
+                ys = [x[1] for x in corners_xy]
+                top = [np.mean(xs[0:2]), np.mean(ys[0:2])]
+                btm = [np.mean(xs[2:]), np.mean(ys[2:])]
+                corners_xy.sort(key=lambda x: x[0])
+                xs = [x[0] for x in corners_xy]
+                ys = [x[1] for x in corners_xy]
+                lft = [np.mean(xs[0:2]), np.mean(ys[0:2])]
+                rgt = [np.mean(xs[2:]), np.mean(ys[2:])]
+                centers_of_edges_xy = [top, rgt, btm, lft]
 
-            centers_of_edges_xy = [
-                [xs_sort[i] + xs_diff[i] // 2, ys_sort[i] + ys_diff[i] // 2]
-                for i in range(4)
-                ]
-
-            corners_xy = [[xs_sort[i], ys_sort[i]] for i in range(xs_sort.size)]
-        else:
-            # try fwhm method - assume square (for now)
-            try:
-                center_x, center_y, width_x, width_y = mmcalc.optimize_center(
-                    image, mask_outer=0.05*image.shape[0])
-                y0 = round(center_y)
-                y1 = round(center_y + 0.1*width_y)
-                center_y0_y1 = []
-                for yval in [y0, y1]:
-                    profile = image[yval]
-                    _, center = mmcalc.get_width_center_at_threshold(
-                        profile, 0.5*(np.max(profile) + np.min(profile)))
-                    center_y0_y1.append(center)
-                if None not in center_y0_y1:
-                    tan_angle = (center_y0_y1[1] - center_y0_y1[0])/(y1-y0)
-                    angle = np.arctan(tan_angle)
-                    w_square = width_x * np.cos(angle)
-                    centers_of_edges_xy = []
-                    rot_angles = np.pi/2 * np.arange(4) - np.pi - angle
-                    for i in rot_angles:
-                        x, y = mmcalc.rotate_point(
-                            [center_x + w_square//2, center_y],
-                            [center_x, center_y], np.rad2deg(i))
-                        centers_of_edges_xy.append([x, y])
-            except TypeError:
-                pass
-
-    # TODO find edges also if full rectangle not imaged
-
-    return {'centers_of_edges_xy': centers_of_edges_xy,
-            'corners_xy': corners_xy}
+    return centers_of_edges_xy
 
 
-def find_lines(image):
+def find_line_sources(image):
     """Detect 2 perpendicular lines in image and return center position of these.
 
     Parameters

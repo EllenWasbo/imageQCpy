@@ -100,7 +100,7 @@ def refresh_results_display(main, update_table=True):
             main.wid_res_image.canvas.result_image_draw()
 
 
-def refresh_img_display(main, force_home=False):
+def refresh_img_display(main, force_home=False, update_roi=True):
     """Refresh image related gui."""
     if main.active_img is not None:
         main.current_roi = None
@@ -114,7 +114,8 @@ def refresh_img_display(main, force_home=False):
             pass
         except IndexError:  # maybe after closing images
             main.wid_image_display.canvas.img_is_missing()
-        main.update_roi()
+        if update_roi:
+            main.update_roi()
     else:
         main.wid_image_display.canvas.img_is_missing()
 

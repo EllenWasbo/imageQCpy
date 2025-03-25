@@ -24,6 +24,7 @@ from imageQC.scripts.calculate_roi import (
 import imageQC.scripts.mtf_methods as mtf_methods
 import imageQC.scripts.nm_methods as nm_methods
 import imageQC.scripts.cdmam_methods as cdmam_methods
+from imageQC.scripts.phantom_xray_methods import calculate_phantom_xray
 import imageQC.scripts.mini_methods_format as mmf
 import imageQC.scripts.mini_methods as mm
 import imageQC.scripts.mini_methods_calculate as mmcalc
@@ -1721,6 +1722,28 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         res = Results(headers=headers, values=values, errmsg=errmsgs)
         return res
 
+    def Pha():
+        alt = paramset.pha_alt
+        headers = copy.deepcopy(HEADERS[modality][test_code]['alt'+str(alt)])
+        #headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt'+str(alt)])
+        if image2d is None:
+            res = Results(headers=headers)#, headers_sup=headers_sup)
+        else:
+            if roi_array is None:
+                sub = image2d
+            else:
+                rows = np.max(roi_array, axis=1)
+                cols = np.max(roi_array, axis=0)
+                sub = image2d[rows][:, cols]
+            details_dict, values, errmsgs = calculate_phantom_xray(
+                image2d, image_info, paramset)
+
+            res = Results(
+                headers=headers, values=values,
+                details_dict=details_dict, errmsg=errmsgs)
+
+        return res
+            
     def PIU():
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         # ['min', 'max', 'PIU'],

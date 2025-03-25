@@ -87,6 +87,38 @@ class ParamsWidget(QWidget):
         vlo.addWidget(self.btn_run)
 
 
+class EditParamsetValues(ImageQCDialog):
+    """Dialog to edit paramset values (details not available from main screen)."""
+
+    def __init__(self, info_widget_pairs):
+        super().__init__()
+        self.setWindowTitle('Edit parameters')
+        self.setMinimumHeight(300)
+        self.setMinimumWidth(300)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        self.flo = QFormLayout()
+        vlo.addLayout(self.flo)
+
+        for info, widget in info_widget_pairs:
+            self.flo.addRow(QLabel(info), widget)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        vlo.addWidget(self.buttonBox)
+
+    def get_values(self):
+        values = []
+        for child in self.children():
+            try:
+                values.append(child.value())
+            except AttributeError:
+                pass  # TODO if other than SpinBox
+        return values
+
+
 class ParamsTabCommon(QTabWidget):
     """Superclass for modality specific tests."""
 
@@ -407,6 +439,50 @@ class ParamsTabCommon(QTabWidget):
                         icon=QMessageBox.Warning,
                         details=log)
                     dlg.exec()
+
+    def edit_details(self):
+        """Edit parameterset values available from details button (dots)."""
+        attributes = []
+        contents = []
+        if self.main.current_test == 'MTF':
+            if self.main.current_modality in ['Xray', 'Mammo', 'MR']:
+                # max/mean variance threshold,
+                # threshold fraction for finding peaks
+                attributes = ['mtf_auto_center_thresholds']
+                vals = self.main.current_paramset.mtf_auto_center_thresholds
+                info_widget_pairs = [
+                    ('Minimum edge length (mm)',
+                     QDoubleSpinBox(
+                        decimals=0, minimum=1, maximum=300, singleStep=1,
+                        value=vals[0])),
+                    ('ROI for variance map fraction of minimum edge',
+                     QDoubleSpinBox(
+                        decimals=2, minimum=0.10, maximum=1., singleStep=0.1,
+                        value=vals[1])),
+                    ('Threshold max variance/mean variance',
+                     QDoubleSpinBox(
+                        decimals=1, minimum=1.5, maximum=1000., singleStep=1,
+                        value=vals[2])),
+                    ('Threshold finding peaks (fraction)',
+                     QDoubleSpinBox(
+                        decimals=1, minimum=0.1, maximum=1., singleStep=0.1,
+                        value=vals[3])),
+                    ]
+
+                dlg = EditParamsetValues(info_widget_pairs)
+                res = dlg.exec()
+                if res:
+                    new_values = dlg.get_values()
+                    contents = [new_values]
+        if len(contents) > 0:
+            for i, attribute in enumerate(attributes):
+                self.param_changed_from_gui(
+                    attribute=attribute, content=contents[i],
+                    update_roi=False)
+            self.main.update_roi()
+            # default:
+            # update_roi=True, clear_results=True, update_plot=True,
+            # update_results_table=True, edit_ignore=False, make_odd=False
 
     def clear_results_current_test(self):
         """Clear results of current test."""
@@ -1022,11 +1098,17 @@ class ParamsTabCommon(QTabWidget):
         self.tab_mtf.hlo.addLayout(vlo1)
         self.tab_mtf.hlo.addWidget(uir.VLine())
         vlo2 = QVBoxLayout()
-        vlo2.addWidget(self.mtf_auto_center)
+        hlo_auto = QHBoxLayout()
+        vlo2.addLayout(hlo_auto)
+        hlo_auto.addWidget(self.mtf_auto_center)
         flo_gb_auto = QFormLayout()
         flo_gb_auto.addRow(QLabel('Use'), self.mtf_auto_center_type)
         flo_gb_auto.addRow(QLabel('Ignore outer mm'), self.mtf_auto_center_mask_outer)
         self.mtf_auto_center.setLayout(flo_gb_auto)
+        self.mtf_auto_details = uir.ToolBarDots(
+            tooltip='Parameters for the edge detection...')
+        self.mtf_auto_details.act_details.triggered.connect(self.edit_details)
+        hlo_auto.addWidget(self.mtf_auto_details)
         flo2 = QFormLayout()
         flo2.addRow(QLabel('Cut LSF tails'), self.mtf_cut_lsf)
         flo2.addRow(QLabel('    Cut at halfmax + (#FWHM)'), self.mtf_cut_lsf_w)

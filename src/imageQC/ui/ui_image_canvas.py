@@ -635,10 +635,14 @@ class ImageCanvas(GenericImageCanvas):
             self.add_contours_to_all_rois(colors=['red', 'blue'])
         else:
             if isinstance(self.main.current_roi, list):
+                if self.main.current_modality != 'CT':
+                    cols = ['r', 'b', 'g', 'c']
+                else:
+                    cols = COLORS
                 roi_indexes = list(range(len(self.main.current_roi) - 1))
                 self.add_contours_to_all_rois(
                     roi_indexes=roi_indexes,
-                    colors=COLORS)
+                    colors=cols)
                 mask = np.where(self.main.current_roi[-1], 0, 1)
                 contour = self.ax.contour(
                     mask, levels=[0.9],
@@ -1633,5 +1637,5 @@ class ResultImageCanvas(GenericImageCanvas):
             sel_idx = 0 if 'ROI 1' in sel_text else 1
             self.current_image = details_dict['variance_image'][sel_idx]
 
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, TypeError):
             pass

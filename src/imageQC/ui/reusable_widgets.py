@@ -279,6 +279,17 @@ class ToolBarEdit(QToolBar):
             self.addAction(self.act_delete)
 
 
+class ToolBarDots(QToolBar):
+    """Toolbar for reuse with dots for details."""
+
+    def __init__(self, tooltip=''):
+        super().__init__()
+        self.act_details = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}dots.png'),
+            tooltip, self)
+        self.addAction(self.act_details)
+
+
 class ToolBarTableExport(QToolBar):
     """Toolbar for reuse with setting table export options."""
 

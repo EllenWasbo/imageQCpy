@@ -23,6 +23,7 @@
 		<file alias="decimal_point.png">icons\decimal_point.png</file>
 		<file alias="delete.png">icons\delete.png</file>
 		<file alias="deleteRed.png">icons\deleteRed.png</file>
+		<file alias="dots.png">icons\dots.png</file>
 		<file alias="duplicate.png">icons\duplicate.png</file>
 		<file alias="edit.png">icons\edit.png</file>
 		<file alias="error.png">icons\error.png</file>
@@ -110,6 +111,7 @@
 		<file alias="decimal_point.png">icons\darkmode\decimal_point.png</file>
 		<file alias="delete.png">icons\darkmode\delete.png</file>
 		<file alias="deleteRed.png">icons\darkmode\deleteRed.png</file>
+		<file alias="dots.png">icons\darkmode\dots.png</file>
 		<file alias="duplicate.png">icons\darkmode\duplicate.png</file>
 		<file alias="edit.png">icons\darkmode\edit.png</file>
 		<file alias="error.png">icons\darkmode\error.png</file>

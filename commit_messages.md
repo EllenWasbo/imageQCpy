@@ -1,3 +1,13 @@
+#v3.1.16
+_Mar 25, 2025_
+
+Test MTF for Xray, Mammo, (MR) when using auto detect edges:
+- The algorithm had issues with slow performance for images whithout edges. 
+	- Changed strategy for finding the edges and avoid spending time when no edges likely to exist. 
+	- Expected edge length minimum 25mm. 
+	- At least one full side of the edge have to be inside the image/masked region (previously full rectangle had to be inside).
+	- Adjustable paramters for the edge detection available from toolbar on details
+
 #v3.1.15
 _Mar 21, 2025_
 

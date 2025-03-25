@@ -381,7 +381,7 @@ class MainWindow(QMainWindow):
         self.tree_file_list.setCurrentItem(
             self.tree_file_list.topLevelItem(imgno))
 
-    def update_active_img(self, current):
+    def update_active_img(self, current, update_roi=True):
         """Overwrite pixmap in memory with new active image, refresh GUI."""
         if len(self.imgs) > 0:
             self.tree_file_list.blockSignals(True)
@@ -431,7 +431,7 @@ class MainWindow(QMainWindow):
                 self.imgs[self.gui.active_img_no].info_list_general,
                 self.imgs[self.gui.active_img_no].info_list_modality)
 
-            self.refresh_img_display()
+            self.refresh_img_display(update_roi=update_roi)
             self.refresh_results_display(update_table=False)
             self.refresh_selected_table_row()
             self.tree_file_list.blockSignals(False)
@@ -683,9 +683,10 @@ class MainWindow(QMainWindow):
         """Method in ui_main_methods.py."""
         ui_main_methods.refresh_results_display(self, update_table=update_table)
 
-    def refresh_img_display(self, force_home=False):
+    def refresh_img_display(self, force_home=False, update_roi=True):
         """Method in ui_main_methods.py."""
-        ui_main_methods.refresh_img_display(self, force_home=force_home)
+        ui_main_methods.refresh_img_display(
+            self, force_home=force_home, update_roi=update_roi)
 
     def refresh_selected_table_row(self):
         """Set selected results table row to the same as image selected file."""
@@ -1109,7 +1110,7 @@ class MainWindow(QMainWindow):
         act_wizard_auto.triggered.connect(self.run_auto_wizard)
         act_dash = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}globe.png'),
-            'Refreash and show dashboard with results from automation templates', self)
+            'Refresh and show dashboard with results from automation templates', self)
         act_dash.triggered.connect(self.run_dash)
         act_rename_dcm = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}rename_dicom.png'),

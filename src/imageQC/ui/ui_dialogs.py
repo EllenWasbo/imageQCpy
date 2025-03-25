@@ -602,8 +602,9 @@ class AddArtifactsDialog(ImageQCDialog):
             self.main.refresh_results_display()
         if update_image:
             self.main.update_active_img(
-                self.main.tree_file_list.topLevelItem(self.main.gui.active_img_no))
-            self.main.refresh_img_display()
+                self.main.tree_file_list.topLevelItem(
+                    self.main.gui.active_img_no),
+                update_roi=False)
 
     def selected_image_changed(self):
         """Update when selected image change."""
@@ -883,7 +884,7 @@ class AddArtifactsDialog(ImageQCDialog):
                 apply_idxs = np.copy(all_idxs)
             else:
                 apply_idxs = [self.cbox_imgs.currentIndex()]
-            add_artifact(label, apply_idxs, self.main)
+            add_artifact(label, apply_idxs, self.main, first=True)
             self.update_applied()
 
     def view_all_artifacts(self):
@@ -1124,6 +1125,13 @@ class AddArtifactsDialog(ImageQCDialog):
         if len(new_labels) > 0:
             self.update_labels(set_text=new_labels[0])
         self.update_applied()
+
+    def reject(self):
+        """Update roi when closing dialog."""
+        self.main.update_active_img(
+            self.main.tree_file_list.topLevelItem(
+                self.main.gui.active_img_no))
+        super().reject()
 
 
 class WindowLevelEditDialog(ImageQCDialog):

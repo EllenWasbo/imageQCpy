@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when major changes, B when new exe release (to come),
 #   C new python release (or small fix to exe)
-VERSION = '3.1.16'
+VERSION = '3.1.17'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -311,12 +311,12 @@ HEADERS = {
                 'New calibration factor']
             },
         'Rec': {
-            'alt0': [f'Avg {i+1}' for i in range(6)] + ['background'],
-            'alt1': [f'Max {i+1}' for i in range(6)] + ['background'],
-            'alt2': [f'Peak {i+1}' for i in range(6)] + ['background'],
-            'alt3': [f'Avg {i+1}' for i in range(6)] + ['background'],
-            'alt4': [f'Max {i+1}' for i in range(6)] + ['background'],
-            'alt5': [f'Peak {i+1}' for i in range(6)] + ['background']
+            'alt0': [f'Avg {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
+            'alt1': [f'Max {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
+            'alt2': [f'Peak {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
+            'alt3': [f'Avg {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
+            'alt4': [f'Max {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
+            'alt5': [f'Peak {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
             },
         'MTF': {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],

@@ -5,166 +5,154 @@ Collection of methods for phantom-specific calculations xray.
 @author: ellen
 """
 import numpy as np
+from scipy import ndimage
 from scipy.signal import fftconvolve
 from skimage.transform import hough_circle, hough_circle_peaks, resize
-from skimage import feature
+from skimage import feature, filters
 
 
 # imageQC block start
-from imageQC.scripts.calculate_roi import get_roi_circle
+from imageQC.scripts.calculate_roi import (
+    get_roi_circle, get_roi_rectangle, find_edges, find_intercepts)
 import imageQC.scripts.mini_methods_calculate as mmcalc
 # imageQC block end
 
 
-def calculate_phantom_xray(image, image_info, paramset):
+def calculate_phantom_xray(image, image_info, roi_array, paramset):
     if paramset.pha_alt == 0:
-        res = calculate_tor(image, image_info, paramset)
+        res = calculate_tor(image, image_info, roi_array, paramset)
     return res
 
 
-def calculate_tor(image, image_info, paramset):
+def calculate_tor(image, image_info, roi_array, paramset):
     details_dict = {}
     errmsgs = None
     values = []
-
-    # thresholding variance image to detect phantom using hough transform
     pix = image_info.pix[0]
-    roi_sz = 5. // pix
-    roi_sz = round(np.max([3, roi_sz]))
-    kernel = np.full((roi_sz, roi_sz), 1./(roi_sz ** 2))
-    mu = fftconvolve(image, kernel, mode='valid')
-    ii = fftconvolve(image ** 2, kernel, mode='valid')
-    variance_image = ii - mu**2
+
+    image_center = image*roi_array
+    rows = np.max(roi_array, axis=1)
+    cols = np.max(roi_array, axis=0)
+    image_center = image[rows][:, cols]
+    image_filt = ndimage.gaussian_filter(image_center, sigma=2./pix)
+    res = find_center_object(image, mask_outer=0, tolerances_width=[None, None], sigma=0)
+    cx, cy, wx, wy = res
+    breakpoint()
+
+    # finding edges in image to detect phantom using hough transform
+    '''
+    edge_image = filters.sobel(image)
+    binary = np.zeros(image.shape, dtype=bool)
+    binary[edge_image > 0.1*np.max(edge_image)] = True
+
+    bin_reduced = resize(
+        binary, (image.shape[0]//dscale, image.shape[1] //dscale))
     # resize to speed up hough transform
-    dscale = 5
-    var = resize(
-        variance_image, (image.shape[0]//dscale, image.shape[1] //dscale))
-    binary = np.zeros(var.shape, dtype=bool)
-    threshold = 0.1 * np.max(var)
-    binary[var > threshold] = True
-    radius_phantom = 77 / (pix * dscale)  # radius of phantom circle approx 77nn
-    # also long axis of rectangle with line-pairs same
+    radius_phantom = 77 / (pix * dscale)  # radius of phantom circle approx 77mm
+
     hough_radii = np.linspace(radius_phantom*0.9, radius_phantom*1.1, num=9)
-    hough_res = hough_circle(binary, hough_radii)
+    hough_res = hough_circle(bin_reduced, hough_radii)
     accums, cx, cy, radi = hough_circle_peaks(
-        hough_res, hough_radii, total_num_peaks=3)
-    
-    if accums > 0.7:  # assume circle found
+        hough_res, hough_radii, total_num_peaks=1)
+    cx = cx[0]
+    cy = cy[0]
+
+    if accums[0] > 0.7:  # assume circle found
         dx_dy = (
-            dscale * (cx - var.shape[1] / 2),
-            dscale * (cy - var.shape[0] / 2))
+            dscale * (cx - bin_reduced.shape[1] / 2),
+            dscale * (cy - bin_reduced.shape[0] / 2))
         roi_circle = get_roi_circle(image.shape, dx_dy, radi * dscale)
     else:
-        cx = var.shape[1] / 2
-        cy = var.shape[0] / 2
+        dx_dy = (0, 0)
 
-    sub_corners = binary[
-        round(cy - radius_phantom / 2):round(cy + radius_phantom / 2),
-        round(cx - radius_phantom / 2):round(cx + radius_phantom / 2)]
-    
+    dd = round(80 / pix / 2)  # 8x8cm distance to offset
+    cx = round(dx_dy[0]) - image.shape[1] // 2
+    cy = round(dx_dy[1]) - image.shape[0] // 2
+
+    min_dist = round(10. / pix)
+    lines = find_edges(binary_center, 2, [45-30, 45+30], 0.5, min_dist)
+    lines2 = find_edges(binary_center, 2, [-45-30, -45+30], 0.5, min_dist)
+    corners_xy = find_intercepts(lines, lines2)
+    breakpoint()
+    # remove corners outside bin_sub
+    corners_xy = [x for x in corners_xy if np.all(
+        [np.min(x) > 0,  x[0] < bin_sub.shape[1], x[1] < bin_sub.shape[0]])]
+    if len(corners_xy) == 4:
+        xs, ys = zip(*corners_xy)
+        cx_sub = np.mean(xs)
+        cy_sub = np.mean(ys)
+
+        corners_xy.sort(key=lambda x: x[1])
+        xs, ys = zip(*corners_xy)
+        top = [xs[0], ys[0]]
+        btm = [xs[-1], ys[-1]]
+        corners_xy.sort(key=lambda x: x[0])
+        xs, ys = zip(*corners_xy)
+        lft = [xs[0], ys[0]]
+        rgt = [xs[-1], ys[-1]]
+
+        points = [top, rgt, btm, lft, top]
+        angles = [[], []]
+        widths = [[], []]
+        angles_widths_1 = []
+        for i in range(len(points) - 1):
+            angle = np.rad2deg(np.arctan(
+                (points[i+1][1] - points[i][1]) /
+                (points[i+1][0] - points[i][0])))
+            width = np.sqrt(
+                (points[i+1][1] - points[i][1])**2 +
+                (points[i+1][0] - points[i][0])**2)
+            angles[i % 2].append(angle)
+            widths[i % 2].append(width)
+
+        off_center_xy = (cx_sub - bin_sub.shape[1] // 2,
+                         cy_sub - bin_sub.shape[0] // 2)
+        roi_rect = get_roi_rectangle(
+            bin_sub.shape,
+            roi_width=np.mean(widths[0]), roi_height=np.mean(widths[1]),
+            offcenter_xy=off_center_xy)
+        roi = mmcalc.rotate2d_offcenter(
+            roi_rect.astype(float), -np.mean(angles[0]), off_center_xy)
+        roi = np.round(roi)
+        roi_center = np.array(roi, dtype=bool)
+
+        image_sub = image[cy - dd:cy + dd, cx - dd:cx + dd] * roi_center
+        image_sub_rot = mmcalc.rotate2d_offcenter(
+            image_sub, np.mean(angles[0]), off_center_xy)
+        rows = np.max(roi_rect, axis=1)
+        cols = np.max(roi_rect, axis=0)
+        image_center = image_sub_rot[rows][:, cols]
+        if image_center.shape[1] < image_center.shape[0]:
+            image_center = np.rot90(image_center, k=1)
+        dd = int(0.2 * image_center.shape[1])
+        margin = dd // 4
+        profile1 = np.mean(image_center[:, dd-margin:dd+margin], axis=1)
+        profile2 = np.mean(image_center[:, -dd-margin:-dd+margin], axis=1)
+        range1 = np.max(profile1) - np.min(profile1)
+        range2 = np.max(profile2) - np.min(profile2)
+        sz = profile1.size
+        if range1 > range2:
+            image_center = np.fliplr(image_center)
+            prof = profile1
+        else:
+            prof = profile2
+        rangeU = np.max(prof[:sz // 2]) - np.min(prof[:sz // 2])
+        rangeD = np.max(prof[sz // 2:]) - np.min(prof[sz // 2:])
+        if rangeU > rangeD:
+            image_center = np.flipud(image_center)
+        profile1 = np.mean(image_center[:, dd-margin:dd+margin], axis=1)
+        profile2 = np.mean(image_center[:, dd*2-margin:dd*2+margin], axis=1)
+        profile3 = np.mean(image_center[:, dd*3-margin:dd*3+margin], axis=1)
+        profile_ref = np.mean(image_center[:, dd*4:dd*4+margin*2], axis=1)
+        range_ref = (np.mean(profile_ref[dd-margin:dd+margin]) -
+                     np.mean(profile_ref[dd*2-margin:dd*2+margin]))
+        
+        breakpoint()
+    #from matplotlib.lines import AxLine
+    #plt.gca().add_artist(AxLine(lines[0][0], None, lines[0][1], color='r'))
 
     # roi_array[0] = framed MTF central part, rotation
     # roi_array[1] = list of center MTF parts
     # roi_array[2] = list of center low contrast parts
+    '''
     return (details_dict, values, errmsgs)
-
-
-def find_rectangle_object(image_binary, min_dist=0):
-    """Detect rectangle in image.
-
-    Parameters
-    ----------
-    image_binary : np.array
-    min_dist: int
-        minimum distance between corners
-
-    Returns
-    -------
-    dict:
-        centers_of_edges_xy : list of list
-            for each edge (top, right, btm, left) [x, y]
-            longest/most central edge if not full rect in image
-        corners_xy : list of list
-            [toplft, toprgt, btmrgt, btmlft] [x, y]
-            None if not 4 corners
-    """
-    centers_of_edges_xy = None
-    corners_xy = None
-
-    corn = feature.corner_peaks(
-        feature.corner_fast(image_binary, 10),
-        min_distance=min_dist
-        )
-
-    '''
-    if corn.shape[1] != 2 or corn.shape[0] != 4:  # try negative high signal
-        if corn.shape[1] != 2:
-            image_binary = np.logical_not(image_binary).astype(int)
-        else:  # corn.shape[0] != 4
-            image_binary = np.zeros(image.shape)
-            image_binary[image < threshold] = 1.
-            image_binary[inside == False] = 1.
-        corn = feature.corner_peaks(
-            feature.corner_fast(image_binary, 10),
-            min_distance=10
-            )
-
-    if corn.shape[1] == 2:
-        ys = np.array([c[0] for c in corn])
-        xs = np.array([c[1] for c in corn])
-        if corn.shape[0] == 4:
-            # sort corners in toplft, toprgt, btmrgt, btmlft
-            # first sort top to btm
-            ys_sortidx = np.argsort(ys)
-            ys_sort = ys[ys_sortidx]
-            xs_sort = xs[ys_sortidx]
-            # top lft to rgt
-            if xs_sort[0] > xs_sort[1]:
-                xs_sort = np.append(np.flip(xs_sort[:2]), xs_sort[2:])
-                ys_sort = np.append(np.flip(ys_sort[:2]), ys_sort[2:])
-            # btm rgt to lft
-            if xs_sort[3] > xs_sort[2]:
-                xs_sort = np.append(xs_sort[:2], np.flip(xs_sort[2:]))
-                ys_sort = np.append(ys_sort[:2], np.flip(ys_sort[2:]))
-
-            xs_diff = np.diff(np.append(xs_sort, xs_sort[0]))
-            ys_diff = np.diff(np.append(ys_sort, ys_sort[0]))
-
-            centers_of_edges_xy = [
-                [xs_sort[i] + xs_diff[i] // 2, ys_sort[i] + ys_diff[i] // 2]
-                for i in range(4)
-                ]
-
-            corners_xy = [[xs_sort[i], ys_sort[i]] for i in range(xs_sort.size)]
-        else:
-            # try fwhm method - assume square (for now)
-            try:
-                center_x, center_y, width_x, width_y = mmcalc.optimize_center(
-                    image, mask_outer=0.05*image.shape[0])
-                y0 = round(center_y)
-                y1 = round(center_y + 0.1*width_y)
-                center_y0_y1 = []
-                for yval in [y0, y1]:
-                    profile = image[yval]
-                    _, center = mmcalc.get_width_center_at_threshold(
-                        profile, 0.5*(np.max(profile) + np.min(profile)))
-                    center_y0_y1.append(center)
-                if None not in center_y0_y1:
-                    tan_angle = (center_y0_y1[1] - center_y0_y1[0])/(y1-y0)
-                    angle = np.arctan(tan_angle)
-                    w_square = width_x * np.cos(angle)
-                    centers_of_edges_xy = []
-                    rot_angles = np.pi/2 * np.arange(4) - np.pi - angle
-                    for i in rot_angles:
-                        x, y = mmcalc.rotate_point(
-                            [center_x + w_square//2, center_y],
-                            [center_x, center_y], np.rad2deg(i))
-                        centers_of_edges_xy.append([x, y])
-            except TypeError:
-                pass
-
-    # TODO find edges also if full rectangle not imag-ed
-    '''
-
-    return {'centers_of_edges_xy': centers_of_edges_xy,
-            'corners_xy': corners_xy}

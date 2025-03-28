@@ -1729,14 +1729,16 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         if image2d is None:
             res = Results(headers=headers)#, headers_sup=headers_sup)
         else:
+            '''
             if roi_array is None:
                 sub = image2d
             else:
                 rows = np.max(roi_array, axis=1)
                 cols = np.max(roi_array, axis=0)
                 sub = image2d[rows][:, cols]
+            '''
             details_dict, values, errmsgs = calculate_phantom_xray(
-                image2d, image_info, paramset)
+                image2d, image_info, roi_array, paramset)
 
             res = Results(
                 headers=headers, values=values,
@@ -2845,6 +2847,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 errmsgs.append(
                     f'Failed summing images. {str(err)} Calculation aborted.')
                 proceed = False
+            except TypeError:
+                errmsgs.append(
+                    'Failed finding expected image content. Calculation aborted.')
+                proceed = False
 
         if proceed:
             # find z-profile of first background roi
@@ -2910,19 +2916,22 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 start_slice_bg = start_slice
                 stop_slice_bg = stop_slice
             background_values = []
+            background_values_std = []
             for i in range(start_slice_bg, stop_slice_bg + 1):
                 if matrix_used[i] is not None:
                     for background_roi in roi_array[:-1]:
                         arr = np.ma.masked_array(
                             matrix_used[i], mask=np.invert(background_roi))
                         background_values.append(np.mean(arr))
+                        background_values_std.append(np.std(arr))
             background_value = np.mean(background_values)
-            details_dict['background_values'] = background_values
+            background_value_std = np.mean(background_values_std)
 
             # calculate sphere values
             res_dict, errmsg = calculate_recovery_curve(
                 matrix_used[start_slice:stop_slice], input_main.imgs[0],
-                roi_array[-1], zpos_sph, paramset, background_value)
+                roi_array[-1], zpos_sph, paramset, 
+                background_value, background_value_std)
             if errmsg is not None:
                 errmsgs.append(errmsg)
             n_spheres = len(paramset.rec_sphere_diameters)
@@ -2958,7 +2967,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 else:
                     rc_values = [None for i in range(n_spheres + 1)]
                     rc_values_all = [rc_values for i in range(3)]
-                    rec_type = rec_type + 3  # image values, not RC values
+                    if rec_type < 3:
+                        rec_type = rec_type + 3  # image values, not RC values
                     headers = copy.deepcopy(
                         HEADERS[modality][test_code]['alt' + str(rec_type)])
                     try:
@@ -4073,7 +4083,8 @@ def calculate_NM_sweep(matrix, img_infos, roi_array, paramset):
     return (details_dicts, errmsgs)
 
 
-def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, background):
+def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset,
+                             background, background_std):
     """Find spheres and calculculate recovery curve values.
 
     Parameters
@@ -4089,15 +4100,17 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
     paramset : cfc.ParamsetPET
     background : float
         found pixel value for background activity
+    background_value_std: float
+        found average std for background
 
     Returns
     -------
     details_dict : dict
         DESCRIPTION.
         'values': [
-            avg_values + [background],
-            max_values + [background],
-            peak_values + [background]
+            avg_values + [background, background_std],
+            max_values + [background, background_std],
+            peak_values + [background, background_std],
             ],
         'roi_spheres': list of foud rois representing the spheres,
         'roi_peaks': list of found rois representing the peak 1ccs
@@ -4144,15 +4157,16 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
             else:
                 peaks_pos = peaks_pos[1:]
         order_peaks = np.argsort(prof[peaks_pos])
+        angs_ordered = angs[peaks_pos][order_peaks]
 
-        tan_angles = np.tan(angs[peaks_pos])
-        for i, order in enumerate(order_peaks):
-            pos_x = dist / np.sqrt(1 + tan_angles[i]**2)
-            this_ang = angs[peaks_pos[i]]
+        tan_angles = np.tan(angs_ordered)
+        for i, tan_ang in enumerate(tan_angles):
+            pos_x = dist / np.sqrt(1 + tan_ang**2)
+            this_ang = angs_ordered[i]
             if this_ang > np.pi/2 and this_ang < 3*np.pi/2:
                 pos_x = - pos_x
-            pos_y = - pos_x * tan_angles[i]
-            roi_dx_dy[order] = (pos_x + dx, pos_y + dy)
+            pos_y = - pos_x * tan_ang
+            roi_dx_dy[i] = (pos_x + dx, pos_y + dy)
 
         # smooth matrix by 1cc spheres for peak-values
         radius_1cc = 10 * (3 / (4 * np.pi)) ** (1/3)
@@ -4253,9 +4267,9 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset, backg
 
         details_dict = {
             'values': [
-                avg_values + [background],
-                max_values + [background],
-                peak_values + [background]
+                avg_values + [background, background_std],
+                max_values + [background, background_std],
+                peak_values + [background, background_std],
                 ],
             'roi_spheres': roi_spheres,
             'roi_peaks': roi_peaks

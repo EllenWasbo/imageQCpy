@@ -419,6 +419,26 @@ def test_Xray_Foc():
     values = np.round(np.array(input_main.results['Foc']['values'][0]))
     assert np.array_equal(values, np.array([85.,  2., 76., 47.,  2.,  1.]))
 
+def test_Xray_Pha():
+    input_main = InputMain(
+        current_modality='Xray',
+        current_test='Pha',
+        current_paramset=cfc.ParamSetXray(),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['Pha']]),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = Path(r'C:\Users\ellen\CloudStation\ImageQCpy\DemoBilder\DemoBilder\Leeds\20221010_113330.005_80_.dcm')
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    breakpoint()
+    values = np.round(np.array(input_main.results['Pha']['values'][0]))
+    assert np.array_equal(values, np.array([85.,  2., 76., 47.,  2.,  1.]))
+
 def test_Xray_Def():
     input_main = InputMain(
         current_modality='Xray',

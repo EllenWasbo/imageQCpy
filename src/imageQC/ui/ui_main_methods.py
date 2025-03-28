@@ -114,7 +114,7 @@ def refresh_img_display(main, force_home=False, update_roi=True):
             pass
         except IndexError:  # maybe after closing images
             main.wid_image_display.canvas.img_is_missing()
-        if update_roi:
+        if update_roi is not False:
             main.update_roi()
     else:
         main.wid_image_display.canvas.img_is_missing()

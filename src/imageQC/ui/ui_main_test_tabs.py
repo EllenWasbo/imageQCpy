@@ -474,6 +474,30 @@ class ParamsTabCommon(QTabWidget):
                 if res:
                     new_values = dlg.get_values()
                     contents = [new_values]
+        elif self.main.current_test == 'Rec':
+            attributes = ['rec_sphere_dist', 'rec_sphere_diameters']
+            vals = [self.main.current_paramset.rec_sphere_dist]
+            vals = vals + self.main.current_paramset.rec_sphere_diameters
+            info_widget_pairs = [
+                ('Distance from center to sphere centers (mm)',
+                 QDoubleSpinBox(
+                    decimals=0, minimum=1, maximum=300, singleStep=1,
+                    value=vals[0]))]
+            n_diam = len(self.main.current_paramset.rec_sphere_diameters)
+            for i, diam in enumerate(
+                    self.main.current_paramset.rec_sphere_diameters):
+                info_widget_pairs.append(
+                    (f'Sphere diameter {n_diam-i} (mm)',
+                     QDoubleSpinBox(
+                         decimals=1, minimum=0.10, singleStep=1.,
+                         value=vals[i+1])))
+
+            dlg = EditParamsetValues(info_widget_pairs)
+            res = dlg.exec()
+            if res:
+                new_values = dlg.get_values()
+                contents = [new_values[0], new_values[1:]]
+            
         if len(contents) > 0:
             for i, attribute in enumerate(attributes):
                 self.param_changed_from_gui(
@@ -3551,6 +3575,10 @@ class ParamsTabPET(ParamsTabCommon):
         hlo_avg_perc.addWidget(QLabel('Average in sphere within threshold (%)'))
         hlo_avg_perc.addWidget(self.rec_sphere_percent)
         hlo_avg_perc.addWidget(uir.InfoTool(info_txt, parent=self.main))
+        rec_details = uir.ToolBarDots(
+            tooltip='More adjustable details...')
+        rec_details.act_details.triggered.connect(self.edit_details)
+        hlo_avg_perc.addWidget(rec_details)
         vlo_right.addLayout(hlo_avg_perc)
 
         vlo_right.addWidget(uir.LabelHeader('Background ROIs', 3))

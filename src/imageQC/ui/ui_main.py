@@ -431,6 +431,8 @@ class MainWindow(QMainWindow):
                 self.imgs[self.gui.active_img_no].info_list_general,
                 self.imgs[self.gui.active_img_no].info_list_modality)
 
+            if update_roi is not False:
+                update_roi = True
             self.refresh_img_display(update_roi=update_roi)
             self.refresh_results_display(update_table=False)
             self.refresh_selected_table_row()

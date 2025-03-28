@@ -497,7 +497,6 @@ class ImageCanvas(GenericImageCanvas):
 
     def CDM(self):
         """Draw found lines."""
-        #self.remove_annotations()
         if self.main.current_roi is not None:
             center_xs = self.main.current_roi['xs']
             center_ys = self.main.current_roi['ys']
@@ -1573,13 +1572,13 @@ class ResultImageCanvas(GenericImageCanvas):
         if self.main.current_paramset.uni_sum_first:
             try:
                 details_dict = self.main.results['Uni']['details_dict'][0]
-            except KeyError:
+            except (KeyError, IndexError):
                 details_dict = {}
         else:
             try:
                 details_dict = self.main.results['Uni']['details_dict'][
                     self.main.gui.active_img_no]
-            except KeyError:
+            except (KeyError, IndexError):
                 details_dict = {}
         self.cmap = 'viridis'
         if sel_text == '':

@@ -23,7 +23,7 @@ def get_rois(image, image_number, input_main):
     The inner functions pr testcode should return either
     roi_array or
     (roi_array, errmsg)
-    Ther roi_array should either be a numpy 2d.array or a list of numpy 2d.arrays.
+    The roi_array should either be a numpy 2d.array or a list of numpy 2d.arrays.
 
     Parameters
     ----------
@@ -479,6 +479,7 @@ def get_rois(image, image_number, input_main):
                 except (KeyError, AttributeError, IndexError):
                     pass
         if roi_this is None:
+            '''
             roi_mask_outer = None
             if paramset.pha_mask_outer_mm > 0:
                 roi_mask_outer = np.full(image_info.shape[0:2], False)
@@ -486,6 +487,10 @@ def get_rois(image, image_number, input_main):
                 if n_pix > 0:
                     roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
             roi_this = roi_mask_outer
+            '''
+            roi_size_in_pix = 50. / image_info.pix[0]
+            roi_this = get_roi_circle(img_shape, (delta_xya[0], delta_xya[1]),
+                                      roi_size_in_pix)
         return roi_this
 
     def PIU():  # MR
@@ -1824,7 +1829,7 @@ def find_intercepts(lines, lines2):
 
 
 def find_rectangle_object(image, mask_outer=0, pix=1.,
-                          thresholds=[25., 0.1, 10., 0.5, 0.7]):
+                          thresholds=[25., 0.1, 10., 0.5]):
     
     """Detect rectangle in image.
 
@@ -1842,7 +1847,6 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
         roi_size fraction of min_size
         max/mean variance threshold
         threshold (fraction) for finding peaks
-        threshold (fraction) for finding lines
 
     Returns
     -------
@@ -1904,13 +1908,11 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
             corners_xy = find_intercepts(lines, lines2)
             if len(corners_xy) == 4:
                 corners_xy.sort(key=lambda x: x[1])
-                xs = [x[0] for x in corners_xy]
-                ys = [x[1] for x in corners_xy]
+                xs, ys = zip(*corners_xy)
                 top = [np.mean(xs[0:2]), np.mean(ys[0:2])]
                 btm = [np.mean(xs[2:]), np.mean(ys[2:])]
                 corners_xy.sort(key=lambda x: x[0])
-                xs = [x[0] for x in corners_xy]
-                ys = [x[1] for x in corners_xy]
+                xs, ys = zip(*corners_xy)
                 lft = [np.mean(xs[0:2]), np.mean(ys[0:2])]
                 rgt = [np.mean(xs[2:]), np.mean(ys[2:])]
                 centers_of_edges_xy = [top, rgt, btm, lft]

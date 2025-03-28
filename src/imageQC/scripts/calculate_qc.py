@@ -2961,7 +2961,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     for i in range(3):
                         img_values = np.array(details_dict['values'][i])
                         rc_values = img_values[:n_spheres] / sph_act_at_scan
-                        rc_values = list(rc_values) + [img_values[-1] / bg_act_at_scan]
+                        rc_values = list(rc_values) + [img_values[-2] / bg_act_at_scan]
                         rc_values_all.append(rc_values)
                     values_sup = [scan_start, sph_act_at_scan, bg_act_at_scan]
                 else:

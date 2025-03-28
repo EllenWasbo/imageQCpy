@@ -2,7 +2,7 @@
 _Mar 28, 2025_
 
 Test PET/Recovery curve:
-- Added background standard deviation to the table of results to facilitate option to calculate CNR or SNR
+- Added background standard deviation to the table of results with Bq/mL to facilitate option to calculate CNR or SNR
 - Added option (button with dots ...) to adjust expected distance from center to spheres and sphere diameters
 	- The diameter is used to set the radius of the search VOI for each sphere and when plotting (setting the x-axis).
 	- If diameters not equal to the EARL diameters, EARL-tolerances will not be shown.

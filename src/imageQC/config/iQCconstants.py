@@ -311,9 +311,9 @@ HEADERS = {
                 'New calibration factor']
             },
         'Rec': {
-            'alt0': [f'Avg {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
-            'alt1': [f'Max {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
-            'alt2': [f'Peak {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
+            'alt0': [f'Avg {i+1}' for i in range(6)] + ['Avg backgr'],
+            'alt1': [f'Max {i+1}' for i in range(6)] + ['Avg backgr'],
+            'alt2': [f'Peak {i+1}' for i in range(6)] + ['Avg backgr'],
             'alt3': [f'Avg {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
             'alt4': [f'Max {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
             'alt5': [f'Peak {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],

@@ -1904,9 +1904,11 @@ class ResultPlotCanvas(PlotCanvas):
             rec_types = [wid_rec_type.itemText(i) for i
                          in range(wid_rec_type.count())]
             rec_type = rec_types.index(sel_text)
+            subtr = -1 if rec_type < 3 else -2
             self.curves.append(
                 {'label': 'measured values', 'xvals': roi_sizes,
-                 'yvals': details_dict['values'][rec_type][:-2], 'style': '-bo'})
+                 'yvals': details_dict['values'][rec_type][:subtr], 'style': '-bo'})
+
             if rec_type < 3:
                 self.ytitle = 'Recovery coefficient'
                 idx = test_widget.rec_earl.currentIndex()

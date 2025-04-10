@@ -1,5 +1,12 @@
+# v3.1.19
+_Apr 10, 2025_
+
+Test PET/Recovery curves:
+- Fixed error in code where background supposed to be calculated from all selected background slices, but in fact only those selected for sphere calculations were used
+- Fixed issue when dataset is cut such thatthe used slices for the spheres is not centered on the largest sphere. Now ROIs placed based on center of spheres, not center of slices used for the spheres.
+
 # v3.1.18
-_Apr 08, 2025_
+_Apr 10, 2025_
 
 Test NM/SNI:
 - Avoided crash with ROI size (method grid) <= 2 times full area dimension.

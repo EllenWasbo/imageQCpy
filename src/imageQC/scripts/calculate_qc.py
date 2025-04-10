@@ -2871,6 +2871,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             # find slices to include based on z-profile of background
             avgs_bg = np.copy(avgs)
             zpos_bg = np.copy(zpos)
+            start_slice_bg, stop_slice_bg = 0, sort_idx.size - 1
             if paramset.rec_auto_select_slices:
                 if avgs[0] < max(avgs)/2 and avgs[-1] < max(avgs)/2:
                     width, center = mmcalc.get_width_center_at_threshold(
@@ -2882,10 +2883,10 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     else:
                         center_slice = round(center)
                         width = 0.01 * width * paramset.rec_percent_slices
-                        start_slice = center_slice - round(width/2)
-                        stop_slice = center_slice + round(width/2)
-                        avgs_bg = avgs_bg[start_slice:stop_slice + 1]
-                        zpos_bg = zpos_bg[start_slice:stop_slice + 1]
+                        start_slice_bg = center_slice - round(width/2)
+                        stop_slice_bg = center_slice + round(width/2)
+                        avgs_bg = avgs_bg[start_slice_bg:stop_slice_bg + 1]
+                        zpos_bg = zpos_bg[start_slice_bg:stop_slice_bg + 1]
                 else:
                     errmsgs.append('Outer slices have average above half max. '
                                    'Auto select slice ignored. '
@@ -2893,36 +2894,11 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             details_dict['used_roi_averages'] = avgs_bg
             details_dict['used_zpos'] = zpos_bg
 
-            # find slices with spheres
             matrix_used = []
             for idx in sort_idx:
                 matrix_used.append(matrix[idx])
-            maxs = [np.max(image) for image in matrix_used]
-            prof_max = np.array(maxs) - np.min(maxs)
-            width, center = mmcalc.get_width_center_at_threshold(prof_max)
-            if center is None:
-                errmsgs.append('Could not find slices with spheres.')
-                max_idx = np.where(maxs == np.max(maxs))[0]
-            else:
-                max_idx = int(np.round(center))
-            zpos_max = zpos[max_idx]
-            diff_z = np.abs(zpos - zpos_max)
-            idxs = np.where(diff_z < paramset.rec_sphere_diameters[-1])  # largest diam
-            start_slice = np.min(idxs)
-            stop_slice = np.max(idxs)
-            maxs_sph = maxs[start_slice:stop_slice]
-            zpos_sph = zpos[start_slice:stop_slice]
-            details_dict['used_roi_maxs'] = maxs_sph
-            details_dict['used_zpos_spheres'] = zpos_sph
-            details_dict['max_slice_idx'] = np.where(zpos == zpos_max)[0][0]
-
+    
             # get background from each roi
-            if paramset.rec_background_full_phantom:
-                start_slice_bg = 0
-                stop_slice_bg = len(matrix_used) - 1
-            else:
-                start_slice_bg = start_slice
-                stop_slice_bg = stop_slice
             background_values = []
             background_values_std = []
             for i in range(start_slice_bg, stop_slice_bg + 1):
@@ -2935,10 +2911,30 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             background_value = np.mean(background_values)
             background_value_std = np.mean(background_values_std)
 
+            # find slices with spheres
+            maxs = [np.max(image) for image in matrix_used]
+            maxs_bg = maxs[start_slice_bg:stop_slice_bg + 1]
+            prof_max = np.array(maxs_bg) - np.min(maxs_bg)
+            width, center = mmcalc.get_width_center_at_threshold(prof_max)
+            if center is None:
+                max_idx = np.where(maxs == np.max(maxs))[0]
+            else:
+                max_idx = int(np.round(center)) + start_slice_bg
+            zpos_max = zpos[max_idx]
+            diff_z = np.abs(zpos - zpos_max)
+            idxs = np.where(diff_z < paramset.rec_sphere_diameters[-1])  # largest diam
+            start_slice = np.min(idxs)
+            stop_slice = np.max(idxs)
+            maxs_sph = maxs[start_slice:stop_slice + 1]
+            zpos_sph = zpos[start_slice:stop_slice + 1]
+            details_dict['used_roi_maxs'] = maxs_sph
+            details_dict['used_zpos_spheres'] = zpos_sph
+            details_dict['max_slice_idx'] = np.where(zpos == zpos_max)[0][0]
+
             # calculate sphere values
             res_dict, errmsg = calculate_recovery_curve(
                 matrix_used[start_slice:stop_slice], input_main.imgs[0],
-                roi_array[-1], zpos_sph, paramset, 
+                roi_array[-1], zpos_sph, zpos_max, paramset,
                 background_value, background_value_std)
             if errmsg is not None:
                 errmsgs.append(errmsg)
@@ -4092,8 +4088,8 @@ def calculate_NM_sweep(matrix, img_infos, roi_array, paramset):
     return (details_dicts, errmsgs)
 
 
-def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset,
-                             background, background_std):
+def calculate_recovery_curve(matrix, img_info, center_roi, zpos, zpos_center,
+                             paramset, background, background_std):
     """Find spheres and calculculate recovery curve values.
 
     Parameters
@@ -4106,6 +4102,8 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset,
         bool array with circular roi at found center
     zpos : np.array
         zpos for each slice in input matrix
+    zpos_center : float
+        zpos of found center of spheres
     paramset : cfc.ParamsetPET
     background : float
         found pixel value for background activity
@@ -4200,7 +4198,7 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset,
         # for each sphere - get spheric roi
         roi_radii = np.array(paramset.rec_sphere_diameters)  # search radius=Ø
         roi_radii[0] = roi_radii[1]  # smallest a bit extra margin
-        zpos_center = zpos[len(zpos) // 2]
+        #zpos_center = zpos[len(zpos) // 2]
         zpos_diff = np.abs(zpos - zpos_center)
         roi_spheres = []
         roi_peaks = []

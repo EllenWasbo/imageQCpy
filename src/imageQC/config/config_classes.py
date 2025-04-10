@@ -634,7 +634,6 @@ class ParamSetPET(ParamSetCommon):
     rec_roi_size: float = 20.
     rec_type: int = 0  # 0 = RC avg, 1 = RC max, 2 = RC peak, 3,4,5 Bq/mL avg,max,peak
     rec_auto_select_slices: bool = True
-    rec_background_full_phantom: bool = False
     rec_percent_slices: int = 90  # % within fwhm of background profile to include
     rec_table: RecTable = field(default_factory=RecTable)
     rec_sphere_diameters: list[float] = field(

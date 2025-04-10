@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "find_rectangle_object"
+search_string = "rec_background_full_phantom"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

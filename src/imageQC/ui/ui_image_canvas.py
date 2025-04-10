@@ -883,27 +883,31 @@ class ImageCanvas(GenericImageCanvas):
                                      f'S{i+1}',
                                      fontsize=self.fontsize, color=colors)
         elif self.main.current_paramset.sni_type in [1, 2]:
-            for row, col in [
-                    (small_start_idx, 0),
-                    (small_start_idx+1, 1), (-2, -2), (-1, -1)]:
-                mask = np.where(self.main.current_roi[row][col], 0, 1)
-                self.contours.append(
-                    self.ax.contourf(mask, levels=[0, 0.5], colors='red', alpha=0.3))
-                if show_labels:
-                    mask_pos = np.where(mask == 0)
-                    xmin = np.min(mask_pos[1])
-                    xmean = np.mean(mask_pos[1])
-                    xpos = int(0.75*xmin + 0.25*xmean)
-                    ypos = np.mean(mask_pos[0]) + 2
-                    if np.isfinite(xpos) and np.isfinite(ypos):
-                        colno = col
-                        rowno = row
-                        if col < 0:
-                            colno = len(self.main.current_roi[row]) + col
-                        if row < 0:
-                            rowno = len(self.main.current_roi) + row
-                        self.ax.text(xpos, ypos, f'r{rowno-small_start_idx}_c{colno}',
-                                     fontsize=self.fontsize, color='k')
+            try:
+                for row, col in [
+                        (small_start_idx, 0),
+                        (small_start_idx+1, 1), (-2, -2), (-1, -1)]:
+                    mask = np.where(self.main.current_roi[row][col], 0, 1)
+                    self.contours.append(
+                        self.ax.contourf(mask, levels=[0, 0.5], colors='red', alpha=0.3))
+                    if show_labels:
+                        mask_pos = np.where(mask == 0)
+                        xmin = np.min(mask_pos[1])
+                        xmean = np.mean(mask_pos[1])
+                        xpos = int(0.75*xmin + 0.25*xmean)
+                        ypos = np.mean(mask_pos[0]) + 2
+                        if np.isfinite(xpos) and np.isfinite(ypos):
+                            colno = col
+                            rowno = row
+                            
+                            if col < 0:
+                                colno = len(self.main.current_roi[row]) + col
+                            if row < 0:
+                                rowno = len(self.main.current_roi) + row
+                            self.ax.text(xpos, ypos, f'r{rowno-small_start_idx}_c{colno}',
+                                         fontsize=self.fontsize, color='k')
+            except (IndexError, TypeError):
+                pass
         else:  # 3 Siemens
             for rowno, rois_row in enumerate(self.main.current_roi[small_start_idx:]):
                 for colno, roi in enumerate(rois_row):

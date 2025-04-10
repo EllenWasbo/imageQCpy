@@ -2134,11 +2134,12 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     if roi_sz_pix < 3:
                         roi_sz_pix = 3
 
-                    kernel = np.full((roi_sz_pix, roi_sz_pix),
-                                     1./(roi_sz_pix**2))
-                    mu = sp.signal.fftconvolve(sub, kernel, mode='valid')
-                    ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='valid')
-                    variance_sub = ii - mu**2
+                    #kernel = np.full((roi_sz_pix, roi_sz_pix),
+                    #                 1./(roi_sz_pix**2))
+                    #mu = sp.signal.fftconvolve(sub, kernel, mode='valid')
+                    #ii = sp.signal.fftconvolve(sub ** 2, kernel, mode='valid')
+                    variance_sub = mmcalc.get_variance_map(
+                        sub, roi_sz_pix, 'valid')  #ii - mu**2
 
                     # mask max?
                     masked = False
@@ -2146,7 +2147,8 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     if roi_array[-1] is not None:
                         # avoid rois where masked max involved
                         grow_max = sp.signal.fftconvolve(
-                            1.*roi_array[-1], np.full(kernel.shape, 1), mode='same')
+                            1.*roi_array[-1],
+                            np.full((roi_sz_pix, roi_sz_pix), 1), mode='same')
                         max_mask = np.zeros(roi_array[-1].shape, dtype=bool)
                         max_mask[grow_max > 1] = True
 
@@ -2896,8 +2898,14 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             for idx in sort_idx:
                 matrix_used.append(matrix[idx])
             maxs = [np.max(image) for image in matrix_used]
-            max_idx = np.where(maxs == np.max(maxs))
-            zpos_max = zpos[max_idx[0]]
+            prof_max = np.array(maxs) - np.min(maxs)
+            width, center = mmcalc.get_width_center_at_threshold(prof_max)
+            if center is None:
+                errmsgs.append('Could not find slices with spheres.')
+                max_idx = np.where(maxs == np.max(maxs))[0]
+            else:
+                max_idx = int(np.round(center))
+            zpos_max = zpos[max_idx]
             diff_z = np.abs(zpos - zpos_max)
             idxs = np.where(diff_z < paramset.rec_sphere_diameters[-1])  # largest diam
             start_slice = np.min(idxs)
@@ -3935,11 +3943,12 @@ def calculate_focal_spot_size(image, roi_array, image_info, paramset):
 
             # calculate variance map to identify minima
             kernel_sz_pix = round(2. / image_info.pix[0])  # 2mm kernel
-            kernel = np.full((kernel_sz_pix, kernel_sz_pix),
-                             1./(kernel_sz_pix**2))
-            mu = sp.signal.fftconvolve(sub_crop, kernel, mode='same')
-            ii = sp.signal.fftconvolve(sub_crop ** 2, kernel, mode='same')
-            variance_crop = ii - mu**2
+            #kernel = np.full((kernel_sz_pix, kernel_sz_pix),
+            #                 1./(kernel_sz_pix**2))
+            #mu = sp.signal.fftconvolve(sub_crop, kernel, mode='same')
+            #ii = sp.signal.fftconvolve(sub_crop ** 2, kernel, mode='same')
+            variance_crop = mmcalc.get_variance_map(
+                sub_crop, kernel_sz_pix, 'same')  #ii - mu**2
             perc = np.percentile(variance_crop, 50)
             variance_crop[variance_crop > perc] = perc
 
@@ -4142,11 +4151,12 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, paramset,
             summed_img = summed_img + this_centered
 
     # get position of spheres
-    pol, (_, angs) = mmcalc.topolar(summed_img)
-    prof = np.max(pol, axis=0)
+    pol, (ax_dists, angs) = mmcalc.topolar(summed_img)
+    diff_dist = np.abs(ax_dists - dist)
+    aa = np.where(diff_dist == np.min(diff_dist))[0][0]
+    prof = np.sum(pol[aa-5:aa+5], axis=0)
     prof = prof - np.min(prof)
-    peaks = find_peaks(prof, distance=prof.shape[0]/10)
-    peaks_pos = peaks[0]
+    peaks_pos, _ = find_peaks(prof, distance=prof.shape[0]/10)
     roi_dx_dy = [(0, 0) for i in range(n_spheres)]
     if peaks_pos.shape[0] in [n_spheres, n_spheres + 1]:
         # +1 if one sphere split at 0

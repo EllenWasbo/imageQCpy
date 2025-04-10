@@ -23,7 +23,7 @@ from imageQC.config.config_func import get_config_folder
 def get_corrections_point_source(
         image2d, img_info, roi_array,
         fit_x=False, fit_y=False, lock_z=False, guess_z=0.1,
-        correction_type='multiply', estimate_noise=0):
+        correction_type='multiply'):#, estimate_noise=0):
     """Estimate xyz of point source and generate correction matrix.
 
     Parameters
@@ -68,7 +68,7 @@ def get_corrections_point_source(
     correction_matrix = np.ones(image2d.shape)
     fit_matrix = None
     distance = 0.
-    estimated_noise_images = None
+    #estimated_noise_images = None
     errmsg = None
 
     # get subarray
@@ -129,10 +129,10 @@ def get_corrections_point_source(
 
             # estimate noise
             fit_matrix = fit.reshape(image2d.shape)
-            if estimate_noise > 0:
-                rng = np.random.default_rng()
-                estimated_noise_images = [
-                    rng.poisson(fit_matrix) for i in range(estimate_noise)]
+            #if estimate_noise > 0:
+            #    rng = np.random.default_rng()
+            #    estimated_noise_images = [
+            #        rng.poisson(fit_matrix) for i in range(estimate_noise)]
 
             # correct input image
             if correction_type == 'multiply':
@@ -147,7 +147,7 @@ def get_corrections_point_source(
     return ({'corrected_image': corrected_image,
              'correction_matrix': correction_matrix,
              'fit_matrix': fit_matrix,
-             'estimated_noise_images': estimated_noise_images,
+             #'estimated_noise_images': estimated_noise_images,
              'dx': dx, 'dy': dy, 'distance': distance}, errmsg)
 
 
@@ -579,14 +579,14 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter_dict, paramset,
                 sub_estimated_noise = [fit_dict[
                     'reference_estimated_noise'][rows][:, cols]]
             else:
-                if fit_dict['estimated_noise_images'] is None:  # est = 0
-                    noise_2d = False
-                    quantum_noise = np.mean(
-                        fit_dict['fit_matrix'][rows][:,cols]) * pix**2
-                else:  # est > 0
-                    sub_estimated_noise = [
-                        noise_img[rows][:, cols] + corr_matrix
-                        for noise_img in fit_dict['estimated_noise_images']]
+                #if fit_dict['estimated_noise_images'] is None:  # est = 0
+                noise_2d = False
+                quantum_noise = np.mean(
+                    fit_dict['fit_matrix'][rows][:,cols]) * pix**2
+                #else:  # est > 0
+                #    sub_estimated_noise = [
+                #        noise_img[rows][:, cols] + corr_matrix
+                #        for noise_img in fit_dict['estimated_noise_images']]
         else:  # reference image, not point source corrected
             sub_estimated_noise = [fit_dict[
                 'reference_estimated_noise'][rows][:, cols]]
@@ -596,14 +596,14 @@ def calculate_SNI_ROI(image2d, roi_array_this, eye_filter_dict, paramset,
         NPS[line, line] = 0  # ignore extreme values as zero frequency
 
         if noise_2d:
-            if len(sub_estimated_noise) == 1:
-                quantum_noise = mmcalc.get_2d_NPS(sub_estimated_noise[0], pix)
-            else:  # multiple samples of 2d noise
-                sum_quantum_noise = np.zeros(NPS.shape)
-                for noise_sub in sub_estimated_noise:
-                    NPS_this = mmcalc.get_2d_NPS(noise_sub, pix)
-                    sum_quantum_noise = sum_quantum_noise + NPS_this
-                quantum_noise = (1/len(sub_estimated_noise)) * sum_quantum_noise
+            #if len(sub_estimated_noise) == 1:
+            quantum_noise = mmcalc.get_2d_NPS(sub_estimated_noise[0], pix)
+            #else:  # multiple samples of 2d noise
+            #    sum_quantum_noise = np.zeros(NPS.shape)
+            #    for noise_sub in sub_estimated_noise:
+            #        NPS_this = mmcalc.get_2d_NPS(noise_sub, pix)
+            #        sum_quantum_noise = sum_quantum_noise + NPS_this
+            #    quantum_noise = (1/len(sub_estimated_noise)) * sum_quantum_noise
             quantum_noise[line, line] = 0
             array_list[0] = quantum_noise
             NPS_struct = np.subtract(NPS, quantum_noise)
@@ -696,7 +696,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_noise):
 
     # point source correction
     if paramset.sni_correct:
-        est_noise = paramset.sni_n_sample_noise if reference_noise is None else 0
+        # DELETE ? est_noise = paramset.sni_n_sample_noise if reference_noise is None else 0
 
         #DELETE?
         #if reference_image is not None and paramset.sni_ref_image_fit:
@@ -709,7 +709,7 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_noise):
             fit_x=paramset.sni_correct_pos_x,
             fit_y=paramset.sni_correct_pos_y,
             lock_z=paramset.sni_lock_radius, guess_z=paramset.sni_radius,
-            correction_type='subtract', estimate_noise=est_noise
+            correction_type='subtract'#, estimate_noise=est_noise
             )
         if fit_dict:
             fit_dict.update(fit_dict_2)
@@ -739,14 +739,14 @@ def calculate_NM_SNI(image2d, roi_array, image_info, paramset, reference_noise):
                         fit_dict[key][start_y:end_y, start_x:end_x],
                         (block_size, block_size), np.sum)
                     fit_dict[key] = temp
-            key = 'estimated_noise_images'
-            if key in fit_dict:
-                if fit_dict[key] is not None:
-                    for i, noise_img in enumerate(fit_dict[key]):
-                        temp = skimage.measure.block_reduce(
-                            noise_img[start_y:end_y, start_x:end_x],
-                            (block_size, block_size), np.sum)
-                        fit_dict[key][i] = temp
+            #key = 'estimated_noise_images'
+            #if key in fit_dict:
+            #    if fit_dict[key] is not None:
+            #        for i, noise_img in enumerate(fit_dict[key]):
+            #            temp = skimage.measure.block_reduce(
+            #                noise_img[start_y:end_y, start_x:end_x],
+            #                (block_size, block_size), np.sum)
+            #            fit_dict[key][i] = temp
 
         # recalculate rois (avoid block reduce on rois, might get non-quadratic)
         roi_array, errmsg = get_roi_SNI(image2d, image_info, paramset,

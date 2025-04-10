@@ -10,6 +10,7 @@ from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter, rotate
 from scipy.ndimage import geometric_transform
 from scipy.signal import convolve2d, fftconvolve
+from skimage import filters, transform
 
 
 def get_distance_map_point(shape, center_dx=0., center_dy=0.):
@@ -439,6 +440,7 @@ def find_median_spectrum(x, y):
     median_y = y[find_median[0][0]]
     return (median_x, median_y)
 
+
 def get_average_NPS(NPS_results, normalize):
     xvals = None
     y_avg = None
@@ -785,6 +787,7 @@ def find_center_object(image, mask_outer=0, tolerances_width=[None, None], sigma
         width_y, center_y = get_width_center_at_threshold(
             prof_y, 0.5 * (np.mean(prof_y) + min(prof_y)),
             force_above=getmax)
+
         if width_x is not None and width_y is not None:
             center_x += mask_outer
             center_y += mask_outer
@@ -851,6 +854,7 @@ def rotate2d_offcenter(array2d, angle, offcenter):
     center = (offcenter[0] + arrshape[1] // 2, offcenter[1] + arrshape[0] // 2)
     pad_x = [arrshape[1] - round(center[0]), round(center[0])]
     pad_y = [arrshape[0] - round(center[1]), round(center[1])]
+    angle = round(angle)
     try:
         padded_image = np.pad(array2d, [pad_y, pad_x], 'constant')
         rotated_padded = rotate(padded_image, angle, reshape=False)
@@ -1299,3 +1303,88 @@ def get_uniformity_map(input_array, neighbour_start=1, neighbour_end=1):
 
     return uniformity_matrix
 
+
+def get_variance_map(image, roi_size_pix, mode):
+    """Calculate variance image from input image.
+
+    Parameters
+    ----------
+    image : np.2darray dtype float
+    roi_size_pix : int
+        Width of kernel in pixels
+    mode : str
+        mode input to scipy.signal.fftconvolve ('same', 'valid')
+
+    Returns
+    -------
+    variance map
+    """
+    kernel = np.full((roi_size_pix, roi_size_pix), 1./(roi_size_pix**2))
+    mu = fftconvolve(image, kernel, mode=mode)
+    ii = fftconvolve(image ** 2, kernel, mode=mode)
+
+    return ii - mu**2
+
+
+def find_circle(image, expected_radius, expected_radius_range=None, n_steps=3,
+                downscale=1., edge_method='None', binary_threshold=0.5):
+    """Find circle
+
+    Parameters
+    ----------
+    image : np.2darray
+    expected_radius : float
+        expected radius in pix
+    expected_radius_range : list of float (or None)
+        min/max expected radius to test in pixels
+    n_steps : int
+        number of radii to test within min/max range
+        ignored if min/max is None
+    downscale : float, optional
+        Downscale factor to speed up calculation. The default is 1. (no scaling).
+    edge_method : str, optional
+        'sobel' or 'None. The default is 'None'.
+    binary_threshold : float, optional
+        thresholding after edge_method used to get bynary image The default is 0.5.
+        Ignored if zero (i.e. input is binary)
+
+    Returns
+    -------
+    dx_dy : center of found circle or (0, 0)
+    found_radius: float or None
+    """
+    if edge_method == 'None':
+        edge_image = image
+    elif edge_method == 'sobel':
+        edge_image = filters.sobel(image)
+
+    binary = np.zeros(image.shape, dtype=bool)
+    binary[edge_image > binary_threshold*np.max(edge_image)] = True
+
+    if downscale != 1.:  # resize to speed up hough transform
+        bin_reduced = transform.resize(
+            binary, (image.shape[0]//downscale, image.shape[1] //downscale))
+        expected_radius = expected_radius / downscale
+        expected_radius_range = np.array(expected_radius_range) / downscale
+    else:
+        bin_reduced = binary
+
+    if expected_radius_range is not None:
+        hough_radii = np.linspace(
+            expected_radius_range[0], expected_radius_range[1], num=n_steps)
+    else:
+        hough_radii = np.array([expected_radius])
+    hough_res = transform.hough_circle(bin_reduced, hough_radii)
+    accums, cx, cy, radius = transform.hough_circle_peaks(
+        hough_res, hough_radii, total_num_peaks=1)
+
+    if accums > 0.7:  # assume circle found
+        dx_dy = (
+            downscale * (cx[0] - bin_reduced.shape[1] / 2),
+            downscale * (cy[0] - bin_reduced.shape[0] / 2))
+        found_radius = radius[0] * downscale
+    else:
+        dx_dy = (0, 0)
+        found_radius = None
+
+    return dx_dy, found_radius

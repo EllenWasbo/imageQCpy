@@ -6,9 +6,9 @@ Collection of methods for phantom-specific calculations xray.
 """
 import numpy as np
 from scipy import ndimage
-from scipy.signal import fftconvolve
+from scipy.signal import fftconvolve, find_peaks
 from skimage.transform import hough_circle, hough_circle_peaks, resize
-from skimage import feature, filters
+from skimage import feature, filters, draw
 
 
 # imageQC block start
@@ -24,135 +24,238 @@ def calculate_phantom_xray(image, image_info, roi_array, paramset):
     return res
 
 
+def get_xy_from_angles_dist(ang_list, dist):
+    """Calculate x and y from angle and distance to origin.
+
+    Parameters
+    ----------
+    ang_list : arraylike of float
+        angles in radians
+    dist : float
+        distance from center
+
+    Returns
+    -------
+    cx : np.array of x positions relative to origin
+    cy : same for y
+    """
+    tanang = np.tan(ang_list)
+    cx = dist / np.sqrt(1 + tanang**2)
+    neg_x = np.where(np.logical_and(
+        ang_list > np.pi/2, ang_list < 3*np.pi/2))
+    if neg_x.size > 0:
+        cx[neg_x] = -cx[neg_x]
+    cy = - cx * tanang
+    pos_y = np.where(np.logical_and(
+        ang_list > np.pi, ang_list < 2*np.pi))
+    if pos_y.size > 0:
+        breakpoint()
+        cy[pos_y] = -cy[pos_y]
+    return (cx, cy)
+
+
+def find_cnr_from_sub(sub, radius_disc):
+    """Locate disc and calculate avg/std of inner/outer signal to get CNR.
+
+    Parameters
+    ----------
+    sub : np.array
+        image cropped to disc + margin
+    radius_disc : float
+        expected radius of disc in sub
+
+    Returns
+    -------
+    (cnr, inner_mean, inner_std, outer_mean, outer_std)
+    """
+    res = mmcalc.find_center_object(sub, sigma=3)
+    if res:
+        cx, cy, width_x, width_y = res
+        if cx is not None and cy is not None:
+            cx, cy = (cx - sub.shape[1] / 2, cy - sub.shape[0] / 2)
+        else:
+            cx, cy = (0, 0)
+    else:
+        cx, cy = (0, 0)
+
+    dists = mmcalc.get_distance_map_point(
+        sub.shape, center_dx=cx, center_dy=cy)
+    inner = np.where(dists < radius_disc * 0.7)
+    inner_mean = np.mean(sub[inner])
+    inner_std = np.std(sub[inner])
+    
+    outer = np.where(np.logical_and(
+        dists > radius_disc * 1.2, dists < radius_disc * 1.5))
+    outer_mean = np.mean(sub[outer])
+    outer_std = np.std(sub[outer])
+
+    cnr = np.abs(inner_mean - outer_mean) / outer_std
+    res = {
+        'cnr': cnr, 'inner_mean': inner_mean, 'inner_std': inner_std,
+        'outer_mean': outer_mean, 'outer_std': outer_std,
+        'center_xy': np.array([cx, cy]) + sub.shape[0] // 2}
+    return res
+
+
 def calculate_tor(image, image_info, roi_array, paramset):
-    details_dict = {}
+    # define linepairs and positions
+    details_dict = {
+        'spatial_frequencies': [0.5, 0.56, 0.63,
+                                0.71, 0.8, 0.9,
+                                1., 1.12, 1.25,
+                                1.4, 1.6, 1.8,
+                                2., 2.24, 2.5,
+                                2.8, 3.15, 3.55,
+                                4., 4.5, 5],
+        'contrast_percents': [
+            16.7, 14.8, 12.8, 10.9, 8.8, 7.5, 6.7, 5.3, 4.5,
+            3.9, 3.2, 2.7, 2.2, 1.7, 1.5, 1.3, 1.1, 0.9]}
+
     errmsgs = None
     values = []
     pix = image_info.pix[0]
 
-    image_center = image*roi_array
-    rows = np.max(roi_array, axis=1)
-    cols = np.max(roi_array, axis=0)
-    image_center = image[rows][:, cols]
-    image_filt = ndimage.gaussian_filter(image_center, sigma=2./pix)
-    res = find_center_object(image, mask_outer=0, tolerances_width=[None, None], sigma=0)
-    cx, cy, wx, wy = res
-    breakpoint()
+    # search for full phantom (circle)
+    radius_large = 75./pix
+    off_xy, radius = mmcalc.find_circle(
+        image, radius_large,
+        expected_radius_range=[0.9*radius_large, 1.1*radius_large],
+        n_steps=9, downscale=5., edge_method='sobel', binary_threshold=0.1)
 
-    # finding edges in image to detect phantom using hough transform
-    '''
     edge_image = filters.sobel(image)
-    binary = np.zeros(image.shape, dtype=bool)
-    binary[edge_image > 0.1*np.max(edge_image)] = True
 
-    bin_reduced = resize(
-        binary, (image.shape[0]//dscale, image.shape[1] //dscale))
-    # resize to speed up hough transform
-    radius_phantom = 77 / (pix * dscale)  # radius of phantom circle approx 77mm
+    # for bar pattern template:
+    freq_0 = np.array([0.5, 0.71, 1., 1.4, 2., 2.8, 4.])
+    widths_0 = 1./freq_0
+    group_widths = 5.5*widths_0
+    group_center_pos = np.cumsum(group_widths) - group_widths/2
 
-    hough_radii = np.linspace(radius_phantom*0.9, radius_phantom*1.1, num=9)
-    hough_res = hough_circle(bin_reduced, hough_radii)
-    accums, cx, cy, radi = hough_circle_peaks(
-        hough_res, hough_radii, total_num_peaks=1)
-    cx = cx[0]
-    cy = cy[0]
-
-    if accums[0] > 0.7:  # assume circle found
-        dx_dy = (
-            dscale * (cx - bin_reduced.shape[1] / 2),
-            dscale * (cy - bin_reduced.shape[0] / 2))
-        roi_circle = get_roi_circle(image.shape, dx_dy, radi * dscale)
-    else:
-        dx_dy = (0, 0)
-
-    dd = round(80 / pix / 2)  # 8x8cm distance to offset
-    cx = round(dx_dy[0]) - image.shape[1] // 2
-    cy = round(dx_dy[1]) - image.shape[0] // 2
-
-    min_dist = round(10. / pix)
-    lines = find_edges(binary_center, 2, [45-30, 45+30], 0.5, min_dist)
-    lines2 = find_edges(binary_center, 2, [-45-30, -45+30], 0.5, min_dist)
-    corners_xy = find_intercepts(lines, lines2)
-    breakpoint()
-    # remove corners outside bin_sub
-    corners_xy = [x for x in corners_xy if np.all(
-        [np.min(x) > 0,  x[0] < bin_sub.shape[1], x[1] < bin_sub.shape[0]])]
-    if len(corners_xy) == 4:
-        xs, ys = zip(*corners_xy)
-        cx_sub = np.mean(xs)
-        cy_sub = np.mean(ys)
-
-        corners_xy.sort(key=lambda x: x[1])
-        xs, ys = zip(*corners_xy)
-        top = [xs[0], ys[0]]
-        btm = [xs[-1], ys[-1]]
-        corners_xy.sort(key=lambda x: x[0])
-        xs, ys = zip(*corners_xy)
-        lft = [xs[0], ys[0]]
-        rgt = [xs[-1], ys[-1]]
-
-        points = [top, rgt, btm, lft, top]
-        angles = [[], []]
-        widths = [[], []]
-        angles_widths_1 = []
-        for i in range(len(points) - 1):
-            angle = np.rad2deg(np.arctan(
-                (points[i+1][1] - points[i][1]) /
-                (points[i+1][0] - points[i][0])))
-            width = np.sqrt(
-                (points[i+1][1] - points[i][1])**2 +
-                (points[i+1][0] - points[i][0])**2)
-            angles[i % 2].append(angle)
-            widths[i % 2].append(width)
-
-        off_center_xy = (cx_sub - bin_sub.shape[1] // 2,
-                         cy_sub - bin_sub.shape[0] // 2)
-        roi_rect = get_roi_rectangle(
-            bin_sub.shape,
-            roi_width=np.mean(widths[0]), roi_height=np.mean(widths[1]),
-            offcenter_xy=off_center_xy)
-        roi = mmcalc.rotate2d_offcenter(
-            roi_rect.astype(float), -np.mean(angles[0]), off_center_xy)
-        roi = np.round(roi)
-        roi_center = np.array(roi, dtype=bool)
-
-        image_sub = image[cy - dd:cy + dd, cx - dd:cx + dd] * roi_center
-        image_sub_rot = mmcalc.rotate2d_offcenter(
-            image_sub, np.mean(angles[0]), off_center_xy)
-        rows = np.max(roi_rect, axis=1)
-        cols = np.max(roi_rect, axis=0)
-        image_center = image_sub_rot[rows][:, cols]
-        if image_center.shape[1] < image_center.shape[0]:
-            image_center = np.rot90(image_center, k=1)
-        dd = int(0.2 * image_center.shape[1])
-        margin = dd // 4
-        profile1 = np.mean(image_center[:, dd-margin:dd+margin], axis=1)
-        profile2 = np.mean(image_center[:, -dd-margin:-dd+margin], axis=1)
-        range1 = np.max(profile1) - np.min(profile1)
-        range2 = np.max(profile2) - np.min(profile2)
-        sz = profile1.size
-        if range1 > range2:
-            image_center = np.fliplr(image_center)
-            prof = profile1
+    phantom_rot = 0  # rotation to square with highlight
+    if radius:  # full phantom circle found
+        # find contrast circle with highest contrast
+        phantom_scale = radius / radius_large
+        radius_small = 4./pix * phantom_scale  # contrast circles 8mm
+        start, end = (phantom_scale / pix) * np.array([58, 62])
+        # center of contrast circles 60mm
+        roi_array = get_roi_circle(image.shape, off_xy, end)
+        rows = np.max(roi_array, axis=1)
+        cols = np.max(roi_array, axis=0)
+        image_center = image[rows][:, cols]
+        pol, (rads, angs) = mmcalc.topolar(image_center)
+        rad1_idx = np.where(rads > start)[0][0]
+        rad2_idx = np.where(rads > end)[0][0] - 1
+        prof = np.mean(pol[rad1_idx:rad2_idx, :], axis=0)
+        diff_prof = np.diff(prof)
+        min_pos = np.where(diff_prof == np.min(diff_prof))
+        max_pos = np.where(diff_prof == np.max(diff_prof))
+        ang_min = angs[min_pos[0][0]]
+        ang_max = angs[max_pos[0][0]]
+        angles = None
+        if np.abs(ang_max - ang_max) > 0.5:
+            # split over zero i.e. rotation close to 0, not optimal
+            # for now:
+            errmsgs.append('Rotation close to zero. 45 degrees recommended.')
         else:
-            prof = profile2
-        rangeU = np.max(prof[:sz // 2]) - np.min(prof[:sz // 2])
-        rangeD = np.max(prof[sz // 2:]) - np.min(prof[sz // 2:])
-        if rangeU > rangeD:
-            image_center = np.flipud(image_center)
-        profile1 = np.mean(image_center[:, dd-margin:dd+margin], axis=1)
-        profile2 = np.mean(image_center[:, dd*2-margin:dd*2+margin], axis=1)
-        profile3 = np.mean(image_center[:, dd*3-margin:dd*3+margin], axis=1)
-        profile_ref = np.mean(image_center[:, dd*4:dd*4+margin*2], axis=1)
-        range_ref = (np.mean(profile_ref[dd-margin:dd+margin]) -
-                     np.mean(profile_ref[dd*2-margin:dd*2+margin]))
-        
-        breakpoint()
-    #from matplotlib.lines import AxLine
-    #plt.gca().add_artist(AxLine(lines[0][0], None, lines[0][1], color='r'))
+            zero_ang = np.mean([ang_max, ang_min])
+            angles = np.pi/12 * np.arange(2, 11)
+            # 15 degrees between circles
 
-    # roi_array[0] = framed MTF central part, rotation
-    # roi_array[1] = list of center MTF parts
-    # roi_array[2] = list of center low contrast parts
-    '''
+        if angles is not None:
+            res_pr_disc = []
+            roi_inners = []
+            dist = 60 * (phantom_scale / pix)
+            eval_angles = np.append(angles + zero_ang,
+                                    np.flip(-angles + zero_ang))
+            cx, cy = get_xy_from_angles_dist(eval_angles, dist)
+            for i, ang in eval_angles:
+                dx_dy = np.array([cx[i], cy[i]])
+                roi = get_roi_circle(
+                    image.shape, off_xy + dx_dy, radius_small*2)
+                rows = np.max(roi, axis=1)
+                cols = np.max(roi, axis=0)
+                sub = image[rows][:, cols]
+                res = find_cnr_from_sub(sub, radius_small)
+                res['center_xy'] = res['center_xy'] + off_xy + dx_dy
+                res_pr_disc.append(res)
+
+        phantom_rot = zero_ang
+    else:  # search for bar pattern at center of image
+        # find center of rounded square
+        ang = find_ang_object((0, 0), round(paramset.pha_roi_mm/pix))
+        
+        def find_ang_object(c_xy, radius_test_range):
+            roi_array = get_roi_circle(image.shape, c_xy, radius_test_range[1])
+            rows = np.max(roi_array, axis=1)
+            cols = np.max(roi_array, axis=0)
+            roi_inner = get_roi_circle(image.shape, c_xy, radius_test_range[0])
+            edge_center = (edge_image*roi_array)[rows][:, cols]
+            edge_center[roi_inner[rows][:, cols] == True] = 0
+            pol, (rads, angs) = mmcalc.topolar(edge_center)
+            first_row = []
+            pol_rot = np.flipud(np.rot90(pol))
+            for i in range(pol.shape[1]):
+                above = np.where(pol_rot[i] > 0.5*np.max(pol_rot))
+                if len(above[0]) > 0:
+                    first = above[0][0]
+                else:
+                    first = pol.shape[0]
+                first_row.append(first)
+            ang_idx = np.where(first_row == np.min(first_row))
+            ang = angs[round(np.mean(ang_idx))]
+            return ang, np.min(first_row)
+        
+        max_ang, max_dist = find_ang_dist_object(
+            off_xy, [0, round(paramset.pha_roi_mm/pix)])
+        tanang = np.tan(ang)
+        cx = max_dist / np.sqrt(1 + tanang**2)
+        if max_ang > np.pi/2 and max_ang < 3*np.pi/2:
+                cx = - cx
+        cy = - cx * tanang
+
+        # find rotation of rounded square
+        dy, dx = 0.5 * np.array(edge_center.shape)
+        dy, dx = int(dy + cy), int(dx + cx)
+        mm = int(15./pix)
+        edge_cut = edge_center[dy - mm:dy + mm, dx - mm:dx + mm]
+        pol, (rads, angs) = mmcalc.topolar(edge_cut)
+        # find edges closest to center of rounded square = normal to edges
+        first = [np.where(prof > 0.5*np.max(prof))[0][0]
+                 for prof in np.rot90(pol[0:mm])]
+        peaks = find_peaks(first, distance=angs.size/5)  # angles where corners
+        deg_from_cardinal = np.mean(np.rad2deg(angs[peaks[0]]) % 90) - 45
+
+        # find direction to bar_pattern
+        variance_center = mmcalc.get_variance_map(
+            image_center, round(2./pix), 'same')
+        dist_30mm = 30./pix
+        variance_at_15mm = []
+        profiles = []
+        for i in range(4):
+            x2, y2 = mmcalc.rotate_point(
+                (dx + dist_30mm, dy), (dx, dy), deg_from_cardinal + 90*i)
+            rr, cc = draw.line(dy, dx, int(np.round(y2)), int(np.round(x2)))
+            try:
+                profile = variance_center[rr, cc]
+                profiles.append(profile)
+                variance_at_15mm.append(
+                    variance_center[rr[len(rr)//2], cc[len(cc)//2]])
+            except IndexError:
+                profiles.append(None)
+                variance_at_15mm.append(0)
+        max_idx = np.where(variance_at_15mm == np.max(variance_at_15mm))
+        freq_0 = np.array([0.5, 0.71, 1., 1.4, 2., 2.8, 4.])
+        widths_0 = 1./freq_0
+        group_widths = 5.5*widths_0
+        group_center_pos = np.cumsum(group_widths) - group_widths/2
+        start = int(
+            len(profiles[max_idx[0][0]])
+            * 1.3 * 0.5 * group_widths[0] / 30)
+        prof1 = profiles[max_idx[0][0] - 1][start:]
+        prof2 = profiles[(max_idx[0][0] + 1) % 4][start:]
+        peaks1 = find_peaks(prof1, distance=group_widths[0]/2/pix)
+        peaks2 = find_peaks(prof2, distance=group_widths[0]/2/pix)
+        if peaks1[0][0] < peaks2[0][0]:
+            print('Test probably fails, try flipping left/right')
+        breakpoint()
+
     return (details_dict, values, errmsgs)

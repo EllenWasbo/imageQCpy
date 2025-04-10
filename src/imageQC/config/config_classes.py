@@ -470,7 +470,7 @@ class ParamSetXray(ParamSetCommon):
     foc_search_margin: float = 10.  # mm margin offsenter for pattern
     foc_search_angle: float = 15.  # angle segment to average radial profile
     pha_alt: int = 0  # which phantom to use (ALTERNATIVE['Xray']['Pha'])
-    pha_mask_outer_mm: float = 10.0
+    pha_roi_mm: float = 50.0
     def_mask_outer_mm: float = 10.
     def_fraction: float = 0.1
 
@@ -566,7 +566,7 @@ class ParamSetNM(ParamSetCommon):
     sni_correct_pos_y: bool = False
     sni_lock_radius: bool = False
     sni_radius: float = 0.1
-    sni_n_sample_noise: int = 5  # number times to sample estimated poisson noise
+    #DELETE? sni_n_sample_noise: int = 5  # number times to sample estimated poisson noise
     sni_sum_first: bool = False
     sni_eye_filter_c: float = 28.
     sni_channels: bool = True   # use channels

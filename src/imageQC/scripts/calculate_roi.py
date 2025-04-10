@@ -487,10 +487,12 @@ def get_rois(image, image_number, input_main):
                 if n_pix > 0:
                     roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
             roi_this = roi_mask_outer
-            '''
+
             roi_size_in_pix = 50. / image_info.pix[0]
             roi_this = get_roi_circle(img_shape, (delta_xya[0], delta_xya[1]),
                                       roi_size_in_pix)
+            '''
+            pass
         return roi_this
 
     def PIU():  # MR
@@ -1330,7 +1332,10 @@ def get_roi_SNI(image, image_info, paramset, block_size=1):
             roi_size = int(paramset.sni_roi_ratio * large_dim)
         else:
             roi_size = paramset.sni_roi_size // block_size
-        if paramset.sni_type in [1, 2]:
+            if large_dim / roi_size <= 2.:
+                roi_size = 0
+                errmsg = 'Set ROI size too small (<= 2 x full area ratio)'
+        if paramset.sni_type in [1, 2] and roi_size > 0:
             n_rois_x = width_x // (0.5 * roi_size) - 1
             n_rois_y = width_y // (0.5 * roi_size) - 1
             pos_x = width_x / (n_rois_x + 1) * np.arange(n_rois_x) + first_col
@@ -1861,10 +1866,10 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
     inside = np.full(image.shape, False)
     if mask_outer > 0:
         inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
-    kernel = np.full((roi_sz, roi_sz), 1./(roi_sz ** 2))
-    mu = fftconvolve(image, kernel, mode='same')
-    ii = fftconvolve(image ** 2, kernel, mode='same')
-    variance_image = ii - mu**2
+    #kernel = np.full((roi_sz, roi_sz), 1./(roi_sz ** 2))
+    #mu = fftconvolve(image, kernel, mode='same')
+    #ii = fftconvolve(image ** 2, kernel, mode='same')
+    variance_image = mmcalc.get_variance_map(image, roi_sz, 'same')  #ii - mu**2
     variance_image[inside == False] = 0
     max_var = np.max(variance_image)
     mean_var = np.mean(variance_image[inside == True])

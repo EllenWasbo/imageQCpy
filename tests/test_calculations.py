@@ -632,6 +632,7 @@ def test_NM_SNI():
 
     calculate_qc.calculate_qc(input_main)
     values1 = np.round(100 * np.array(input_main.results['SNI']['values'][1]))
+    breakpoint()
     assert max(values1) < 20  # random but ish [16.,12.,12.,12.,16.,11.,10.,13.,8.]
 
 
@@ -830,17 +831,17 @@ def test_PET_Rec():
     values = np.round(np.array(input_main.results['Rec']['details_dict']['values'][3]))
     assert np.array_equal(
         values,
-        np.array([10766., 14281., 15373., 15403., 16304., 16695.,  2131.]))
+        np.array([10766., 14281., 15373., 15403., 16304., 16695.,  2131., 156.]))
     # max
     values = np.round(np.array(input_main.results['Rec']['details_dict']['values'][4]))
     assert np.array_equal(
         values,
-        np.array([14467., 19557., 21250., 20156., 20717., 20389.,  2131.]))
+        np.array([14467., 19557., 21250., 20156., 20717., 20389.,  2131., 156.]))
     # peak
     values = np.round(np.array(input_main.results['Rec']['details_dict']['values'][5]))
     assert np.array_equal(
         values,
-        np.array([7867., 11378., 15615., 18612., 18994., 18938.,  2131.]))
+        np.array([7867., 11378., 15615., 18612., 18994., 18938.,  2131., 156.]))
 
 
 def test_MR_SNR():

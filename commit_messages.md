@@ -1,4 +1,15 @@
-#v3.1.17
+# v3.1.18
+_Apr 08, 2025_
+
+Test NM/SNI:
+- Avoided crash with ROI size (method grid) <= 2 times full area dimension.
+- Removed option to sample noise with curvature corrections
+
+Test PET/Recovery curves:
+- Changes to more robust method of finding center of spheres (along z-axis) and finding the sphere order
+- Details pop up with option to change sphere size (search VOI radius = sphere diameter) added in last version showed incorrect indexes 6..1. Changed to 1..6.
+
+# v3.1.17
 _Mar 28, 2025_
 
 Test PET/Recovery curve:
@@ -9,7 +20,7 @@ Test PET/Recovery curve:
 - Order of spheres mixed up sometimes. Now this is corrected.
 - Avoided crash when no activities given and calculations are repeated. 
 
-#v3.1.16
+# v3.1.16
 _Mar 25, 2025_
 
 Test MTF for Xray, Mammo, (MR) when using auto detect edges:
@@ -19,7 +30,7 @@ Test MTF for Xray, Mammo, (MR) when using auto detect edges:
 	- At least one full side of the edge have to be inside the image/masked region (previously full rectangle had to be inside).
 	- Adjustable paramters for the edge detection available from toolbar on details
 
-#v3.1.15
+# v3.1.15
 _Mar 21, 2025_
 
 Set default window level for Xray and Mammo to center min/max (else from DICOM).
@@ -28,7 +39,7 @@ NM test SNI:
 - temporary set option to set sampling noise for point source to 0 = estimate quantum noise from mean of corrected.
 - added reference calibration AutoQC file to test files.
 
-#v3.1.14
+# v3.1.14
 _Mar 03, 2025_
 
 - NM test SNI - changed default settings again (working on optimization, probably not last changes):

@@ -2864,6 +2864,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             zpos = [float(img_info.zpos) for img_info in input_main.imgs]
             zpos = np.array(zpos)[images_to_test]
             sort_idx = np.argsort(zpos)
+            zpos_orig = np.copy(zpos)
             zpos = zpos[sort_idx]
             avgs = np.array(avgs_background)[sort_idx]
             details_dict = {'roi_averages': avgs, 'zpos': zpos}
@@ -2929,11 +2930,12 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             zpos_sph = zpos[start_slice:stop_slice + 1]
             details_dict['used_roi_maxs'] = maxs_sph
             details_dict['used_zpos_spheres'] = zpos_sph
-            details_dict['max_slice_idx'] = np.where(zpos == zpos_max)[0][0]
+            details_dict['max_slice_idx'] = np.where(
+                zpos_orig == zpos_max)[0][0]
 
             # calculate sphere values
             res_dict, errmsg = calculate_recovery_curve(
-                matrix_used[start_slice:stop_slice], input_main.imgs[0],
+                matrix_used[start_slice:stop_slice + 1], input_main.imgs[0],
                 roi_array[-1], zpos_sph, zpos_max, paramset,
                 background_value, background_value_std)
             if errmsg is not None:

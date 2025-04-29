@@ -151,7 +151,9 @@ def get_rois(image, image_number, input_main):
                 segment.astype(float), 90-paramset.foc_rotate_angle, reshape=False)
             segments_x = np.round(segments_x).astype(bool)
             segments_x = segments_x + np.fliplr(np.flipud(segments_x))
-            segments_y = np.rot90(segments_x, k=1)  # segment + np.flipud(segment)
+            segments_y = ndimage.rotate(
+                segments_x.astype(float), 90, reshape=False)
+            segments_y = np.round(segments_y).astype(bool)
             segments_x = np.roll(segments_x, round(off_x), axis=1)
             segments_x = np.roll(segments_x, round(off_y), axis=0)
             segments_y = np.roll(segments_y, round(off_x), axis=1)

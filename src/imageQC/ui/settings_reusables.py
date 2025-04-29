@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt, QModelIndex
 from PyQt5.QtGui import QIcon, QBrush, QColor, QStandardItemModel
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QDialogButtonBox,
-    QToolBar, QLabel, QAction, QLineEdit,
+    QToolBar, QLabel, QAction, QLineEdit, QPushButton, QCheckBox, QDoubleSpinBox,
     QTreeWidget, QTreeWidgetItem, QTreeView,
     QListWidget, QListWidgetItem, QComboBox, QInputDialog, QMessageBox, QFileDialog
     )
@@ -26,7 +26,7 @@ from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
-from imageQC.ui.ui_dialogs import ImageQCDialog
+from imageQC.ui.ui_dialogs import ImageQCDialog, CmapSelectDialog
 from imageQC.scripts.mini_methods import create_empty_file, get_included_tags
 from imageQC.scripts.mini_methods_format import valid_template_name
 # imageQC block end
@@ -1648,6 +1648,288 @@ class QuickTestOutputSubDialog(ImageQCDialog):
 
         return qtsub
 
+class ResultImageDefaultsTreeView(QTreeView):
+    """QTreeWidget for list of override result image display settings."""
+
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+        self.setRootIsDecorated(False)
+        self.setAlternatingRowColors(True)
+        self.update_model()
+        self.setModel(self.model)
+
+    def update_model(self):
+        """Initialize model with headers."""
+        self.model = QStandardItemModel(0, 7, self.parent)
+        self.model.setHeaderData(0, Qt.Horizontal, "Test")
+        self.model.setHeaderData(1, Qt.Horizontal, "Selected text")
+        self.model.setHeaderData(2, Qt.Horizontal, "Set min")
+        self.model.setHeaderData(3, Qt.Horizontal, "Min")
+        self.model.setHeaderData(4, Qt.Horizontal, "Set max")
+        self.model.setHeaderData(5, Qt.Horizontal, "Max")
+        self.model.setHeaderData(6, Qt.Horizontal, "Colormap")
+
+        self.model.itemChanged.connect(self.parent.flag_edit)
+
+    def update_data(self, set_selected=0):
+        """Set data to self.parent.current_template.output.
+
+        Parameters
+        ----------
+        set_selected : int
+            Row number to set as selected when finished. Default is 0
+        """
+        self.model.beginResetModel()
+        self.model.blockSignals(True)
+
+        n_rows = self.model.rowCount()
+        for i in range(n_rows):
+            self.model.removeRow(n_rows-i-1, QModelIndex())
+
+        temp = self.parent.current_template.result_image_defaults
+        row = 0
+        if len(temp) > 0:
+            for sub in temp:
+                self.model.insertRow(row)
+                self.model.setData(self.model.index(row, 0), sub.test)
+                self.model.setData(self.model.index(row, 1), sub.selected_text)
+                self.model.setData(self.model.index(row, 2), sub.set_min)
+                self.model.setData(self.model.index(row, 3), sub.cmin)
+                self.model.setData(self.model.index(row, 4), sub.set_max)
+                self.model.setData(self.model.index(row, 5), sub.cmax)
+                self.model.setData(self.model.index(row, 6), sub.cmap)
+                row += 1
+
+        self.setColumnWidth(0, 70)
+        self.setColumnWidth(1, 200)
+        self.setColumnWidth(6, 200)
+
+        self.model.blockSignals(False)
+        self.model.endResetModel()
+        if set_selected:
+            self.setCurrentIndex(self.model.index(set_selected, 0))
+
+    def run_subdialog(self, subno, default_sub):
+        main = self.parent.dlg_settings.main
+        if main.current_modality == self.parent.current_modality:
+            dlg_sub = ResultImageDefaultDialog(
+                self.parent.current_template,
+                modality=self.parent.current_modality, main=main)
+            res = dlg_sub.exec()
+            if res:
+                new_sub = dlg_sub.get_data()
+                def_list = self.parent.current_template.result_image_defaults
+                if default_sub is None:
+                    if subno == -1:
+                        def_list.append(new_sub)
+                    else:
+                        def_list.insert(subno + 1, new_sub)
+                else:
+                    def_list[subno] = new_sub
+                self.update_data(set_selected=subno)
+                self.parent.flag_edit(True)
+        else:
+            QMessageBox.warning(self, 'Warning',
+                                'Changes only possible when same modality '
+                                'active in main window.')
+
+    def insert_row(self):
+        """Insert row after selected if any, else at end."""
+        sel = self.selectedIndexes()
+        subno = -1
+        if len(sel) > 0:
+            subno = sel[0].row()
+        self.run_subdialog(subno, None)
+
+    def edit_row(self):
+        """Edit selected row."""
+        sel = self.selectedIndexes()
+        if len(sel) > 0:
+            subno = sel[0].row()
+            self.run_subdialog(
+                subno,
+                self.parent.current_template.result_image_defaults[subno])
+
+    def delete_row(self):
+        """Delete selected row."""
+        sel = self.selectedIndexes()
+        if len(sel) > 0:
+            subno = sel[0].row()
+            self.parent.current_template.result_image_defaults.pop(subno)
+            self.update_data(set_selected=subno - 1)
+            self.parent.flag_edit(True)
+
+    def move_sub(self, move_up=True):
+        """Move sub up or down."""
+        sel = self.selectedIndexes()
+        if len(sel) > 0:
+            subno = sel[0].row()
+            new_idx = subno
+
+            move = False
+            if move_up and subno > 0:
+                move = True
+                new_idx = subno - 1
+            elif move_up is False:
+                if subno < len(self.parent.current_template.result_image_defaults):
+                    move = True
+                    new_idx = subno + 1
+
+            if move:
+                popped = self.parent.current_template.result_image_defaults.pop(
+                    subno)
+                self.parent.current_template.result_image_defaults.insert(
+                    new_idx, popped)
+
+            self.update_data(set_selected=new_idx)
+            self.parent.flag_edit(True)
+
+
+class ResultImageDefaultDialog(ImageQCDialog):
+    """Dialog to set QuickTestOutputSub."""
+
+    def __init__(self, paramset, default_sub=None, modality='CT', main=None):
+        """Initialize QuickTestOutputSubDialog.
+
+        Parameters
+        ----------
+        paramset : object
+            Paramset<mod> as defined in config_classes.py
+        default_sub : object, optional
+            input ResultImageDefaultSub. The default is None.
+        modality : str, optional
+            current modality from parent window. The default is 'CT'.
+        initial_testcode : str, optional
+            testcode selected from start (if edit existing sub)
+        main : MainWindow
+        """
+        super().__init__()
+        self.setWindowTitle('Override image display defaults')
+
+        if default_sub is None:
+            default_sub = cfc.ResultImageDefaultSub()
+        self.default_sub = default_sub
+        self.paramset = paramset
+        self.modality = modality
+        self.main_window = main
+
+        self.cbox_testcode = QComboBox()
+        self.cbox_selected_text = QComboBox()
+        self.cmap = QLineEdit()
+        self.chk_min = QCheckBox()
+        self.cmin = QDoubleSpinBox(
+            decimals=2, minimum=-1000000, maximum=1000000, singleStep=1.)
+        self.chk_max = QCheckBox()
+        self.cmax = QDoubleSpinBox(
+            decimals=2, minimum=-1000000, maximum=1000000, singleStep=1.)
+
+        self.cbox_testcode.addItems(QUICKTEST_OPTIONS[modality][3:])
+        initial_testcode = self.default_sub.test
+        if initial_testcode != '':
+            self.cbox_testcode.setCurrentText(initial_testcode)
+            self.cbox_testcode.setEnabled(False)
+        else:
+            self.cbox_testcode.setCurrentIndex(0)
+
+        self.cbox_testcode.currentIndexChanged.connect(
+            self.update_select_options)
+
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        flo = QFormLayout()
+        flo.addRow(QLabel('Test:'), self.cbox_testcode)
+        flo.addRow(QLabel('Selected text:'), self.cbox_selected_text)
+        flo.addRow(QLabel('Set minimum:'), self.chk_min)
+        flo.addRow(QLabel('Minimum:'), self.cmin)
+        flo.addRow(QLabel('Set maximum:'), self.chk_max)
+        flo.addRow(QLabel('Maximum:'), self.cmax)
+        vlo.addLayout(flo)
+        hlo_cmap = QHBoxLayout()
+        hlo_cmap.addWidget(QLabel('Colormap:'))
+        hlo_cmap.addWidget(self.cmap)
+        btn_cmap = QPushButton('Select ...')
+        btn_cmap.clicked.connect(self.select_cmap)
+        hlo_cmap.addWidget(btn_cmap)
+        vlo.addLayout(hlo_cmap)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(buttons)
+        self.buttonBox.accepted.connect(self.verify)
+        self.buttonBox.rejected.connect(self.reject)
+        vlo.addWidget(self.buttonBox)
+
+        self.init = True
+        self.update_data()
+        self.init = False
+
+    def update_select_options(self):
+        self.cbox_selected_text.clear()
+        testcode = self.cbox_testcode.currentText().lower()
+        widget_params = self.main_window.stack_test_tabs.currentWidget()
+        attrib = f'{testcode}_result_image'
+        if testcode == 'hom':
+            try:
+                if self.main_window.current_paramset.hom_tab_alt == 4:
+                    attrib = attrib + '_aapm'
+            except AttributeError:
+                pass
+        widget_options = getattr(widget_params, attrib, None)
+        if widget_options is not None:
+            options = [
+                widget_options.itemText(i) for i
+                in range(widget_options.count())]
+            self.cbox_selected_text.addItems(options)
+            preset_text = '' if self.init is False else self.default_sub.selected_text
+            if preset_text in options:
+                self.cbox_selected_text.setCurrentText(preset_text)
+
+    def update_data(self):
+        """Set visuals to input data and refresh lists if selections change."""
+        if self.init is True:
+            self.cbox_testcode.setCurrentText(self.default_sub.test)
+            self.update_select_options()
+        self.cmap.setText(self.default_sub.cmap)
+        self.chk_min.setChecked(self.default_sub.set_min)
+        self.chk_max.setChecked(self.default_sub.set_max)
+        self.cmin.setValue(self.default_sub.cmin)
+        self.cmax.setValue(self.default_sub.cmax)
+
+    def select_cmap(self):
+        dlg = CmapSelectDialog(self)
+        res = dlg.exec()
+        if res:
+            cmap = dlg.get_cmap()
+            self.cmap.setText(cmap)
+
+    def verify(self):
+        verified = True
+        if self.chk_min.isChecked() and self.chk_max.isChecked():
+            if self.cmin.value() >= self.cmax.value():
+                verified = False
+                QMessageBox.warning(self, 'Warning',
+                                    'Minimum have to be smaller than maximum.')
+        if verified:
+            self.accept()
+
+    def get_data(self):
+        """Get settings from dialog as QuickTestOutputSub.
+
+        Returns
+        -------
+        default_sub : ResultImageDefaultSub
+        """
+        default_sub = cfc.ResultImageDefaultSub()
+        default_sub.test = self.cbox_testcode.currentText()
+        default_sub.selected_text = self.cbox_selected_text.currentText()
+        default_sub.cmap = self.cmap.text()
+        default_sub.set_min = self.chk_min.isChecked()
+        default_sub.set_max = self.chk_max.isChecked()
+        default_sub.cmin = self.cmin.value()
+        default_sub.cmax = self.cmax.value()
+
+        return default_sub
 
 class DicomCritAddDialog(ImageQCDialog):
     """Dialog to add dicom criteria for automation."""

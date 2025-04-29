@@ -286,6 +286,7 @@ class ImageCanvas(GenericImageCanvas):
                     prop=dict(size=self.main.gui.annotations_font_size, color='red'),
                     frameon=False, loc='upper left')
                 self.ax.add_artist(at)
+
             self.roi_draw()
         else:
             self.draw()
@@ -691,6 +692,25 @@ class ImageCanvas(GenericImageCanvas):
         except (AttributeError, IndexError):
             pass
         self.add_contours_to_all_rois(colors=colors, labels=labels)
+
+    def Pha(self):
+        if 'Pha' in self.main.results:
+            try:
+                details_dict = self.main.results['Pha'][
+                    'details_dict'][self.main.gui.active_img_no]
+                pix = self.main.imgs[self.main.gui.active_img_no].pix[0]
+                shape = self.main.imgs[self.main.gui.active_img_no].shape
+                cnr_dicts = details_dict['cnr_results_pr_disc']
+                center_xs = [elem['center_xy'][0] for elem in cnr_dicts]
+                center_ys = [elem['center_xy'][1] for elem in cnr_dicts]
+                center_xs = np.array(center_xs) + shape[1] / 2
+                center_ys = np.array(center_ys) + shape[0] / 2
+                self.scatters = []
+                scatter = self.ax.scatter(
+                    center_xs, center_ys, s=40, c='green', marker='x')
+                self.scatters.append(scatter)
+            except (KeyError, TypeError):
+                pass
 
     def PIU(self):
         """Draw MR PIU ROI."""
@@ -1121,6 +1141,39 @@ class ResultImageCanvas(GenericImageCanvas):
             self.fig.subplots_adjust(.05, .05, 1., 1.)
         self.draw()
 
+    def zoom_as_active_image(self):
+        xlim = None
+        ylim = None
+        act_canvas = self.main.wid_image_display.canvas
+        try:
+            act_img = act_canvas.ax.get_images()[0].get_array()
+            xlim = act_canvas.ax.get_xlim()
+            ylim = act_canvas.ax.get_ylim()
+            if self.current_image.shape != act_img.shape:
+                if self.main.current_test in ['Hom', 'Var']:
+                    if self.current_image.shape[0] < 0.5*act_img.shape[0]:
+                        xlim, ylim = None, None
+                    else:
+                        # zoom relative to center (masked edge)
+                        xlim = (np.array(xlim) - act_img.shape[1] / 2
+                                + self.current_image.shape[1] / 2)
+                        ylim = (np.array(ylim) - act_img.shape[0] / 2
+                                + self.current_image.shape[0] / 2)
+                else:
+                    xlim, ylim = None, None
+                if xlim is None:
+                    QMessageBox.information(
+                        self.parent, 'Not same size',
+                        'Matched zoom not available when result image not '
+                        'same size as active image.')
+                    xlim, ylim = None, None
+        except (AttributeError, IndexError):
+            pass
+        if xlim is not None and ylim is not None:
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
+            self.draw_idle()
+
     def mark_pixels(self):
         if 'Hom' in self.main.results and self.main.current_test == 'Hom':
             if self.current_image.shape == self.main.active_img.shape:
@@ -1177,8 +1230,27 @@ class ResultImageCanvas(GenericImageCanvas):
                     self.main.tab_mammo.blockSignals(False)
                     self.result_image_draw()
 
+    def get_default_display(self, testcode, sel_text, default_cmap='gray'):
+        defaults = self.main.current_paramset.result_image_defaults
+        self.found_default = False
+        tests = [x.test for x in defaults]
+        if testcode in tests:
+            sel_texts = [x.selected_text for x in defaults
+                         if x.test == testcode]
+            if sel_text in sel_texts or sel_text == '':
+                self.found_default = True
+                obj = [x for x in defaults if x.test == testcode][0]
+                if obj.set_min:
+                    self.min_val_default = obj.cmin
+                if obj.set_max:
+                    self.max_val_default = obj.cmax
+                self.cmap = obj.cmap
+                self.positive_negative = False
+        if self.found_default is False:
+            self.cmap = default_cmap
+
     def CDM(self, sel_text):
-        self.cmap = 'gray'
+        self.get_default_display('CDM', sel_text, 'gray')
         try:
             details_dict = self.main.results['CDM']['details_dict'][
                 self.main.gui.active_img_no]
@@ -1289,31 +1361,29 @@ class ResultImageCanvas(GenericImageCanvas):
             self.title = sel_txt
 
             try:
+                def_cmap = 'viridis'
                 if sel_txt == 'Pix == Avg of 8 neighbours':
                     self.current_image = details_dicts[
                         self.main.gui.active_img_no]['diff_neighbours_is_zero']
-                    self.cmap = 'RdYlGn_r'
+                    def_cmap = 'RdYlGn_r'
                 elif sel_txt == 'Pix == Avg of 4 neighbours':
                     self.current_image = details_dicts[
                         self.main.gui.active_img_no]['diff_nearest_is_zero']
-                    self.cmap = 'RdYlGn_r'
+                    def_cmap = 'RdYlGn_r'
                 elif sel_txt == '# pix == avg of 8 pr 1x1cm':
                     self.current_image = details_dicts[
                         self.main.gui.active_img_no]['n_pr_roi_neighbours']
-                    self.cmap = 'viridis'
                 elif sel_txt == '# pix == avg of 4 pr 1x1cm':
                     self.current_image = details_dicts[
                         self.main.gui.active_img_no]['n_pr_roi_nearest']
-                    self.cmap = 'viridis'
                 elif sel_txt == 'Fraction of images where avg of 8 neighbours':
                     self.current_image = details_dicts[
                         -1]['frac_diff_neighbours_is_zero']
-                    self.cmap = 'viridis'
                 elif sel_txt == 'Fraction of images where avg of 4 neighbours':
                     self.current_image = details_dicts[
                         -1]['frac_diff_nearest_is_zero']
-                    self.cmap = 'viridis'
 
+                self.get_default_display('Def', sel_text, def_cmap)
             except KeyError:
                 pass
 
@@ -1321,7 +1391,7 @@ class ResultImageCanvas(GenericImageCanvas):
         try:
             details_dict = self.main.results['Foc']['details_dict'][
                 self.main.gui.active_img_no]
-            self.cmap = 'viridis'
+            self.get_default_display('Foc', sel_text, 'viridis')
             self.title = 'Variance image cropped to star pattern'
             self.current_image = details_dict['variance_cropped']
 
@@ -1343,7 +1413,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 flatfield = True
 
         if flatfield:
-            self.cmap = 'viridis'
+            def_cmap = 'viridis'
             try:
                 details_dict = self.main.results['Hom']['details_dict'][
                     self.main.gui.active_img_no]
@@ -1417,20 +1487,21 @@ class ResultImageCanvas(GenericImageCanvas):
                         self.positive_negative = True
                     elif sel_txt == 'Deviating ROIs':
                         self.current_image = details_dict['deviating_rois']
-                        self.cmap = 'RdYlGn_r'
+                        def_cmap = 'RdYlGn_r'
                     elif sel_txt == 'Deviating pixels':
                         self.current_image = details_dict['deviating_pixels']
-                        self.cmap = 'RdYlGn_r'
+                        def_cmap = 'RdYlGn_r'
                     elif sel_txt == '# deviating pixels pr ROI':
                         self.current_image = details_dict['deviating_pixel_clusters']
                         self.set_min_max = True
                     elif sel_txt == 'Anomalous pixels':
                         if details_dict['n_anomalous_pixels'] > 0:
                             self.current_image = details_dict['anomalous_pixels']
-                            self.cmap = 'RdYlGn_r'
+                            def_cmap = 'RdYlGn_r'
                     elif sel_txt == '# anomalous pixels pr ROI':
                         self.current_image = details_dict['n_anomalous_pixels_pr_roi']
                         self.set_min_max = True
+                    self.get_default_display('Hom', sel_txt, def_cmap)
 
                 except KeyError:
                     pass
@@ -1442,7 +1513,6 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.main.gui.active_img_no]
         except KeyError:
             details_dict = {}
-        self.cmap = 'viridis'
 
         if self.main.current_modality == 'CT':
             self.title = '2d Noise Power Spectrum - average of ROIs'
@@ -1460,6 +1530,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.title = 'Large area correct for second order 2d polynomial trend'
                 if 'trend_corrected_sub_matrix' in details_dict:
                     self.current_image = details_dict['trend_corrected_sub_matrix']
+        self.get_default_display('NPS', sel_text, 'viridis')
 
     def Rin(self, sel_text):
         """Prepare result image for test Rin."""
@@ -1468,7 +1539,7 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.main.gui.active_img_no]
         except KeyError:
             details_dict = {}
-        self.cmap = 'viridis'
+        self.get_default_display('Rin', sel_text, 'viridis')
         if self.main.current_paramset.rin_sigma_image > 0:
             self.title = 'Gaussian filtered and masked image'
         else:
@@ -1490,7 +1561,6 @@ class ResultImageCanvas(GenericImageCanvas):
             except KeyError:
                 details_dict = {}
         if details_dict:
-            self.cmap = 'viridis'
             if sel_txt == '':
                 sel_txt = self.main.tab_nm.sni_result_image.currentText()
             if 'Curvature' in sel_txt:
@@ -1532,6 +1602,7 @@ class ResultImageCanvas(GenericImageCanvas):
                         if len(row) > 0])
                     if max_in_res > 0:
                         self.max_val = max_in_res
+            self.get_default_display('SNI', sel_txt, 'viridis')
 
     def Swe(self, sel_text):
         try:
@@ -1550,7 +1621,6 @@ class ResultImageCanvas(GenericImageCanvas):
             return res_img
 
         if 'FWHM' in sel_text:
-            self.cmap = 'viridis'
             self.current_image = resize_aspect(
                 details_dicts[idx]['fwhm_matrix'])
             self.min_val = np.nanmin(self.current_image[self.current_image>0])
@@ -1562,14 +1632,12 @@ class ResultImageCanvas(GenericImageCanvas):
             self.min_val = -3.
             self.max_val = 3.
         elif 'Sum detector' in sel_text:
-            self.cmap = 'viridis'
             self.current_image = details_dicts[idx]['sum_matrix']
         elif 'Processed' in sel_text:
-            self.cmap = 'viridis'
             self.current_image = details_dicts[idx]['ufov_matrix']
         elif 'Differential' in sel_text:
-            self.cmap = 'viridis'
             self.current_image = details_dicts[idx]['du_matrix']
+        self.get_default_display('Swe', sel_text, 'viridis')
 
     def Uni(self, sel_text):
         """Prepare result image for test Uni."""
@@ -1584,7 +1652,7 @@ class ResultImageCanvas(GenericImageCanvas):
                     self.main.gui.active_img_no]
             except (KeyError, IndexError):
                 details_dict = {}
-        self.cmap = 'viridis'
+
         if sel_text == '':
             sel_text = self.main.tab_nm.uni_result_image.currentText()
 
@@ -1623,13 +1691,13 @@ class ResultImageCanvas(GenericImageCanvas):
                 self.max_val = max_val
                 non_zero = self.current_image[self.current_image != 0]
                 self.min_val = np.nanmin(non_zero)
+        self.get_default_display('Uni', sel_text, 'viridis')
 
     def Var(self, sel_text):
         """Prepare variance image."""
         try:
             details_dict = self.main.results['Var']['details_dict'][
                 self.main.gui.active_img_no]
-            self.cmap = 'viridis'
             self.title = 'Variance image'
             if self.main.current_modality == 'Mammo':
                 if sel_text == '':
@@ -1639,6 +1707,7 @@ class ResultImageCanvas(GenericImageCanvas):
                     sel_text = self.main.tab_xray.var_result_image.currentText()
             sel_idx = 0 if 'ROI 1' in sel_text else 1
             self.current_image = details_dict['variance_image'][sel_idx]
+            self.get_default_display('Var', sel_text, 'viridis')
 
         except (KeyError, IndexError, TypeError):
             pass

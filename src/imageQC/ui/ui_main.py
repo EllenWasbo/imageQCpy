@@ -38,7 +38,8 @@ from imageQC.ui.settings import SettingsDialog
 from imageQC.ui import automation_wizard
 from imageQC.ui import open_multi
 from imageQC.ui import open_automation
-from imageQC.ui.ui_dialogs import TextDisplay, AboutDialog, AddArtifactsDialog
+from imageQC.ui.ui_dialogs import (
+    TextDisplay, AboutDialog, AddArtifactsDialog, OpenRawDialog)
 from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
@@ -277,19 +278,28 @@ class MainWindow(QMainWindow):
         """Open DICOM files and update GUI."""
         if file_list is False:
             fnames = QFileDialog.getOpenFileNames(
-                self, 'Open DICOM files',
-                filter="DICOM files (*.dcm *.IMA);;All files (*)")
+                self, 'Open DICOM or raw files',
+                filter="DICOM files (*.dcm *.IMA);;RAW files (*.raw);;All files (*)")
             file_list = fnames[0]
         if len(file_list) > 0:
-            max_progress = 100  # %
-            progress_modal = uir.ProgressModal(
-                "Calculating...", "Cancel",
-                0, max_progress, self, minimum_duration=0)
-            new_img_infos, ignored_files, warnings = dcm.read_dcm_info(
-                file_list, tag_infos=self.tag_infos,
-                tag_patterns_special=self.tag_patterns_special,
-                statusbar=self.status_bar, progress_modal=progress_modal)
-            progress_modal.setValue(max_progress)
+            ignored_files = []
+            warnings = []
+            new_img_infos = []
+            if file_list[0][-4:].lower() == '.raw':
+                dlg = OpenRawDialog(self, file_list)
+                res = dlg.exec()
+                if res:
+                    new_img_infos, ignored_files, warnings = dlg.get_infos()
+            else:
+                max_progress = 100  # %
+                progress_modal = uir.ProgressModal(
+                    "Reading files...", "Cancel",
+                    0, max_progress, self, minimum_duration=0)
+                new_img_infos, ignored_files, warnings = dcm.read_dcm_info(
+                    file_list, tag_infos=self.tag_infos,
+                    tag_patterns_special=self.tag_patterns_special,
+                    statusbar=self.status_bar, progress_modal=progress_modal)
+                progress_modal.setValue(max_progress)
             if ignored_files:
                 dlg = messageboxes.MessageBoxWithDetails(
                     self, title='Some files ignored',
@@ -398,7 +408,7 @@ class MainWindow(QMainWindow):
                     read_img = False
             if read_img:
                 self.active_img, _ = dcm.get_img(
-                    self.imgs[self.gui.active_img_no].filepath,
+                    self.imgs[self.gui.active_img_no],
                     frame_number=self.imgs[self.gui.active_img_no].frame_number,
                     tag_infos=self.tag_infos, overlay=self.gui.show_overlay,
                     rotate_k=self.gui.rotate_k)
@@ -480,7 +490,7 @@ class MainWindow(QMainWindow):
         self.average_img = False
         try:
             self.active_img, _ = dcm.get_img(
-                self.imgs[self.gui.active_img_no].filepath,
+                self.imgs[self.gui.active_img_no],
                 frame_number=self.imgs[self.gui.active_img_no].frame_number,
                 tag_infos=self.tag_infos, overlay=self.gui.show_overlay,
                 rotate_k=self.gui.rotate_k)

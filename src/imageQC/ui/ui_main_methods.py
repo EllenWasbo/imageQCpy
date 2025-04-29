@@ -133,7 +133,7 @@ def sum_marked_images(main):
         for img_no, img_info in enumerate(main.imgs):
             if img_no in marked:
                 arr, _ = dcm.get_img(
-                    img_info.filepath,
+                    img_info,
                     frame_number=img_info.frame_number,
                     tag_infos=main.tag_infos, overlay=main.gui.show_overlay,
                     rotate_k=main.gui.rotate_k)

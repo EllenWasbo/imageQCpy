@@ -2828,6 +2828,7 @@ class ResultImageWidget(GenericImageWidget):
         tb_right_top.addWidget(self.tool_profile)
         tb_right_top.addWidget(self.tool_cmap)
         tb_right_top.addWidget(self.tool_rectangle)
+        tb_right_top.addWidget(self.tool_zoom_as_active_image)
         hlo_right = QHBoxLayout()
         hlo_right.addWidget(toolb)
         hlo_right.addWidget(tb_right_top)
@@ -2874,6 +2875,9 @@ class ResultImageWidget(GenericImageWidget):
     def hide_window_level(self):
         """Set window level widget to zero width."""
         self.splitter.setSizes([round(self.main.gui.panel_width*0.8), 0])
+
+    def zoom_as_active_image(self):
+        self.canvas.zoom_as_active_image()
 
 
 class ResultImageNavigationToolbar(ImageNavigationToolbar):

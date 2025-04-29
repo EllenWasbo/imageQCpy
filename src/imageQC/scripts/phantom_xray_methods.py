@@ -42,12 +42,12 @@ def get_xy_from_angles_dist(ang_list, dist):
     tanang = np.tan(ang_list)
     cx = dist / np.sqrt(1 + tanang**2)
     neg_x = np.where(np.logical_and(
-        ang_list > np.pi/2, ang_list < 3*np.pi/2))
+        ang_list > np.pi/2, ang_list < 3*np.pi/2))[0]
     if neg_x.size > 0:
         cx[neg_x] = -cx[neg_x]
     cy = - cx * tanang
     pos_y = np.where(np.logical_and(
-        ang_list > np.pi, ang_list < 2*np.pi))
+        ang_list > np.pi, ang_list < 2*np.pi))[0]
     if pos_y.size > 0:
         breakpoint()
         cy[pos_y] = -cy[pos_y]
@@ -160,14 +160,14 @@ def calculate_tor(image, image_info, roi_array, paramset):
             angles = np.pi/12 * np.arange(2, 11)
             # 15 degrees between circles
 
+        # find cnr pr disc
         if angles is not None:
             res_pr_disc = []
-            roi_inners = []
             dist = 60 * (phantom_scale / pix)
             eval_angles = np.append(angles + zero_ang,
                                     np.flip(-angles + zero_ang))
             cx, cy = get_xy_from_angles_dist(eval_angles, dist)
-            for i, ang in eval_angles:
+            for i, ang in enumerate(eval_angles):
                 dx_dy = np.array([cx[i], cy[i]])
                 roi = get_roi_circle(
                     image.shape, off_xy + dx_dy, radius_small*2)
@@ -178,7 +178,12 @@ def calculate_tor(image, image_info, roi_array, paramset):
                 res['center_xy'] = res['center_xy'] + off_xy + dx_dy
                 res_pr_disc.append(res)
 
+        details_dict['cnr_results_pr_disc'] = res_pr_disc
+        values = []
+
         phantom_rot = zero_ang
+        
+    '''
     else:  # search for bar pattern at center of image
         # find center of rounded square
         ang = find_ang_object((0, 0), round(paramset.pha_roi_mm/pix))
@@ -256,6 +261,7 @@ def calculate_tor(image, image_info, roi_array, paramset):
         peaks2 = find_peaks(prof2, distance=group_widths[0]/2/pix)
         if peaks1[0][0] < peaks2[0][0]:
             print('Test probably fails, try flipping left/right')
-        breakpoint()
+        
+    '''
 
     return (details_dict, values, errmsgs)

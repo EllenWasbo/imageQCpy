@@ -1307,6 +1307,8 @@ def get_uniformity_map(input_array, neighbour_start=1, neighbour_end=1):
 def get_variance_map(image, roi_size_pix, mode):
     """Calculate variance image from input image.
 
+    Var(X) = E[X^2] - E[X]^2
+
     Parameters
     ----------
     image : np.2darray dtype float

@@ -331,12 +331,26 @@ class QuickTestOutputSub:
 
 
 @dataclass
+class ResultImageDefaultSub:
+    """Class for holding details for specific Result image defaults."""
+
+    test: str = ''
+    selected_text: str = ''  # QComboBox dropdown selected text
+    cmap: str = ''  # colormap for selected image
+    set_min: bool = False
+    cmin: float = 0.
+    set_max: bool = False
+    cmax: float = 0.
+
+
+@dataclass
 class ParamSetCommon:
     """Set of paramaters used for all parameter sets."""
 
     label: str = ''
     output: QuickTestOutputTemplate = field(
         default_factory=QuickTestOutputTemplate)
+    result_image_defaults: list = field(default_factory=list)
     dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
     roi_type: int = 0  # 0=circular, 1=rectangular, 2=rectangular with rotation
     roi_radius: float = 5.
@@ -469,6 +483,7 @@ class ParamSetXray(ParamSetCommon):
     foc_angle: float = 1.5  # star pattern line angle in degrees
     foc_search_margin: float = 10.  # mm margin offsenter for pattern
     foc_search_angle: float = 15.  # angle segment to average radial profile
+    foc_rotate_angle: float = 0.  # rotate segments (degrees)
     pha_alt: int = 0  # which phantom to use (ALTERNATIVE['Xray']['Pha'])
     pha_roi_mm: float = 50.0
     def_mask_outer_mm: float = 10.
@@ -714,6 +729,7 @@ class ParamSetSR:
     label: str = ''
     output: QuickTestOutputTemplate = field(
         default_factory=QuickTestOutputTemplate)
+    result_image_defaults: list = field(default_factory=list)
     dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
 
 

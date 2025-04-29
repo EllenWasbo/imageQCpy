@@ -14,14 +14,16 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QBrush, QColor, QFont
 from PyQt5.QtWidgets import (
     QWidget, QTreeWidget, QTreeWidgetItem, QTabWidget,
-    QVBoxLayout, QHBoxLayout, QToolBar, QLabel, QAction, QListWidget, QPushButton,
+    QVBoxLayout, QHBoxLayout,
+    QToolBar, QLabel, QAction, QListWidget, QPushButton,
     QMessageBox
     )
 
 # imageQC block start
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.config import config_classes as cfc
-from imageQC.ui.settings_reusables import StackWidget, QuickTestOutputTreeView
+from imageQC.ui.settings_reusables import (
+    StackWidget, QuickTestOutputTreeView, ResultImageDefaultsTreeView)
 from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
@@ -225,6 +227,51 @@ class ParametersOutputWidget(QWidget):
                 'No images loaded and calculated with QuickTest in main window.')
 
 
+class ResultImageDefaultsWidget(QWidget):
+    """Widget for holding the output parameters table for ParamSetsWidget."""
+
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+
+        self.wid_defaults = ResultImageDefaultsTreeView(self.parent)
+
+        hlo = QHBoxLayout()
+        self.setLayout(hlo)
+        vlo_general = QVBoxLayout()
+        hlo.addLayout(vlo_general)
+        vlo_general.addWidget(uir.LabelItalic(
+            'Override default result image draw options'))
+        vlo_general.addWidget(self.wid_defaults)
+
+        self.toolbar = QToolBar()
+        self.toolbar.setOrientation(Qt.Vertical)
+        hlo.addWidget(self.toolbar)
+        act_add = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+            'Add override rule', self)
+        act_add.triggered.connect(self.wid_defaults.insert_row)
+        act_edit = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
+            'Edit rule', self)
+        act_edit.triggered.connect(self.wid_defaults.edit_row)
+        act_up = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
+            'Move up', self)
+        act_up.triggered.connect(
+            lambda: self.wid_defaults.move_sub(move_up=True))
+        act_down = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}moveDown.png'),
+            'Move down', self)
+        act_down.triggered.connect(
+            lambda: self.wid_defaults.move_sub(move_up=False))
+        act_delete = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+            'Delete rule', self)
+        act_delete.triggered.connect(self.wid_defaults.delete_row)
+        self.toolbar.addActions([act_add, act_edit, act_up, act_down, act_delete])
+
+
 class ParamSetsWidget(StackWidget):
     """Widget holding paramsets settings."""
 
@@ -254,11 +301,15 @@ class ParamSetsWidget(StackWidget):
         self.tabs = QTabWidget()
         self.wid_params = ParametersWidget(self)
         self.wid_output = ParametersOutputWidget(self)
+        self.wid_result_image_defaults = ResultImageDefaultsWidget(self)
         if self.import_review_mode:
             self.wid_output.setEnabled(False)
+            self.wid_result_image_defaults.setEnabled(False)
 
         self.tabs.addTab(self.wid_params, 'Parameters')
         self.tabs.addTab(self.wid_output, 'Output parameters')
+        self.tabs.addTab(self.wid_result_image_defaults,
+                         'Result image display overrides')
 
         self.hlo.addWidget(self.tabs)
         self.vlo.addWidget(uir.HLine())
@@ -285,6 +336,7 @@ class ParamSetsWidget(StackWidget):
         self.wid_output.list_group_by.clear()
         self.wid_output.list_group_by.addItems(
             self.current_template.output.group_by)
+        self.wid_result_image_defaults.wid_defaults.update_data()
 
         self.wid_params.table_params.clear()
         font_bold = QFont()
@@ -297,7 +349,7 @@ class ParamSetsWidget(StackWidget):
                     self.current_modality):
                 get_main = True
         for paramname, paramval in asdict(self.current_template).items():
-            if paramname != 'output':
+            if paramname not in ['output', 'result_image_defaults']:
                 if isinstance(paramval, dict):
                     item = QTreeWidgetItem(
                         self.wid_params.table_params, [paramname])

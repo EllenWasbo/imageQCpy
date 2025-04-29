@@ -686,7 +686,7 @@ def calculate_qc(input_main, wid_auto=None,
                         if extra_tag_pattern is not None:
                             tag_patterns.append(extra_tag_pattern)
                         image, tags = dcm.get_img(
-                            img_infos[i].filepath,
+                            img_infos[i],
                             frame_number=img_infos[i].frame_number,
                             tag_patterns=tag_patterns,
                             tag_infos=tag_infos, NM_count=NM_count[i],
@@ -742,7 +742,7 @@ def calculate_qc(input_main, wid_auto=None,
                 else:
                     if read_image[i]:
                         image, tags = dcm.get_img(
-                            img_infos[i].filepath,
+                            img_infos[i],
                             frame_number=img_infos[i].frame_number,
                             tag_patterns=[group_pattern],
                             tag_infos=tag_infos,
@@ -993,6 +993,8 @@ def calculate_qc(input_main, wid_auto=None,
                 if 'TTF' in input_main.results:
                     input_main.refresh_img_display()
             elif 'Foc' in input_main.results:
+                input_main.refresh_img_display()
+            elif 'Pha' in input_main.results:
                 input_main.refresh_img_display()
             elif 'Rec' in input_main.results:
                 try:
@@ -1729,14 +1731,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         if image2d is None:
             res = Results(headers=headers)#, headers_sup=headers_sup)
         else:
-            '''
-            if roi_array is None:
-                sub = image2d
-            else:
-                rows = np.max(roi_array, axis=1)
-                cols = np.max(roi_array, axis=0)
-                sub = image2d[rows][:, cols]
-            '''
             details_dict, values, errmsgs = calculate_phantom_xray(
                 image2d, image_info, roi_array, paramset)
 
@@ -1745,7 +1739,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 details_dict=details_dict, errmsg=errmsgs)
 
         return res
-            
+
     def PIU():
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
         # ['min', 'max', 'PIU'],
@@ -3970,7 +3964,10 @@ def calculate_focal_spot_size(image, roi_array, image_info, paramset):
                 profiles.append(vals_x)
                 profiles_dists.append(dists_x)
                 peaks = find_peaks(vals_x)
-                x_peak = dists_x[peaks[0][-1]]  # last peak
+                peakvals = vals_x[peaks[0]]
+                peaks_above_idx = np.where(peakvals > 0.9*np.max(vals_x))
+                last_above = peaks[0][peaks_above_idx[0][-1]]
+                x_peak = dists_x[last_above]
                 blur_diameter_xy.append(x_peak * 2)
                 fs = line_radians * (x_peak * 2) / (magnification - 1)
                 focal_size_xy.append(fs)

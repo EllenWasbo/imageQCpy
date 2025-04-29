@@ -684,6 +684,14 @@ def load_paramsets(fnames, path):
                                                     cfc.TagPatternFormat())
                             doc['group_tagpattern'] = cfc.TagPatternFormat(
                                 **upd)
+                        if 'result_image_defaults' in doc:
+                            result_image_defaults = []
+                            for sub in doc['result_image_defaults']:
+                                upd = verify_input_dict(
+                                    sub, cfc.ResultImageDefaultSub())
+                                result_image_defaults.append(
+                                    cfc.ResultImageDefaultSub(**upd))
+                            doc['result_image_defaults'] = result_image_defaults
                         tests = {}
                         for key, test in doc['output']['tests'].items():
                             tests[key] = []

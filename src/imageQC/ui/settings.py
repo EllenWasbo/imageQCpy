@@ -1146,12 +1146,17 @@ class ReportTemplatesWidget(StackWidget):
         else:
             header = self.current_template.htmlhead
         self.txt_header.setPlainText(header)
-        txt = ''
-        txt = [
-            yaml.safe_dump(asdict(element),
-                           sort_keys=False)
-            for element in self.current_template.elements]
-        self.txt_elements.setPlainText('\n------------\n'.join(txt))
+        txt = []
+        for element in self.current_template.elements:
+            if isinstance(element, list):
+                
+                for i, cell_element in enumerate(element):
+                    txt.append(f'--- Cell {i} ---')
+                    txt.append(yaml.safe_dump(
+                        asdict(cell_element), sort_keys=False))
+            else:
+                txt.append(yaml.safe_dump(asdict(element), sort_keys=False))
+            self.txt_elements.setPlainText('\n------------\n'.join(txt))
 
 
 @dataclass

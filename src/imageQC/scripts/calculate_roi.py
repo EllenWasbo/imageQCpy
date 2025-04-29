@@ -7,7 +7,7 @@ Calculation processes for the different tests.
 """
 import numpy as np
 from scipy import ndimage
-from scipy.signal import find_peaks, fftconvolve
+from scipy.signal import find_peaks
 from skimage.transform import hough_line, hough_line_peaks
 
 # imageQC block start
@@ -115,42 +115,48 @@ def get_rois(image, image_number, input_main):
         return (roi_this, errmsg)
 
     def Foc():  # Focal spot size search area (pattern size + 10%)
-        # first find center of image part with signal
-        off_x, off_y = 0, 0
-        res = mmcalc.find_center_object(
-            image, mask_outer=20./image_info.pix[0])
-        if res is not None:
-            center_x, center_y, _, _ = res
-            off_x = center_x - image.shape[1] // 2
-            off_y = center_y - image.shape[0] // 2
+        try:
+            diam = input_main.results['Foc']['details_dict'][
+                image_number]['star_diameter_mm']
+            roi_this = None
+        except (KeyError, IndexError, TypeError):
+            # first find center of image part with signal
+            off_x, off_y = 0, 0
+            res = mmcalc.find_center_object(
+                image, mask_outer=20./image_info.pix[0])
+            if res is not None:
+                center_x, center_y, _, _ = res
+                off_x = center_x - image.shape[1] // 2
+                off_y = center_y - image.shape[0] // 2
 
-        tot_w_mm = 5.1 *  paramset.foc_pattern_size  # assumed max 5x magnification
-        w_tot = tot_w_mm / image_info.pix[0]
-        roi_outer = get_roi_rectangle(
-            img_shape, roi_width=w_tot, roi_height=w_tot, offcenter_xy=(off_x, off_y))
-        w = 2 * paramset.foc_search_margin / image_info.pix[0]
-        roi_inner = get_roi_rectangle(
-            img_shape, roi_width=w, roi_height=w, offcenter_xy=(off_x, off_y))
-        roi_this = [roi_outer, roi_inner]
+            tot_w_mm = 5.1 *  paramset.foc_pattern_size  # assumed max 5x magnification
+            w_tot = tot_w_mm / image_info.pix[0]
+            roi_outer = get_roi_rectangle(
+                img_shape, roi_width=w_tot, roi_height=w_tot, offcenter_xy=(off_x, off_y))
+            w = 2 * paramset.foc_search_margin / image_info.pix[0]
+            roi_inner = get_roi_rectangle(
+                img_shape, roi_width=w, roi_height=w, offcenter_xy=(off_x, off_y))
+            roi_this = [roi_outer, roi_inner]
 
-        rot_a = paramset.foc_search_angle / 2
-        roi_half = get_roi_rectangle(
-            img_shape, roi_width=w_tot//2, roi_height=w_tot, offcenter_xy=(w_tot//4, 0))
-        roi_half_rot = ndimage.rotate(
-            roi_half.astype(float), rot_a, reshape=False)
-        roi_half_rot = np.round(roi_half_rot)
-        overlap = roi_half_rot + np.fliplr(roi_half_rot)
-        segment = np.zeros(roi_half_rot.shape, dtype=bool)
-        segment[overlap == 2] = True
-        segments_x = ndimage.rotate(segment.astype(float), 90, reshape=False)
-        segments_x = np.round(segments_x).astype(bool)
-        segments_x = segments_x + np.fliplr(segments_x)
-        segments_y = segment + np.flipud(segment)
-        segments_x = np.roll(segments_x, round(off_x), axis=1)
-        segments_x = np.roll(segments_x, round(off_y), axis=0)
-        segments_y = np.roll(segments_y, round(off_x), axis=1)
-        segments_y = np.roll(segments_y, round(off_y), axis=0)
-        roi_this.extend([segments_x, segments_y])
+            rot_a = paramset.foc_search_angle / 2
+            roi_half = get_roi_rectangle(
+                img_shape, roi_width=w_tot//2, roi_height=w_tot, offcenter_xy=(w_tot//4, 0))
+            roi_half_rot = ndimage.rotate(
+                roi_half.astype(float), rot_a, reshape=False)
+            roi_half_rot = np.round(roi_half_rot)
+            overlap = roi_half_rot + np.fliplr(roi_half_rot)
+            segment = np.zeros(roi_half_rot.shape, dtype=bool)
+            segment[overlap == 2] = True
+            segments_x = ndimage.rotate(
+                segment.astype(float), 90-paramset.foc_rotate_angle, reshape=False)
+            segments_x = np.round(segments_x).astype(bool)
+            segments_x = segments_x + np.fliplr(np.flipud(segments_x))
+            segments_y = np.rot90(segments_x, k=1)  # segment + np.flipud(segment)
+            segments_x = np.roll(segments_x, round(off_x), axis=1)
+            segments_x = np.roll(segments_x, round(off_y), axis=0)
+            segments_y = np.roll(segments_y, round(off_x), axis=1)
+            segments_y = np.roll(segments_y, round(off_y), axis=0)
+            roi_this.extend([segments_x, segments_y])
 
         return roi_this
 
@@ -315,6 +321,7 @@ def get_rois(image, image_number, input_main):
             if paramset.mtf_auto_center:
                 mask_outer_pix = round(
                     paramset.mtf_auto_center_mask_outer / image_info.pix[0])
+
                 centers_of_edges_xy = find_rectangle_object(
                     image, mask_outer=mask_outer_pix, pix=image_info.pix[0],
                     thresholds=paramset.mtf_auto_center_thresholds)
@@ -325,12 +332,30 @@ def get_rois(image, image_number, input_main):
                     off_xy = [
                         [xy[0] - cent[0], xy[1] - cent[1]]
                         for xy in centers_of_edges_xy]
-                    if paramset.mtf_auto_center_type == 1:
-                        # find most central edge
-                        distsq = [np.sum(np.power(xy, 2)) for xy in off_xy]
-                        idx_min = np.argmin(distsq)
-                        height_idx = idx_min % 2
-                        width_idx = 1 if height_idx == 0 else 0
+                    if paramset.mtf_auto_center_type == 1 or len(centers_of_edges_xy) == 1:
+                        width_idx = 0
+                        height_idx = 1
+                        idx_min = 0
+                        if len(off_xy) == 1:  # found one edge only
+                            if roi_sz_xy[0] != roi_sz_xy[1]:
+                                # find direction of edge
+                                x, y = centers_of_edges_xy[0]
+                                wi = round(min(roi_sz_xy) / 2)
+                                try:
+                                    subarr = image[y-wi:y+wi, x-wi:x+wi]
+                                    diffs_y = np.diff(np.sum(subarr, axis=1))
+                                    diffs_x = np.diff(np.sum(subarr, axis=0))
+                                    if np.max(diffs_x) > np.max(diffs_y):
+                                        width_idx = 1
+                                        height_idx = 0
+                                except:  # indexes outside array
+                                    pass
+                        else:
+                            # find most central edge
+                            distsq = [np.sum(np.power(xy, 2)) for xy in off_xy]
+                            idx_min = np.argmin(distsq)
+                            height_idx = idx_min % 2
+                            width_idx = 1 if height_idx == 0 else 0
                         roi_this = [get_roi_rectangle(
                             img_shape,
                             roi_width=roi_sz_xy[width_idx],
@@ -473,26 +498,7 @@ def get_rois(image, image_number, input_main):
         roi_this = None
         if 'Pha' in input_main.results:
             if input_main.results['Pha'] is not None:
-                try:
-                    roi_this = input_main.results[
-                        'Pha']['details_dict'][image_number]['roi_dict']
-                except (KeyError, AttributeError, IndexError):
-                    pass
-        if roi_this is None:
-            '''
-            roi_mask_outer = None
-            if paramset.pha_mask_outer_mm > 0:
-                roi_mask_outer = np.full(image_info.shape[0:2], False)
-                n_pix = round(paramset.var_mask_outer_mm / image_info.pix[0])
-                if n_pix > 0:
-                    roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
-            roi_this = roi_mask_outer
-
-            roi_size_in_pix = 50. / image_info.pix[0]
-            roi_this = get_roi_circle(img_shape, (delta_xya[0], delta_xya[1]),
-                                      roi_size_in_pix)
-            '''
-            pass
+                roi_this = get_roi_circle(img_shape, (0, 0), 10)
         return roi_this
 
     def PIU():  # MR
@@ -1866,10 +1872,7 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
     inside = np.full(image.shape, False)
     if mask_outer > 0:
         inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
-    #kernel = np.full((roi_sz, roi_sz), 1./(roi_sz ** 2))
-    #mu = fftconvolve(image, kernel, mode='same')
-    #ii = fftconvolve(image ** 2, kernel, mode='same')
-    variance_image = mmcalc.get_variance_map(image, roi_sz, 'same')  #ii - mu**2
+    variance_image = mmcalc.get_variance_map(image, roi_sz, 'same')
     variance_image[inside == False] = 0
     max_var = np.max(variance_image)
     mean_var = np.mean(variance_image[inside == True])

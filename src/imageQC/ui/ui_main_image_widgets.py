@@ -54,6 +54,13 @@ class GenericImageWidget(QWidget):
         self.tool_cmap.setIcon(QIcon(
             f'{os.environ[ENV_ICON_PATH]}colorbar.png'))
         self.tool_cmap.clicked.connect(self.clicked_colormap)
+        self.tool_zoom_as_active_image = QToolButton()
+        self.tool_zoom_as_active_image.setToolTip(
+            'Zoom similar to active image (if ~same size)')
+        self.tool_zoom_as_active_image.setIcon(QIcon(
+            f'{os.environ[ENV_ICON_PATH]}search_target.png'))
+        self.tool_zoom_as_active_image.clicked.connect(
+            self.zoom_as_active_image)
 
         self.mouse_pressed = False
 
@@ -146,6 +153,9 @@ class GenericImageWidget(QWidget):
                 except (AttributeError, IndexError):
                     pass
                 self.parent.wid_window_level.colorbar.colorbar_draw(cmap=cmap)
+
+    def zoom_as_active_image(self):
+        pass  # implemented in inherited class
 
 
 class GenericImageToolbarPosVal(QToolBar):

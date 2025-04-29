@@ -2067,6 +2067,10 @@ class ParamsTabXray(ParamsTabCommon):
             decimals=1, minimum=0.1, maximum=90., singleStep=0.1)
         self.foc_search_angle.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='foc_search_angle'))
+        self.foc_rotate_angle = QDoubleSpinBox(
+            decimals=1, minimum=-45., maximum=45., singleStep=0.1)
+        self.foc_rotate_angle.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='foc_rotate_angle'))
 
         self.foc_plot = QComboBox()
         self.foc_plot.currentIndexChanged.connect(
@@ -2085,6 +2089,8 @@ class ParamsTabXray(ParamsTabCommon):
         flo1.addRow(QLabel('Search margin (mm)'), self.foc_search_margin)
         flo1.addRow(QLabel('Angle segment for averaging (deg)'),
                     self.foc_search_angle)
+        flo1.addRow(QLabel('Rotate angle segments (deg)'),
+                    self.foc_rotate_angle)
         flo2 = QFormLayout()
         flo2.addRow(QLabel('Result plot'), self.foc_plot)
         flo2.addRow(QLabel('Result image'), self.foc_result_image)

@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (
     QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox,
     QLineEdit, QTextEdit, QPushButton, QLabel, QRadioButton, QCheckBox,
-    QComboBox, QListWidget, QWidget, QToolBar, QAction,
+    QComboBox, QListWidget, QWidget, QToolBar, QAction, QDateTimeEdit,
     QTableWidget, QTableWidgetItem, QTabWidget, QMessageBox, QFileDialog
     )
 
@@ -30,8 +30,8 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 
 # imageQC block start
 from imageQC.config.iQCconstants import (
-    APPDATA, TEMPDIR, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER, ENV_ICON_PATH
-    )
+    APPDATA, TEMPDIR, ENV_USER_PREFS_PATH, ENV_CONFIG_FOLDER, ENV_ICON_PATH,
+    QUICKTEST_OPTIONS)
 from imageQC.config.config_func import init_user_prefs
 import imageQC.config.config_classes as cfc
 import imageQC.scripts.dcm as dcm
@@ -257,6 +257,140 @@ class StartUpDialog(ImageQCDialog):
 
             self.accept()
 
+
+class OpenRawDialog(ImageQCDialog):
+    """Dialog to open .raw images."""
+
+    def __init__(self, main, raw_paths, title='Open .raw images'):
+        self.raw_paths = raw_paths
+        self.main = main
+        super().__init__()
+        self.setWindowTitle(title)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        self.read_mode = 'manual'  # 'dcm', 'hdr', 'filename'....
+
+        # Get info from filename, .hdr, .dcm manual input
+        self.shape_y = QDoubleSpinBox(decimals=0)
+        self.shape_y.setRange(0, 10000)
+        self.shape_x = QDoubleSpinBox(decimals=0)
+        self.shape_x.setRange(0, 10000)
+        self.pix_x = QDoubleSpinBox(decimals=3)
+        self.pix_x.setRange(0, 10)
+        #self.pix_y = QDoubleSpinBox(decimals=3)
+        #self.pix_y.setRange(0, 10)
+        # TODO? slice thickness, zpos, nm_radius, studyUID
+        self.modality = QComboBox()
+        self.modality.addItems([*QUICKTEST_OPTIONS][:-1])
+        self.modality.setCurrentText('Xray')
+        self.wid_acq_date = QDateTimeEdit(calendarPopup=True)
+        
+        self.cbox_mode = QComboBox()
+        self.cbox_mode.addItems([
+            'Manual input (below)',
+            'DICOM sample file(s) from same/similar equipment',
+            'Filename (yyyyMMddHHmmss_id_widthxheight)'
+            ])
+        self.cbox_mode.currentIndexChanged.connect(self.mode_changed)
+        flo_top = QFormLayout()
+        vlo.addLayout(flo_top)
+        flo_top.addRow(QLabel('Get image info from'), self.cbox_mode)
+        flo = QFormLayout()
+        vlo.addLayout(flo)
+        flo.addRow(QLabel('Image height (pixels)'), self.shape_y)
+        flo.addRow(QLabel('Image width (pixels)'), self.shape_x)
+        flo.addRow(QLabel('Pixel size (mm) x = y assumed'), self.pix_x)
+        #flo.addRow(QLabel('Acquisition date time'), self.wid_acq_date)
+        flo.addRow(QLabel('Modality'), self.modality)
+
+        # test if raw path contain info
+        name = Path(self.raw_paths[0]).stem
+        name_parts = name.split('_')
+        if len(name_parts) == 3:
+            acq_date = name_parts[0]
+            shape_parts = name_parts[-1].split('x')
+            if len(shape_parts) == 2:
+                shape = (int(shape_parts[0]), int(shape_parts[1]))
+                self.cbox_mode.setCurrentIndex(2)
+                self.shape_y.setValue(shape[0])
+                self.shape_x.setValue(shape[1])
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        button_box = QDialogButtonBox(buttons)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        vlo.addWidget(button_box)
+
+    def mode_changed(self):
+        if self.cbox_mode.currentIndex() == 0:
+            self.read_mode = 'manual'
+            self.shape_y.setEnabled(True)
+            self.shape_x.setEnabled(True)
+            self.pix_x.setEnabled(True)
+            self.wid_acq_date.setEnabled(True)
+            self.modality.setEnabled(True)
+        elif self.cbox_mode.currentIndex() == 1:
+            self.read_mode = 'dcm'
+            self.shape_y.setEnabled(False)
+            self.shape_x.setEnabled(False)
+            self.pix_x.setEnabled(False)
+            self.wid_acq_date.setEnabled(False)
+            self.modality.setEnabled(False)
+            # TODO option to select dicom files and read 
+        elif self.cbox_mode.currentIndex() == 2:
+            self.read_mode = 'filename'
+            self.shape_y.setEnabled(False)
+            self.shape_x.setEnabled(False)
+            self.pix_x.setEnabled(True)
+            self.wid_acq_date.setEnabled(False)
+            self.modality.setEnabled(True)
+            self.modality.setCurrentText('Xray')
+
+    def get_infos(self):
+
+        print(self.wid_acq_date.dateTime())
+        acq_date = self.wid_acq_date.dateTime().toString('yyyyMMdd HHmm')
+        print(acq_date)
+        img_infos, ignored_files, warnings = [], [], []
+
+        if self.read_mode == 'dcm':  # preread dicom alias
+            max_progress = 100  # %
+            progress_modal = uir.ProgressModal(
+                "Reading DICOM files...", "Cancel",
+                0, max_progress, self, minimum_duration=0)
+            temp_img_infos, ignored_files, warnings = dcm.read_dcm_info(
+                self.file_list_dcm, tag_infos=self.main.tag_infos,
+                tag_patterns_special=self.main.tag_patterns_special,
+                statusbar=self.main.status_bar, progress_modal=progress_modal)
+            progress_modal.setValue(max_progress)
+            if len(temp_img_infos) > 0:
+                max_progress = 100  # %
+                progress_modal = uir.ProgressModal(
+                    "Reading .raw files...", "Cancel",
+                    0, max_progress, self, minimum_duration=0)
+                img_infos, ignored_files, warnings = dcm.read_raw_info(
+                    self.raw_paths, info_preread=temp_img_infos,
+                    statusbar=self.main.status_bar,
+                    progress_modal=progress_modal)
+                progress_modal.setValue(max_progress)
+
+        else:
+            max_progress = 100  # %
+            progress_modal = uir.ProgressModal(
+                "Reading .raw files...", "Cancel",
+                0, max_progress, self, minimum_duration=0)
+            img_infos, ignored_files, warnings = dcm.read_raw_info(
+                self.raw_paths, read_mode=self.read_mode,
+                shape=(self.shape_y.value(), self.shape_x.value()),
+                pix=(self.pix_x.value(), self.pix_x.value()),
+                modality=self.modality.currentText(),
+                acq_date=acq_date,
+                statusbar=self.main.status_bar,
+                progress_modal=progress_modal)
+            progress_modal.setValue(max_progress)
+
+        return (img_infos, ignored_files, warnings)
 
 class SelectTextsDialog(ImageQCDialog):
     """Dialog to select texts."""
@@ -1264,7 +1398,8 @@ class CmapSelectDialog(ImageQCDialog):
         vlo = QVBoxLayout()
         self.setLayout(vlo)
 
-        self.cmaps = ['gray', 'inferno', 'hot', 'rainbow', 'viridis', 'RdBu']
+        self.cmaps = ['gray', 'inferno', 'hot', 'rainbow', 'viridis', 'RdBu',
+                      'coolwarm', 'bwr', 'seismic']
         self.list_cmaps = QComboBox()
         self.list_cmaps.addItems(self.cmaps)
         self.list_cmaps.setCurrentIndex(0)
@@ -1777,7 +1912,7 @@ class ProjectionPlotDialog(ImageQCDialog):
                         progress_modal.setValue(100)
                         break
                 image, tags_ = dcm.get_img(
-                    img_info.filepath,
+                    img_info,
                     frame_number=img_info.frame_number, tag_infos=tag_infos,
                     tag_patterns=tag_patterns,
                     overlay=self.main.gui.show_overlay,

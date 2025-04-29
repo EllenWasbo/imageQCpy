@@ -1,3 +1,18 @@
+# v3.1.20
+_Apr 29, 2025_
+
+Changes:
+Test MTF Xray/Mammo: finding edges automatically: Small change in finding direction of edge if not full rectangle
+Test Foc Xray: Better finding the outer minimum variance (maximum radial inverted profile). Added option to set rotation for the analysisis.
+
+New functionalities:
+- Added option to zoom result image similar to the active image. Find button for zoom-to-target in result image toolbar. 
+- Added option to specify colormap and limits for the result images other than default. Intended for visual follow-up e.g. via the report templates.
+- Added option to open .raw images (select .raw as file filter when opening files). Tested for Decotron .raw images where filename contain info on image shape.
+
+Bugfixes:
+- Fixed crash in Settings - Report template manager (when html row of elements used).
+
 # v3.1.19
 _Apr 10, 2025_
 

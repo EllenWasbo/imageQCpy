@@ -39,7 +39,7 @@ class DcmInfo():
 
     filepath: str = ''
     modality: str = 'CT'  # as mode in imageQC
-    modalityDCM: str = 'CT'  # as modality read from DICOM
+    modalityDCM: str = 'CT'  # as modality read from DICOM or RAW if .raw
     marked: bool = False
     marked_quicktest: list = field(default_factory=list)
     quicktest_image_name: str = ''  # for result export
@@ -680,16 +680,14 @@ def get_modality(modalityStr):
             'key': qtOptKey}
 
 
-def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
+def get_img(file_info, frame_number=-1, tag_patterns=[], tag_infos=None,
             NM_count=False, get_window_level=False, overlay=True,
             rotate_k=0):
     """Read pixmap from filepath int numpy array prepeared for display.
 
     Parameters
     ----------
-    filepath : str
-        full path of DICOM file
-        - already verified as dicom, but file connection might get lost
+    file_info : DcmInfo or full path
     frame_number : int
         if multiframe, -1 if single frame dicom
     tag_patterns : list of TagPatternFormat, optional
@@ -714,142 +712,161 @@ def get_img(filepath, frame_number=-1, tag_patterns=[], tag_infos=None,
     """
     npout = None
     tag_strings = []
-    pyd, is_image, _ = read_dcm(filepath, stop_before_pixels=False)
-    if is_image:
-        pixarr = None
-        try:
-            pixarr = pyd.pixel_array
-        except AttributeError as err:
-            if 'convert_pixel_data' in str(err):
-                # fix for pydicom v3.0.1+  TODO - later use only this
-                try:
-                    pixarr = pydicom.pixels.pixel_array(pyd)
-                except AttributeError as err2:
-                    print(err2)
-                    if 'Transfer Syntax UID' in str(err2):
-                        pyd.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
-                        try:  # try again
-                            pixarr = pydicom.pixels.pixel_array(pyd)
-                        except:
-                            pass
-                    elif 'required' in str(err2):
-                        pyd = fix_required_tags(pyd)
-                        try:
-                            pixarr = pydicom.pixels.pixel_array(pyd)
-                        except:
-                            pass
-            elif 'TransferSyntaxUID' in str(err):
-                pyd.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
-                try:
-                    pixarr = pyd.pixel_array
-                except:
-                    pass
-            elif 'required' in str(err):
-                print(err)
-                pyd = fix_required_tags(pyd)
-                try:
-                    pixarr = pyd.pixel_array
-                except:
-                    pass
+    dcm_path = True
+    if isinstance(file_info, str):
+        filepath = file_info
+    else:
+        filepath = file_info.filepath
+        if file_info.modalityDCM == 'RAW':
+            dcm_path = False
+            f = open(filepath, 'rb')
+            img_str = f.read()
+            arr = np.fromstring(img_str, np.uint16)
+            if arr.size == file_info.shape[0] * file_info.shape[1]:
+                npout = np.reshape(arr, file_info.shape)
+                npout = npout.astype(np.uint32)
             else:
-                pass
+                print('Expected image size do not fit file content')
 
-        overlay_array = None
-        if overlay:
+    if dcm_path:
+        pyd, is_image, _ = read_dcm(
+            filepath, stop_before_pixels=False)
+        if is_image:
+            pixarr = None
             try:
-                overlay_array = pyd.overlay_array(0x6000)  # e.g. Patient Protocol Siemens CT
-            except AttributeError:
-                pass
-
-        if pixarr is not None:
-            slope, intercept = get_dcm_info_list(
-                pyd, TagPatternFormat(list_tags=['RescaleSlope', 'RescaleIntercept']),
-                tag_infos)
-            if frame_number == -1 or isinstance(slope, str):
-                # assume intercept is str if slope is str
-                slope_this = slope
-                intercept_this = intercept
-            else:
-                try:
-                    slope_this = slope[1][frame_number]
-                    intercept_this = intercept[1][frame_number]
-                except IndexError:
+                pixarr = pyd.pixel_array
+            except AttributeError as err:
+                if 'convert_pixel_data' in str(err):
+                    # fix for pydicom v3.0.1+  TODO - later use only this
                     try:
-                        slope_this = slope[1]
-                        intercept_this = intercept[1]
-                    except IndexError:
-                        slope_this = slope
-                        intercept_this = intercept
-            try:
-                slope = float(slope_this)
-                intercept = float(intercept_this)
-            except ValueError:
-                slope = 1.
-                intercept = 0.
-
-            if frame_number > -1:
-                ndim = pixarr.ndim
-                if ndim == 3:
-                    pixarr = pixarr[frame_number, :, :]
-
-            if pixarr is not None:
-                npout = pixarr * slope + intercept
-
-        if npout is not None:
-            if len(npout.shape) == 3:
-                # rgb to grayscale NTSC formula
-                npout = (0.299 * npout[:, :, 0]
-                         + 0.587 * npout[:, :, 1]
-                         + 0.114 * npout[:, :, 2])
-
-        if overlay_array is not None:
-            if pixarr is not None:
-                if npout.shape == overlay_array.shape:
-                    npout = np.add(npout, overlay_array)
+                        pixarr = pydicom.pixels.pixel_array(pyd)
+                    except AttributeError as err2:
+                        print(err2)
+                        if 'Transfer Syntax UID' in str(err2):
+                            pyd.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
+                            try:  # try again
+                                pixarr = pydicom.pixels.pixel_array(pyd)
+                            except:
+                                pass
+                        elif 'required' in str(err2):
+                            pyd = fix_required_tags(pyd)
+                            try:
+                                pixarr = pydicom.pixels.pixel_array(pyd)
+                            except:
+                                pass
+                elif 'TransferSyntaxUID' in str(err):
+                    pyd.file_meta.TransferSyntaxUID = pydicom.uid.ImplicitVRLittleEndian
+                    try:
+                        pixarr = pyd.pixel_array
+                    except:
+                        pass
+                elif 'required' in str(err):
+                    print(err)
+                    pyd = fix_required_tags(pyd)
+                    try:
+                        pixarr = pyd.pixel_array
+                    except:
+                        pass
                 else:
-                    pass  # implement when example file exists
-                    # overlay_offset at 0x6000, 0x0050
-            else:
-                npout = overlay_array
+                    pass
 
-        orient = pyd.get('PatientPosition', '')
-        if orient == 'FFS':
-            try:
-                npout = np.fliplr(npout)
-            except ValueError:
-                pass
+            overlay_array = None
+            if overlay:
+                try:
+                    overlay_array = pyd.overlay_array(0x6000)  # e.g. Patient Protocol Siemens CT
+                except AttributeError:
+                    pass
 
-        if len(tag_patterns) > 0 and tag_infos is not None:
-            tag_strings = read_tag_patterns(
-                pyd, tag_patterns, tag_infos, frame_number=frame_number)
-            if NM_count:
-                for pidx, pattern in enumerate(tag_patterns):
-                    if 'CountsAccumulated' in pattern.list_tags:
-                        idx = pattern.list_tags.index('CountsAccumulated')
-                        if isinstance(tag_strings[pidx], dict):
-                            this_list = tag_strings[pidx]['dummy']
-                        else:
-                            this_list = tag_strings[pidx]
-                        if this_list[idx] in ['', '-']:
-                            new_val = np.sum(pixarr)
-                            if hasattr(pattern, 'list_format'):
-                                new_val = mmf.format_val(
-                                    new_val, pattern.list_format[idx])
+            if pixarr is not None:
+                slope, intercept = get_dcm_info_list(
+                    pyd, TagPatternFormat(
+                        list_tags=['RescaleSlope', 'RescaleIntercept']),
+                    tag_infos)
+                if frame_number == -1 or isinstance(slope, str):
+                    # assume intercept is str if slope is str
+                    slope_this = slope
+                    intercept_this = intercept
+                else:
+                    try:
+                        slope_this = slope[1][frame_number]
+                        intercept_this = intercept[1][frame_number]
+                    except IndexError:
+                        try:
+                            slope_this = slope[1]
+                            intercept_this = intercept[1]
+                        except IndexError:
+                            slope_this = slope
+                            intercept_this = intercept
+                try:
+                    slope = float(slope_this)
+                    intercept = float(intercept_this)
+                except ValueError:
+                    slope = 1.
+                    intercept = 0.
+
+                if frame_number > -1:
+                    ndim = pixarr.ndim
+                    if ndim == 3:
+                        pixarr = pixarr[frame_number, :, :]
+
+                if pixarr is not None:
+                    npout = pixarr * slope + intercept
+
+            if npout is not None:
+                if len(npout.shape) == 3:
+                    # rgb to grayscale NTSC formula
+                    npout = (0.299 * npout[:, :, 0]
+                             + 0.587 * npout[:, :, 1]
+                             + 0.114 * npout[:, :, 2])
+
+            if overlay_array is not None:
+                if pixarr is not None:
+                    if npout.shape == overlay_array.shape:
+                        npout = np.add(npout, overlay_array)
+                    else:
+                        pass  # implement when example file exists
+                        # overlay_offset at 0x6000, 0x0050
+                else:
+                    npout = overlay_array
+
+            orient = pyd.get('PatientPosition', '')
+            if orient == 'FFS':
+                try:
+                    npout = np.fliplr(npout)
+                except ValueError:
+                    pass
+
+            if len(tag_patterns) > 0 and tag_infos is not None:
+                tag_strings = read_tag_patterns(
+                    pyd, tag_patterns, tag_infos, frame_number=frame_number)
+                if NM_count:
+                    for pidx, pattern in enumerate(tag_patterns):
+                        if 'CountsAccumulated' in pattern.list_tags:
+                            idx = pattern.list_tags.index('CountsAccumulated')
                             if isinstance(tag_strings[pidx], dict):
-                                tag_strings[pidx]['dummy'][idx] = new_val
+                                this_list = tag_strings[pidx]['dummy']
                             else:
-                                tag_strings[pidx][idx] = new_val
+                                this_list = tag_strings[pidx]
+                            if this_list[idx] in ['', '-']:
+                                new_val = np.sum(pixarr)
+                                if hasattr(pattern, 'list_format'):
+                                    new_val = mmf.format_val(
+                                        new_val, pattern.list_format[idx])
+                                if isinstance(tag_strings[pidx], dict):
+                                    tag_strings[pidx]['dummy'][idx] = new_val
+                                else:
+                                    tag_strings[pidx][idx] = new_val
 
-        if get_window_level:
-            winw = pyd.get('WindowWidth', -1)
-            winc = pyd.get('WindowCenter', -1)
-            # seen issue with window width and window center
-            # listed as two identical values
-            if str(type(winw)) == "<class 'pydicom.multival.MultiValue'>":
-                winw = int(winw[0])
-                if str(type(winc)) == "<class 'pydicom.multival.MultiValue'>":
-                    winc = int(winc[0])
-            tag_strings.append([winc - winw / 2, winc + winw / 2])
+            if get_window_level:
+                winw = pyd.get('WindowWidth', -1)
+                winc = pyd.get('WindowCenter', -1)
+                # seen issue with window width and window center
+                # listed as two identical values
+                if str(type(winw)) == "<class 'pydicom.multival.MultiValue'>":
+                    winw = int(winw[0])
+                    if str(type(winc)) == "<class 'pydicom.multival.MultiValue'>":
+                        winc = int(winc[0])
+                tag_strings.append([winc - winw / 2, winc + winw / 2])
 
         # for testing:
         #import scipy as sp
@@ -1362,9 +1379,8 @@ def sum_marked_images(img_infos, included_ids, tag_infos):
     for idx, img_info in enumerate(img_infos):
         if idx in included_ids:
             image, _ = get_img(
-                img_info.filepath,
-                frame_number=img_info.frame_number, tag_infos=tag_infos,
-                overlay=False
+                img_info, frame_number=img_info.frame_number,
+                tag_infos=tag_infos, overlay=False
                 )
             if summed_img is None:
                 summed_img = image
@@ -1380,3 +1396,81 @@ def sum_marked_images(img_infos, included_ids, tag_infos):
         summed_img = None
 
     return (summed_img, errmsg)
+
+
+def read_raw_info(filenames_raw, info_preread=None, read_mode='manual',
+                  shape=(0, 0), pix=(0, 0), modality='CT', acq_date='',
+                  statusbar=None, progress_modal=None):
+    """Read .raw into DcmInfoGui objects when opening files.
+
+    Parameters
+    ----------
+    filenames_raw : list of str
+        list of filenames to open
+    info_preread : list of DcmInfoGui or None
+        if dicom file(s) used as header-template for raw image
+    read_mode : str
+        manual, dcm or filename. Default is 'manual'
+        assumed dcm if info_preread is not None
+    shape : tuple of int
+        image size (rows, columns) if manually specified
+    pix : tuple of float
+        pixel size (x, y) if manually specified
+    modality : str
+        if manually specified
+    acq_date: str
+        Acquisition date if manually specified
+    statusbar : StatusBar, optional
+        for messages to screen
+    progress_modal : uir.ProgressModal, optional
+        for mesaages to screen and blocking actions, cancel option
+
+    Returns
+    -------
+    list_of_DcmInfo : list of objects
+        DcmInfoGui
+    ignored_files : list of str
+        file_paths not accepted as images of expected format
+    warnings_this : list of str
+        warnings to display
+    """
+
+    list_of_DcmInfo = []
+    ignored_files = []
+    warnings_this = []
+
+    for fileno, file in enumerate(filenames_raw):
+        this_info = None
+        if info_preread:
+            this_info = info_preread[fileno]
+        else:
+            if read_mode == 'filename':
+                name = Path(file).stem
+                name_parts = name.split('_')
+                if len(name_parts) == 3:
+                    acq_date = name_parts[0]
+                    shape_parts = name_parts[-1].split('x')
+                    if len(shape_parts) == 2:
+                        shape = (int(shape_parts[1]), int(shape_parts[0]))
+                    else:
+                        warnings_this.append(
+                            f'Filename {name} do not fit the expected format '
+                            'date_id_widthxheight')
+                else:
+                    warnings_this.append(
+                        f'Filename {name} do not fit the expected format '
+                        'date_id_widthxheight')
+            if 0 in pix:
+                warnings_this.append(
+                    f'Missing pixel spacing set to 1x1 mm for file {file}'
+                    )
+                pix = (1., 1.)
+            this_info = DcmInfoGui(
+                filepath=file, modality=modality,
+                modalityDCM='RAW', pix=pix, shape=shape, acq_date=acq_date)
+        if this_info is not None:
+            list_of_DcmInfo.append(this_info)
+        else:
+            ignored_files.append(file)
+
+    return (list_of_DcmInfo, ignored_files, warnings_this)

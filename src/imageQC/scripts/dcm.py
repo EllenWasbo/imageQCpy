@@ -715,7 +715,7 @@ def get_img(file_info, frame_number=-1, tag_patterns=[], tag_infos=None,
     npout = None
     tag_strings = []
     dcm_path = True
-    if isinstance(file_info, str):
+    if isinstance(file_info, str) or 'WindowsPath' in str(type(file_info)):
         filepath = file_info
     else:
         filepath = file_info.filepath

@@ -996,7 +996,10 @@ class ParamsTabCommon(QTabWidget):
             lambda: self.param_changed_from_gui(attribute='mtf_plot',
                                                 update_roi=False,
                                                 clear_results=False))
-        
+        self.mtf_result_image = QComboBox()
+        self.mtf_result_image.currentIndexChanged.connect(
+            self.main.wid_res_image.canvas.result_image_draw)
+
     def create_tab_mtf_ct_spect_pet(self, modality='CT'):
         """GUI of tab MTF - common to CT/SPECT/PET."""
         self.mtf_roi_size = QDoubleSpinBox(
@@ -1104,6 +1107,10 @@ class ParamsTabCommon(QTabWidget):
         self.mtf_plot.addItems(['Edge position',
                                 'Sorted pixel values', 'LSF', 'MTF'])
 
+        self.mtf_result_image.addItems([
+            'Variance image for auto center',
+            'Thresholded image for auto center'])
+
         self.create_offset_widget('mtf')
 
         hlo_size = QHBoxLayout()
@@ -1140,6 +1147,7 @@ class ParamsTabCommon(QTabWidget):
         flo3 = QFormLayout()
         flo3.addRow(QLabel('Table results from'), self.mtf_gaussian)
         flo3.addRow(QLabel('Plot'), self.mtf_plot)
+        flo3.addRow(QLabel('Result image'), self.mtf_result_image)
         vlo2.addLayout(flo3)
         self.tab_mtf.hlo.addLayout(vlo2)
 
@@ -2046,10 +2054,38 @@ class ParamsTabXray(ParamsTabCommon):
 
     def create_tab_foc(self):
         """GUI for tab Focal spot size."""
+        info_txt = '''
+        The focal spot size (FS) is calculated according to equation 8 in AAPM TG150:<br><br>
+        FS = &theta; * D / (M-1)<br><br>
+        where<br>
+        &theta; = the star pattern spoka angle in radians (defined by the user in degrees)<br>
+        D = the measured blur diameter in mm<br>
+        M = magnification factor<br><br>
+        Magnification M is found from the ratio of star pattern size automatically found in the image relative <br>
+        to the true size of the star. The blur diameter in x and y direction is found by taking the variance <br>
+        image of the star pattern using a 2 mm ROI size. Where the star lines are blurred, the variance is lowest.<br>
+        The user define an angular segment to average over in x and y direction optionally with a rotation if the focus.<br>
+        Average radial profile of the variance image is extracted from these angular segments.<br>
+        This radial profile is then limited to the 50th percentile and inverted such that the blurred regions are the <br>
+        profile maxima. Profile maxima are found using peak-analysis and the center of the peak is used to calculate the <br>
+        blur diameter.<br>
+        <br>
+        Result image show the variance map and Result plot display the radial profile for x and y direction together with <br>
+        the found blur radius.<br>
+        <br>
+        Verify that the blue dashed circle in the star pattern image fit the star pattern. Else the magnification factor <br>
+        or radial profile center might be incorrect. Consider increasing the search margin for the central dot marking.<br>
+        <br>
+        If the last maxima in the profile is the only maximum of the profile, the magnification should be increased by <br>
+        increasing the source image distance relative to the source object distance.<br>
+        <br>
+        Maximum tolerance values for focal spot sizes can be found in table 9 in AAPM TG150.
+        '''
         self.tab_foc = ParamsWidget(self, run_txt='Calculate focal spot size')
 
-        self.tab_foc.vlo_top.addWidget(uir.LabelItalic(
+        self.tab_foc.hlo_top.addWidget(uir.LabelItalic(
             'Find focal spot size from star test pattern object.'))
+        self.tab_foc.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
         self.foc_pattern_size = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=100., singleStep=0.1)

@@ -470,7 +470,8 @@ def get_SNI_ref_image(paramset, tag_infos):
     for rno, ref_info in enumerate(ref_infos):
         image, _ = dcm.get_img(
             filename,
-            frame_number=rno, tag_infos=tag_infos)
+            frame_number=rno, tag_infos=tag_infos,
+            postprocessing=paramset.postprocessing)
         if image is not None:
             sni_ref_image.append(image)
     return {'reference_image': sni_ref_image,

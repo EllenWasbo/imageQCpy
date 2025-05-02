@@ -11,7 +11,7 @@ from pathlib import Path
 
 directory = Path(__file__).parent.parent / 'src'
 
-search_string = "get_img"
+search_string = "update_active_img"
 
 for root, dirs, files in os.walk(directory):
     for file in files:

@@ -1,3 +1,15 @@
+# v3.1.21
+_May 02, 2025_
+
+New functionalities:
+Added option to invert/flip/rotate images. Parameters saved to parameterset and applies to all images visually and during analysis.
+
+Changes:
+- Test Foc Xray: Added info-button to better explain the calculations and how to verify the results.
+- Test MTF Xray/Mammo, finding edges automatically: 
+	- Handeling IEC phantom finding most central edge
+	- Added option to view processed matrixes for finding the edge(s). This helps on evaluating if the search fails and how to change the parameters (...).
+
 # v3.1.20
 _Apr 29, 2025_
 
@@ -46,7 +58,7 @@ Test PET/Recovery curve:
 _Mar 25, 2025_
 
 Test MTF for Xray, Mammo, (MR) when using auto detect edges:
-- The algorithm had issues with slow performance for images whithout edges. 
+- The algorithm had issues with slow performance for images whithout edges.
 	- Changed strategy for finding the edges and avoid spending time when no edges likely to exist. 
 	- Expected edge length minimum 25mm. 
 	- At least one full side of the edge have to be inside the image/masked region (previously full rectangle had to be inside).

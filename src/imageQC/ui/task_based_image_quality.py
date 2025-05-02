@@ -767,7 +767,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                     tag_patterns=tag_patterns,
                     tag_infos=self.main.tag_infos,
                     overlay=self.gui.show_overlay,
-                    rotate_k=self.gui.rotate_k)
+                    postprocessing=self.current_paramset.postprocessing)
                 self.max_pix_values.append(np.max(img_array))
                 if diameters and len(self.diameters) == 0:
                     widths = get_object_width_xy(
@@ -921,7 +921,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
                 self.imgs[self.gui.active_img_no].filepath,
                 frame_number=self.imgs[self.gui.active_img_no].frame_number,
                 tag_infos=self.tag_infos, overlay=self.gui.show_overlay,
-                rotate_k=self.gui.rotate_k)
+                postprocessing=self.current_paramset.postprocessing)
 
             self.refresh_img_display()
             self.refresh_results_display(update_table=False)

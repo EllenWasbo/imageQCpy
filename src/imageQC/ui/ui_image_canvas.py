@@ -385,7 +385,7 @@ class ImageCanvas(GenericImageCanvas):
         if hasattr(self.main, 'wid_window_level'):
             annotate = self.main.gui.annotations
 
-        if self.main.current_roi is not None and annotate:
+        if annotate:
             try:
                 self.linewidth = self.main.gui.annotations_line_thick
                 self.fontsize = self.main.gui.annotations_font_size
@@ -393,10 +393,13 @@ class ImageCanvas(GenericImageCanvas):
                 pass  # default
 
             class_method = getattr(self, self.main.current_test, None)
-            if class_method is not None:
-                class_method()
-            else:
-                self.add_contours_to_all_rois()
+            try:
+                if class_method is not None:
+                    class_method()
+                else:
+                    self.add_contours_to_all_rois()
+            except (TypeError, IndexError, AttributeError):
+                pass
         self.draw()
         if 'InputMain' in str(type(self.main)):
             sleep(.2)
@@ -643,12 +646,19 @@ class ImageCanvas(GenericImageCanvas):
                 self.add_contours_to_all_rois(
                     roi_indexes=roi_indexes,
                     colors=cols)
-                mask = np.where(self.main.current_roi[-1], 0, 1)
-                contour = self.ax.contour(
-                    mask, levels=[0.9],
-                    colors='red', alpha=0.5, linewidths=self.linewidth,
-                    linestyles='dotted')
-                self.contours.append(contour)
+                mask = True
+                try:
+                    if self.main.current_paramset.mtf_auto_center_mask_outer == 0:
+                        mask = False
+                except AttributeError:
+                    pass
+                if mask:
+                    mask = np.where(self.main.current_roi[-1], 0, 1)
+                    contour = self.ax.contour(
+                        mask, levels=[0.9],
+                        colors='blue', alpha=0.5, linewidths=self.linewidth,
+                        linestyles='dotted')
+                    self.contours.append(contour)
             else:
                 self.add_contours_to_all_rois(colors=COLORS)
 
@@ -1505,6 +1515,29 @@ class ResultImageCanvas(GenericImageCanvas):
 
                 except KeyError:
                     pass
+
+    def MTF(self, sel_text):
+        """Prepare result image for test MTF."""
+        if self.main.current_modality in ['Xray', 'Mammo', 'MR']:
+            if sel_text == '':
+                test_widget = self.main.stack_test_tabs.currentWidget()
+                sel_text = test_widget.mtf_result_image.currentText()
+            try:
+                details_dict = self.main.results['MTF']['details_dict'][
+                    self.main.gui.active_img_no]
+            except KeyError:
+                details_dict = {}
+            def_cmap = 'viridis'
+            if details_dict:
+                self.title = sel_text
+                if 'Variance' in sel_text:
+                    if 'variance_image' in details_dict:
+                        self.current_image = details_dict['variance_image']
+                else:
+                    if 'binary_image' in details_dict:
+                        self.current_image = details_dict['binary_image']
+                        def_cmap = 'gray'
+            self.get_default_display('MTF', sel_text, def_cmap)
 
     def NPS(self, sel_text):
         """Prepare result image for test NPS."""

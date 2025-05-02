@@ -126,7 +126,8 @@ def sum_marked_images(main):
     if len(main.artifacts) == 0 and len(main.artifacts_3d) == 0:
         summed_img, errmsg = dcm.sum_marked_images(
             main.imgs, main.tree_file_list.get_marked_imgs_current_test(),
-            tag_infos=main.tag_infos)
+            tag_infos=main.tag_infos,
+            postprocessing=main.current_paramset.postprocessing)
     else:
         marked = main.get_marked_imgs_current_test()
         summed_img = None
@@ -136,7 +137,7 @@ def sum_marked_images(main):
                     img_info,
                     frame_number=img_info.frame_number,
                     tag_infos=main.tag_infos, overlay=main.gui.show_overlay,
-                    rotate_k=main.gui.rotate_k)
+                    postprocessing=main.current_paramset.postprocessing)
                 if len(img_info.artifacts) > 0:
                     arr = apply_artifacts(
                         arr, img_info,

@@ -188,6 +188,32 @@ class DigitTemplate:
 
 
 @dataclass
+class PostProcessVariables:
+    """Class to keep parameters for postprocessing."""
+    any_set: bool = False  # True if any parameters not as default
+    rotate_k: int = 0
+    rotate: float = 0.0
+    invert: bool = False
+    flip_lr: bool = False
+    flip_ud: bool = False
+
+    def any_set_update(self):
+        """Find whether any_set or not."""
+        any_set = False
+        if self.rotate_k != 0:
+            any_set = True
+        if self.rotate != 0:
+            any_set = True
+        if self.invert:
+            any_set = True
+        if self.flip_lr:
+            any_set = True
+        if self.flip_ud:
+            any_set = True
+        self.any_set = any_set
+
+
+@dataclass
 class PositionTable:
     """Set of labels and positions used for different test ROIs."""
 
@@ -348,6 +374,8 @@ class ParamSetCommon:
     """Set of paramaters used for all parameter sets."""
 
     label: str = ''
+    postprocessing: PostProcessVariables = field(
+        default_factory=PostProcessVariables)
     output: QuickTestOutputTemplate = field(
         default_factory=QuickTestOutputTemplate)
     result_image_defaults: list = field(default_factory=list)
@@ -465,7 +493,7 @@ class ParamSetXray(ParamSetCommon):
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
     mtf_auto_center_mask_outer: int = 30  # mask outer mm
     mtf_auto_center_thresholds: list[float] = field(
-        default_factory=lambda: [25., 0.1, 10., 0.5])
+        default_factory=lambda: [25., 0.1, 10., 0.8])
         # min_size (mm), roi_size fraction of min_size, max/mean variance threshold,
         # threshold fraction for finding peaks
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
@@ -481,7 +509,7 @@ class ParamSetXray(ParamSetCommon):
     var_mask_outer_mm: float = 10.0
     foc_pattern_size: float = 45.  # star pattern size in mm
     foc_angle: float = 1.5  # star pattern line angle in degrees
-    foc_search_margin: float = 10.  # mm margin offsenter for pattern
+    foc_search_margin: float = 20.  # mm margin offsenter for pattern
     foc_search_angle: float = 15.  # angle segment to average radial profile
     foc_rotate_angle: float = 0.  # rotate segments (degrees)
     pha_alt: int = 0  # which phantom to use (ALTERNATIVE['Xray']['Pha'])
@@ -531,7 +559,7 @@ class ParamSetMammo(ParamSetCommon):
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
     mtf_auto_center_mask_outer: int = 30  # mask outer mm
     mtf_auto_center_thresholds: list[float] = field(
-        default_factory=lambda: [25., 0.1, 10., 0.5])
+        default_factory=lambda: [25., 0.1, 10., 0.8])
         # min_size (mm), roi_size fraction of min_size, max/mean variance threshold,
         # threshold fraction for finding peaks
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
@@ -716,7 +744,7 @@ class ParamSetMR(ParamSetCommon):
     mtf_auto_center_type: int = 0  # 0 all edges, 1 = most central edge
     mtf_auto_center_mask_outer: int = 10  # mask outer mm
     mtf_auto_center_thresholds: list[float] = field(
-        default_factory=lambda: [25., 0.1, 10., 0.5])
+        default_factory=lambda: [25., 0.1, 10., 0.8])
         # min_size (mm), roi_size fraction of min_size, max/mean variance threshold,
         # threshold fraction for finding peaks
     mtf_sampling_frequency: float = 0.01  # mm-1 for gaussian
@@ -730,6 +758,8 @@ class ParamSetSR:
     output: QuickTestOutputTemplate = field(
         default_factory=QuickTestOutputTemplate)
     result_image_defaults: list = field(default_factory=list)
+    postprocessing: PostProcessVariables = field(
+        default_factory=PostProcessVariables)
     dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
 
 

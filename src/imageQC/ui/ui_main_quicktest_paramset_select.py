@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 # imageQC block start
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
-from imageQC.ui.ui_dialogs import QuickTestClipboardDialog
+from imageQC.ui.ui_dialogs import QuickTestClipboardDialog, PostProcessingDialog
 from imageQC.config import config_func as cff
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.config import config_classes as cfc
@@ -438,8 +438,15 @@ class SelectParamsetWidget(SelectTemplateWidget):
                 initial_view='Parameter sets / output',
                 initial_template_label=self.main.current_paramset.label))
 
+        act_tools = QAction(
+            QIcon(f'{os.environ[ENV_ICON_PATH]}tool_invert.png'),
+            'Edit postprocessing settings', self)
+        act_tools.triggered.connect(self.run_edit_postprocessing)
+
         toolb = QToolBar()
         toolb.addActions([act_add_param, act_save_param, act_settings_param])
+        toolb.addWidget(QLabel('     '))
+        toolb.addAction(act_tools)
         h_lo.addWidget(toolb)
 
         h_lo.addStretch()
@@ -454,3 +461,15 @@ class SelectParamsetWidget(SelectTemplateWidget):
 
         self.main.update_paramset()
         self.main.reset_results()
+
+    def run_edit_postprocessing(self):
+        dlg = PostProcessingDialog(self.main)
+        res = dlg.exec()
+        if res:
+            postproc_object, changed = dlg.get_data()
+            if changed:
+                self.main.current_paramset.postprocessing = postproc_object
+                self.flag_edit(True)
+                self.main.update_active_img(
+                    self.main.tree_file_list.topLevelItem(
+                        self.main.gui.active_img_no))

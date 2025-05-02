@@ -84,9 +84,6 @@ class GuiVariables():
     show_axis: bool = False
     show_overlay: bool = True
 
-    # for testing
-    rotate_k: int = 0
-
 
 class MainWindow(QMainWindow):
     """Class main window of imageQC."""
@@ -271,7 +268,8 @@ class MainWindow(QMainWindow):
         widget.update_displayed_params()
         self.wid_res_tbl.tb_copy.parameters_output = self.current_paramset.output
         self.wid_res_tbl.tb_copy.update_checked()
-        self.update_roi()
+        self.update_active_img(self.tree_file_list.topLevelItem(
+            self.gui.active_img_no))
         self.wid_paramset.flag_edit(False)
 
     def open_files(self, file_list=None):
@@ -411,7 +409,7 @@ class MainWindow(QMainWindow):
                     self.imgs[self.gui.active_img_no],
                     frame_number=self.imgs[self.gui.active_img_no].frame_number,
                     tag_infos=self.tag_infos, overlay=self.gui.show_overlay,
-                    rotate_k=self.gui.rotate_k)
+                    postprocessing=self.current_paramset.postprocessing)
             if self.active_img is not None:
                 # apply artifacts if any
                 try:
@@ -493,7 +491,7 @@ class MainWindow(QMainWindow):
                 self.imgs[self.gui.active_img_no],
                 frame_number=self.imgs[self.gui.active_img_no].frame_number,
                 tag_infos=self.tag_infos, overlay=self.gui.show_overlay,
-                rotate_k=self.gui.rotate_k)
+                postprocessing=self.current_paramset.postprocessing)
         except IndexError:
             pass
 
@@ -1246,18 +1244,6 @@ class MainWindow(QMainWindow):
             act_reset_split, act_rename_dcm, act_report, act_settings])
         tool_bar.addWidget(QLabel('             '))
         tool_bar.addAction(self.act_warning)
-
-        self.btn_rotate = QPushButton('0')
-        self.btn_rotate.clicked.connect(self.rotate_select)
-        if self.developer_mode:
-            tool_bar.addWidget(QLabel('Rotate k:'))
-            tool_bar.addWidget(self.btn_rotate)
-
-    def rotate_select(self):
-        self.gui.rotate_k += 1
-        if self.gui.rotate_k == 4:
-            self.gui.rotate_k = 0
-        self.btn_rotate.setText(str(self.gui.rotate_k))
 
     def create_modality_selector(self):
         """Groupbox with modality selection."""

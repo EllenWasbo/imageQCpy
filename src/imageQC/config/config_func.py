@@ -684,6 +684,11 @@ def load_paramsets(fnames, path):
                                                     cfc.TagPatternFormat())
                             doc['group_tagpattern'] = cfc.TagPatternFormat(
                                 **upd)
+                        if 'postprocessing' in doc:
+                            upd = verify_input_dict(doc['postprocessing'],
+                                                    cfc.PostProcessVariables())
+                            doc['postprocessing'] = cfc.PostProcessVariables(
+                                **upd)
                         if 'result_image_defaults' in doc:
                             result_image_defaults = []
                             for sub in doc['result_image_defaults']:

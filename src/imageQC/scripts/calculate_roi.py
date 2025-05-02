@@ -130,7 +130,7 @@ def get_rois(image, image_number, input_main):
                 off_y = center_y - image.shape[0] // 2
 
             tot_w_mm = 5.1 *  paramset.foc_pattern_size  # assumed max 5x magnification
-            w_tot = tot_w_mm / image_info.pix[0]
+            w_tot = round(tot_w_mm / image_info.pix[0])
             roi_outer = get_roi_rectangle(
                 img_shape, roi_width=w_tot, roi_height=w_tot, offcenter_xy=(off_x, off_y))
             w = 2 * paramset.foc_search_margin / image_info.pix[0]
@@ -139,13 +139,14 @@ def get_rois(image, image_number, input_main):
             roi_this = [roi_outer, roi_inner]
 
             rot_a = paramset.foc_search_angle / 2
-            roi_half = get_roi_rectangle(
-                img_shape, roi_width=w_tot//2, roi_height=w_tot, offcenter_xy=(w_tot//4, 0))
+            roi_half = np.zeros((w_tot, w_tot), dtype=bool)
+            roi_half[:,w_tot//2:3 * w_tot // 4] = True
             roi_half_rot = ndimage.rotate(
                 roi_half.astype(float), rot_a, reshape=False)
             roi_half_rot = np.round(roi_half_rot)
             overlap = roi_half_rot + np.fliplr(roi_half_rot)
             segment = np.zeros(roi_half_rot.shape, dtype=bool)
+
             segment[overlap == 2] = True
             segments_x = ndimage.rotate(
                 segment.astype(float), 90-paramset.foc_rotate_angle, reshape=False)
@@ -154,11 +155,22 @@ def get_rois(image, image_number, input_main):
             segments_y = ndimage.rotate(
                 segments_x.astype(float), 90, reshape=False)
             segments_y = np.round(segments_y).astype(bool)
-            segments_x = np.roll(segments_x, round(off_x), axis=1)
-            segments_x = np.roll(segments_x, round(off_y), axis=0)
-            segments_y = np.roll(segments_y, round(off_x), axis=1)
-            segments_y = np.roll(segments_y, round(off_y), axis=0)
-            roi_this.extend([segments_x, segments_y])
+
+            x = img_shape[1] // 2 - w_tot // 2
+            y = img_shape[0] // 2 - w_tot // 2
+            segments_x_full = np.zeros(img_shape)
+            segments_x_full[
+                y:y+roi_half.shape[0], x:x+roi_half.shape[1]] = segments_x
+            segments_y_full = np.zeros(img_shape)
+            segments_y_full[
+                y:y+roi_half.shape[0], x:x+roi_half.shape[1]] = segments_y
+
+            segments_x_full = np.roll(segments_x_full, round(off_x), axis=1)
+            segments_x_full = np.roll(segments_x_full, round(off_y), axis=0)
+            segments_y_full = np.roll(segments_y_full, round(off_x), axis=1)
+            segments_y_full = np.roll(segments_y_full, round(off_y), axis=0)
+
+            roi_this.extend([segments_x_full, segments_y_full])
 
         return roi_this
 
@@ -324,9 +336,17 @@ def get_rois(image, image_number, input_main):
                 mask_outer_pix = round(
                     paramset.mtf_auto_center_mask_outer / image_info.pix[0])
 
+                thresholds = paramset.mtf_auto_center_thresholds
+                if thresholds[0] < paramset.mtf_roi_size_x:
+                    thresholds[0] = paramset.mtf_roi_size_x
+                    errmsg = (
+                        'Minimum edge length (threshold details) should not '
+                        'be shorter than the ROI width. Minimum edge length '
+                        'changed to the ROI width.')
                 centers_of_edges_xy = find_rectangle_object(
-                    image, mask_outer=mask_outer_pix, pix=image_info.pix[0],
-                    thresholds=paramset.mtf_auto_center_thresholds)
+                    image, mask_outer=paramset.mtf_auto_center_mask_outer,
+                    pix=image_info.pix[0],
+                    thresholds=thresholds)
 
                 roi_this = []
                 if centers_of_edges_xy is not None:
@@ -342,12 +362,15 @@ def get_rois(image, image_number, input_main):
                             if roi_sz_xy[0] != roi_sz_xy[1]:
                                 # find direction of edge
                                 x, y = centers_of_edges_xy[0]
+                                x, y = round(x), round(y)
                                 wi = round(min(roi_sz_xy) / 2)
                                 try:
                                     subarr = image[y-wi:y+wi, x-wi:x+wi]
-                                    diffs_y = np.diff(np.sum(subarr, axis=1))
-                                    diffs_x = np.diff(np.sum(subarr, axis=0))
-                                    if np.max(diffs_x) > np.max(diffs_y):
+                                    diffs_y = np.abs(np.diff(np.sum(
+                                        subarr, axis=1)))
+                                    diffs_x = np.abs(np.diff(np.sum(
+                                        subarr, axis=0)))
+                                    if np.max(diffs_x) < np.max(diffs_y):
                                         width_idx = 1
                                         height_idx = 0
                                 except:  # indexes outside array
@@ -1774,6 +1797,30 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
     return ({'h_lines': h_lines, 'v_lines': v_lines}, errmsg)
 
 
+def threshold_image(image, pix, mask_outer, thresholds):
+    """Generate variance image and thresholded binary image."""
+    min_size=round(thresholds[0] / pix)
+
+    # prepare binary image based on thresholded variance image
+    roi_sz = round(thresholds[1] * min_size)  # roi for variance image
+    inside = np.full(image.shape, False)
+    if mask_outer > 0:
+        inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
+    else:
+        inside = np.full(image.shape, True)
+    var_valid = mmcalc.get_variance_map(image, roi_sz, 'valid')
+    variance_image = np.zeros(image.shape)
+    start = roi_sz // 2
+    variance_image[
+        start:start+var_valid.shape[0],
+        start:start+var_valid.shape[1]] = var_valid
+    variance_image[inside == False] = 0
+    max_var = np.max(variance_image)
+    binary_image = np.zeros(variance_image.shape, dtype=bool)
+    binary_image[variance_image > max_var * thresholds[3]] = True
+
+    return (binary_image, variance_image)
+
 def find_edges(binary_sub, angle_resolution, angle_range,
                threshold_peaks, min_distance):
     """Find edges in binary image.
@@ -1849,8 +1896,8 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
     Parameters
     ----------
     image : np.array
-    mask_outer : int
-        mask outer pixels and ignore signal there
+    mask_outer : float
+        mask outer mm and ignore signal there
     pix : float
         mm/pix
     thresholds: list of float
@@ -1865,28 +1912,24 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
     -------
     centers_of_edges_xy
         list of [x, y] for each edge (top, right, btm, left)
+        or only one set of x, y if only one edge found
     """
     centers_of_edges_xy = None
+    binary_image, variance_image = threshold_image(
+        image, pix, mask_outer, thresholds)
     min_size=round(thresholds[0] / pix)
-
-    # prepare binary image based on thresholded variance image
-    roi_sz = round(thresholds[1] * min_size)  # roi for variance image
-    inside = np.full(image.shape, False)
-    if mask_outer > 0:
-        inside[mask_outer:-mask_outer, mask_outer:-mask_outer] = True
-    variance_image = mmcalc.get_variance_map(image, roi_sz, 'same')
-    variance_image[inside == False] = 0
     max_var = np.max(variance_image)
-    mean_var = np.mean(variance_image[inside == True])
-    binary_image = np.zeros(variance_image.shape, dtype=bool)
-    binary_image[variance_image > max_var * thresholds[3]] = True
+    mean_var = np.mean(variance_image)
+    mask_outer = round(mask_outer / pix)
 
     # find edge_positions
     peaks_pos = []
+    profiles =  []
     for i in range(2):
         profile = np.sum(binary_image, axis=i)[mask_outer+1:-mask_outer-1]
+        profiles.append(profile)
         peaks = find_peaks(profile, distance=min_size,
-                       height=thresholds[3]*np.max(profile))
+                       prominence=thresholds[3]*np.max(profile))
         peaks_pos.append(peaks[0])
     n_peaks = [len(peaks_pos[0]), len(peaks_pos[1])]
 
@@ -1894,7 +1937,7 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
     # avoid spending time on homogeneous images
     xs = []
     ys = []
-    if max(n_peaks) == 2 and min(n_peaks) > 0:
+    if max(n_peaks) >= 1 and min(n_peaks) > 0:
         xs = peaks_pos[0]
         ys = peaks_pos[1]
 
@@ -1908,6 +1951,12 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
             centers_of_edges_xy = [np.array(
                 [xs[0], 0.5*np.sum(ys)]) + mask_outer + 1]
             find_intersections = False
+        else:
+            width, center = mmcalc.get_width_center_at_threshold(profiles[0])
+            width1, center1 = mmcalc.get_width_center_at_threshold(profiles[1])
+            if center is not None and center1 is not None:
+                centers_of_edges_xy = [np.array(
+                    [center, center1]) + mask_outer + 1]
 
     if find_intersections:
         lines = find_edges(

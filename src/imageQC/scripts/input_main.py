@@ -23,7 +23,6 @@ class Gui():
     delta_a: float = 0.0
     show_axis: bool = False
     show_overlay: bool = True
-    rotate_k: int = 0
 
 
 @dataclass

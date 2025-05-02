@@ -12,6 +12,7 @@ from typing import Optional
 from pathlib import Path
 
 import numpy as np
+from scipy import ndimage
 import pydicom
 import pandas
 from PyQt5.QtWidgets import QMessageBox
@@ -682,7 +683,7 @@ def get_modality(modalityStr):
 
 def get_img(file_info, frame_number=-1, tag_patterns=[], tag_infos=None,
             NM_count=False, get_window_level=False, overlay=True,
-            rotate_k=0):
+            postprocessing=None):
     """Read pixmap from filepath int numpy array prepeared for display.
 
     Parameters
@@ -701,6 +702,7 @@ def get_img(file_info, frame_number=-1, tag_patterns=[], tag_infos=None,
         Used in OpenAutomationDialog. Default is False
     overlay : bool, optional
         include overlay (if any) in array. Default is True.
+    postprocessing : configclasses.PostProcessingVariables or None
 
     Returns
     -------
@@ -868,11 +870,19 @@ def get_img(file_info, frame_number=-1, tag_patterns=[], tag_infos=None,
                         winc = int(winc[0])
                 tag_strings.append([winc - winw / 2, winc + winw / 2])
 
-        # for testing:
-        #import scipy as sp
-        #npout = sp.ndimage.rotate(npout, 2, reshape=False)
-        if rotate_k != 0:
-            npout = np.rot90(npout, k=rotate_k)
+        if postprocessing is not None:
+            if postprocessing.any_set:
+                if postprocessing.invert:
+                    npout = np.max(npout) - npout
+                if postprocessing.rotate_k != 0:
+                    npout = np.rot90(npout, k=postprocessing.rotate_k)
+                if postprocessing.rotate != 0:
+                    npout = ndimage.rotate(
+                        npout, -postprocessing.rotate, reshape=False)
+                if postprocessing.flip_lr:
+                    npout = np.fliplr(npout)
+                if postprocessing.flip_ud:
+                    npout = np.flipud(npout)
 
     return (npout, tag_strings)
 
@@ -1356,7 +1366,7 @@ def get_all_tags_name_number(pyd, sequence_list=['']):
     return {'tags': tags, 'attribute_names': attribute_names}
 
 
-def sum_marked_images(img_infos, included_ids, tag_infos):
+def sum_marked_images(img_infos, included_ids, tag_infos, postprocessing):
     """Calculate sum of marked images.
 
     Parameters
@@ -1366,6 +1376,7 @@ def sum_marked_images(img_infos, included_ids, tag_infos):
     included_ids : list of int
         image ids to include in sum
     tag_infos : list of TagInfos
+    postprocessing : config_classes.PostProcessingVariables
 
     Returns
     -------
@@ -1380,7 +1391,8 @@ def sum_marked_images(img_infos, included_ids, tag_infos):
         if idx in included_ids:
             image, _ = get_img(
                 img_info, frame_number=img_info.frame_number,
-                tag_infos=tag_infos, overlay=False
+                tag_infos=tag_infos, overlay=False,
+                postprocessing=postprocessing
                 )
             if summed_img is None:
                 summed_img = image

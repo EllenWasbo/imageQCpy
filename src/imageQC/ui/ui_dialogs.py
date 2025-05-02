@@ -392,6 +392,71 @@ class OpenRawDialog(ImageQCDialog):
 
         return (img_infos, ignored_files, warnings)
 
+
+class PostProcessingDialog(ImageQCDialog):
+    """Dialog to set postprocessing parameters."""
+
+    def __init__(self, main):
+        super().__init__(parent=main)
+        self.setWindowTitle('Edit postprocessing parameters')
+        self.setMinimumHeight(300)
+        self.setMinimumWidth(300)
+
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        self.proc = main.current_paramset.postprocessing
+
+        self.invert = QCheckBox('')
+        self.invert.setChecked(self.proc.invert)
+        self.invert.stateChanged.connect(self.value_edited)
+        self.flip_lr = QCheckBox('')
+        self.flip_lr.setChecked(self.proc.flip_lr)
+        self.flip_lr.stateChanged.connect(self.value_edited)
+        self.flip_ud = QCheckBox('')
+        self.flip_ud.setChecked(self.proc.flip_ud)
+        self.flip_ud.stateChanged.connect(self.value_edited)
+
+        self.rotate_k = QDoubleSpinBox(
+            decimals=0, minimum=0, maximum=3, singleStep=1,
+            value=self.proc.rotate_k)
+        self.rotate_k.valueChanged.connect(self.value_edited)
+        self.rotate = QDoubleSpinBox(
+            decimals=2, minimum=-359, maximum=359, singleStep=0.1,
+            value=self.proc.rotate)
+        self.rotate.valueChanged.connect(self.value_edited)
+
+        vlo.addWidget(QLabel(
+            'Perform this processing for all images while reading image data.'))
+        flo = QFormLayout()
+        vlo.addLayout(flo)
+        flo.addRow('Invert image (max - image)', self.invert)
+        flo.addRow('Rotate 90 degrees x ', self.rotate_k)
+        flo.addRow('Rotate (degrees)', self.rotate)
+        flo.addRow('Flip left/right', self.flip_lr)
+        flo.addRow('Flip up/down', self.flip_ud)
+
+        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        button_box = QDialogButtonBox(buttons)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        vlo.addWidget(button_box)
+
+    def value_edited(self):
+        """Notify edited values."""
+        self.edited = True
+
+    def get_data(self):
+        proc_new = copy.deepcopy(self.proc)
+        if self.edited:
+            proc_new.invert = self.invert.isChecked()
+            proc_new.flip_lr = self.flip_lr.isChecked()
+            proc_new.flip_ud = self.flip_ud.isChecked()
+            proc_new.rotate_k = self.rotate_k.value()
+            proc_new.rotate = self.rotate.value()
+            proc_new.any_set_update()
+        return (proc_new, self.edited)
+
+
 class SelectTextsDialog(ImageQCDialog):
     """Dialog to select texts."""
 
@@ -1916,7 +1981,7 @@ class ProjectionPlotDialog(ImageQCDialog):
                     frame_number=img_info.frame_number, tag_infos=tag_infos,
                     tag_patterns=tag_patterns,
                     overlay=self.main.gui.show_overlay,
-                    rotate_k=self.main.gui.rotate_k
+                    postprocessing=self.main.current_paramset.postprocessing
                     )
                 if len(img_info.artifacts) > 0:
                     image = apply_artifacts(

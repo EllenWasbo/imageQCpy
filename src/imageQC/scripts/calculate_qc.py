@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import qApp
 # imageQC block start
 from imageQC.scripts import dcm
 from imageQC.scripts.calculate_roi import (
-    get_rois, get_roi_circle, get_roi_rectangle)
+    get_rois, get_roi_circle, get_roi_rectangle, threshold_image)
 import imageQC.scripts.mtf_methods as mtf_methods
 import imageQC.scripts.nm_methods as nm_methods
 import imageQC.scripts.cdmam_methods as cdmam_methods
@@ -692,7 +692,7 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_infos=tag_infos, NM_count=NM_count[i],
                             get_window_level=any(auto_template_label),
                             overlay=overlay,
-                            rotate_k=input_main.gui.rotate_k
+                            postprocessing=paramset.postprocessing
                             )
                         try:
                             if len(input_main.imgs[i].artifacts) > 0:
@@ -748,7 +748,7 @@ def calculate_qc(input_main, wid_auto=None,
                             tag_infos=tag_infos,
                             get_window_level=any(auto_template_label),
                             overlay=overlay,
-                            rotate_k=input_main.gui.rotate_k
+                            postprocessing=paramset.postprocessing
                             )
                         try:
                             if len(input_main.imgs[i].artifacts) > 0:
@@ -1527,9 +1527,21 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         if roi_array[0] is None:
                             roi_mtf_exist = False
 
+                if paramset.mtf_auto_center:
+                    # recalculate to make images available for display
+                    binary_image, variance_image = threshold_image(
+                        image2d, image_info.pix[0],
+                        paramset.mtf_auto_center_mask_outer,
+                        paramset.mtf_auto_center_thresholds)
+                    details_auto = {'binary_image': binary_image,
+                                    'variance_image': variance_image}
+                else:
+                    details_auto = {}
+
                 if roi_mtf_exist is False:
                     res = Results(
                         headers=headers, headers_sup=headers_sup,
+                        details_dict=details_auto,
                         errmsg='Failed finding ROI')
                 else:
                     sub = []
@@ -1548,6 +1560,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     details, errmsg = mtf_methods.calculate_MTF_2d_line_edge(
                         sub, image_info.pix[0], paramset, mode='edge')
                     prefix = 'g' if paramset.mtf_gaussian else 'd'
+
                     try:
                         values = details[prefix + 'MTF_details']['values']
                         values_sup = (
@@ -1556,10 +1569,12 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                         res = Results(
                             headers=headers, values=values,
                             headers_sup=headers_sup, values_sup=values_sup,
-                            details_dict=details, errmsg=errmsg)
+                            details_dict={**details, **details_auto},
+                            errmsg=errmsg)
                     except (KeyError, TypeError):
                         res = Results(
                             headers=headers, headers_sup=headers_sup,
+                            details_dict=details_auto,
                             errmsg=errmsg)
 
         elif modality == 'NM':

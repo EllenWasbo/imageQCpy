@@ -1710,11 +1710,11 @@ class ResultImageDefaultsTreeView(QTreeView):
         if set_selected:
             self.setCurrentIndex(self.model.index(set_selected, 0))
 
-    def run_subdialog(self, subno, default_sub):
+    def run_subdialog(self, subno, default_sub=None):
         main = self.parent.dlg_settings.main
         if main.current_modality == self.parent.current_modality:
             dlg_sub = ResultImageDefaultDialog(
-                self.parent.current_template,
+                self.parent.current_template, default_sub=default_sub,
                 modality=self.parent.current_modality, main=main)
             res = dlg_sub.exec()
             if res:
@@ -1818,9 +1818,11 @@ class ResultImageDefaultDialog(ImageQCDialog):
         self.cbox_selected_text = QComboBox()
         self.cmap = QLineEdit()
         self.chk_min = QCheckBox()
+        self.chk_min.stateChanged.connect(self.update_chk_min)
         self.cmin = QDoubleSpinBox(
             decimals=2, minimum=-1000000, maximum=1000000, singleStep=1.)
         self.chk_max = QCheckBox()
+        self.chk_max.stateChanged.connect(self.update_chk_max)
         self.cmax = QDoubleSpinBox(
             decimals=2, minimum=-1000000, maximum=1000000, singleStep=1.)
 
@@ -1864,6 +1866,18 @@ class ResultImageDefaultDialog(ImageQCDialog):
         self.update_data()
         self.init = False
 
+    def update_chk_min(self):
+        if self.chk_min.isChecked():
+            self.cmin.setEnabled(True)
+        else:
+            self.cmin.setEnabled(False)
+
+    def update_chk_max(self):
+        if self.chk_max.isChecked():
+            self.cmax.setEnabled(True)
+        else:
+            self.cmax.setEnabled(False)
+
     def update_select_options(self):
         self.cbox_selected_text.clear()
         testcode = self.cbox_testcode.currentText().lower()
@@ -1895,6 +1909,8 @@ class ResultImageDefaultDialog(ImageQCDialog):
         self.chk_max.setChecked(self.default_sub.set_max)
         self.cmin.setValue(self.default_sub.cmin)
         self.cmax.setValue(self.default_sub.cmax)
+        self.update_chk_min()
+        self.update_chk_max()
 
     def select_cmap(self):
         dlg = CmapSelectDialog(self)

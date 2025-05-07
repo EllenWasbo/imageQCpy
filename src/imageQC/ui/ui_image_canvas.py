@@ -1249,13 +1249,18 @@ class ResultImageCanvas(GenericImageCanvas):
                          if x.test == testcode]
             if sel_text in sel_texts or sel_text == '':
                 self.found_default = True
-                obj = [x for x in defaults if x.test == testcode][0]
+                obj = [x for x in defaults if
+                       x.test == testcode and x.selected_text == sel_text][0]
                 if obj.set_min:
                     self.min_val_default = obj.cmin
                 if obj.set_max:
                     self.max_val_default = obj.cmax
-                self.cmap = obj.cmap
+                if obj.cmap != '':
+                    self.cmap = obj.cmap
+                else:
+                    self.cmap = default_cmap
                 self.positive_negative = False
+
         if self.found_default is False:
             self.cmap = default_cmap
 

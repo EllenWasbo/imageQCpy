@@ -1,3 +1,11 @@
+# v3.1.22
+_May 07, 2025_
+
+Bugfixes:
+- Fixed error when importing tag pattern in dialog for open images with advanced options.
+- Fixes to functionality of specifying colormap and limits for the result images in parametersets.
+
+
 # v3.1.21
 _May 02, 2025_
 

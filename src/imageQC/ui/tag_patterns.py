@@ -311,7 +311,11 @@ class TagPatternTree(QWidget):
     def import_tag_pattern(self):
         """Import tag pattern from TagPattern Format."""
         _, _, all_temps = cff.load_settings(fname='tag_patterns_format')
-        mods = [key for key, val in all_temps.items() if val[0].label != '']
+        mods = []
+        for key, val in all_temps.items():
+            if len(val) > 0:
+                if val[0].label != '':
+                    mods.append(key)
         if len(mods) > 0:
             dlg = TagPatternImportDialog(mods, all_temps)
             res = dlg.exec()

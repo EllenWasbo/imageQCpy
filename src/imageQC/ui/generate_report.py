@@ -1118,6 +1118,8 @@ class AddEditElementDialog(ImageQCDialog):
         hlo_buttons_btm.addWidget(btn_close)
 
         self.update_element()
+        if self.element.variant == self.variants[0]:
+            self.update_variant()  # not triggered on index changed
 
     def update_element(self):
         idx = self.variants.index(self.element.variant)

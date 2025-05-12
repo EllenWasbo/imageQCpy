@@ -1,3 +1,9 @@
+# v3.1.23
+_May 12, 2025_
+
+Bugfixes:
+- Report generator: Edit html_table_row element now comes with the previous set header, not empty.
+
 # v3.1.22
 _May 07, 2025_
 

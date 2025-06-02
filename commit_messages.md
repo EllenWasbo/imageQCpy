@@ -1,3 +1,13 @@
+# v3.1.24
+_Jun 02, 2025_
+
+Changes:
+- Added option to reading vendor QC report from Planmeca CBCT.
+- Addig artifacts: Option to blur image within specified form (geometric shape and image both blurred by the same gaussian sigma)
+
+Bugfixes:
+- Fixed error when automatically adding multiple dummy images (missing more than one image for QuickTest templates). Dummies now true copies, not linked.
+
 # v3.1.23
 _May 12, 2025_
 

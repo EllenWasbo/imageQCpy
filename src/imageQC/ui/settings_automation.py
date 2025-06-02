@@ -2080,8 +2080,9 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         file_filter = ''
         old_status = self.status_label.text()
         if self.current_modality == 'CT':
-            open_title = 'Open Siemens CT QC report file'
-            file_filter = "PDF file (*.pdf)"
+            if 'pdf' in file_type:
+                open_title = 'Open Siemens CT QC report file'
+                file_filter = "PDF file (*.pdf)"
         elif self.current_modality == 'PET':
             if 'pdf' in file_type:
                 open_title = 'Open Siemens CT QC report file'

@@ -1289,7 +1289,8 @@ def append_auto_res(auto_template, headers, values, to_file=False):
     return (status, print_list)
 
 
-def append_auto_res_vendor(output_path, result_dict, to_file=False, decimal_mark='.'):
+def append_auto_res_vendor(output_path, result_dict, to_file=False,
+                           decimal_mark='.'):
     """Append test results to output path.
 
     Parameters

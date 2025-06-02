@@ -83,6 +83,7 @@ class ParamsTabVendor(QWidget):
                 self.main.current_modality][self.selected]
             implemented_types = [
                 'Siemens CT Constancy/Daily Reports (.pdf)',
+                'Planmeca CBCT report (.html)',
                 'Siemens PET-CT DailyQC Reports (.pdf)',
                 'Siemens PET-MR DailyQC Reports (.xml)',
                 'Siemens exported energy spectrum (.txt)',

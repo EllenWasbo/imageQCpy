@@ -18,9 +18,9 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-# A when major changes, B when new exe release (to come),
-#   C new python release (or small fix to exe)
-VERSION = '3.1.23'
+# A when fundamental changes or B turns 99, B when major changes,
+#   C new python release (or small fix)
+VERSION = '3.1.24'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -474,7 +474,8 @@ HEADERS_SUP = {
 
 # should end with '(.suffix)' to get file_suffix
 VENDOR_FILE_OPTIONS = {
-    'CT': ['Siemens CT Constancy/Daily Reports (.pdf)'],
+    'CT': ['Siemens CT Constancy/Daily Reports (.pdf)',
+           'Planmeca CBCT report (.html)'],
     'Xray': ['GE QAP (.txt)'],
     'Mammo': ['GE Mammo QAP (txt)'],
     'NM': ['Siemens exported energy spectrum (.txt)'],

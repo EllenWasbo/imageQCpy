@@ -872,8 +872,11 @@ class GenerateReportDialog(ImageQCDialog):
             image_names = get_image_names(self.main)
             if len(img_nos) == 1:
                 self.main.set_active_img(img_nos[0])
-                html_this = self.add_figure(element,
-                                            image_name=image_names[img_nos[0]])
+                if img_nos[0] < len(image_names):
+                    html_this = self.add_figure(
+                        element, image_name=image_names[img_nos[0]])
+                else:
+                    html_this = self.add_figure(element)
             else:
                 html_this = ['<table class="image_table"><tr>']
                 total_width = element.width

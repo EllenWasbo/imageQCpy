@@ -326,7 +326,8 @@ class MainWindow(QMainWindow):
         """Add place-holder / dummy image when missing images for QuickTest temp."""
         if not n_dummies:
             n_dummies = 1
-        dummy_list = [dcm.DcmInfoGui(modality=self.current_modality)] * n_dummies
+        dummy_list = [dcm.DcmInfoGui(modality=self.current_modality)
+                      for i in range(n_dummies)]
         self.update_on_new_images(dummy_list, append=True)
 
     def update_on_new_images(self, new_img_info_list, append=False):

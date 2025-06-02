@@ -380,6 +380,15 @@ def apply_artifacts(image, image_info, artifacts, artifacts_3d, image_number):
                             image[artifact_array == 1] = rng.poisson(vals_in)
                         else:
                             image = image + artifact_array*artifact.value
+                    elif 'blur' in artifact.method:
+                        if sigma > 0:
+                            artifact_array = ndimage.gaussian_filter(
+                                artifact_array, sigma=sigma)
+                            blurred_image = ndimage.gaussian_filter(
+                                image, sigma=sigma)
+                            image = (
+                                image * (np.ones((image.shape)) - artifact_array)
+                                + blurred_image * artifact_array)
                     else:  # multiplying
                         if artifact.value != 0:
                             artifact_array[artifact_array == 1] = artifact.value

@@ -64,6 +64,12 @@ If adding icons, a dark-mode icon is also needed.
 	- and optionally result image canvas (ui/ui_image_canvas - ResultImageCanvas)
 - if more ALTERNATIVES or dynamic HEADERS given in iQCconstants - note the comments above these parameters within iQCconstants.py
  
+## When adding new vendor QA reports to read
+- add code for reading the file-type in scripts/read_vendor_QC_reports.py (using the existing methods or method read_pdf_dummy as guide/example)
+- add option to config/iQCconstants.py VENDOR_FILE_OPTIONS. Parenthesis at end of option string have to contain file extension
+- add the same string to the list implemented_types in ui/ui_main_test_tabs_vendor.py
+- add the same string to read_vendor_template (method in scripts/read_vendor_QC_reports.py) for pointing to the method for the specific file-type
+ 
 ## When adding new types of templates (settings)
 - add to iQCconstants CONFIG_FNAMES
 - add template type to config_classes + add to last_modified

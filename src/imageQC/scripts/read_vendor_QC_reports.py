@@ -4,7 +4,7 @@
 
 @author: EllenWasbo
 """
-
+import re
 from fnmatch import fnmatch
 import datetime
 import xml.etree.ElementTree as ET
@@ -40,6 +40,8 @@ def read_vendor_template(template, filepath):
     if template.file_type == 'Siemens CT Constancy/Daily Reports (.pdf)':
         txt = get_pdf_txt(filepath)
         results = read_Siemens_CT_QC(txt)
+    elif template.file_type == 'Planmeca CBCT report (.html)':
+        results = read_Planmeca_html(filepath)
     elif template.file_type == 'Siemens exported energy spectrum (.txt)':
         results = read_e_spectrum_Siemens_gamma_camera(filepath)
     elif template.file_type == 'Siemens PET-CT DailyQC Reports (.pdf)':
@@ -2019,6 +2021,76 @@ def read_GE_Mammo_QAP(filepath):
             'values': values, 'headers': headers,
             'limits': limits}
 
+    return data
+
+
+def read_Planmeca_html(filepath):
+    """Read Planmeca report from Viso QA.
+
+    Parameters
+    ----------
+    root: root element
+        from xml.etree.ElementTree.getroot()
+
+    Returns
+    -------
+    data : dict
+        'status': bool
+        'errmsg': list of str
+        'values': list of str,
+        'headers': list of str}
+
+    """
+    txt = []
+    with open(filepath, 'r') as file:
+        txt = file.readlines()
+
+    def get_td_value(td_line):
+        """Extract value from <td ...>value</td>."""
+        split_string = re.split('<|>', td_line)
+        split_string = list(filter(None, split_string))
+        res = None
+        if len(split_string) == 5:
+            res = split_string[2]
+        return res
+
+    values = []
+    headers = []
+    errmsg = []
+    status = False
+
+    if '<HTML>' not in txt[0]:
+        errmsg = ['Expected file to start with <HTML>. File reading aborted.']
+    else:
+        # date
+        filepath = Path(filepath)
+        date = ''
+        try:
+            datestr = filepath.name[7:7+9]
+            date = f'{datestr[6:8]}.{datestr[4:6]}.{datestr[:4]}'
+        except IndexError:
+            pass
+
+        rownos = [
+            index for index in range(len(txt))
+            if fnmatch(txt[index], '<H4>Mode </H4>\n')]
+        if len(rownos) == 3:
+            for rowno in rownos:
+                for addrow in [11, 19, 27, 35, 43, 51, 59, 67, 75]:
+                    values.append(get_td_value(txt[rowno + addrow]))
+        values = [date] + values
+        headers_one = ['MTF 50', 'Air Density', 'Air Uniformity', 
+                       'Aluminum Density', 'Aluminum SNR', 'Aluminum Uniformity',
+                       'Acryl Density', 'Acryl', 'Acryl Uniformity']
+        headers = (
+            ['Date'] 
+            + ['1 ' + x for x in headers_one]
+            + ['2 ' + x for x in headers_one]
+            + ['3 ' + x for x in headers_one])
+        status = True
+
+    data = {'status': status, 'errmsg': errmsg,
+            'values': values, 'headers': headers}
     return data
 
 

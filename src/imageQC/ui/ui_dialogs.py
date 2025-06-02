@@ -655,7 +655,7 @@ class AddArtifactsDialog(ImageQCDialog):
         self.sigma_label = QLabel('Gaussian blur, sigma (mm)')
         flo.addRow(self.sigma_label, self.sigma)
         self.method = QComboBox()
-        self.method.addItems(['adding', 'multiplying',
+        self.method.addItems(['adding', 'multiplying', 'blur input image',
                               'adding poisson noise',
                               'adding gamma camera point source'])
         self.method.currentIndexChanged.connect(self.update_method)

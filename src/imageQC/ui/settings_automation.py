@@ -489,7 +489,10 @@ class LimitsAndPlotRow(QWidget):
         self.spin.setDecimals(decimals)
         self.spin.setMaximum(max_value)
         if min_value is None:
-            self.spin.setMinimum(-max_value)
+            if max_value < 0:
+                self.spin.setMinimum(max_value - 1000)
+            else:
+                self.spin.setMinimum(-max_value)
         else:
             self.spin.setMinimum(min_value)
         if isinstance(value, (int, float)):
@@ -1032,7 +1035,7 @@ class LimitsAndPlotContent(QWidget):
                 if len(sample_split) == 2:
                     decimals = len(sample_split[1])
                 if abs(sample_val) > 100:
-                    max_val = 10 * sample_val
+                    max_val = 10 * abs(sample_val)
                 else:
                     max_val = 200
             except ValueError:

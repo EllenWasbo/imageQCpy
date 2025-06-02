@@ -2052,6 +2052,10 @@ def read_Planmeca_html(filepath):
         res = None
         if len(split_string) == 5:
             res = split_string[2]
+            try:
+                res = float(res)
+            except TypeError:
+                pass
         return res
 
     values = []
@@ -2081,7 +2085,7 @@ def read_Planmeca_html(filepath):
         values = [date] + values
         headers_one = ['MTF 50', 'Air Density', 'Air Uniformity', 
                        'Aluminum Density', 'Aluminum SNR', 'Aluminum Uniformity',
-                       'Acryl Density', 'Acryl', 'Acryl Uniformity']
+                       'Acryl Density', 'Acryl SNR', 'Acryl Uniformity']
         headers = (
             ['Date'] 
             + ['1 ' + x for x in headers_one]

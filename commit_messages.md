@@ -1,3 +1,8 @@
+# v3.1.25
+_Jun 02, 2025_
+
+Fixes to limits for dash-plots and added tolerance-limits also with text in plots.
+
 # v3.1.24
 _Jun 02, 2025_
 

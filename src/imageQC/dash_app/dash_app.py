@@ -416,9 +416,6 @@ def run_dash_app(dash_settings=None):
         except IndexError:
             proceed = False
         if proceed:
-            #colorlist = [
-            #    '#000000', '#5165d5', '#a914a6', '#7f9955', '#efb412',
-            #    '#97d2d1', '#b3303b']
             colorlist = dash_settings.colors
             data = modality_dict[mod][template_value].data
             lim_plots = modality_dict[mod][template_value].limits_and_plot_template
@@ -435,28 +432,39 @@ def run_dash_app(dash_settings=None):
                             go.Scatter(
                                 x=data[data.columns[0]], y=data[header],
                                 line_color=colorlist[lineno % len(colorlist)],
-                                name=header, mode='lines+markers', showlegend=True,
-                                legendgroup=str(group_idx)
+                                name=header, mode='lines+markers',
+                                showlegend=True, legendgroup=str(group_idx)
                                 ),
                             row=rowno, col=1,
                             )
                     if any(lim_plots.groups_limits[group_idx]):
                         lims = lim_plots.groups_limits[group_idx]
+                        lim_text = [None, None]
                         if isinstance(lims[0], str):
                             if lims[0] == 'text':
                                 lims = [None, None]
                             elif lims[0] == 'relative_first':
                                 first_val = data[header][0]
                                 tol = first_val * 0.01 * lims[1]
+                                lim_text = [f'first +/- {lims[1]}%', '']
                                 lims = [first_val - tol, first_val + tol]
                             else:  # 'relative_median'
                                 med_val = np.median(data[header][:-1])
                                 tol = med_val * 0.01 * lims[1]
+                                lim_text = [f'median +/- {lims[1]}%', '']
                                 lims = [med_val - tol, med_val + tol]
-                        for lim in lims:
+                        else:
+                            lim_text = [str(lims[0]), str(lims[1])]
+                        yanchors = ['bottom', 'top']
+                        for limno, lim in enumerate(lims):
                             if lim is not None:
-                                fig.add_hline(y=lim, line_dash='dash', line_color='red',
-                                              row=rowno, col=1)
+                                label_dict = dict(
+                                    text=lim_text[limno], textposition='start',
+                                    font=dict(color='red'),
+                                    yanchor=yanchors[limno])
+                                fig.add_hline(
+                                    y=lim, line_dash='dash', line_color='red',
+                                    label=label_dict, row=rowno, col=1)
                     if any(lim_plots.groups_ranges[group_idx]):
                         set_range = lim_plots.groups_ranges[group_idx]
                         # TODO if None in set_range:

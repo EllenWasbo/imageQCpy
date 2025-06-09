@@ -194,7 +194,7 @@ def generate_artifact_3d(meshgrids, artifact):
             artifact_array = ndimage.gaussian_filter(
                 artifact_array.astype(float), sigma=sigma)
 
-    artifact_array = artifact_array.transpose(1, 0, 2)  # Y, X, Z
+        artifact_array = artifact_array.transpose(1, 0, 2)  # Y, X, Z
 
     return artifact_array
 
@@ -310,7 +310,9 @@ def apply_artifacts(image, image_info, artifacts, artifacts_3d, image_number):
                 artifact = None
                 if artifact_label == '***set to zero***':
                     image = np.zeros(image.shape, dtype=float)
-
+                elif artifact_label == '***add poisson noise***':
+                    rng = np.random.default_rng()
+                    image = rng.poisson(image)
             if artifact:
                 roi_array = None
                 artifact_array = None
@@ -323,7 +325,8 @@ def apply_artifacts(image, image_info, artifacts, artifacts_3d, image_number):
                 if artifact.form in ['circle', 'ring']:
                     roi_size_pix = artifact.size_1 / image_info.pix[0]
                     if roi_size_pix > 0:
-                        roi_array = get_roi_circle(image.shape, off_xy, roi_size_pix)
+                        roi_array = get_roi_circle(
+                            image.shape, off_xy, roi_size_pix)
                         if artifact.form == 'ring':
                             if artifact.size_2 > 0:
                                 roi_size_2_pix = artifact.size_2 / image_info.pix[0]
@@ -335,20 +338,25 @@ def apply_artifacts(image, image_info, artifacts, artifacts_3d, image_number):
                     h = artifact.size_2 / image_info.pix[0]
                     if w > 0 and h > 0:
                         roi_array = get_roi_rectangle(
-                            image.shape, roi_width=w, roi_height=h, offcenter_xy=off_xy)
+                            image.shape, roi_width=w, roi_height=h,
+                            offcenter_xy=off_xy)
                         if artifact.rotation != 0:
                             if any(off_xy):
                                 roi_array = mmcalc.rotate2d_offcenter(
-                                    roi_array.astype(float), -artifact.rotation, off_xy)
+                                    roi_array.astype(float),
+                                    -artifact.rotation, off_xy)
                             else:
                                 roi_array = ndimage.rotate(
-                                    roi_array.astype(float), -artifact.rotation,
-                                    reshape=False)
+                                    roi_array.astype(float),
+                                    -artifact.rotation, reshape=False)
                             roi_array = np.round(roi_array)
                 elif artifact.type_3d:
                     labels = [art_3d[0] for art_3d in artifacts_3d]
-                    idx = labels.index(artifact.label)
-                    artifact_array = artifacts_3d[idx][1][:,:,image_number]
+                    try:
+                        idx = labels.index(artifact.label)
+                        artifact_array = artifacts_3d[idx][1][:,:,image_number]
+                    except ValueError:  # label not in list
+                        pass
 
                 sigma = 0
                 if roi_array is not None:
@@ -387,7 +395,8 @@ def apply_artifacts(image, image_info, artifacts, artifacts_3d, image_number):
                             blurred_image = ndimage.gaussian_filter(
                                 image, sigma=sigma)
                             image = (
-                                image * (np.ones((image.shape)) - artifact_array)
+                                image
+                                * (np.ones((image.shape)) - artifact_array)
                                 + blurred_image * artifact_array)
                     else:  # multiplying
                         if artifact.value != 0:

@@ -583,6 +583,12 @@ def get_width_center_at_threshold(
     width = None
     center = None
 
+    def get_width_one_above_below(profile, idx):
+        # interpolate to find width when only one value above or below threshold
+        r1 = (profile[idx] - threshold) / (profile[idx] - profile[idx - 1])
+        r2 = (profile[idx] - threshold) / (profile[idx] - profile[idx + 1])
+        return r1 + r2
+
     if isinstance(profile, list):
         profile = np.array(profile)
     if threshold is None:
@@ -642,8 +648,10 @@ def get_width_center_at_threshold(
             width = x2 - x1
     elif len(above[0]) == 1 and len(below[0]) > 2:
         center = above[0][0]
+        width = get_width_one_above_below(profile, center)
     elif len(below[0]) == 1 and len(above[0]) > 2:
         center = below[0][0]
+        width = get_width_one_above_below(profile, center)
 
     return (width, center)
 

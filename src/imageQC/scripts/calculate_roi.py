@@ -251,10 +251,20 @@ def get_rois(image, image_number, input_main):
             roi_size_in_pix = paramset.mtf_roi_size / image_info.pix[0]
 
             bg_rim = True
-            if paramset.mtf_type == 0:  # bead / point source
-                if paramset.mtf_auto_center:
+            if paramset.mtf_type in [0, 5]:  # bead / point source
+                if paramset.mtf_auto_center and paramset.mtf_type == 0:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)
+                    off_center_xy = list(reversed(
+                        np.array(yxmax) - 0.5 * np.array(image.shape)))
+                else:
+                    if 'MainWindow' in str(type(input_main)):
+                        if input_main.summed_img is None:  # avoid each time active slice changes
+                            input_main.summed_img, _ = input_main.sum_marked_images()
+                        summed_img = input_main.summed_img
+                    else:
+                        summed_img = image
+                    yxmax = get_max_pos_yx(summed_img)
                     off_center_xy = list(reversed(
                         np.array(yxmax) - 0.5 * np.array(image.shape)))
                 roi_this = [[], []]

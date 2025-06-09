@@ -819,16 +819,19 @@ class GenerateReportDialog(ImageQCDialog):
                 sub_txt_split = sub_txt.split(']')
                 attr = sub_txt_split[0]
                 nmb = sub_txt_split[1][1:]
-                attr_no = self.tags_active.index(attr)
                 val = '-'
-                if nmb == 'active':
-                    val = self.values_active[attr_no]
-                else:
-                    try:
-                        imgno = int(nmb)
-                        val = self.get_tag_value(imgno, attr)
-                    except TypeError:
-                        pass
+                try:
+                    attr_no = self.tags_active.index(attr)
+                    if nmb == 'active':
+                        val = self.values_active[attr_no]
+                    else:
+                        try:
+                            imgno = int(nmb)
+                            val = self.get_tag_value(imgno, attr)
+                        except TypeError:
+                            pass
+                except ValueError:
+                    pass
                 text = text.replace(f'#DICOM[{attr}][{nmb}]', val)
         return text
 
@@ -900,6 +903,7 @@ class GenerateReportDialog(ImageQCDialog):
             self.main.update_current_test(
                 reset_index=False, refresh_display=False,
                 set_test='DCM')  # no ROIs annotated
+            self.main.refresh_img_display(force_home=True)
             if element.all_images:
                 img_nos = list(range(len(self.main.imgs)))
             else:

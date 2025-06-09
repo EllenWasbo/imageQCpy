@@ -992,6 +992,14 @@ def calculate_qc(input_main, wid_auto=None,
                     input_main.refresh_img_display()
                 if 'TTF' in input_main.results:
                     input_main.refresh_img_display()
+            elif input_main.current_modality in ['CT', 'SPECT', 'PET']:
+                if 'MTF' in input_main.results and paramset.mtf_type == 5:
+                    try:
+                        input_main.set_active_img(
+                            input_main.results['MTF']['details_dict'][-1][
+                                'max_slice_idx'])
+                    except (KeyError, IndexError):
+                        pass
             elif 'Foc' in input_main.results:
                 input_main.refresh_img_display()
             elif 'Pha' in input_main.results:
@@ -2650,7 +2658,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
         if proceed:
             details_dict = {}
-            if alt == 4:
+            if alt == 4:  # zres, edge
                 roi_array, errmsg = get_rois(
                     matrix[images_to_test[0]], images_to_test[0], input_main)
             else:
@@ -2660,9 +2668,9 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         sum_image = np.add(sum_image, matrix[imgNo])
                 roi_array, errmsg = get_rois(
                     sum_image, images_to_test[0], input_main)
-            if alt == 2 and modality == 'CT':
+            if alt == 2 and modality == 'CT':  # circular edge
                 roi_array_inner = roi_array
-            elif alt == 4:
+            elif alt == 4:  # zres, edge
                 roi_array_inner = roi_array
             else:
                 roi_array_inner = roi_array[0]
@@ -2671,6 +2679,9 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             if modality == 'CT' and paramset.mtf_type == 1:
                 background_subtract = True
             elif modality in ['PET', 'SPECT'] and paramset.mtf_type < 3:
+                background_subtract = True
+            elif modality in ['CT', 'PET', 'SPECT'] and paramset.mtf_type == 5:
+                # zres, point
                 background_subtract = True
 
             rows = np.max(roi_array_inner, axis=1)
@@ -2733,15 +2744,19 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         details_dict, errmsg = mtf_methods.calculate_MTF_3d_z_edge(
                             sub, roi_array_inner[rows][:, cols],
                             images_to_test, img_infos, paramset)
+                    elif paramset.mtf_type == 5:  # point
+                        details_dict, errmsg = mtf_methods.calculate_MTF_3d_point(
+                            sub, roi_array_inner[rows][:, cols],
+                            images_to_test, img_infos, paramset)
                 else:
                     errmsg = 'At least 5 images required for z-resolution'
 
             values = None
             values_sup = None
             prefix = 'g' if paramset.mtf_gaussian else 'd'
+            pix = img_infos[images_to_test[0]].pix[0]
             if pr_image:
                 offset_max = []
-                pix = img_infos[images_to_test[0]].pix[0]
                 for sli in matrix:
                     if sli is not None:
                         this_offset = mmcalc.get_offset_max_pos_2d(
@@ -2784,7 +2799,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         values_sup.append(sup_this)
             else:
                 try:
-                    values = details_dict[0][prefix + 'MTF_details']['values']
+                    values = copy.deepcopy(
+                        details_dict[0][prefix + 'MTF_details']['values'])
                 except (TypeError, KeyError):
                     pass
                 try:
@@ -2792,21 +2808,44 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         'gMTF_details']['LSF_fit_params'])
                 except (TypeError, KeyError):
                     pass
-                try:  # x-dir, y-dir or  2 lines
+
+                try:  # x-dir, y-dir or  2 lines, xyz-point
                     values.extend(
                         details_dict[1][prefix + 'MTF_details']['values'])
                     values_sup.extend(list(
                         details_dict[1]['gMTF_details']['LSF_fit_params']))
+                    if paramset.mtf_type == 5:  #xyz-point
+                        values.extend(
+                            details_dict[2][prefix + 'MTF_details']['values'])
+                        values_sup.extend(list(
+                            details_dict[2]['gMTF_details']['LSF_fit_params']))
+                        if modality in ['SPECT', 'PET']:
+                            center_x = (np.where(cols==True)[0][0]
+                                        + details_dict[0]['center'])
+                            off_x = pix * (center_x - matrix[0].shape[1]//2)
+                            center_y = (np.where(rows==True)[0][0]
+                                        + details_dict[1]['center'])
+                            off_y = pix * (center_y - matrix[0].shape[0]//2)
+                            incr_z = np.mean(np.diff(
+                                details_dict[-1]['zpos_used']))
+                            mid_z = np.mean(details_dict[-1]['zpos_marked_images'])
+                            cent_z = (details_dict[-1]['zpos_used'][0]
+                                      + incr_z * (details_dict[2]['center']))
+                            off_z = cent_z - mid_z
+                            off_xyz_cm = [off_x/10, off_y/10, off_z/10]
+                            values_sup = off_xyz_cm + values_sup
                 except (IndexError, KeyError, AttributeError):
                     if paramset.mtf_type == 3 and values:
                         values.extend([None] * len(values))
                         values_sup.extend([None] * len(values_sup))
+
                 values=[values]
-                try:
-                    values_sup.append(
-                        details_dict[0]['gMTF_details']['prefilter_sigma'])
-                except (IndexError, KeyError):
-                    values_sup.append(None)
+                if paramset.mtf_type != 5:
+                    try:
+                        values_sup.append(
+                            details_dict[0]['gMTF_details']['prefilter_sigma'])
+                    except (IndexError, KeyError):
+                        values_sup.append(None)
                 values_sup=[values_sup]
 
             res = Results(headers=headers, values=values,

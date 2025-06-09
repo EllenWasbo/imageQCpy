@@ -644,6 +644,7 @@ class ParamSetSPECT(ParamSetCommon):
 
     mtf_type: int = 1
     # 0=point, 1=line, 2=line sliding window,, 3=z-res line, 4=zres edge
+    #5=zres point
     mtf_roi_size: float = 25.
     mtf_background_width: float = 5.
     mtf_line_tolerance: int = 10
@@ -687,7 +688,8 @@ class ParamSetPET(ParamSetCommon):
     rec_earl: int = 1  # tolerances from 0 = None, 1 = EARL1, 2 = EARL2
     rec_background_volume: int = 9500
     mtf_type: int = 2
-    # 0=point, 1=line, 2=line sliding window,, 3=z-res line, 4=zres edge
+    # 0=point xy, 1=line, 2=line sliding window,, 3=z-res line, 4=zres edge,
+    #5=zres point
     mtf_roi_size: float = 60.
     mtf_background_width: float = 5.
     mtf_line_tolerance: int = 30

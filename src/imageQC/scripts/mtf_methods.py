@@ -235,7 +235,7 @@ def get_MTF_discrete(LSF, dx=1, padding_factor=1):
     return {'MTF_freq': freq, 'MTF': MTF}
 
 
-def calculate_MTF_point(matrix, img_info, paramset):
+def calculate_MTF_point(matrix, img_info, paramset, vertical_pix_mm=None):
     """Calculate MTF from point source.
 
     Based on J Appl Clin Med Phys, Vol 14. No4, 2013, pp216..
@@ -248,6 +248,9 @@ def calculate_MTF_point(matrix, img_info, paramset):
         as defined in scripts/dcm.py
     paramset : ParamSetXX
         depending on modality
+    vertical_pix_mm : float, optional
+        if vertical pix size != pix
+        (summed 3d where pix_vertical = slice increment)
 
     Returns
     -------
@@ -278,7 +281,11 @@ def calculate_MTF_point(matrix, img_info, paramset):
         if center is None:
             errmsgs.append('Could not find center of point in ROI.')
         else:
-            pos = (np.arange(len(profile)) - center) * img_info.pix[0]
+            if ax == 1 and vertical_pix_mm is not None:
+                pix = vertical_pix_mm
+            else:
+                pix = img_info.pix[0]
+            pos = (np.arange(len(profile)) - center) * pix
 
             # modality specific settings
             fade_lsf_fwhm = None
@@ -305,9 +312,9 @@ def calculate_MTF_point(matrix, img_info, paramset):
             details_dict['LSF'] = profile
 
             # Discrete MTF
-            res = get_MTF_discrete(profile, dx=img_info.pix[0])
-            res['cut_width'] = cw * img_info.pix[0]
-            res['cut_width_fade'] = cwf * img_info.pix[0]
+            res = get_MTF_discrete(profile, dx=pix)
+            res['cut_width'] = cw * pix
+            res['cut_width_fade'] = cwf * pix
             if isinstance(paramset, cfc.ParamSetCT):
                 res['values'] = mmcalc.get_curve_values(
                     res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
@@ -315,9 +322,9 @@ def calculate_MTF_point(matrix, img_info, paramset):
                 fwtm, _ = mmcalc.get_width_center_at_threshold(
                     profile, np.max(profile)/10)
                 if width is not None:
-                    width = width*img_info.pix[0]
+                    width = width * pix
                 if fwtm is not None:
-                    fwtm = fwtm*img_info.pix[0]
+                    fwtm = fwtm * pix
                 res['values'] = [width, fwtm]
             details_dict['dMTF_details'] = res
 
@@ -327,7 +334,7 @@ def calculate_MTF_point(matrix, img_info, paramset):
             else:  # NM, SPECT or PET
                 gaussfit = 'single'
             res, err = get_MTF_gauss(
-                profile, dx=img_info.pix[0], gaussfit=gaussfit)
+                profile, dx=pix, gaussfit=gaussfit)
             if err is not None:
                 errmsgs.append(err)
             else:
@@ -341,15 +348,89 @@ def calculate_MTF_point(matrix, img_info, paramset):
                     fwtm, _ = mmcalc.get_width_center_at_threshold(
                         profile, np.max(profile)/10)
                     if fwhm is not None:
-                        fwhm = fwhm*img_info.pix[0]
+                        fwhm = fwhm * pix
                     if fwtm is not None:
-                        fwtm = fwtm*img_info.pix[0]
+                        fwtm = fwtm * pix
                     res['values'] = [fwhm, fwtm]
                 details_dict['gMTF_details'] = res
 
                 details.append(details_dict)
 
     return (details, errmsgs)
+
+
+def calculate_MTF_3d_point(matrix, roi, images_to_test, image_infos, paramset):
+    """Calculate MTF from point/bead ~normal to slices.
+
+    Parameters
+    ----------
+    matrix : numpy.2darray or list of numpy.array
+        list of 2d part of slice limited ROI
+    roi : numpy.2darray of bool
+        2d part of larger roi
+    images_to_test : list of int
+        image numbers to test
+    image_infos : list of DcmInfo
+        DcmInfo as defined in scripts/dcm.py
+    paramset : ParamSetXX
+        depending on modality
+
+    Returns
+    -------
+    details_dict: list of dict
+        x_dir, y_dir, common_details
+    errmsg : list of str
+    """
+    details_dict = []
+    common_details_dict = {}
+    errmsg = []
+    matrix = [sli for sli in matrix if sli is not None]
+    zpos = np.array([image_infos[sli].zpos for sli in images_to_test])
+    max_values = np.array([np.max(sli) for sli in matrix])
+    common_details_dict['max_roi_marked_images'] = max_values
+    common_details_dict['zpos_marked_images'] = zpos
+
+    max_z = np.where(max_values == np.max(max_values))
+    idx_max = max_z[0][0]
+    #common_details_dict['zpos_max_offset_mm'] = zpos[idx_max] - np.mean(zpos)
+
+    z_diffs = np.diff(zpos)
+    z_dist = z_diffs[0]
+    if np.min(z_diffs) < 0.95 * np.max(z_diffs):  # allow for precision issues
+        errmsg.append('NB: z-increment differ for the slices. '
+                      'Could cause erroneous results.')
+
+    margin = (paramset.mtf_roi_size + paramset.mtf_background_width) // z_dist
+    zpos_used = None
+    if margin < 2:
+        errmsg.append(
+            'ROI radius + background widht used to select images. '
+            'Set this value larger than 2 * slice thickness.')
+    else:
+        margin = round(margin)
+        matrix_this = None
+        try:
+            matrix_this = matrix[idx_max - margin:idx_max + margin + 1]
+            zpos_used = zpos[idx_max - margin:idx_max + margin + 1]
+            common_details_dict['zpos_used'] = zpos_used
+            common_details_dict['max_slice_idx'] = idx_max
+        except (IndexError, ValueError):
+            pass
+        if matrix_this is not None:
+            for i in [0, 1]:
+                axis = 2 if i == 0 else 1
+                matrix_xz = np.sum(matrix_this, axis=axis)
+
+                details_dict_this, errmsg_this = calculate_MTF_point(
+                    matrix_xz, image_infos[0], paramset,
+                    vertical_pix_mm=np.mean(z_diffs))
+                details_dict.extend(details_dict_this)
+                errmsg.append(errmsg_this)
+            details_dict.pop(1)  # removing first Z results (x, Z, y, z)
+
+    details_dict.append(common_details_dict)
+
+    return (details_dict, errmsg)
 
 
 def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):

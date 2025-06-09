@@ -10,6 +10,7 @@ from pathlib import Path
 
 import imageQC.scripts.dcm as dcm
 import imageQC.config.config_classes as cfc
+import imageQC.scripts.artifact as artifact
 from imageQC.scripts.input_main import InputMain
 import imageQC.scripts.calculate_qc as calculate_qc
 import imageQC.resources
@@ -842,6 +843,50 @@ def test_PET_Rec():
     assert np.array_equal(
         values,
         np.array([7867., 11378., 15615., 18612., 18994., 18938.,  2131., 156.]))
+
+
+def test_PET_MTF_point3d():
+    """Simulate 3d point source with known gaussian smoothing,
+    calculate xyz-resolution."""
+    
+    sphere_artifact = artifact.Artifact(
+        label='sphere', form='sphere',
+        x_offset=10.0, y_offset=20.0, z_offset=-15.,
+        size_1=1.0, sigma=3.0, method='add', value=1000., type_3d=True)
+    input_main = InputMain(
+        current_modality='PET',
+        current_test='MTF',
+        current_paramset=cfc.ParamSetPET(
+            mtf_type=5,
+            mtf_roi_size=10.,
+            mtf_auto_center=True
+            ),
+        current_quicktest=cfc.QuickTestTemplate(tests=[['MTF']]*36),
+        tag_infos=tag_infos,
+        automation_active=False,
+        artifacts = [sphere_artifact]
+        )
+
+    file_path = path_tests / 'test_inputs' / 'PET' / 'body_phantom'
+    files = [x for x in file_path.glob('**/*') if x.is_file()]
+    img_infos, _, _ = dcm.read_dcm_info(
+        files, GUI=False, tag_infos=input_main.tag_infos)
+    for img in img_infos:
+        img.artifacts = ['***set to zero***', 'sphere']#, '***add poisson noise***']
+    input_main.artifacts_3d = artifact.generate_artifacts_3d(
+            img_infos, input_main.artifacts)
+
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+    values_sup = np.round(np.array(input_main.results['MTF']['values_sup'][0]))
+
+    assert values_sup[0] == np.round(sphere_artifact.x_offset)
+    assert values_sup[1] == np.round(sphere_artifact.y_offset)
+    assert values_sup[2] == np.round(sphere_artifact.z_offset)
+    assert values_sup[4] == np.round(sphere_artifact.sigma)
+    assert values_sup[6] == np.round(sphere_artifact.sigma)
+    assert values_sup[8] == np.round(sphere_artifact.sigma)
 
 
 def test_MR_SNR():

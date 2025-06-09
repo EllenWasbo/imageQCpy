@@ -325,7 +325,7 @@ class RenameDicomDialog(ImageQCDialog):
                             detailed_text='\n'.join(
                                 [x.name for x in uniq_new_folders])
                             )
-                        if proceed and series_uid is False:
+                        if proceed and series_uid is False and rename_files:
                             for folder in uniq_new_folders:
                                 idxs = get_all_matches(new_folders, folder)
                                 files_in_folder = [new_filenames[i] for i in idxs]

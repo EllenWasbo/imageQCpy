@@ -1,7 +1,18 @@
+# v3.1.26
+_Jun 09, 2025_
+
+Changes and fixes:
+- Added MTF calculations from 3d point for CT, SPECT, PET (added method option: xyz-resolution, bead/point)
+	- For PET (and SPECT): Please find the calculated offset positions in the supplement table to validate NEMA positions.
+- MTF bead or wire: Fixed error when very sharp images or low resolution (only one pixel higher than the half max)
+- Simulate artifacts:
+	- option to add poisson noise to full image(s) without specifying form/shape for the area. Added as button in tab Applied artifacts.
+	- fixes to 3d artifacts (not yet fully validated)
+
 # v3.1.25
 _Jun 02, 2025_
 
-Fixes to limits for dash-plots and added tolerance-limits also with text in plots.
+- Fixes to limits for dash-plots and added tolerance-limits also with text in plots.
 
 # v3.1.24
 _Jun 02, 2025_

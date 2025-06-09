@@ -1145,17 +1145,20 @@ class ResultPlotCanvas(PlotCanvas):
                 self.ytitle = 'MTF'
 
                 colors = [self.color_k, 'r']  # gaussian black, discrete red
-                linestyles = ['-', '--']
+                linestyles = ['-', '--', ':']
                 infotext = ['gaussian', 'discrete']
                 prefix = ['g', 'd']
-                suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
+                suffix = [' x', ' y', ' z'] if len(details_dicts) >= 2 else ['']
                 if self.main.current_modality in ['CT', 'SPECT', 'PET']:
                     if self.main.current_paramset.mtf_type == 3:
                         suffix = [' line 1', ' line 2']
-                for ddno in range(2):
+                for ddno in range(3):
                     try:
                         dd = details_dicts[ddno]
-                        proceed = True
+                        if f'{prefix[0]}MTF_details' in dd:
+                            proceed = True
+                        else:
+                            proceed = False
                     except IndexError:
                         proceed = False
                     if proceed:
@@ -1246,8 +1249,8 @@ class ResultPlotCanvas(PlotCanvas):
             self.ytitle = 'LSF'
             self.legend_location = 'upper left'
 
-            linestyles = ['-', '--']
-            suffix = [' x', ' y'] if len(details_dicts) >= 2 else ['']
+            linestyles = ['-', '--', ':']
+            suffix = [' x', ' y', ' z'] if len(details_dicts) >= 2 else ['']
             if self.main.current_modality in ['CT', 'SPECT', 'PET']:
                 if self.main.current_paramset.mtf_type == 3:
                     suffix = [' line 1', ' line 2']
@@ -1257,7 +1260,7 @@ class ResultPlotCanvas(PlotCanvas):
                 if details_dicts[0]['sigma_prefilter'] > 0:
                     prefilter = True
                     lbl_prefilter = ' presmoothed'
-            for ddno in range(2):
+            for ddno in range(3):
                 try:
                     dd = details_dicts[ddno]
                     xvals = dd['LSF_x']  # TODO fix when this is error, expecting index

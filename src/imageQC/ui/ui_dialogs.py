@@ -745,6 +745,9 @@ class AddArtifactsDialog(ImageQCDialog):
         btn_empty = QPushButton('Start with empty image(s)')
         vlo_aa.addWidget(btn_empty)
         btn_empty.clicked.connect(self.start_with_empty)
+        btn_noise = QPushButton('Add poisson noise to (full) image(s)')
+        vlo_aa.addWidget(btn_noise)
+        btn_noise.clicked.connect(self.add_noise)
 
         toolbar_btm = QToolBar()
         act_save_all = QAction(
@@ -938,7 +941,7 @@ class AddArtifactsDialog(ImageQCDialog):
 
     def value_edited(self, edited=True):
         """Notify edited values."""
-        if edited:
+        if edited is not False:
             self.edited = True
             if self.label.currentText() != '':
                 self.lbl_edited.setText('* values changed')
@@ -1009,7 +1012,8 @@ class AddArtifactsDialog(ImageQCDialog):
                 self.update_labels()
                 labels = [row[0] for row in self.main.artifacts_3d]
                 if label in labels:
-                    self.main.artifacts_3d.pop(idx)
+                    idx3d = labels.index(label)
+                    self.main.artifacts_3d.pop(idx3d)
                 self.update_applied()
         else:
             QMessageBox.warning(
@@ -1084,6 +1088,25 @@ class AddArtifactsDialog(ImageQCDialog):
             else:
                 apply_idxs = [self.cbox_imgs.currentIndex()]
             add_artifact(label, apply_idxs, self.main, first=True)
+            self.update_applied()
+
+    def add_noise(self):
+        """Add poisson noise to full image."""
+        if len(self.main.imgs) == 0:
+            QMessageBox.information(self.main, 'No images loaded',
+                                    'No images loaded. Can not apply artifacts.')
+        else:
+            label = '***add poisson noise***'
+            all_idxs = list(range(len(self.main.imgs)))
+            res = messageboxes.QuestionBox(
+                self, title='Add noise to image(s)',
+                msg='Add noise to all images or just selected image',
+                yes_text='All', no_text='Selected')
+            if res.exec() == 1:
+                apply_idxs = np.copy(all_idxs)
+            else:
+                apply_idxs = [self.cbox_imgs.currentIndex()]
+            add_artifact(label, apply_idxs, self.main)
             self.update_applied()
 
     def view_all_artifacts(self):
@@ -1297,12 +1320,13 @@ class AddArtifactsDialog(ImageQCDialog):
                     # any saved pattern loadable?
                     artifacts_available = [x.label for x in self.main.artifacts]
                     del_labels = []
+                    presets = ['***set to zero***', '***add poisson noise***']
                     for img_info in self.main.imgs:
                         artifacts_this = img_info.artifacts
                         if artifacts_this:
                             for artifact_label in artifacts_this:
                                 if artifact_label not in artifacts_available:
-                                    if artifact_label != '***set to zero***':
+                                    if artifact_label not in presets:
                                         del_labels.append(artifact_label)
                     del_labels = list(set(del_labels))
                     if del_labels:

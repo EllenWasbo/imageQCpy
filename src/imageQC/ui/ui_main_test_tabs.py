@@ -274,43 +274,49 @@ class ParamsTabCommon(QTabWidget):
             self.mtf_plot.clear()
             plot_items = ['Centered xy profiles', 'Sorted pixel values',
                           'LSF', 'MTF']
-            if mtf_type == 0:
+            if mtf_type in [0, 5]:  # point 2d or 3d
                 plot_items.pop(1)
+                if mtf_type == 5:
+                    plot_items.pop(0)
             else:
                 if mtf_type == 2 and modality == 'CT':
                     pass
                 else:
                     plot_items.pop(0)
-            if modality in ['SPECT', 'PET']:
-                if mtf_type == 4:
-                    plot_items.append('Line source average z-profile')
-                    self.mtf_background_width.setEnabled(False)
-                else:
-                    if mtf_type > 0:
-                        plot_items.append('Line source max z-profile')
-                    self.mtf_background_width.setEnabled(True)
-                if mtf_type == 2:
-                    self.mtf_sliding_window.setEnabled(True)
-                    plot_items.extend(
-                        ['Sliding window FWHM z-profile',
-                         'Sliding window x/y offset z-profile'])
-                else:
-                    self.mtf_sliding_window.setEnabled(False)
-                if mtf_type in [1, 2]:
-                    self.mtf_line_tolerance.setEnabled(True)
-                else:
-                    self.mtf_line_tolerance.setEnabled(False)
-            elif modality == 'CT':
-                if mtf_type == 4:
-                    plot_items.append('ROI average z-profile')
-                    self.mtf_background_width.setEnabled(False)
-                else:
-                    if mtf_type == 2:
+            if mtf_type == 5:  # zres point
+                plot_items.append('ROI max z-profile')
+                self.mtf_background_width.setEnabled(True)
+            else:
+                if modality in ['SPECT', 'PET']:
+                    if mtf_type == 4:
+                        plot_items.append('Line source average z-profile')
                         self.mtf_background_width.setEnabled(False)
-                    elif mtf_type:
+                    else:
+                        if mtf_type > 0:
+                            plot_items.append('Line source max z-profile')
                         self.mtf_background_width.setEnabled(True)
-                        #if mtf_type > 0:
-                        #    plot_items.append('ROI max z-profile')
+                    if mtf_type == 2:
+                        self.mtf_sliding_window.setEnabled(True)
+                        plot_items.extend(
+                            ['Sliding window FWHM z-profile',
+                             'Sliding window x/y offset z-profile'])
+                    else:
+                        self.mtf_sliding_window.setEnabled(False)
+                    if mtf_type in [1, 2]:
+                        self.mtf_line_tolerance.setEnabled(True)
+                    else:
+                        self.mtf_line_tolerance.setEnabled(False)
+                elif modality == 'CT':
+                    if mtf_type == 4:
+                        plot_items.append('ROI average z-profile')
+                        self.mtf_background_width.setEnabled(False)
+                    else:
+                        if mtf_type == 2:
+                            self.mtf_background_width.setEnabled(False)
+                        elif mtf_type:
+                            self.mtf_background_width.setEnabled(True)
+                            #if mtf_type > 0:
+                            #    plot_items.append('ROI max z-profile')
             self.mtf_plot.addItems(plot_items)
             if modality in ['SPECT', 'PET']:
                 if mtf_type == 2:
@@ -395,7 +401,8 @@ class ParamsTabCommon(QTabWidget):
                         self.update_values_mtf()
                     elif attribute == 'rec_type':
                         self.update_values_rec()
-                    self.main.refresh_results_display()
+                    else:
+                        self.main.refresh_results_display()
                 if attribute == 'roi_use_table':
                     new_rect_pos = True if content == 2 else False
                     if new_rect_pos != self.roi_table_widget.use_rectangle:
@@ -538,18 +545,17 @@ class ParamsTabCommon(QTabWidget):
                 else:
                     if isinstance(details_dict, dict):
                         details_dict = [details_dict]
-                    try:
-                        new_values_this = details_dict[0][
-                            prefix + 'MTF_details']['values']
-                    except KeyError:
-                        new_values_this = []
-                    try:
-                        new_values_this.extend(
-                                details_dict[1][prefix + 'MTF_details']['values'])
-                    except IndexError:
-                        pass  # only if x and y dir
+                    new_values_this = []
+                    key_d = f'{prefix}MTF_details'
+                    for i in range(3):
+                        try:
+                            new_values_this.extend(
+                                    details_dict[i][key_d]['values'])
+                        except (KeyError, IndexError):
+                            break
                     new_values.append(new_values_this)
 
+            print(f'update_values_mtf prefix {prefix} {len(new_values)}')
             self.main.results['MTF']['values'] = new_values
             self.main.refresh_results_display()
             self.main.status_bar.showMessage('MTF tabular values updated', 1000)
@@ -4062,6 +4068,10 @@ class BoolSelectTests(uir.BoolSelect):
         self.update_results_table = update_results_table
 
         self.btn_true.toggled.connect(
+            lambda: self.btn_changed(sel_true_false=True))
+        self.btn_false.toggled.connect(
+            lambda: self.btn_changed(sel_true_false=False))
+        '''
             lambda: self.parent.param_changed_from_gui(
                 attribute=self.attribute,
                 update_roi=self.update_roi, clear_results=self.clear_results,
@@ -4077,6 +4087,16 @@ class BoolSelectTests(uir.BoolSelect):
                 update_results_table=self.update_results_table,
                 content=False)
             )
+        '''
+
+    def btn_changed(self, sel_true_false=None):
+        if self.sender().isChecked():
+            self.parent.param_changed_from_gui(
+                attribute=self.attribute,
+                update_roi=self.update_roi, clear_results=self.clear_results,
+                update_plot=self.update_plot,
+                update_results_table=self.update_results_table,
+                content=sel_true_false)
 
 
 class SimpleTableWidget(QTableWidget):

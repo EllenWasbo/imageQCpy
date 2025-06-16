@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when fundamental changes or B turns 99, B when major changes,
 #   C new python release (or small fix)
-VERSION = '3.1.26'
+VERSION = '3.1.27'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -101,9 +101,10 @@ ALTERNATIVES = {
         },
     'SPECT': {
         'ROI': ALTERNATIVES_ROI,
-        'MTF': ['Point source', 'Line source', 'Line source, sliding window',
+        'MTF': ['Point source (2d, xy)', 'Line source (3d, xy)',
+                'Line source, sliding window (3d, xy)',
                 'z-resolution, line source(s)', 'z-resolution, edge',
-                'xyz-resolution, point']
+                'xyz-resolution, point', 'xyz-resolution, point (NEMA)']
         },
     'PET': {
         'ROI': ALTERNATIVES_ROI,
@@ -113,9 +114,10 @@ ALTERNATIVES = {
                 'Bq/ml from images, average',
                 'Bq/ml from images, max',
                 'Bq/ml from images, peak'],
-        'MTF': ['Point source', 'Line source', 'Line source, sliding window',
+        'MTF': ['Point source (2d, xy)', 'Line source (3d, xy)',
+                'Line source, sliding window (3d, xy)',
                 'z-resolution, line source(s)', 'z-resolution, edge',
-                'xyz-resolution, point']
+                'xyz-resolution, point', 'xyz-resolution, point (NEMA)']
         },
     'MR': {
         'ROI': ALTERNATIVES_ROI,
@@ -297,6 +299,7 @@ HEADERS = {
             'alt3': ['FWHM z line1', 'FWTM z line1', 'FWHM z line2', 'FWTM z line2'],
             'alt4': ['FWHM z', 'FWTM z'],
             'alt5': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y', 'FWHM z', 'FWTM z'],
+            'alt6': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y', 'FWHM z', 'FWTM z'],
             },
         'Rin': {'alt0': ['Min diff from trend', 'Max diff from trend']},
         },
@@ -330,6 +333,7 @@ HEADERS = {
             'alt3': ['FWHM z line1', 'FWTM z line1', 'FWHM z line2', 'FWTM z line2'],
             'alt4': ['FWHM z', 'FWTM z'],
             'alt5': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y', 'FWHM z', 'FWTM z'],
+            'alt6': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y', 'FWHM z', 'FWTM z'],
             },
         },
     'MR': {
@@ -451,8 +455,10 @@ HEADERS_SUP = {
             'alt3': ['A line1', 'sigma line1', 'A line2', 'sigma line2', 'sigma_prefilt'],
             'alt4': ['A', 'sigma', 'sigma_prefilt'],
             'alt5': [
-                'offset_x (cm)', 'offset_y (cm)', 'offset_z (cm)',
+                'offset_x (mm)', 'offset_y (mm)', 'offset_z (mm)',
                 'A1_x', 'sigma1_x', 'A1_y', 'sigma1_y','A1_z', 'sigma1_z'],
+            'alt6': [
+                'offset_x (mm)', 'offset_y (mm)', 'offset_z (mm)'],
             },
         },
     'PET':  {
@@ -470,8 +476,10 @@ HEADERS_SUP = {
                      'sigma_prefilt'],
             'alt4': ['A', 'sigma', 'sigma_prefilt'],
             'alt5': [
-                'offset_x (cm)', 'offset_y (cm)', 'offset_z (cm)',
+                'offset_x (mm)', 'offset_y (mm)', 'offset_z (mm)',
                 'A1_x', 'sigma1_x', 'A1_y', 'sigma1_y','A1_z', 'sigma1_z'],
+            'alt6': [
+                'offset_x (mm)', 'offset_y (mm)', 'offset_z (mm)'],
             },
         },
     'MR': {

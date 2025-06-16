@@ -271,13 +271,28 @@ class ParamsTabCommon(QTabWidget):
         modality = self.main.current_modality
         mtf_type = self.mtf_type.currentIndex()
         if modality in ['CT', 'SPECT', 'PET']:
+            if mtf_type == 6:  # and modality in ['SPECT', 'PET']:
+                self.mtf_sampling_frequency.setEnabled(False)
+                self.mtf_cut_lsf.setEnabled(False)
+                self.mtf_cut_lsf_w.setEnabled(False)
+                self.mtf_cut_lsf_w_fade.setEnabled(False)
+                self.mtf_gaussian.setEnabled(False)
+            else:
+                self.mtf_sampling_frequency.setEnabled(True)
+                self.mtf_cut_lsf.setEnabled(True)
+                self.mtf_cut_lsf_w.setEnabled(True)
+                self.mtf_cut_lsf_w_fade.setEnabled(True)
+                self.mtf_gaussian.setEnabled(True)
             self.mtf_plot.clear()
             plot_items = ['Centered xy profiles', 'Sorted pixel values',
                           'LSF', 'MTF']
             if mtf_type in [0, 5]:  # point 2d or 3d
                 plot_items.pop(1)
-                if mtf_type == 5:
-                    plot_items.pop(0)
+            elif mtf_type == 6:  # point 3d NEMA
+                plot_items = ['Centered xyz profiles',
+                              'x profile with FWHM, FWTM and fit max',
+                              'y profile with FWHM, FWTM and fit max',
+                              'z profile with FWHM, FWTM and fit max']
             else:
                 if mtf_type == 2 and modality == 'CT':
                     pass
@@ -313,10 +328,8 @@ class ParamsTabCommon(QTabWidget):
                     else:
                         if mtf_type == 2:
                             self.mtf_background_width.setEnabled(False)
-                        elif mtf_type:
+                        else:
                             self.mtf_background_width.setEnabled(True)
-                            #if mtf_type > 0:
-                            #    plot_items.append('ROI max z-profile')
             self.mtf_plot.addItems(plot_items)
             if modality in ['SPECT', 'PET']:
                 if mtf_type == 2:
@@ -1057,7 +1070,7 @@ class ParamsTabCommon(QTabWidget):
             QLabel(f'Width of background ({txt})'), self.mtf_background_width)
         flo1.addRow(QLabel('Auto center ROI in max'), self.mtf_auto_center)
         if modality in ['SPECT', 'PET']:
-            flo1.addRow(QLabel('Linesource: ignore slices with max diff % from top 3 slices'),
+            flo1.addRow(QLabel('Ignore slices with max diff % from top 3 slices'),
                         self.mtf_line_tolerance)
             flo1.addRow(QLabel('Sliding window width (N slices)'),
                         self.mtf_sliding_window)
@@ -1083,6 +1096,20 @@ class ParamsTabCommon(QTabWidget):
         flo3.addRow(QLabel('Plot'), self.mtf_plot)
         vlo2.addLayout(flo3)
         self.tab_mtf.hlo.addLayout(vlo2)
+        self.tab_mtf.hlo.addWidget(uir.VLine())
+        if modality == 'CT':
+            info_txt = '''
+            Read more about the different methods in the 
+            <a href="https://github.com/EllenWasbo/imageQCpy/wiki/Appendix-C-_-MTF-calculations">
+            Wiki</a>
+            '''
+        else:
+            info_txt = '''
+            Read more about the different methods in the 
+            <a href="https://github.com/EllenWasbo/imageQCpy/wiki/4_5-SPECT-tests">
+            Wiki</a>
+            '''
+        self.tab_mtf.hlo.addWidget(uir.InfoTool(info_txt, parent=self.main))
 
     def create_tab_mtf_xray_mr(self):
         """GUI of tab MTF - common to Xray/Mammo and MR."""

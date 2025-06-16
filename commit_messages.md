@@ -1,3 +1,13 @@
+# v3.1.27
+_Jun 13, 2025_
+
+Changes and fixes:
+- Test MTF, option xyz-resolution:
+	- FWHM x and y was mixed. Now corrected.
+	- Added option to display xyz-profiles through max pixel.
+	- Unit for offset from image center set to mm instead of cm.
+	- Added option to calculate FWHM, FWTM as defined by NEMA (directly from profiles through max in point, parabolic fit to max).
+
 # v3.1.26
 _Jun 09, 2025_
 

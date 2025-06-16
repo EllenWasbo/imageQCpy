@@ -251,7 +251,7 @@ def get_rois(image, image_number, input_main):
             roi_size_in_pix = paramset.mtf_roi_size / image_info.pix[0]
 
             bg_rim = True
-            if paramset.mtf_type in [0, 5]:  # bead / point source
+            if paramset.mtf_type in [0, 5, 6]:  # bead / point source
                 if paramset.mtf_auto_center and paramset.mtf_type == 0:
                     filt_img = ndimage.gaussian_filter(image, sigma=5)
                     yxmax = get_max_pos_yx(filt_img)
@@ -273,6 +273,9 @@ def get_rois(image, image_number, input_main):
                     roi_width=2*roi_size_in_pix + 1,
                     roi_height=2*roi_size_in_pix + 1,
                     offcenter_xy=off_center_xy)
+                if paramset.mtf_type == 6:  # 3d point source NEMA
+                    bg_rim = False
+                    roi_this[1] = None
             else:  # circular edge / wire or cylinder source / line source
                 off_xy_is_null = False
                 if paramset.mtf_auto_center:
@@ -327,13 +330,21 @@ def get_rois(image, image_number, input_main):
             # outer background rim
             if bg_rim:  # bead/wire or point/line
                 bg_width_in_pix = paramset.mtf_background_width // image_info.pix[0]
-                background_outer = get_roi_rectangle(
-                    img_shape,
-                    roi_width=2*(roi_size_in_pix + bg_width_in_pix) + 1,
-                    roi_height=2*(roi_size_in_pix + bg_width_in_pix) + 1,
-                    offcenter_xy=off_center_xy)
-                background_outer[roi_this[0] == True] = False
-                roi_this[1] = background_outer
+                if bg_width_in_pix < 1:
+                    if paramset.mtf_background_width == 0:
+                        bg_width_in_pix = 0
+                    else:
+                        bg_width_in_pix = 1
+                if bg_width_in_pix > 0:
+                    background_outer = get_roi_rectangle(
+                        img_shape,
+                        roi_width=2*(roi_size_in_pix + bg_width_in_pix) + 1,
+                        roi_height=2*(roi_size_in_pix + bg_width_in_pix) + 1,
+                        offcenter_xy=off_center_xy)
+                    background_outer[roi_this[0] == True] = False
+                    roi_this[1] = background_outer
+                else:
+                    roi_this[1] = None
 
         elif input_main.current_modality in ['Xray', 'Mammo', 'MR']:
             dx = delta_xya[0]  # center of ROI

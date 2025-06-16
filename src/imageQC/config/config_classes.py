@@ -689,7 +689,7 @@ class ParamSetPET(ParamSetCommon):
     rec_background_volume: int = 9500
     mtf_type: int = 2
     # 0=point xy, 1=line, 2=line sliding window,, 3=z-res line, 4=zres edge,
-    #5=zres point
+    #5=xyzres point, 6=xyzres point NEMA
     mtf_roi_size: float = 60.
     mtf_background_width: float = 5.
     mtf_line_tolerance: int = 30

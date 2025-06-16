@@ -235,6 +235,64 @@ def get_MTF_discrete(LSF, dx=1, padding_factor=1):
     return {'MTF_freq': freq, 'MTF': MTF}
 
 
+def get_NEMA_spatial(profiles):
+    """Calculate FWHM, FWTM from profiles as defined in NEMA PET 2024.
+
+    Parameters
+    ----------
+    profiles : list of np.array or list
+        [x, y (), z)] profiles through max of point
+        assumed background subtracted (background = zero)
+
+    Returns
+    -------
+    
+    """
+    def get_parabolic_fit_max(yvalues):
+        """Calculate max from fit of three pixelvalues."""
+        A = np.array([[1, -1, 1], [0, 0, 1], [1, 1, 1]])
+        b = np.array(yvalues)
+        abc = np.linalg.solve(A, b)
+        x_max = -abc[1]/(2*abc[0])
+        y_max = abc[0] * (x_max**2) + abc[1] * x_max + abc[2]
+        return y_max, abc
+
+    modified_profiles = []
+    fwhm_values = []
+    fwtm_values = []
+    for profile in profiles:
+        # find max from parabolic fit of max and the two neighbours
+        max_pos = np.where(profile == np.max(profile))[0][0]
+        max_fit, abc = get_parabolic_fit_max(profile[max_pos-1:max_pos+2])
+        # find interpolated fwhm/fwtm
+        fwhm, center = mmcalc.get_width_center_at_threshold(
+                profile, threshold=max_fit/2)
+        fwtm, _ = mmcalc.get_width_center_at_threshold(
+                profile, threshold=max_fit/10)
+        fwhm_values.append(fwhm)
+        fwtm_values.append(fwtm)
+        # additional points to the profile -  parabolic fit (x10 res) and fwhm
+        res10 = 0.1 * (np.arange(21) - 10)
+        parabolic = [abc[0] * (x**2) + abc[1] * x + abc[2] for x in res10]
+        res10 = list(res10 + max_pos)
+        x_values = ([center - fwtm / 2, center - fwhm / 2]
+                    + res10
+                    + [center + fwhm / 2, center + fwtm / 2])
+        y_values = [max_fit/10, max_fit/2] + parabolic + [max_fit/2, max_fit/10]
+        orig_x_values = np.arange(profile.size)
+        #x_values = np.append(x_values, orig_x_values[:max_pos-1])
+        #x_values = np.append(x_values, orig_x_values[max_pos+2:])
+        x_values = x_values - max_pos
+        #order = np.argsort(x_values)
+        #x_values = x_values[order]
+        #y_values = np.append(y_values, profile[:max_pos-1])
+        #y_values = np.append(y_values, profile[max_pos+2:])
+        #y_values = y_values[order]
+        modified_profiles.append([x_values, y_values])
+
+    return modified_profiles, fwhm_values, fwtm_values
+
+
 def calculate_MTF_point(matrix, img_info, paramset, vertical_pix_mm=None):
     """Calculate MTF from point source.
 
@@ -392,7 +450,6 @@ def calculate_MTF_3d_point(matrix, roi, images_to_test, image_infos, paramset):
 
     max_z = np.where(max_values == np.max(max_values))
     idx_max = max_z[0][0]
-    #common_details_dict['zpos_max_offset_mm'] = zpos[idx_max] - np.mean(zpos)
 
     z_diffs = np.diff(zpos)
     z_dist = z_diffs[0]
@@ -417,16 +474,45 @@ def calculate_MTF_3d_point(matrix, roi, images_to_test, image_infos, paramset):
         except (IndexError, ValueError):
             pass
         if matrix_this is not None:
-            for i in [0, 1]:
-                axis = 2 if i == 0 else 1
-                matrix_xz = np.sum(matrix_this, axis=axis)
+            if paramset.mtf_type == 5:
+                for i in [0, 1]:
+                    axis = 1 if i == 0 else 2
+                    matrix_xz = np.sum(matrix_this, axis=axis)
 
-                details_dict_this, errmsg_this = calculate_MTF_point(
-                    matrix_xz, image_infos[0], paramset,
-                    vertical_pix_mm=np.mean(z_diffs))
-                details_dict.extend(details_dict_this)
-                errmsg.append(errmsg_this)
-            details_dict.pop(1)  # removing first Z results (x, Z, y, z)
+                    details_dict_this, errmsg_this = calculate_MTF_point(
+                        matrix_xz, image_infos[0], paramset,
+                        vertical_pix_mm=np.mean(z_diffs))
+                    details_dict.extend(details_dict_this)
+                    errmsg.append(errmsg_this)
+                details_dict.pop(1)  # removing first Z results (x, Z, y, z)
+
+            # add sentral profiles
+            max_slice = matrix_this[margin]
+            max_pos = np.where(max_slice == np.max(max_slice))
+            dx, dy = max_pos[1][0], max_pos[0][0]
+            x_prof = max_slice[dy,:]
+            y_prof = max_slice[:, dx]
+            z_prof = np.array([sub[dy,dx] for sub in matrix_this])
+            common_details_dict['profile_xyz'] = [x_prof, y_prof, z_prof]
+            dxy = (np.arange(x_prof.size) - x_prof.size//2) * image_infos[0].pix[0]
+            dz = zpos_used - zpos[idx_max]
+            common_details_dict['profile_xyz_dist'] = [dxy, dxy, dz]
+
+            if paramset.mtf_type == 6:
+                profs = common_details_dict['profile_xyz']
+                profs_mod, fwhms, fwtms = get_NEMA_spatial(profs)
+                values = []
+                for i in range(3):
+                    pix = image_infos[0].pix[0] if i < 2 else np.mean(z_diffs)
+                    values.extend([fwhms[i] * pix, fwtms[i] * pix])
+                    max_pos = np.where(profs[i] == np.max(profs[i]))[0][0]
+                    details_dict_this = {'center': max_pos}
+                    details_dict.append(details_dict_this)
+                common_details_dict['NEMA_widths'] = values
+                profs_mod[0][0] = np.array(profs_mod[0][0]) * image_infos[0].pix[0]
+                profs_mod[1][0] = np.array(profs_mod[1][0]) * image_infos[0].pix[0]
+                profs_mod[2][0] = np.array(profs_mod[2][0]) * np.abs(dz[1]-dz[0])
+                common_details_dict['NEMA_modified_profiles'] = profs_mod
 
     details_dict.append(common_details_dict)
 

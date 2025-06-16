@@ -1526,9 +1526,11 @@ class ResultPlotCanvas(PlotCanvas):
                                      })
 
         def prepare_plot_centered_profiles():
+
             proceed = True
             if 'matrix' not in details_dicts[0]:
-                proceed = False
+                if 'profile_xyz' not in details_dicts[-1]:
+                    proceed = False
             elif self.main.current_modality in ['CT', 'SPECT', 'PET']:
                 if self.main.current_paramset.mtf_type in [1, 4]:
                     proceed = False
@@ -1538,44 +1540,58 @@ class ResultPlotCanvas(PlotCanvas):
 
             if proceed:
                 self.xtitle = 'pos (mm)'
-                self.ytitle = 'Pixel value'
+                self.ytitle = 'Pixel value - background mean'
 
-                linestyles = ['-', '--']  # x, y
-                colors = ['g', 'b', 'r', self.color_k, 'c', 'm']
-                if len(details_dicts) == 2:
-                    center_xy = [details_dicts[i]['center'] for i in range(2)]
-                    submatrix = [details_dicts[0]['matrix']]
+                if 'profile_xyz' in details_dicts[-1]:
+                    linestyles = ['-', '--', ':']
+                    legend = ['x', 'y', 'z']
+                    profiles = details_dicts[-1]['profile_xyz']
+                    xvals = details_dicts[-1]['profile_xyz_dist']
+                    for i in range(3):
+                        self.curves.append({
+                            'label': legend[i],
+                            'xvals': xvals[i],
+                            'yvals': profiles[i],
+                            'style': linestyles[i] + 'k'
+                             })
                 else:
-                    center_xy = details_dicts[0]['center_xy']
-                    submatrix = details_dicts[0]['matrix']
+                    linestyles = ['-', '--']  # x, y
+                    colors = ['g', 'b', 'r', self.color_k, 'c', 'm']
+                    if len(details_dicts) == 2:
+                        center_xy = [
+                            details_dicts[i]['center'] for i in range(2)]
+                        submatrix = [details_dicts[0]['matrix']]
+                    else:
+                        center_xy = details_dicts[0]['center_xy']
+                        submatrix = details_dicts[0]['matrix']
 
-                marked_imgs = self.main.get_marked_imgs_current_test()
-                pix = self.main.imgs[marked_imgs[0]].pix[0]
+                    marked_imgs = self.main.get_marked_imgs_current_test()
+                    pix = self.main.imgs[marked_imgs[0]].pix[0]
 
-                for no, sli in enumerate(submatrix):
-                    proceed = True
-                    if self.main.results['MTF']['pr_image'] is False:
-                        if no not in marked_imgs:
-                            proceed = False
-                    if proceed and sli is not None:
-                        suffix = f' {no}' if len(submatrix) > 1 else ''
-                        szy, szx = sli.shape
-                        xvals1 = pix * (np.arange(szx) - center_xy[0])
-                        yvals1 = sli[round(center_xy[1]), :]
-                        self.curves.append({
-                            'label': 'x' + suffix,
-                            'xvals': xvals1,
-                            'yvals': yvals1,
-                            'style': linestyles[0] + colors[no % len(colors)]
-                             })
-                        xvals2 = pix * (np.arange(szy) - center_xy[1])
-                        yvals2 = sli[:, round(center_xy[0])]
-                        self.curves.append({
-                            'label': 'y' + suffix,
-                            'xvals': xvals2,
-                            'yvals': yvals2,
-                            'style': linestyles[1] + colors[no % len(colors)]
-                             })
+                    for no, sli in enumerate(submatrix):
+                        proceed = True
+                        if self.main.results['MTF']['pr_image'] is False:
+                            if no not in marked_imgs:
+                                proceed = False
+                        if proceed and sli is not None:
+                            suffix = f' {no}' if len(submatrix) > 1 else ''
+                            szy, szx = sli.shape
+                            xvals1 = pix * (np.arange(szx) - center_xy[0])
+                            yvals1 = sli[round(center_xy[1]), :]
+                            self.curves.append({
+                                'label': 'x' + suffix,
+                                'xvals': xvals1,
+                                'yvals': yvals1,
+                                'style': linestyles[0] + colors[no % len(colors)]
+                                 })
+                            xvals2 = pix * (np.arange(szy) - center_xy[1])
+                            yvals2 = sli[:, round(center_xy[0])]
+                            self.curves.append({
+                                'label': 'y' + suffix,
+                                'xvals': xvals2,
+                                'yvals': yvals2,
+                                'style': linestyles[1] + colors[no % len(colors)]
+                                 })
 
         def prepare_plot_edge_position():
             self.xtitle = 'pos (mm)'
@@ -1693,6 +1709,41 @@ class ResultPlotCanvas(PlotCanvas):
                                 'yvals': yvals,
                                 'style': '-r'})
 
+        def prepare_plot_xyz_NEMA(sel_text):
+            common_details = self.main.results['MTF']['details_dict'][-1]
+            if sel_text[0] == 'x':
+                idx = 0
+            elif sel_text[0] == 'y':
+                idx = 1
+            else:
+                idx = 2
+
+            self.xtitle = 'position (mm)'
+            self.ytitle = 'Voxel value'
+            self.title = sel_text
+            xvals = common_details['profile_xyz_dist'][idx]
+            yvals = common_details['profile_xyz'][idx]
+            self.curves.append({
+                'label': 'image values',
+                'xvals': xvals, 'yvals': yvals, 'style': '-k.'})
+            xvals = common_details['NEMA_modified_profiles'][idx][0]
+            yvals = common_details['NEMA_modified_profiles'][idx][1]
+            self.curves.append({
+                'label': 'fit values',
+                'xvals': xvals[2:-2], 'yvals': yvals[2:-2], 'style': ':k'})
+            self.curves.append({
+                'label': '_no_legend_', 'style': '-r',
+                'xvals': [xvals[1], xvals[-2]],
+                'yvals': [yvals[1], yvals[-2]]})
+            self.ax.text(xvals[-2], yvals[1], '  FWHM',
+                         ha='left', size=8)
+            self.curves.append({
+                'label': '_no_legend_', 'style': '-b',
+                'xvals': [xvals[0], xvals[-1]],
+                'yvals': [yvals[0], yvals[-1]]})
+            self.ax.text(xvals[-1], yvals[0], '  FWTM',
+                         ha='left', size=8)
+
         if sel_text == '':
             test_widget = self.main.stack_test_tabs.currentWidget()
             try:
@@ -1706,12 +1757,14 @@ class ResultPlotCanvas(PlotCanvas):
                 prepare_plot_LSF()
             elif sel_text == 'Sorted pixel values':
                 prepare_plot_sorted_pix()
-            elif sel_text == 'Centered xy profiles':
+            elif sel_text in ['Centered xy profiles', 'Centered xyz profiles']:
                 prepare_plot_centered_profiles()
             elif sel_text in ['Edge position', 'Line fit']:
                 prepare_plot_edge_position()
             elif 'z-profile' in sel_text:
                 prepare_plot_zprofile(sel_text)
+            elif 'profile with FWHM, FWTM and fit max' in sel_text:
+                prepare_plot_xyz_NEMA(sel_text)
             self.title = sel_text
         except (TypeError, IndexError) as err:
             try:

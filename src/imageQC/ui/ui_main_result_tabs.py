@@ -1303,6 +1303,24 @@ class ResultPlotCanvas(PlotCanvas):
 
                     xvals = dd_this['LSF_fit_x']
                     yvals = dd_this['LSF_fit']
+                    if self.main.current_paramset.mtf_type in [0, 5, 6]:
+                        # 2d or 3d point
+                        # +/- 5x sigma devided on 100 x values params
+                        try:
+                            sigma = dd_this['LSF_fit_params'][1]
+                            A = dd_this['LSF_fit_params'][0]
+                            xvals = (5 * sigma)/100 * np.arange(100)
+                            xvals = np.append(-xvals[::-1], xvals[1:])
+                            yvals = A * np.exp(
+                                -0.5 * (xvals ** 2) / (sigma ** 2))
+                            if len(dd_this['LSF_fit_params']) == 4:
+                                sigma2 = dd_this['LSF_fit_params'][3]
+                                A2 = dd_this['LSF_fit_params'][2]
+                                yvals = yvals + A2 * np.exp(
+                                    -0.5 * (xvals ** 2) / (sigma2 ** 2))
+                        except (KeyError, IndexError):
+                            pass
+
                     self.curves.append({
                         'label': f'LSF{lbl_prefilter} - gaussian fit' + suffix[ddno],
                         'xvals': xvals,
@@ -1719,17 +1737,17 @@ class ResultPlotCanvas(PlotCanvas):
                 idx = 2
 
             self.xtitle = 'position (mm)'
-            self.ytitle = 'Voxel value'
+            self.ytitle = 'Pixel value'
             self.title = sel_text
             xvals = common_details['profile_xyz_dist'][idx]
             yvals = common_details['profile_xyz'][idx]
             self.curves.append({
-                'label': 'image values',
+                'label': 'pixel values',
                 'xvals': xvals, 'yvals': yvals, 'style': '-k.'})
             xvals = common_details['NEMA_modified_profiles'][idx][0]
             yvals = common_details['NEMA_modified_profiles'][idx][1]
             self.curves.append({
-                'label': 'fit values',
+                'label': 'parabolic fit',
                 'xvals': xvals[2:-2], 'yvals': yvals[2:-2], 'style': ':k'})
             self.curves.append({
                 'label': '_no_legend_', 'style': '-r',

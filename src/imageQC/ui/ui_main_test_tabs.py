@@ -308,8 +308,14 @@ class ParamsTabCommon(QTabWidget):
                         self.mtf_background_width.setEnabled(False)
                     else:
                         if mtf_type > 0:
-                            plot_items.append('Line source max z-profile')
-                        self.mtf_background_width.setEnabled(True)
+                            if mtf_type == 6:
+                                plot_items.append('ROI max z-profile')
+                            else:
+                                plot_items.append('Line source max z-profile')
+                        if mtf_type == 6:
+                            self.mtf_background_width.setEnabled(False)
+                        else:
+                            self.mtf_background_width.setEnabled(True)
                     if mtf_type == 2:
                         self.mtf_sliding_window.setEnabled(True)
                         plot_items.extend(
@@ -981,9 +987,10 @@ class ParamsTabCommon(QTabWidget):
         btn_get_coord.clicked.connect(self.hom_get_coordinates)
         vlo_right.addWidget(btn_get_coord)
 
-    def create_tab_mtf(self, avoid_mtf_type_connect=False):
+    def create_tab_mtf(self, avoid_mtf_type_connect=False,
+                       run_txt='Calculate MTF'):
         """GUI of tab MTF - common settings here."""
-        self.tab_mtf = ParamsWidget(self, run_txt='Calculate MTF')
+        self.tab_mtf = ParamsWidget(self, run_txt=run_txt)
 
         self.mtf_type = QComboBox()
         if avoid_mtf_type_connect is False:
@@ -3417,7 +3424,8 @@ class ParamsTabSPECT(ParamsTabCommon):
 
     def create_tab_mtf(self):
         """GUI of tab MTF."""
-        super().create_tab_mtf(avoid_mtf_type_connect=True)
+        super().create_tab_mtf(avoid_mtf_type_connect=True,
+                               run_txt='Calculate spatial resolution')
         self.create_tab_mtf_ct_spect_pet(modality='SPECT')
 
 
@@ -3684,7 +3692,8 @@ class ParamsTabPET(ParamsTabCommon):
 
     def create_tab_mtf(self):
         """GUI of tab MTF."""
-        super().create_tab_mtf(avoid_mtf_type_connect=True)
+        super().create_tab_mtf(avoid_mtf_type_connect=True,
+                               run_txt='Calculate spatial resolution')
         self.create_tab_mtf_ct_spect_pet(modality='PET')
 
     def get_Cro_activities(self):

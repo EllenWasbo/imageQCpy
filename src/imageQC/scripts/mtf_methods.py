@@ -279,15 +279,7 @@ def get_NEMA_spatial(profiles):
                     + res10
                     + [center + fwhm / 2, center + fwtm / 2])
         y_values = [max_fit/10, max_fit/2] + parabolic + [max_fit/2, max_fit/10]
-        orig_x_values = np.arange(profile.size)
-        #x_values = np.append(x_values, orig_x_values[:max_pos-1])
-        #x_values = np.append(x_values, orig_x_values[max_pos+2:])
         x_values = x_values - max_pos
-        #order = np.argsort(x_values)
-        #x_values = x_values[order]
-        #y_values = np.append(y_values, profile[:max_pos-1])
-        #y_values = np.append(y_values, profile[max_pos+2:])
-        #y_values = y_values[order]
         modified_profiles.append([x_values, y_values])
 
     return modified_profiles, fwhm_values, fwtm_values
@@ -401,6 +393,8 @@ def calculate_MTF_point(matrix, img_info, paramset, vertical_pix_mm=None):
                         res['MTF_freq'], res['MTF'], [0.5, 0.1, 0.02])
                 else:  # NM, SPECT or PET
                     profile = res['LSF_fit']
+                    res['values'] = [res['FWHM'], res['FWTM']]
+                    '''
                     fwhm, _ = mmcalc.get_width_center_at_threshold(
                         profile, np.max(profile)/2)
                     fwtm, _ = mmcalc.get_width_center_at_threshold(
@@ -410,6 +404,7 @@ def calculate_MTF_point(matrix, img_info, paramset, vertical_pix_mm=None):
                     if fwtm is not None:
                         fwtm = fwtm * pix
                     res['values'] = [fwhm, fwtm]
+                    '''
                 details_dict['gMTF_details'] = res
 
                 details.append(details_dict)
@@ -494,9 +489,12 @@ def calculate_MTF_3d_point(matrix, roi, images_to_test, image_infos, paramset):
             y_prof = max_slice[:, dx]
             z_prof = np.array([sub[dy,dx] for sub in matrix_this])
             common_details_dict['profile_xyz'] = [x_prof, y_prof, z_prof]
-            dxy = (np.arange(x_prof.size) - x_prof.size//2) * image_infos[0].pix[0]
-            dz = zpos_used - zpos[idx_max]
-            common_details_dict['profile_xyz_dist'] = [dxy, dxy, dz]
+            max_pos_x = np.where(x_prof == np.max(x_prof))[0][0]
+            max_pos_y = np.where(y_prof == np.max(y_prof))[0][0]
+            distx = (np.arange(x_prof.size) - max_pos_x) * image_infos[0].pix[0]
+            disty = (np.arange(y_prof.size) - max_pos_y) * image_infos[0].pix[0]
+            distz = zpos_used - zpos[idx_max]
+            common_details_dict['profile_xyz_dist'] = [distx, disty, distz]
 
             if paramset.mtf_type == 6:
                 profs = common_details_dict['profile_xyz']
@@ -511,7 +509,7 @@ def calculate_MTF_3d_point(matrix, roi, images_to_test, image_infos, paramset):
                 common_details_dict['NEMA_widths'] = values
                 profs_mod[0][0] = np.array(profs_mod[0][0]) * image_infos[0].pix[0]
                 profs_mod[1][0] = np.array(profs_mod[1][0]) * image_infos[0].pix[0]
-                profs_mod[2][0] = np.array(profs_mod[2][0]) * np.abs(dz[1]-dz[0])
+                profs_mod[2][0] = np.array(profs_mod[2][0]) * np.mean(z_diffs)
                 common_details_dict['NEMA_modified_profiles'] = profs_mod
 
     details_dict.append(common_details_dict)

@@ -993,7 +993,7 @@ def calculate_qc(input_main, wid_auto=None,
                 if 'TTF' in input_main.results:
                     input_main.refresh_img_display()
             elif input_main.current_modality in ['CT', 'SPECT', 'PET']:
-                if 'MTF' in input_main.results and paramset.mtf_type == 5:
+                if 'MTF' in input_main.results and paramset.mtf_type in [5, 6]:
                     try:
                         input_main.set_active_img(
                             input_main.results['MTF']['details_dict'][-1][
@@ -2782,6 +2782,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         try:
                             values_sup.append(
                                 list(dd[0]['gMTF_details']['LSF_fit_params']))
+                            if len(values_sup) == 2 and modality == 'CT':
+                                values_sup.extend([None, None])
                         except TypeError:
                             pass
                         try:  # x-dir, y-dir
@@ -2789,6 +2791,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                                 dd[1][prefix + 'MTF_details']['values'])
                             values_sup[-1].extend(list(
                                 dd[1]['gMTF_details']['LSF_fit_params']))
+                            if len(values_sup) == 6 and modality == 'CT':
+                                values_sup.extend([None, None])
                         except (IndexError, KeyError, AttributeError, TypeError):
                             pass
                         values_sup[-1].append(
@@ -2829,6 +2833,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     try:
                         values_sup = list(details_dict[0][
                             'gMTF_details']['LSF_fit_params'])
+                        if len(values_sup) == 2 and modality == 'CT':
+                            values_sup.extend([None, None])
                     except (TypeError, KeyError):
                         pass
 
@@ -2837,11 +2843,15 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                             details_dict[1][prefix + 'MTF_details']['values'])
                         values_sup.extend(list(
                             details_dict[1]['gMTF_details']['LSF_fit_params']))
+                        if len(values_sup) == 6 and modality == 'CT':
+                            values_sup.extend([None, None])
                         if paramset.mtf_type == 5:
                             values.extend(
                                 details_dict[2][prefix + 'MTF_details']['values'])
                             values_sup.extend(list(
                                 details_dict[2]['gMTF_details']['LSF_fit_params']))
+                            if len(values_sup) == 10 and modality == 'CT':
+                                values_sup.extend([None, None])
                     except (IndexError, KeyError, AttributeError):
                         if paramset.mtf_type == 3 and values:
                             values.extend([None] * len(values))

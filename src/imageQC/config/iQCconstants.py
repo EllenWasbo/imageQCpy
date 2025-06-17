@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when fundamental changes or B turns 99, B when major changes,
 #   C new python release (or small fix)
-VERSION = '3.1.27'
+VERSION = '3.1.28'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')

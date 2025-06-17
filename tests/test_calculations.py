@@ -712,7 +712,7 @@ def test_NM_MTF_pointsource():
 
     calculate_qc.calculate_qc(input_main)
     values = np.round(10*np.array(input_main.results['MTF']['values'][10]))
-    assert np.array_equal(values, np.array([92., 169., 95., 174.]))
+    assert np.array_equal(values, np.array([92., 168., 95., 173.]))
 
 
 def test_NM_MTF_2_linesources():

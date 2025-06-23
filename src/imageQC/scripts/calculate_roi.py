@@ -203,11 +203,12 @@ def get_rois(image, image_number, input_main):
         return (roi_this, errmsg)
 
     def Hom():  # Homogeneity
+        errmsg = None
         flatfield = False
         if input_main.current_modality == 'Mammo':
             flatfield = True
         elif input_main.current_modality == 'Xray':
-            if paramset.hom_tab_alt >= 3:
+            if paramset.hom_type >= 3:
                 flatfield = True
         if flatfield:
             roi_array = get_roi_hom_flatfield(image_info, paramset)
@@ -224,10 +225,30 @@ def get_rois(image, image_number, input_main):
                     roi_mask_outer[n_pix:-n_pix, n_pix:-n_pix] = True
             roi_array.append(roi_mask_outer)
         else:
-            roi_array = get_roi_hom(image_info, paramset, delta_xya=delta_xya,
-                                    modality=input_main.current_modality)
+            if input_main.current_modality == 'PET':
+                if paramset.hom_auto_center:
+                    if 'MainWindow' in str(type(input_main)):
+                        if input_main.summed_img is None:
+                            input_main.summed_img, errmsg = input_main.sum_marked_images()
+                        summed_img = np.copy(input_main.summed_img)
+                    else:
+                        summed_img = image
+                else:
+                    summed_img = image
 
-        return roi_array
+                if summed_img is None:
+                    roi_array = None
+                    if errmsg is None or errmsg == '':
+                        errmsg = 'Failed to sum images. Further calculations aborted.'
+                else:
+                    roi_array, errmsg = get_roi_hom_pet(
+                        summed_img, image_info, paramset)
+            else:
+                roi_array = get_roi_hom(image_info, paramset,
+                                        delta_xya=delta_xya,
+                                        modality=input_main.current_modality)
+
+        return (roi_array, errmsg)
 
     def HUw():  # CT HU water
         roi_size_in_pix = paramset.huw_roi_size / image_info.pix[0]
@@ -1071,9 +1092,9 @@ def get_roi_hom_flatfield(image_info, paramset):
         image_info.shape, roi_width=roi_size_in_pix, roi_height=roi_size_in_pix)
     variance = False
     try:
-        if paramset.hom_tab_alt == 3 and paramset.hom_variance:
+        if paramset.hom_type == 3 and paramset.hom_variance:
             variance = True
-    except AttributeError:  # mammo not having hom_tab_alt
+    except AttributeError:  # mammo not having hom_type
         variance = paramset.hom_variance
 
     if variance:
@@ -1085,6 +1106,55 @@ def get_roi_hom_flatfield(image_info, paramset):
     roi_array = [roi_small, roi_variance]
 
     return roi_array
+
+
+def get_roi_hom_pet(summed_image, image_info, paramset):
+    errmsg = None
+    roi_array = None
+    center = (0, 0)
+    roi_size_in_pix = paramset.hom_roi_size / image_info.pix[0]
+    # Auto center phantom
+    if paramset.hom_auto_center:
+        res_center = mmcalc.optimize_center(summed_image, 0)
+        off_centers = []
+        if res_center is not None:
+            center_x, center_y, _, _ = res_center
+            center = (center_x - summed_image.shape[1] // 2,
+                      center_y - summed_image.shape[0] // 2)
+        else:
+            errmsg = 'Failed finding center of phantom. Image center used.'
+
+    if paramset.hom_type < 2:  # 5 rois
+        dist = paramset.hom_roi_distance / image_info.pix[0]
+
+        off_centers = [
+            center,
+            (center[0], center[1] + dist),
+            (center[0] + dist, center[1]),
+            (center[0], center[1] - dist),
+            (center[0] - dist, center[1]),
+            ]
+        roi_array = []
+        for off_center in off_centers:
+            roi_array.append(get_roi_circle(
+                summed_image.shape, off_center, roi_size_in_pix))
+    elif paramset.hom_type == 2:  # NEMA NU-2 1994 large circular ROI with squares
+        roi_array = [
+            get_roi_circle(summed_image.shape, center, roi_size_in_pix)]
+        xs, ys = [], []
+        cm_in_pix = 10. / image_info.pix[0]
+        n_max = round(np.floor(roi_size_in_pix / cm_in_pix))
+        for i in range(-n_max, n_max + 1):
+            for j in range(-n_max, n_max + 1):
+                if np.sqrt(i**2 + j**2) <= n_max:
+                    xs.append(
+                        summed_image.shape[1] // 2 + center[0] + i * cm_in_pix)
+                    ys.append(
+                        summed_image.shape[0] // 2 + center[1] + j * cm_in_pix)
+        roi_array.extend([xs, ys])
+
+    return (roi_array, errmsg)
+
 
 def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
     """Calculate roi array with center roi and periferral rois.

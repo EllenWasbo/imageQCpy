@@ -360,7 +360,7 @@ class ConfigIdl2Py():
             if 'HOMOGROIROTX' in param_names:
                 paramset.Xray.hom_roi_rotation = cp.HOMOGROIROTX[0]
             if 'ALTHOMOGX' in param_names:
-                paramset.Xray.hom_tab_alt = cp.ALTHOMOGX[0]
+                paramset.Xray.hom_type = cp.ALTHOMOGX[0]
             if 'NOISEXPERCENT' in param_names:
                 paramset.Xray.noi_percent = cp.NOISEXPERCENT[0]
             if 'TYPEROIX' in param_names:

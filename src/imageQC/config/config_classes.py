@@ -471,7 +471,8 @@ class ParamSetXray(ParamSetCommon):
     # % of shortes center to edge distance, if zero = center of quadrants
     hom_roi_rotation: float = 0.
     # if non-zero - same distance to center for all (half if distance is zero)
-    hom_tab_alt: int = 0  # alternatives TODO change variablename to hom_type
+    hom_type: int = 0  # alternatives
+    hom_tab_alt: int = 0  # same as hom_type, kept for version compability, later delete
     hom_variance: bool = False
     hom_roi_size_variance: float = 2.
     hom_mask_max: bool = False
@@ -669,8 +670,12 @@ class ParamSetSPECT(ParamSetCommon):
 class ParamSetPET(ParamSetCommon):
     """Set of parameters regarding PET tests."""
 
-    hom_roi_size: float = 10.
-    hom_roi_distance: float = 55.
+    hom_type: int = 0  # 0 = pr image 5 ROIs, 1 = AAPM TG 126, 2 = NEMA NU-2 1994 / IAEA 2009
+    hom_roi_size: float = 15.
+    hom_roi_distance: float = 60.
+    hom_auto_center: bool = False
+    hom_auto_select_slices: bool = True
+    hom_percent_slices: float = 90  # % within fwhm of signal profile to include
     cro_roi_size: float = 60.
     cro_volume: float = 6283.
     cro_auto_select_slices: bool = True

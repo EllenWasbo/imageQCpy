@@ -190,9 +190,12 @@ class ParamsTabCommon(QTabWidget):
                             self.roi_table_widget.setEnabled(False)
                         else:
                             self.roi_table_widget.setEnabled(True)
-                    elif field.name == 'hom_tab_alt':
-                        enable = True if content >= 3 else False
-                        self.hom_mask_outer_mm.setEnabled(enable)
+                    elif field.name == 'hom_type':
+                        try:
+                            enable = True if content >= 3 else False
+                            self.hom_mask_outer_mm.setEnabled(enable)
+                        except AttributeError:  # if PET, not Xray
+                            pass
                 elif field.type == 'float':
                     reciever.setValue(content)
                 elif field.type == 'bool':
@@ -432,9 +435,12 @@ class ParamsTabCommon(QTabWidget):
                     else:
                         self.roi_table_widget.setEnabled(True)
                         self.set_offset('roi_offset_xy', reset=True)
-                elif attribute == 'hom_tab_alt':
-                    enable = True if content >= 3 else False
-                    self.hom_mask_outer_mm.setEnabled(enable)
+                elif attribute == 'hom_type':
+                    try:
+                        enable = True if content >= 3 else False
+                        self.hom_mask_outer_mm.setEnabled(enable)
+                    except AttributeError:  # if PET, not Xray
+                        pass
                 elif attribute in ['sni_type', 'sni_channels']:
                     alt = 0 if self.main.current_paramset.sni_type == 0 else 2
                     if self.main.current_paramset.sni_channels:
@@ -451,9 +457,13 @@ class ParamsTabCommon(QTabWidget):
                 log = []
                 if attribute in [
                         'sli_type', 'mtf_type', 'rec_type', 'snr_type',
-                        'roi_use_table', 'hom_tab_alt', 'sni_alt']:
+                        'roi_use_table', 'hom_type', 'sni_alt']:
                     _, log = cff.verify_output_alternative(
                         self.main.current_paramset, testcode=self.main.current_test)
+                    if attribute == 'hom_type':
+                        # copy to hom_tab_alt (pre v3.1.29 name, allow using mix of versions)
+                        self.main.current_paramset.hom_tab_alt = \
+                            self.main.current_paramset.hom_type
                 if log:
                     msg = ('Output settings are defined for this parameterset. '
                            'Changing this parameter will change the headers of '
@@ -1946,9 +1956,9 @@ class ParamsTabXray(ParamsTabCommon):
         super().update_enabled()
         if self.main.current_modality == 'Xray':
             paramset = self.main.current_paramset
-            if paramset.hom_tab_alt >= 3:
+            if paramset.hom_type >= 3:
                 self.hom_roi_size_label.setText('ROI size (mm)')
-                self.stack_hom.setCurrentIndex(paramset.hom_tab_alt - 3 + 1)
+                self.stack_hom.setCurrentIndex(paramset.hom_type - 3 + 1)
             else:
                 self.hom_roi_size_label.setText('ROI radius (mm)')
                 self.stack_hom.setCurrentIndex(0)
@@ -1957,10 +1967,10 @@ class ParamsTabXray(ParamsTabCommon):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate homogeneity')
 
-        self.hom_tab_alt = QComboBox()
-        self.hom_tab_alt.addItems(ALTERNATIVES['Xray']['Hom'])
-        self.hom_tab_alt.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='hom_tab_alt'))
+        self.hom_type = QComboBox()
+        self.hom_type.addItems(ALTERNATIVES['Xray']['Hom'])
+        self.hom_type.currentIndexChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_type'))
 
         self.hom_roi_size = QDoubleSpinBox(
             decimals=1, minimum=0.1, maximum=300, singleStep=0.1)
@@ -1979,7 +1989,7 @@ class ParamsTabXray(ParamsTabCommon):
             QLabel('Mask outer mm'))
         self.tab_hom.hlo_top.addWidget(self.hom_mask_outer_mm)
         self.tab_hom.hlo_top.addWidget(QLabel('Method: '))
-        self.tab_hom.hlo_top.addWidget(self.hom_tab_alt)
+        self.tab_hom.hlo_top.addWidget(self.hom_type)
         info_txt = (
             'Method with central + quadrants ROI adapted from IPEM Report 32<br><br>'
             + '<b>Flat field test from Mammo:</b><br>'
@@ -3447,11 +3457,62 @@ class ParamsTabPET(ParamsTabCommon):
 
         self.flag_ignore_signals = False
 
+    def update_enabled(self):
+        """Update enabled/disabled features."""
+        super().update_enabled()
+        if self.main.current_modality == 'PET':
+            paramset = self.main.current_paramset
+            if paramset.hom_type == 0:
+                self.hom_roi_distance.setEnabled(True)
+                self.hom_plot.setEnabled(False)
+            elif paramset.hom_type == 1:
+                self.hom_roi_distance.setEnabled(True)
+                self.hom_plot.setEnabled(True)
+            elif paramset.hom_type == 2:
+                self.hom_roi_distance.setEnabled(False)
+                self.hom_plot.setEnabled(True)
+
+    def update_hom_options(self):
+        """Update ROI size based on selected method for test Hom."""
+        curr_type = self.hom_type.currentIndex()
+        if curr_type < 2:
+            radius = 15.
+        else:
+            radius = 175./2
+        self.blockSignals(True)
+        self.main.current_paramset.hom_roi_size = radius
+        self.hom_roi_size.setValue(radius)
+        plot_options = None
+        self.hom_plot.clear()
+        if curr_type == 0:
+            self.hom_auto_select_slices.setChecked(False)
+        else:
+            self.hom_auto_select_slices.setChecked(True)
+            if curr_type == 1:
+                plot_options = [
+                    'Average in ROI pr slice',
+                    'Integral uniformity pr slice',
+                    'Integral uniformity pr ROI',
+                    'z-profile central ROI, slice selection']
+                self.hom_plot.addItems(plot_options)
+            elif curr_type == 2:
+                plot_options = [
+                    'Non-uniformity pr slice',
+                    'Coefficient of Variation pr slice',
+                    'Averages pr ROI for selected slice',
+                    'z-profile central ROI, slice selection']
+                self.hom_plot.addItems(plot_options)
+        self.blockSignals(False)
+        self.param_changed_from_gui(attribute='hom_type')
+
     def create_tab_hom(self):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate homogeneity')
-        self.tab_hom.vlo_top.addWidget(QLabel(
-            'Calculate mean in ROIs and % difference from mean of all mean values.'))
+
+        self.hom_type = QComboBox()
+        self.hom_type.addItems(ALTERNATIVES['PET']['Hom'])
+        self.hom_type.currentIndexChanged.connect(self.update_hom_options)
+        #lambda: self.param_changed_from_gui(attribute='hom_type'))
 
         self.hom_roi_size = QDoubleSpinBox(decimals=1, minimum=0.1, singleStep=0.1)
         self.hom_roi_size.valueChanged.connect(
@@ -3461,11 +3522,72 @@ class ParamsTabPET(ParamsTabCommon):
         self.hom_roi_distance.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='hom_roi_distance'))
 
+        self.hom_auto_center = QCheckBox('')
+        self.hom_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_auto_center'))
+
+        self.hom_auto_select_slices = QGroupBox('Auto select slices')
+        self.hom_auto_select_slices.setCheckable(True)
+        self.hom_auto_select_slices.setFont(uir.FontItalic())
+        self.hom_auto_select_slices.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_auto_select_slices'))
+
+        self.hom_percent_slices = QDoubleSpinBox(
+            decimals=0, minimum=10, maximum=100, singleStep=1)
+        self.hom_percent_slices.valueChanged.connect(
+            lambda: self.param_changed_from_gui(attribute='hom_percent_slices'))
+
+        self.hom_plot = QComboBox()
+        self.update_hom_options()
+        self.hom_plot.currentIndexChanged.connect(
+            self.main.refresh_results_display)
+
+        self.tab_hom.hlo_top.addWidget(QLabel('Method: '))
+        self.tab_hom.hlo_top.addWidget(self.hom_type)
+        info_txt = """
+        Methods for homogeneity/uniformity:<br>
+        <br>
+        <b>Pr image 5 ROIs</b><br>
+        Calculate average pixel value for each image in one central and four 
+        circular ROIs at 12, 15, 18 and 21 o'clock.<br>
+        Specify ROI radius and distance to the peripheral ROIs.<br>
+        <br>
+        <b>AAPM TG 126</b><br>
+        ROIs similar to the 5 ROIs method. <br>
+        Given in TG 126:
+        <ul><li>ROI radius 15 mm</li>
+        <li>ROI distance = phantom radius - (ROI radius  + 10mm) = 
+        (peripheral ROIs 1cm from phantom border)</li></ul>
+        Option to autoselect slices within the phantom based on the z-profile.<br>
+        Calculates integral uniformity for each slice and across slices (axial).<br>
+        <br>
+        <b>NEMA NU-2 1994 / IAEA 2009</b><br>
+        Based on NEMA NU-2 1994, as described in IAEA Quality Assurance for 
+        PET and PET/CT Systems (2009).<br>
+        Circular large ROI (17.5cm) with smaller 1x1 cm ROIs within.<br>
+        Calculate maximum non-uniformity and coefficient of variation pr slice 
+        and for the full volume.
+        """
+        self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
+        self.tab_hom.hlo_top.addStretch()
+
         flo = QFormLayout()
         flo.addRow(QLabel('ROI radius (mm)'), self.hom_roi_size)
         flo.addRow(QLabel('ROI distance (mm)'), self.hom_roi_distance)
+        flo.addRow(QLabel('Auto center phantom'), self.hom_auto_center)
+        flo2 = QFormLayout()
+        flo2.addRow(QLabel('Plot:'), self.hom_plot)
         self.tab_hom.hlo.addLayout(flo)
-        self.tab_hom.hlo.addStretch()
+        self.tab_hom.hlo.addWidget(uir.VLine())
+        self.tab_hom.hlo.addLayout(flo2)
+
+        hlo_auto_select = QHBoxLayout()
+        self.hom_auto_select_slices.setLayout(hlo_auto_select)
+        hlo_auto_select.addWidget(
+            QLabel('Use percentage of images within FWHM of z-profile of ROIs'))
+        hlo_auto_select.addWidget(self.hom_percent_slices)
+        hlo_auto_select.addWidget(QLabel('%'))
+        self.tab_hom.vlo.addWidget(self.hom_auto_select_slices)
 
     def create_tab_cro(self):
         """GUI of tab Cross Calibration."""

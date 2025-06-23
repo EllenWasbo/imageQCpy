@@ -131,6 +131,9 @@ def read_dcm(file, stop_before_pixels=True):
             is_image = False
     except (FileNotFoundError, PermissionError, OSError) as err:
         errmsg = f'Error reading {file} {str(err)}'
+        if isinstance(file, str):
+            if len(file) > 260:
+                errmsg = errmsg + ' Filename > 260 characters. Might cause error. Try shortening the file path.'
         is_image = False
     except AttributeError:
         pydicom.config.data_element_callback = fix_sop_class

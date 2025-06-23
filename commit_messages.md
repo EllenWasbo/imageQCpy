@@ -1,3 +1,13 @@
+# v3.1.29
+_Jun 23, 2025_
+
+PET:
+- Added options to test Homogeneity (Uniformity):
+	- Method described in AAPM TG 126 and NEMA NU-2 1994 (as described in IAEA guidelines 2009)
+
+- Code structure:
+	- Renamed ParamsetXray.hom_tab_alt to hom_type for consistency with similar parameters with other tests. Kept both as copies to allow for mix of versions.
+
 # v3.1.28
 _Jun 17, 2025_
 

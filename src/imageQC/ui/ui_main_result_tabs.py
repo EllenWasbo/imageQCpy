@@ -492,33 +492,43 @@ class ResultPlotCanvas(PlotCanvas):
                 # seen when in results, results and options change, #TODO better avoid
         elif len(self.scatters) > 0:
             first = self.scatters[0]
-            self.ax.set_xticks(np.arange(len(first['xlabels'])))
-            self.ax.set_xticklabels(first['xlabels'], rotation=45)
-            self.ax.set_yticks(np.arange(len(first['ylabels'])))
-            self.ax.set_yticklabels(first['ylabels'])
+            if 'xlabels' in first:
+                self.ax.set_xticks(np.arange(len(first['xlabels'])))
+                self.ax.set_xticklabels(first['xlabels'], rotation=45)
+                self.ax.set_yticks(np.arange(len(first['ylabels'])))
+                self.ax.set_yticklabels(first['ylabels'])
             self.ax.set_aspect(1)
             for scatter in self.scatters:
-                arr = scatter['array']
-                if 'label' in scatter:
-                    label = scatter['label']
-                else:
-                    label = ''
-                r = np.arange(arr.shape[1])
-                p = np.arange(arr.shape[0])
-                R,P = np.meshgrid(r,p)
-                if isinstance(scatter['color'], str):
-                    self.ax.scatter(
-                        R[arr == True], P[arr == True],
-                        s=scatter['size'],
-                        marker=scatter['marker'],
-                        color=scatter['color'], label=label)
-                else:
-                    self.ax.scatter(
-                        R[arr == True], P[arr == True],
-                        s=scatter['size'],
-                        marker=scatter['marker'], label=label,
-                        c=scatter['color'][arr == True], cmap=scatter['cmap'],
-                        norm=scatter['norm'])
+                if 'array' in scatter:
+                    arr = scatter['array']
+                    if 'label' in scatter:
+                        label = scatter['label']
+                    else:
+                        label = ''
+                    r = np.arange(arr.shape[1])
+                    p = np.arange(arr.shape[0])
+                    R,P = np.meshgrid(r,p)
+                    if isinstance(scatter['color'], str):
+                        self.ax.scatter(
+                            R[arr == True], P[arr == True],
+                            s=scatter['size'],
+                            marker=scatter['marker'],
+                            color=scatter['color'], label=label)
+                    else:
+                        self.ax.scatter(
+                            R[arr == True], P[arr == True],
+                            s=scatter['size'],
+                            marker=scatter['marker'], label=label,
+                            c=scatter['color'][arr == True], cmap=scatter['cmap'],
+                            norm=scatter['norm'])
+                elif 'xs' in scatter:
+                    self.ax.yaxis.set_inverted(True)
+                    self.ax.scatter(scatter['xs'], scatter['ys'],
+                                    s = scatter['size'],
+                                    marker=scatter['marker'],
+                                    c=scatter['color'],
+                                    cmap=scatter['cmap'],
+                                    norm=scatter['norm'])
 
         else:
             self.ax.axis('off')
@@ -982,6 +992,12 @@ class ResultPlotCanvas(PlotCanvas):
 
     def Hom(self, sel_text):
         """Prepare plot for test Hom."""
+        if sel_text == '':
+            try:
+                test_widget = self.main.stack_test_tabs.currentWidget()
+                sel_text = test_widget.hom_plot.currentText()
+            except AttributeError:
+                pass
         img_nos = []
         xvals = []
         if self.main.current_modality == 'CT':
@@ -1026,7 +1042,7 @@ class ResultPlotCanvas(PlotCanvas):
             self.curves.append(tolmax)
             self.default_range_y = self.test_values_outside_yrange([-6, 6])
         elif self.main.current_modality == 'Xray':
-            if self.main.current_paramset.hom_tab_alt == 4:  # flatfield aapm
+            if self.main.current_paramset.hom_type == 4:  # flatfield aapm
                 self.title = ('Profile average minus '
                               'average of neighbours in same profile')
                 imgno = self.main.gui.active_img_no
@@ -1039,54 +1055,128 @@ class ResultPlotCanvas(PlotCanvas):
                         {'label': labels[i], 'xvals': np.arange(prof.size),
                          'yvals': prof, 'style': styles[i]})
         elif self.main.current_modality == 'PET':
-            self.title = '% difference from mean of all means'
-            yvalsC = []
-            yvals12 = []
-            yvals15 = []
-            yvals18 = []
-            yvals21 = []
-            for i, row in enumerate(self.main.results['Hom']['values']):
-                if len(row) > 0:
-                    img_nos.append(i)
-                    xvals.append(self.zpos_all[i])
-                    yvalsC.append(row[5])
-                    yvals12.append(row[6])
-                    yvals15.append(row[7])
-                    yvals18.append(row[8])
-                    yvals21.append(row[9])
-            self.curves.append(
-                {'label': 'Center', 'xvals': xvals,
-                 'yvals': yvalsC, 'style': '-r'})
-            self.curves.append(
-                {'label': 'at 12', 'xvals': xvals,
-                 'yvals': yvals12, 'style': '-b'})
-            self.curves.append(
-                {'label': 'at 15', 'xvals': xvals,
-                 'yvals': yvals15, 'style': '-g'})
-            self.curves.append(
-                {'label': 'at 18', 'xvals': xvals,
-                 'yvals': yvals18, 'style': '-y'})
-            self.curves.append(
-                {'label': 'at 21', 'xvals': xvals,
-                 'yvals': yvals21, 'style': '-c'})
-            self.xtitle = 'zpos (mm)'
-            if None in xvals:
-                xvals = img_nos
-                self.xtitle = 'Image number'
-            self.ytitle = '% difference'
-            try:
-                tolmax = {'label': 'tolerance max',
-                          'xvals': [min(xvals), max(xvals)],
-                          'yvals': [5, 5],
-                          'style': '--' + self.color_k}
-                tolmin = tolmax.copy()
-                tolmin['label'] = 'tolerance min'
-                tolmin['yvals'] = [-5, -5]
-                self.curves.append(tolmin)
-                self.curves.append(tolmax)
-            except ValueError:
-                pass
-            self.default_range_y = self.test_values_outside_yrange([-7, 7])
+            if self.main.current_paramset.hom_type == 0:
+                self.title = '% difference from mean of all means'
+                yvals = [[] for j in range(5)]
+                for i, row in enumerate(self.main.results['Hom']['values']):
+                    if len(row) > 0:
+                        img_nos.append(i)
+                        xvals.append(self.zpos_all[i])
+                        for j in range(5):
+                            yvals[j].append(row[5+j])
+                labels = ['Center', 'at 12', 'at 15', 'at 18', 'at 21']
+                styles = ['-r', '-b', '-g', '-y', '-c']
+                for j in range(5):
+                    self.curves.append(
+                        {'label': labels[j], 'xvals': xvals,
+                         'yvals': yvals[j], 'style': styles[j]})
+                self.xtitle = 'zpos (mm)'
+                if None in xvals:
+                    xvals = img_nos
+                    self.xtitle = 'Image number'
+                self.ytitle = '% difference'
+                try:
+                    tolmax = {'label': 'tolerance max',
+                              'xvals': [min(xvals), max(xvals)],
+                              'yvals': [5, 5],
+                              'style': '--' + self.color_k}
+                    tolmin = tolmax.copy()
+                    tolmin['label'] = 'tolerance min'
+                    tolmin['yvals'] = [-5, -5]
+                    self.curves.append(tolmin)
+                    self.curves.append(tolmax)
+                except ValueError:
+                    pass
+                self.default_range_y = self.test_values_outside_yrange([-7, 7])
+            else:
+                details_dict = self.main.results['Hom']['details_dict']
+                self.title = sel_text
+                self.xtitle = 'zpos (mm)'
+                xvals = details_dict['zpos_used']
+                if sel_text == 'z-profile central ROI, slice selection':
+                    self.curves.append(
+                        {'label': 'All slices', 'xvals': details_dict['zpos'],
+                         'yvals': details_dict['roi_averages'],
+                         'style': '-' + self.color_k})
+                    self.curves.append(
+                        {'label': 'Used slices', 'xvals': xvals,
+                         'yvals': details_dict['roi_averages_0'],
+                         'style': '-r'})
+                    self.ytitle = 'z-profile for Auto select slices'
+                elif sel_text == 'Average in ROI pr slice':
+                    labels = ['Center', 'at12', 'at15', 'at18', 'at21']
+                    styles = ['-r', '-b', '-g', '-y', '-c']
+                    for i in  range(5):
+                        yvals = details_dict[f'roi_averages_{i}']
+                        self.curves.append(
+                            {'label': labels[i], 'xvals': xvals,
+                             'yvals': yvals, 'style': styles[i]})
+                    self.ytitle = 'Average pixel value'
+                elif sel_text == 'Integral uniformity pr slice':
+                    yvals = details_dict['uniformity_pr_slice']
+                    self.ytitle = 'Integral uniformity (%)'
+                    self.curves.append(
+                        {'label': 'Integral uniformity', 'xvals': xvals,
+                         'yvals': yvals, 'style': '-' + self.color_k})
+                    tolmax = {'label': '_no_legend_',
+                              'xvals': [min(xvals), max(xvals)],
+                              'yvals': [5, 5],
+                              'style': '--r'}
+                    tolmin = tolmax.copy()
+                    tolmin['yvals'] = [-5, -5]
+                    self.curves.append(tolmin)
+                    self.curves.append(tolmax)
+                    self.default_range_y = self.test_values_outside_yrange([-7, 7])
+                elif sel_text == 'Integral uniformity pr ROI':
+                    yvals = details_dict['uniformity_pr_roi']
+                    self.ytitle = 'Integral uniformity (%)'
+                    self.xtitle = 'ROI'
+                    self.curves.append(
+                        {'label': 'Integral uniformity',
+                         'xvals': list(range(5)),
+                         'xticks': ['Center', 'at12', 'at15', 'at18', 'at21'],
+                         'yvals': yvals, 'style': 'o'})
+                    tolmax = {'label': '_no_legend_',
+                              'xvals': [0, 4],
+                              'yvals': [5, 5],
+                              'style': '--r'}
+                    tolmin = tolmax.copy()
+                    tolmin['yvals'] = [-5, -5]
+                    self.curves.append(tolmin)
+                    self.curves.append(tolmax)
+                    self.default_range_y = self.test_values_outside_yrange([-7, 7])
+                elif sel_text == 'Non-uniformity pr slice':
+                    self.curves.append(
+                        {'label': 'Non-uniformity', 'xvals': xvals,
+                         'yvals': details_dict['uniformity_pr_slice']})
+                    self.ytitle = 'Non-uniformity %'
+                elif 'Coefficient of Variation' in sel_text:
+                    self.curves.append(
+                        {'label': 'CoV', 'xvals': xvals,
+                         'yvals': details_dict['cov_pr_slice']})
+                    self.ytitle = 'CoV %'
+                elif sel_text == 'Averages pr ROI for selected slice':
+                    imgno = self.main.gui.active_img_no
+                    if imgno in details_dict['image_indexes_used']:
+                        sz = details_dict['roi_shape']
+                        self.title =\
+                            f'Averages pr ROI ({sz}x{sz}) for selected slice'
+                        self.xtitle = 'pos x (pix)'
+                        self.ytitle = 'pos y (pix)'
+                        idx = np.where(
+                            details_dict['image_indexes_used'] == imgno)[0][0]
+                        values_this = details_dict['roi_averages_square'][idx]
+                        self.scatters.append(
+                            {'xs': self.main.current_roi[1],
+                             'ys': self.main.current_roi[2],
+                             'size': 100, 'marker': 'o',
+                             'color': values_this,
+                             'cmap': 'coolwarm',
+                             'norm': matplotlib.colors.Normalize(
+                                 vmin=0.95 * np.mean(values_this),
+                                 vmax=1.05 * np.mean(values_this))
+                             })
+
 
     def HUw(self, sel_text):
         """Prepare plot for test HUw."""

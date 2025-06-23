@@ -395,6 +395,9 @@ def verify_input_dict(dict_input, default_object):
             else:
                 updated_dict['all_images'] = dict_input['result_pr_image']
             updated_dict['image_number'] = dict_input['result_from_image']
+    elif default_object == cfc.ParamSetXray():
+        if 'hom_tab_alt' in [*dict_input]:  # changed in v3.1.29
+            updated_dict['hom_type'] = dict_input['hom_tab_alt']
 
     return updated_dict
 
@@ -1523,12 +1526,10 @@ def get_test_alternative(paramset, testcode):
     """
     alt = None
     testcode = testcode.lower()
-    if testcode in ['sli', 'mtf', 'rec', 'snr']:
+    if testcode in ['hom', 'sli', 'mtf', 'rec', 'snr']:
         alt = getattr(paramset, f'{testcode}_type', None)
     elif testcode == 'roi':
         alt = getattr(paramset, 'roi_use_table', None)
-    elif testcode == 'hom':
-        alt = getattr(paramset, 'hom_tab_alt', None)
     elif testcode == 'sni':
         alt = paramset.sni_alt
 

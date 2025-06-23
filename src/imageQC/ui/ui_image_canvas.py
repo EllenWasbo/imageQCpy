@@ -599,7 +599,7 @@ class ImageCanvas(GenericImageCanvas):
         if self.main.current_modality == 'Mammo':
             flatfield = True
         elif self.main.current_modality == 'Xray':
-            if self.main.current_paramset.hom_tab_alt >= 3:
+            if self.main.current_paramset.hom_type >= 3:
                 flatfield = True
 
         if flatfield:
@@ -621,6 +621,15 @@ class ImageCanvas(GenericImageCanvas):
                     colors='blue', alpha=0.5, linewidths=self.linewidth,
                     linestyles='dotted')
                 self.contours.append(contour)
+        elif self.main.current_modality == 'PET':
+            if self.main.current_paramset.hom_type == 2:
+                self.add_contours_to_all_rois(roi_indexes=[0])
+                scatter = self.ax.scatter(
+                    self.main.current_roi[1], self.main.current_roi[2],
+                    s=20, c='green', marker='+')
+                self.scatters = [scatter]
+            else:
+                self.add_contours_to_all_rois(colors=COLORS)
         else:
             self.add_contours_to_all_rois(colors=COLORS)
 
@@ -1116,7 +1125,7 @@ class ResultImageCanvas(GenericImageCanvas):
             if self.main.current_modality == 'Mammo':
                 flatfield = True
             elif self.main.current_modality == 'Xray':
-                if self.main.current_paramset.hom_tab_alt >= 3:
+                if self.main.current_paramset.hom_type >= 3:
                     flatfield = True
             if flatfield:
                 self.mark_pixels()
@@ -1424,7 +1433,7 @@ class ResultImageCanvas(GenericImageCanvas):
         if self.main.current_modality == 'Mammo':
             flatfield = True
         elif self.main.current_modality == 'Xray':
-            if self.main.current_paramset.hom_tab_alt >= 3:
+            if self.main.current_paramset.hom_type >= 3:
                 flatfield = True
 
         if flatfield:
@@ -1440,7 +1449,7 @@ class ResultImageCanvas(GenericImageCanvas):
                     if sel_txt == '':
                         sel_txt = self.main.tab_mammo.hom_result_image.currentText()
                 else:
-                    if self.main.current_paramset.hom_tab_alt == 3:
+                    if self.main.current_paramset.hom_type == 3:
                         if sel_txt == '':
                             sel_txt = self.main.tab_xray.hom_result_image.currentText()
                     else:

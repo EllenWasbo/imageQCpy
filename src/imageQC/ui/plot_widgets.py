@@ -139,13 +139,23 @@ class PlotWidget(QWidget):
                         arr = scatter['array']
                     else:
                         arr = scatter['color']
-                    xlabels = scatterdict['xlabels']
-                    ylabels = scatterdict['ylabels']
-                    if decimal_mark == ',':
-                        ylabels = [lbl.replace('.', ',') for lbl in ylabels]
-                        xlabels = [lbl.replace('.', ',') for lbl in xlabels]
-                    df = pd.DataFrame(arr, index=ylabels, columns=xlabels)
-                    df.to_clipboard(excel=True, decimal=decimal_mark)
+                    if 'xlabels' in scatterdict:
+                        xlabels = scatterdict['xlabels']
+                        ylabels = scatterdict['ylabels']
+                        if decimal_mark == ',':
+                            ylabels = [lbl.replace('.', ',') for lbl in ylabels]
+                            xlabels = [lbl.replace('.', ',') for lbl in xlabels]
+                        df = pd.DataFrame(arr, index=ylabels, columns=xlabels)
+                        df.to_clipboard(excel=True, decimal=decimal_mark)
+                    elif 'xs' in scatterdict:
+                        color_values = val_2_str(scatter['color'],
+                                            decimal_mark=decimal_mark)
+                        xvalues = val_2_str(scatter['xs'],
+                                            decimal_mark=decimal_mark)
+                        yvalues = val_2_str(scatter['ys'],
+                                            decimal_mark=decimal_mark)
+                        values = [xvalues, yvalues, color_values]
+                        headers = ['x', 'y', 'value']
                     self.main.status_bar.showMessage(
                         'Values in clipboard', 2000)
             except:

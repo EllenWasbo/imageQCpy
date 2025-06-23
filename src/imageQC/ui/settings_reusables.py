@@ -1885,7 +1885,7 @@ class ResultImageDefaultDialog(ImageQCDialog):
         attrib = f'{testcode}_result_image'
         if testcode == 'hom':
             try:
-                if self.main_window.current_paramset.hom_tab_alt == 4:
+                if self.main_window.current_paramset.hom_type == 4:
                     attrib = attrib + '_aapm'
             except AttributeError:
                 pass

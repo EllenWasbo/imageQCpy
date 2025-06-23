@@ -623,6 +623,9 @@ def calculate_qc(input_main, wid_auto=None,
                             if paramset.mtf_type > 0:
                                 marked_3d[i].append('MTF')
                     elif modality == 'PET':
+                        if 'Hom' in marked[i]:
+                            if paramset.hom_type > 0:
+                                marked_3d[i].append('Hom')
                         if 'Cro' in marked[i]:
                             marked_3d[i].append('Cro')
                             extra_tag_pattern = cfc.TagPatternFormat(
@@ -1341,7 +1344,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             if modality == 'Mammo':
                 proceed = False
             elif modality == 'Xray':
-                if paramset.hom_tab_alt >= 3:
+                if paramset.hom_type >= 3:
                     proceed = False
             if proceed:
                 for i in range(np.shape(roi_array)[0]):
@@ -1362,7 +1365,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                 values_sup = [stds[1], stds[2], stds[3], stds[4], stds[0]]
 
         elif modality == 'Xray':
-            alt = paramset.hom_tab_alt
+            alt = paramset.hom_type
             headers = copy.deepcopy(HEADERS[modality][test_code]['alt'+str(alt)])
             headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt'+str(alt)])
             if image2d is not None:
@@ -2633,6 +2636,165 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             errmsgs = ['Missing TTF or NPS results (or both).']
             res = Results(headers=headers, errmsg=errmsgs)
         return res
+
+    def Hom(images_to_test):
+        """PET homogeneity."""
+        headers = copy.deepcopy(HEADERS[modality][test_code][
+            f'alt{paramset.hom_type}'])
+        if len(images_to_test) == 0:
+            res = Results(headers=headers)
+        else:
+            errmsgs = []
+            roi_array, errmsg = get_rois(
+                matrix[images_to_test[0]], images_to_test[0], input_main)
+            if errmsg is not None:
+                errmsgs.append(errmsg)
+            avgs = []
+            if paramset.hom_type >= 1:
+                central_roi = roi_array[0]
+            else:
+                central_roi = roi_array
+            for image in matrix:
+                if image is not None:
+                    arr = np.ma.masked_array(
+                        image, mask=np.invert(central_roi))
+                    avgs.append(np.mean(arr))
+            zpos = [float(img_info.zpos) for img_info in input_main.imgs]
+            zpos = np.array(zpos)[images_to_test]
+
+            sort_idx = np.argsort(zpos)
+            zpos = zpos[sort_idx]
+            avgs = np.array(avgs)[sort_idx]
+
+            details_dict = {'roi_averages': avgs, 'zpos': zpos}
+
+            if paramset.hom_auto_select_slices:
+                if avgs[0] < max(avgs)/2 and avgs[-1] < max(avgs)/2:
+                    width, center = mmcalc.get_width_center_at_threshold(
+                        avgs, max(avgs)/2, force_above=True)
+                    if center is None or width is None:
+                        errmsgs.append(
+                            'Auto select slice failed. Could not find FWHM.')
+                    else:
+                        center_slice = round(center)
+                        width = width * paramset.hom_percent_slices/100
+                        start_slice = center_slice - round(width/2)
+                        stop_slice = center_slice + round(width/2)
+                        avgs = avgs[start_slice:stop_slice + 1]
+                        zpos = zpos[start_slice:stop_slice + 1]
+                else:
+                    errmsgs.append('Outer slices have average above half max. '
+                                   'Auto select slice ignored.')
+            details_dict['roi_averages_0'] = avgs
+            details_dict['zpos_used'] = zpos
+
+            if paramset.hom_type == 1:  # AAPM TG126
+                perif_vals = [[], [], [], []]
+                for image in matrix:
+                    if image is not None:
+                        for i, roi in enumerate(roi_array[1:]):
+                            arr = np.ma.masked_array(
+                                image, mask=np.invert(roi))
+                            perif_vals[i].append(np.mean(arr))
+
+                for i in range(4):
+                    details_dict[f'roi_averages_{i+1}'] = np.array(
+                        perif_vals[i])[sort_idx][start_slice:stop_slice + 1]
+
+                # uniformity pr slice
+                uniformity_pr_slice = []
+                for i in range(avgs.size):
+                    vals = [details_dict[f'roi_averages_{j}'][i]
+                            for j in range(5)]
+                    uniformity_pr_slice.append(
+                        100 * (np.max(vals) - np.min(vals)) / (
+                            np.max(vals) + np.min(vals)))
+                details_dict['uniformity_pr_slice'] = uniformity_pr_slice
+
+                # uniformity pr ROI
+                uniformity_pr_roi = []
+                for j in range(5):
+                    vals = details_dict[f'roi_averages_{j}']
+                    uniformity_pr_roi.append(
+                        100 * (np.max(vals) - np.min(vals)) / (
+                            np.max(vals) + np.min(vals)))
+                details_dict['uniformity_pr_roi'] = uniformity_pr_roi
+
+                values = [np.max(np.abs(uniformity_pr_slice)),
+                          np.max(np.abs(uniformity_pr_roi))]
+
+                res = Results(headers=headers, values=[values],
+                              details_dict=details_dict, pr_image=False,
+                              errmsg=errmsgs)
+
+            elif paramset.hom_type == 2:
+                # NEMA NU-2 1994 as described in IAEA HHS1 2009
+                xs = np.array(roi_array[1]).astype(int)
+                ys = np.array(roi_array[2]).astype(int)
+                avgs = []
+                counts_pr_slice = []
+                half_roi = round(5. / input_main.imgs[0].pix[0])
+                details_dict['roi_shape'] = 2 * half_roi + 1
+
+                sort_idxs_used = sort_idx[start_slice:stop_slice + 1]
+                for idx in sort_idxs_used:
+                    image_this = matrix[idx]
+                    avgs_this = []
+                    for i, x in enumerate(xs):
+                        y = ys[i]
+                        avgs_this.append(np.mean(
+                            image_this[y - half_roi: y + half_roi + 1,
+                                       x - half_roi: x + half_roi + 1]
+                            ))
+                    avgs.append(avgs_this)
+                    counts_pr_slice.append(np.sum(image_this))
+                details_dict['roi_averages_square'] = avgs
+                details_dict['image_indexes_used'] = sort_idxs_used
+                details_dict['total_counts'] = counts_pr_slice
+
+                # uniformity pr slice
+                uniformity_pr_slice = []
+                cov_pr_slice = []
+                factor = 1 / (len(xs) - 1)
+                for i in range(len(avgs)):
+                    vals = details_dict['roi_averages_square'][i]
+                    avg_val = np.mean(vals)
+                    min_val = np.min(vals)
+                    max_val = np.max(vals)
+                    above = 100 * (max_val - avg_val) / avg_val
+                    below = 100 * (avg_val - min_val) / avg_val
+                    uniformity_pr_slice.append(np.max([above, below]))
+                    diff = vals - avg_val
+                    sd_this = np.sqrt(factor * np.sum(diff**2))
+                    cov_pr_slice.append(100 * sd_this / avg_val)
+
+                details_dict['uniformity_pr_slice'] = uniformity_pr_slice
+                details_dict['cov_pr_slice'] = cov_pr_slice
+
+                # volume non-uniformity
+                avg_val_vol = np.mean(avgs)
+                min_val_vol = np.min(avgs)
+                max_val_vol = np.max(avgs)
+                above = 100 * (max_val_vol - avg_val_vol) / avg_val_vol
+                below = 100 * (avg_val_vol - min_val_vol) / avg_val_vol
+                nu_vol = np.max([above, below])
+                diff = np.array(avgs) - avg_val_vol
+                sd_vol = np.sqrt(1 / (len(xs)*len(avgs) - 1) * np.sum(diff**2))
+                cov_vol = 100 * sd_vol / avg_val_vol
+
+                values = [np.max(uniformity_pr_slice),
+                          np.max(cov_pr_slice), nu_vol, cov_vol]
+                values_sup = [np.min(counts_pr_slice), np.max(counts_pr_slice),
+                              np.mean(counts_pr_slice)]
+
+                headers_sup = copy.deepcopy(HEADERS_SUP['PET']['Hom']['alt2'])
+                res = Results(headers=headers, values=[values],
+                              headers_sup=headers_sup,
+                              values_sup = [values_sup],
+                              details_dict=details_dict, pr_image=False,
+                              errmsg=errmsgs)
+
+            return res
 
     def MTF(images_to_test):
         res = None

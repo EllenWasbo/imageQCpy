@@ -1140,7 +1140,7 @@ class AddEditElementDialog(ImageQCDialog):
         attrib = f'{testcode}_{plot_or_image}'
         if testcode == 'hom':
             try:
-                if self.parent.main.current_paramset.hom_tab_alt == 4:
+                if self.parent.main.current_paramset.hom_type == 4:
                     attrib = attrib + '_aapm'
             except AttributeError:
                 pass

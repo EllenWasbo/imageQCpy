@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when fundamental changes or B turns 99, B when major changes,
 #   C new python release (or small fix)
-VERSION = '3.1.28'
+VERSION = '3.1.29'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -108,6 +108,8 @@ ALTERNATIVES = {
         },
     'PET': {
         'ROI': ALTERNATIVES_ROI,
+        'Hom': ['pr image 5 ROIs', 'AAPM TG 126',
+                'NEMA NU-2 1994 / IAEA 2009'],
         'Rec': ['Recovery coefficients, average',
                 'Recovery coefficients, max',
                 'Recovery coefficients, peak',
@@ -309,7 +311,11 @@ HEADERS = {
         'Hom': {
             'alt0': ['Center', 'at12', 'at15', 'at18', 'at21',
                      'dMean% C', 'dMean% at12', 'dMean% at15',
-                     'dMean% at18', 'dMean% at21']
+                     'dMean% at18', 'dMean% at21'],
+            'alt1': ['Max abs IU within slices', 'Max abs IU (axial) within ROIs'],
+            'alt2': ['Max intra slice non-uniformity',
+                     'Max CoV pr slice',
+                     'Volume non_uniformity', 'Volume CoV'],
             },
         'Cro': {
             'alt0': [
@@ -463,6 +469,9 @@ HEADERS_SUP = {
         },
     'PET':  {
         'ROI': {'alt0': roi_headers_sup},
+        'Hom': {'alt2': ['Min total counts pr slice',
+                         'Max total counts pr slice',
+                         'Avg total counts pr slice']},
         'Rec': {
             'alt0': ['Scan start (HHMMSS)', 'Spheres at scan start (Bq/mL)',
                      'Background at scan start (Bq/mL)'],

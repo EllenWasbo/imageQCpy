@@ -321,11 +321,16 @@ class ParamsTabCommon(QTabWidget):
                             self.mtf_background_width.setEnabled(True)
                     if mtf_type == 2:
                         self.mtf_sliding_window.setEnabled(True)
-                        plot_items.extend(
-                            ['Sliding window FWHM z-profile',
-                             'Sliding window x/y offset z-profile'])
+                        plot_items = [
+                            'Sorted pixel values',
+                            'LSF',
+                            'Line source max z-profile',
+                            'Sliding window FWHM z-profile',
+                            'Sliding window x/y offset z-profile']
+                        self.mtf_gaussian.setEnabled(False)
                     else:
                         self.mtf_sliding_window.setEnabled(False)
+                        self.mtf_gaussian.setEnabled(True)
                     if mtf_type in [1, 2]:
                         self.mtf_line_tolerance.setEnabled(True)
                     else:
@@ -340,11 +345,6 @@ class ParamsTabCommon(QTabWidget):
                         else:
                             self.mtf_background_width.setEnabled(True)
             self.mtf_plot.addItems(plot_items)
-            if modality in ['SPECT', 'PET']:
-                if mtf_type == 2:
-                    self.blockSignals(True)
-                    self.mtf_plot.setCurrentIndex(5)  # FWHM
-                    self.blockSignals(False)
         self.param_changed_from_gui(attribute='mtf_type')
 
     def param_changed_from_gui(self, attribute='', update_roi=True,

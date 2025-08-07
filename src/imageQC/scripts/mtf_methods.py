@@ -456,7 +456,7 @@ def calculate_MTF_3d_point(matrix, roi, images_to_test, image_infos, paramset):
     zpos_used = None
     if margin < 2:
         errmsg.append(
-            'ROI radius + background widht used to select images. '
+            'ROI radius + background width used to select images. '
             'Set this value larger than 2 * slice thickness.')
     else:
         margin = round(margin)

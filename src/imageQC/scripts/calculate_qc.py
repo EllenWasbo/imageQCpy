@@ -52,7 +52,9 @@ class Results:
     values_sup_info: str = ''
     details_dict: dict = field(default_factory=dict)
     alternative: int = 0
-    pr_image: bool = True
+    pr_image: bool = True  # indicating details_dict as list of dicts pr image
+    # special care if result table not pr image and details dict pr image
+    # (example mtf_type 2 SPECT/PET)
     pr_image_sup: bool = True
 
 
@@ -996,13 +998,14 @@ def calculate_qc(input_main, wid_auto=None,
                 if 'TTF' in input_main.results:
                     input_main.refresh_img_display()
             elif input_main.current_modality in ['CT', 'SPECT', 'PET']:
-                if 'MTF' in input_main.results and paramset.mtf_type in [5, 6]:
-                    try:
-                        input_main.set_active_img(
-                            input_main.results['MTF']['details_dict'][-1][
-                                'max_slice_idx'])
-                    except (KeyError, IndexError):
-                        pass
+                if 'MTF' in input_main.results:
+                    if paramset.mtf_type in [5, 6]:
+                        try:
+                            input_main.set_active_img(
+                                input_main.results['MTF']['details_dict'][-1][
+                                    'max_slice_idx'])
+                        except (KeyError, IndexError):
+                            pass
             elif 'Foc' in input_main.results:
                 input_main.refresh_img_display()
             elif 'Pha' in input_main.results:
@@ -2863,6 +2866,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     sub.append(None)
 
             pr_image = False
+            pr_image_sup = False
             if paramset.mtf_type == 1:  # wire/line
                 if len(images_to_test) > 2:
                     details_dict, errmsg = mtf_methods.calculate_MTF_3d_line(
@@ -2890,7 +2894,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         details_dict['found_disc_roi'] = roi_disc
                     details_dict = [details_dict]
                 else:  # SPECT/PET line source sliding window
-                    pr_image = True
+                    pr_image_sup = True
                     if len(images_to_test) > 2:
                         details_dict, errmsg = mtf_methods.calculate_MTF_3d_line(
                             sub, roi_array_inner[rows][:, cols], images_to_test,
@@ -2898,7 +2902,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     else:
                         errmsg = 'At least 3 images required for MTF wire/line in 3d'
             elif paramset.mtf_type >= 3:  # z-resolution
-                pr_image = False
                 if len(images_to_test) > 4:
                     if paramset.mtf_type == 3:  # line
                         details_dict, errmsg = mtf_methods.calculate_MTF_3d_line(
@@ -2919,7 +2922,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             values_sup = None
             prefix = 'g' if paramset.mtf_gaussian else 'd'
             pix = img_infos[images_to_test[0]].pix[0]
-            if pr_image:
+            if pr_image_sup:  # sliding window line source SPECT/PET
+                # max position pr slice
                 offset_max = []
                 for sli in matrix:
                     if sli is not None:
@@ -2931,40 +2935,34 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 # add to common details (last dict):
                 details_dict[-1].update({'offset_max': offset_max})
 
-                values = []
                 values_sup = []
+                all_used_values = []
                 for idx in images_to_test:
                     dd = details_dict[idx]
+                    sup_this = [None for i in range(8)]
                     if dd:
                         try:
-                            values.append(
-                                dd[0][prefix + 'MTF_details']['values'])
-                        except TypeError:
-                            pass
-                        try:
-                            values_sup.append(
-                                list(dd[0]['gMTF_details']['LSF_fit_params']))
-                            if len(values_sup) == 2 and modality == 'CT':
-                                values_sup.extend([None, None])
-                        except TypeError:
-                            pass
-                        try:  # x-dir, y-dir
-                            values[-1].extend(
-                                dd[1][prefix + 'MTF_details']['values'])
-                            values_sup[-1].extend(list(
-                                dd[1]['gMTF_details']['LSF_fit_params']))
-                            if len(values_sup) == 6 and modality == 'CT':
-                                values_sup.extend([None, None])
+                            all_used_values.append(
+                                dd[0]['gMTF_details']['values']
+                                + dd[1]['gMTF_details']['values'])
+                            sup_this[0] = all_used_values[-1][0]  # FWHM x
+                            sup_this[1] = all_used_values[-1][2]  # FWHM y
+                            sup_this[2:4] = list(offset_max[idx])
+                            sup_this[4:6] = list(
+                                dd[0]['gMTF_details']['LSF_fit_params'])
+                            sup_this[6:] = list(
+                                dd[1]['gMTF_details']['LSF_fit_params'])
                         except (IndexError, KeyError, AttributeError, TypeError):
                             pass
-                        values_sup[-1].append(
-                            dd[0]['gMTF_details']['prefilter_sigma'])
-                        values_sup[-1].extend(list(offset_max[idx]))
-                    else:
-                        values.append([None] * len(headers))
-                        sup_this = [None] * len(headers_sup)
-                        sup_this[-2:] = list(offset_max[idx])
-                        values_sup.append(sup_this)
+                    values_sup.append(sup_this)
+                if all_used_values:
+                    all_fwhm_x = [val[0] for val in all_used_values]
+                    all_fwhm_y = [val[2] for val in all_used_values]
+                    values = [[
+                        np.median(all_fwhm_x), np.median(all_fwhm_y),
+                        np.mean(all_fwhm_x), np.mean(all_fwhm_y)]]
+                else:
+                    values = None
             else:
                 values_sup = []
                 off_xyz_mm = []
@@ -3034,7 +3032,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                           headers_sup=headers_sup, values_sup=values_sup,
                           details_dict=details_dict,
                           alternative=paramset.mtf_type,
-                          pr_image=pr_image, pr_image_sup=pr_image,
+                          pr_image=pr_image, pr_image_sup=pr_image_sup,
                           errmsg=errmsg)
 
         return res

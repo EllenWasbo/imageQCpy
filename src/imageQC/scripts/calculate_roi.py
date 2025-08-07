@@ -1699,7 +1699,7 @@ def get_roi_circle_MR(image, image_info, paramset, test_code, delta_xy):
             )
         if res_center is None:
             errmsg = ('Failed to find center and width of object in image.'
-                      'Image center and widht 10 pix is used.')
+                      'Image center and width 10 pix is used.')
     roi_array = get_roi_circle(image_info.shape, delta_xy, radius)
     if mask_outer > 0:
         inside = np.full(image_info.shape, False)

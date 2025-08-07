@@ -706,7 +706,7 @@ def optimize_center(image, mask_outer=0, max_from_part=4):
     Returns
     -------
     res : tuple of float or None
-        center_x, center_y, widht_x, width_y
+        center_x, center_y, width_x, width_y
     """
     # get maximum profiles x and y
     mask_outer = round(mask_outer)
@@ -759,7 +759,7 @@ def find_center_object(image, mask_outer=0, tolerances_width=[None, None], sigma
     Returns
     -------
     res : tuple of float or None
-        center_x, center_y, widht_x, width_y
+        center_x, center_y, width_x, width_y
     """
     res = None
     mask_outer = round(mask_outer)

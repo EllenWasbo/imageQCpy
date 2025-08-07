@@ -1,3 +1,9 @@
+# v3.1.30
+_Aug 07, 2025_
+
+Test Spatial resolution for SPECT/PET, alternative "Line source, sliding window (3d, xy)":
+- FWHM pr slice (sliding window) moved from Results table to Supplement table. Results table now contain median and average values for all used slices.
+
 # v3.1.29
 _Jun 23, 2025_
 
@@ -12,10 +18,10 @@ PET:
 _Jun 17, 2025_
 
 Test MTF:
-	- SPECT/PET: Fixed plot display issues to test MTF, option xyz-resolution (NEMA).
-	- Where gaussian fit to LSF of point (2d or 3d) and modality is NM/SPECT/PET, FWHM is now calculated from sigma of gaussian fit, not from gaussian curve with limited resolution. 
-	- CT/NM/SPECT/PET: if point source / bead 2d or 3d method gaussian fit to LSF is now displayed with high resolution
-	- CT: If 2d or 3d bead with smooth kernel, supplement table of gaussian fit parameters used to be missing due to expected double gaussian fit (if single fit sufficient fewer values than expected). Now fixed.
+- SPECT/PET: Fixed plot display issues to test MTF, option xyz-resolution (NEMA).
+- Where gaussian fit to LSF of point (2d or 3d) and modality is NM/SPECT/PET, FWHM is now calculated from sigma of gaussian fit, not from gaussian curve with limited resolution. 
+- CT/NM/SPECT/PET: if point source / bead 2d or 3d method gaussian fit to LSF is now displayed with high resolution
+- CT: If 2d or 3d bead with smooth kernel, supplement table of gaussian fit parameters used to be missing due to expected double gaussian fit (if single fit sufficient fewer values than expected). Now fixed.
 
 # v3.1.27
 _Jun 16, 2025_

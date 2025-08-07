@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when fundamental changes or B turns 99, B when major changes,
 #   C new python release (or small fix)
-VERSION = '3.1.29'
+VERSION = '3.1.30'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -297,7 +297,7 @@ HEADERS = {
         'MTF': {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            'alt2': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt2': ['median FWHM x', 'median FWHM y', 'average FWHM x', 'average FWHM y'],
             'alt3': ['FWHM z line1', 'FWTM z line1', 'FWHM z line2', 'FWTM z line2'],
             'alt4': ['FWHM z', 'FWTM z'],
             'alt5': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y', 'FWHM z', 'FWTM z'],
@@ -335,7 +335,7 @@ HEADERS = {
         'MTF': {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
             'alt1': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
-            'alt2': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
+            'alt2': ['median FWHM x', 'median FWHM y', 'average FWHM x', 'average FWHM y'],
             'alt3': ['FWHM z line1', 'FWTM z line1', 'FWHM z line2', 'FWTM z line2'],
             'alt4': ['FWHM z', 'FWTM z'],
             'alt5': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y', 'FWHM z', 'FWTM z'],
@@ -456,8 +456,9 @@ HEADERS_SUP = {
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
             'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
-            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt',
-                     'x offset (mm)', 'y offset (mm)'],
+            'alt2': ['FWHM x', 'FWHM y',
+                     'x offset (mm)', 'y offset (mm)',
+                     'A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt3': ['A line1', 'sigma line1', 'A line2', 'sigma line2', 'sigma_prefilt'],
             'alt4': ['A', 'sigma', 'sigma_prefilt'],
             'alt5': [
@@ -479,8 +480,9 @@ HEADERS_SUP = {
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
             'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
-            'alt2': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt',
-                     'x offset (mm)', 'y offset (mm)'],
+            'alt2': ['FWHM x', 'FWHM y',
+                     'x offset (mm)', 'y offset (mm)',
+                     'A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
             'alt3': ['A line1', 'sigma line1', 'A line2', 'sigma line2',
                      'sigma_prefilt'],
             'alt4': ['A', 'sigma', 'sigma_prefilt'],

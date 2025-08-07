@@ -246,7 +246,6 @@ class ResultTable(QTableWidget):
                     # factor 10 to get /cm instead of /mm
                     for i in range(len(values_rows_copy)):
                         values_rows_copy[i] = mtf_multiply_10(values_rows_copy[i])
-
         if len(row_labels) != 0:
             n_cols = len(values_cols)
             n_rows = len(row_labels)
@@ -1213,7 +1212,8 @@ class ResultPlotCanvas(PlotCanvas):
         """Prepare plot for test MTF."""
         imgno = self.main.gui.active_img_no
         rowno = imgno
-        if self.main.results['MTF']['pr_image']:
+        if (self.main.results['MTF']['pr_image']
+            or self.main.results['MTF']['pr_image_sup']):
             details_dicts = self.main.results['MTF']['details_dict'][imgno]
             if isinstance(details_dicts, dict):
                 details_dicts = [details_dicts]
@@ -1350,6 +1350,7 @@ class ResultPlotCanvas(PlotCanvas):
                 if details_dicts[0]['sigma_prefilter'] > 0:
                     prefilter = True
                     lbl_prefilter = ' presmoothed'
+
             for ddno in range(3):
                 try:
                     dd = details_dicts[ddno]
@@ -1777,18 +1778,18 @@ class ResultPlotCanvas(PlotCanvas):
                 elif 'FWHM' in sel_text:
                     if self.main.current_paramset.mtf_type == 2:
                         self.ytitle = 'FWHM pr sliding window'
-                        yvals = [
-                            row[0] for row
-                            in self.main.results[self.main.current_test]['values']]
+                        yvals = [row[0] for row in
+                            self.main.results[self.main.current_test][
+                                'values_sup']]
                         if any(yvals):
                             self.curves.append({
                                 'label': 'FWHM x',
                                 'xvals': common_details['zpos_marked_images'],
                                 'yvals': yvals,
                                 'style': '-b'})
-                        yvals = [
-                            row[2] for row
-                            in self.main.results[self.main.current_test]['values']]
+                        yvals = [row[1] for row in
+                            self.main.results[self.main.current_test][
+                                'values_sup']]
                         if any(yvals):
                             self.curves.append({
                                 'label': 'FWHM y',
@@ -1799,7 +1800,7 @@ class ResultPlotCanvas(PlotCanvas):
                     if self.main.current_paramset.mtf_type == 2:
                         self.ytitle = 'Offset pr image (mm from image center)'
                         yvals = [
-                            row[-2] for row
+                            row[2] for row
                             in self.main.results[self.main.current_test]['values_sup']]
                         if any(yvals):
                             self.curves.append({
@@ -1808,7 +1809,7 @@ class ResultPlotCanvas(PlotCanvas):
                                 'yvals': yvals,
                                 'style': '-b'})
                         yvals = [
-                            row[-1] for row
+                            row[3] for row
                             in self.main.results[self.main.current_test]['values_sup']]
                         if any(yvals):
                             self.curves.append({

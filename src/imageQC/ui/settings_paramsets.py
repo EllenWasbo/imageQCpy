@@ -10,12 +10,12 @@ import os
 import copy
 from dataclasses import asdict
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QBrush, QColor, QFont
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction, QBrush, QColor, QFont
+from PyQt6.QtWidgets import (
     QWidget, QTreeWidget, QTreeWidgetItem, QTabWidget,
     QVBoxLayout, QHBoxLayout,
-    QToolBar, QLabel, QAction, QListWidget, QPushButton,
+    QToolBar, QLabel, QListWidget, QPushButton,
     QMessageBox
     )
 
@@ -66,7 +66,7 @@ class ParametersOutputWidget(QWidget):
         hlo.addLayout(vlo_general)
         vlo_general.addWidget(uir.LabelItalic('Settings for text output:'))
         self.tb_copy = uir.ToolBarTableExport(self.parent, flag_edit=True)
-        self.tb_copy.setOrientation(Qt.Horizontal)
+        self.tb_copy.setOrientation(Qt.Orientation.Horizontal)
         vlo_general.addWidget(self.tb_copy)
         vlo_general.addSpacing(10)
         vlo_general.addWidget(
@@ -92,7 +92,7 @@ class ParametersOutputWidget(QWidget):
         self.wid_output_table.setFixedWidth(800)
 
         self.toolbar = QToolBar()
-        self.toolbar.setOrientation(Qt.Vertical)
+        self.toolbar.setOrientation(Qt.Orientation.Vertical)
         hlo_table.addWidget(self.toolbar)
         act_add = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
@@ -245,7 +245,7 @@ class ResultImageDefaultsWidget(QWidget):
         vlo_general.addWidget(self.wid_defaults)
 
         self.toolbar = QToolBar()
-        self.toolbar.setOrientation(Qt.Vertical)
+        self.toolbar.setOrientation(Qt.Orientation.Vertical)
         hlo.addWidget(self.toolbar)
         act_add = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),

@@ -15,7 +15,7 @@ import numpy as np
 import scipy as sp
 from scipy.signal import find_peaks
 import skimage
-from PyQt5.QtWidgets import qApp
+from PyQt6.QtWidgets import QApplication
 
 # imageQC block start
 from imageQC.scripts import dcm
@@ -810,7 +810,7 @@ def calculate_qc(input_main, wid_auto=None,
                                     canv_main.current_test = test
                                     canv_main.current_roi = prev_roi[test]
                                     wid_auto.wid_image_display.canvas.roi_draw()
-                                    qApp.processEvents()
+                                    QApplication.instance().processEvents()
 
                             result = calculate_2d(
                                 image, prev_roi[test], img_infos[i],

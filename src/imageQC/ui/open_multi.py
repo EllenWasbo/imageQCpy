@@ -9,8 +9,8 @@ import os
 import copy
 import numpy as np
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QButtonGroup,
     QPushButton, QLabel, QLineEdit, QSpinBox, QDoubleSpinBox,
     QListWidget, QRadioButton, QAbstractItemView,
@@ -70,14 +70,14 @@ class OpenMultiDialog(ImageQCDialog):
         vlo.addLayout(hlo_dlg_btns)
         hlo_dlg_btns.addStretch()
         btns = QDialogButtonBox()
-        btns.setOrientation(Qt.Horizontal)
+        btns.setOrientation(Qt.Orientation.Horizontal)
         btns.setStandardButtons(
-            QDialogButtonBox.Open | QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Open).setText('Open all images')
-        btns.button(QDialogButtonBox.Open).clicked.connect(self.open_all)
-        btns.button(QDialogButtonBox.Ok).setText('Open images in list above')
-        btns.button(QDialogButtonBox.Ok).clicked.connect(self.accept)
-        btns.button(QDialogButtonBox.Cancel).clicked.connect(self.reject)
+            QDialogButtonBox.StandardButton.Open | QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns.button(QDialogButtonBox.StandardButton.Open).setText('Open all images')
+        btns.button(QDialogButtonBox.StandardButton.Open).clicked.connect(self.open_all)
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText('Open images in list above')
+        btns.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.accept)
+        btns.button(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.reject)
         hlo_dlg_btns.addWidget(btns)
 
     def open_all(self):
@@ -170,12 +170,13 @@ class OpenMultiWidget(QWidget):
         vlo_series = QVBoxLayout()
         hlo_lists.addLayout(vlo_series)
         lbl_series = uir.LabelHeader('Groups', 4)
-        lbl_series.setAlignment(Qt.AlignCenter)
+        lbl_series.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vlo_series.addWidget(lbl_series)
         self.list_series = QListWidget()
         self.list_series.setMinimumHeight(min_height)
         self.list_series.setMinimumWidth(min_width)
-        self.list_series.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.list_series.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection)
         self.list_series.currentRowChanged.connect(self.update_list_images)
         vlo_series.addWidget(self.list_series)
         btn_send_all = QPushButton('Open all images >>')
@@ -186,11 +187,12 @@ class OpenMultiWidget(QWidget):
         vlo_images = QVBoxLayout()
         hlo_lists.addLayout(vlo_images)
         lbl_images = uir.LabelHeader('Images', 4)
-        lbl_images.setAlignment(Qt.AlignCenter)
+        lbl_images.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vlo_images.addWidget(lbl_images)
         self.list_images = QListWidget()
         self.list_images.setMinimumHeight(min_height)
-        self.list_images.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.list_images.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection)
         vlo_images.addWidget(self.list_images)
 
         gb_select_pattern = QGroupBox('Selection pattern')
@@ -260,12 +262,13 @@ class OpenMultiWidget(QWidget):
         vlo_open = QVBoxLayout()
         hlo_lists.addLayout(vlo_open)
         lbl_open = uir.LabelHeader('Images to open', 4)
-        lbl_open.setAlignment(Qt.AlignCenter)
+        lbl_open.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vlo_open.addWidget(lbl_open)
         self.list_open_images = QListWidget()
         self.list_open_images.setMinimumHeight(min_height)
         self.list_open_images.setMinimumWidth(min_width)
-        self.list_open_images.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.list_open_images.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection)
         vlo_open.addWidget(self.list_open_images)
         hlo_btns = QHBoxLayout()
         btn_remove_selected = QPushButton('Remove selected')
@@ -283,7 +286,7 @@ class OpenMultiWidget(QWidget):
     def browse(self):
         """Browse to set selected folder and start searching for images."""
         dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
         if dlg.exec():
             fname = dlg.selectedFiles()
             self.path.setText(os.path.normpath(fname[0]))
@@ -303,7 +306,7 @@ class OpenMultiWidget(QWidget):
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Some files read with warnings',
                 msg='See details for warning messages',
-                details=warnings, icon=QMessageBox.Warning)
+                details=warnings, icon=QMessageBox.Icon.Warning)
             dlg.exec()
         if len(img_infos) > 0:
             series_nmb_name = [' '.join(

@@ -8,11 +8,11 @@ User interface classes for different uses and reuses in ImageQC.
 import os
 import numpy as np
 
-from PyQt5.QtCore import Qt, QTimer, QSize
-from PyQt5.QtGui import QIcon, QFont
-from PyQt5.QtWidgets import (
-    qApp, QWidget, QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayout, QFrame,
-    QToolBar, QAction, QComboBox, QRadioButton, QButtonGroup, QToolButton,
+from PyQt6.QtCore import Qt, QTimer, QSize
+from PyQt6.QtGui import QIcon, QAction, QFont
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayout, QFrame,
+    QToolBar, QComboBox, QRadioButton, QButtonGroup, QToolButton,
     QLabel, QPushButton, QListWidget, QLineEdit, QCheckBox, QGroupBox, QSlider,
     QProgressDialog, QProgressBar, QStatusBar, QFileDialog, QMessageBox
     )
@@ -122,9 +122,9 @@ class InfoTool(QToolBar):
         dlg = QDialog(self.parent)
         dlg.setWindowTitle('Information')
         dlg.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        dlg.setWindowFlags(dlg.windowFlags() | Qt.CustomizeWindowHint)
+        dlg.setWindowFlags(dlg.windowFlags() | Qt.WindowType.CustomizeWindowHint)
         dlg.setWindowFlags(
-            dlg.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+            dlg.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         dlg.infotext = QLabel(f"""<html><head/><body>
                 {self.html_body_text}
@@ -133,7 +133,7 @@ class InfoTool(QToolBar):
 
         vlo = QVBoxLayout()
         vlo.addWidget(dlg.infotext)
-        buttons = QDialogButtonBox.Ok
+        buttons = QDialogButtonBox.StandardButton.Ok
         dlg.buttonBox = QDialogButtonBox(buttons)
         dlg.buttonBox.accepted.connect(dlg.accept)
         vlo.addWidget(dlg.buttonBox)
@@ -175,7 +175,7 @@ class HLine(QFrame):
 
     def __init__(self):
         super().__init__()
-        self.setFrameShape(QFrame.HLine)
+        self.setFrameShape(QFrame.Shape.HLine)
         self.setLineWidth(1)
 
 
@@ -184,7 +184,7 @@ class VLine(QFrame):
 
     def __init__(self):
         super().__init__()
-        self.setFrameShape(QFrame.VLine)
+        self.setFrameShape(QFrame.Shape.VLine)
         self.setLineWidth(1)
 
 
@@ -194,7 +194,7 @@ class ProgressBar(QProgressBar):
     def __init__(self, parent_widget):
         super().__init__(parent_widget)
         self
-        self.setAlignment(Qt.AlignCenter)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet(
             """
             QProgressBar {
@@ -214,10 +214,10 @@ class ProgressModal(QProgressDialog):
     def __init__(self, text, cancel_text, start, stop, parent,
                  minimum_duration=200, hide_cancel=False):
         super().__init__(text, cancel_text, start, stop, parent)
-        self.setWindowModality(Qt.WindowModal)
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
+        self.setWindowModality(Qt.WindowModality.WindowModal)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.CustomizeWindowHint)
         self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+            self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
         self.setWindowTitle('Wait while processing...')
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
         self.setMinimumDuration(minimum_duration)
@@ -307,7 +307,7 @@ class ToolBarTableExport(QToolBar):
         """
         super().__init__()
 
-        self.setOrientation(Qt.Vertical)
+        self.setOrientation(Qt.Orientation.Vertical)
         self.parent = parent
         self.parameters_output = parameters_output
         self.flag_edit = flag_edit
@@ -710,11 +710,11 @@ class WindowLevelWidget(QGroupBox):
         self.parent = parent
         self.setFont(FontItalic())
         self.tb_wl = ToolBarWindowLevel(self)
-        self.tb_wl.setOrientation(Qt.Horizontal)
+        self.tb_wl.setOrientation(Qt.Orientation.Horizontal)
         self.tb_wl.act_tool_dcm_wl.setVisible(show_dicom_wl)
         self.tb_wl.act_wl_update.setVisible(show_lock_wl)
-        self.min_wl = QSlider(Qt.Horizontal)
-        self.max_wl = QSlider(Qt.Horizontal)
+        self.min_wl = QSlider(Qt.Orientation.Horizontal)
+        self.max_wl = QSlider(Qt.Orientation.Horizontal)
         self.lbl_min_wl = QLabel('-200')
         self.lbl_max_wl = QLabel('200')
         self.canvas = WindowLevelHistoCanvas(self)
@@ -921,17 +921,17 @@ class ListWidgetCheckable(QListWidget):
 
         for i in range(len(self.texts)):
             item = self.item(i)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             if i in set_checked_ids:
-                item.setCheckState(Qt.Checked)
+                item.setCheckState(Qt.CheckState.Checked)
             else:
-                item.setCheckState(Qt.Unchecked)
+                item.setCheckState(Qt.CheckState.Unchecked)
 
     def get_checked_ids(self):
         """Get checked ids from list."""
         checked_ids = []
         for i in range(self.count()):
-            if self.item(i).checkState() == Qt.Checked:
+            if self.item(i).checkState() == Qt.CheckState.Checked:
                 checked_ids.append(i)
         return checked_ids
 
@@ -939,7 +939,7 @@ class ListWidgetCheckable(QListWidget):
         """Get checked strings from list."""
         checked_texts = []
         for i, txt in enumerate(self.texts):
-            if self.item(i).checkState() == Qt.Checked:
+            if self.item(i).checkState() == Qt.CheckState.Checked:
                 checked_texts.append(txt)
         return checked_texts
 
@@ -948,9 +948,9 @@ class ListWidgetCheckable(QListWidget):
         for i, text in enumerate(self.texts):
             item = self.item(i)
             if text in set_texts:
-                item.setCheckState(Qt.Checked)
+                item.setCheckState(Qt.CheckState.Checked)
             else:
-                item.setCheckState(Qt.Unchecked)
+                item.setCheckState(Qt.CheckState.Unchecked)
 
 
 class CheckCell(QCheckBox):
@@ -1073,18 +1073,18 @@ class CheckComboBox(QComboBox):
         """
         item = self.model().item(index, self.modelColumn())
         if checked:
-            item.setCheckState(Qt.Checked)
+            item.setCheckState(Qt.CheckState.Checked)
         else:
-            item.setCheckState(Qt.Unchecked)
+            item.setCheckState(Qt.CheckState.Unchecked)
 
     def itemPressed(self, index):
         """Handle item pressed."""
         item = self.model().itemFromIndex(index)
 
-        if item.checkState() == Qt.Checked:
-            item.setCheckState(Qt.Unchecked)
+        if item.checkState() == Qt.CheckState.Checked:
+            item.setCheckState(Qt.CheckState.Unchecked)
         else:
-            item.setCheckState(Qt.Checked)
+            item.setCheckState(Qt.CheckState.Checked)
         self.edited = True
 
     def hidePopup(self):
@@ -1094,7 +1094,7 @@ class CheckComboBox(QComboBox):
 
     def itemChecked(self, index):
         item = self.model().item(index, self.modelColumn())
-        return item.checkState() == Qt.Checked
+        return item.checkState() == Qt.CheckState.Checked
 
     def get_ids_checked(self):
         """Get array of checked ids."""
@@ -1115,7 +1115,7 @@ class StatusBar(QStatusBar):
         self.setStyleSheet("QStatusBar{padding-left: 8px;}")
         self.default_color = self.palette().window().color().name()
         self.message = QLabel('')
-        self.message.setAlignment(Qt.AlignCenter)
+        self.message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.addWidget(self.message, 1)
         self.timer = QTimer()
         self.timer.setSingleShot(True)
@@ -1133,14 +1133,14 @@ class StatusBar(QStatusBar):
             self.timer.start(timeout)
         else:
             self.timer.start()
-        qApp.processEvents()
+        QApplication.instance().processEvents()
 
     def clearMessage(self):
         """Reset background and clear message."""
         self.setStyleSheet(
             "QStatusBar{background:" + self.default_color + ";}")
         self.message.setText('')
-        qApp.processEvents()
+        QApplication.instance().processEvents()
 
 
 class StatusLabel(QWidget):
@@ -1154,7 +1154,7 @@ class StatusLabel(QWidget):
         lo = QHBoxLayout()
         self.message = QLabel('')
         self.message.setStyleSheet("QLabel{padding-left: 8px;}")
-        self.message.setAlignment(Qt.AlignCenter)
+        self.message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setLayout(lo)
         lo.addWidget(self.message)
 
@@ -1162,14 +1162,14 @@ class StatusLabel(QWidget):
         """Set background color when message is shown."""
         self.setStyleSheet("QWidget{background-color:#6e94c0;}")
         self.message.setText(txt)
-        qApp.processEvents()
+        QApplication.instance().processEvents()
 
     def clearMessage(self):
         """Reset background and clear message."""
         self.setStyleSheet(
             "QWidget{background-color:" + self.default_color + ";}")
         self.message.setText('')
-        qApp.processEvents()
+        QApplication.instance().processEvents()
 
 
 class ImageNavigationToolbar(NavigationToolbar2QT):

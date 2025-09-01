@@ -8,11 +8,11 @@ import os
 import copy
 import numpy as np
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QToolBar, QLabel, QLineEdit, QPushButton, QAction, QListWidget,
+    QToolBar, QLabel, QLineEdit, QPushButton, QListWidget,
     QMessageBox, QDialogButtonBox, QFileDialog
     )
 import matplotlib
@@ -227,8 +227,8 @@ class DigitTemplateEditDialog(ImageQCDialog):
         vlo.addWidget(self.wid_temp)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
-            Qt.Horizontal, self)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            Qt.Orientation.Horizontal, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         vlo.addWidget(buttons)

@@ -9,12 +9,12 @@ from time import time
 import copy
 import os
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QBrush, QColor, QPalette
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction, QBrush, QColor, QPalette
+from PyQt6.QtWidgets import (
     QWidget, QDialogButtonBox, QVBoxLayout, QHBoxLayout,
-    QToolBar, QAction, QComboBox, QLabel, QPushButton, QListWidget, QLineEdit,
-    QTreeWidget, QTreeWidgetItem, QMessageBox, QInputDialog
+    QToolBar, QComboBox, QLabel, QPushButton, QListWidget, QAbstractItemView,
+    QLineEdit, QTreeWidget, QTreeWidgetItem, QMessageBox, QInputDialog
     )
 
 # imageQC block start
@@ -80,16 +80,19 @@ class TagPatternTree(QWidget):
 
         palette = self.table_pattern.palette()
         palette.setColor(
-            QPalette.Inactive, QPalette.Highlight,
-            palette.color(QPalette.Active, QPalette.Highlight))
+            QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight,
+            palette.color(
+                QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight))
         palette.setColor(
-            QPalette.Inactive, QPalette.HighlightedText,
-            palette.color(QPalette.Active, QPalette.HighlightedText))
+            QPalette.ColorGroup.Inactive, QPalette.ColorRole.HighlightedText,
+            palette.color(
+                QPalette.ColorGroup.Active,
+                QPalette.ColorRole.HighlightedText))
         self.table_pattern.setPalette(palette)
 
         if editable:
             toolb = QToolBar()
-            toolb.setOrientation(Qt.Vertical)
+            toolb.setOrientation(Qt.Orientation.Vertical)
             act_sort = QAction(
                 QIcon(f'{os.environ[ENV_ICON_PATH]}sortAZ.png'),
                 'ASC or DESC when sorting images', self)
@@ -120,7 +123,8 @@ class TagPatternTree(QWidget):
             elif self.typestr == 'none':
                 toolb.addActions([act_up, act_down, act_delete])
             else:
-                toolb.addActions([act_format_out, act_up, act_down, act_delete])
+                toolb.addActions(
+                    [act_format_out, act_up, act_down, act_delete])
             if import_any:
                 toolb.addAction(act_import)
             self.hlo.addWidget(toolb)
@@ -410,21 +414,28 @@ class TagPatternWidget(QWidget):
         if editable:
             vlo_taglist.addWidget(uir.LabelItalic('Available DICOM tags'))
             self.list_tags = QListWidget()
-            self.list_tags.setSelectionMode(QListWidget.ExtendedSelection)
+            self.list_tags.setSelectionMode(
+                QAbstractItemView.SelectionMode.ExtendedSelection)
             self.list_tags.itemDoubleClicked.connect(self.double_click_tag)
             vlo_taglist.addWidget(self.list_tags)
             if self.lock_on_general:
                 vlo_taglist.addWidget(uir.LabelItalic('General tags only'))
             else:
-                vlo_taglist.addWidget(uir.LabelItalic('Blue font = general tags'))
+                vlo_taglist.addWidget(
+                    uir.LabelItalic('Blue font = general tags'))
 
             palette = self.list_tags.palette()
             palette.setColor(
-                QPalette.Inactive, QPalette.Highlight,
-                palette.color(QPalette.Active, QPalette.Highlight))
+                QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight,
+                palette.color(
+                    QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight))
             palette.setColor(
-                QPalette.Inactive, QPalette.HighlightedText,
-                palette.color(QPalette.Active, QPalette.HighlightedText))
+                QPalette.ColorGroup.Inactive,
+                QPalette.ColorRole.HighlightedText,
+                palette.color(
+                    QPalette.ColorGroup.Active,
+                    QPalette.ColorRole.HighlightedText)
+                )
             self.list_tags.setPalette(palette)
 
         vlo_pattern = QVBoxLayout()
@@ -465,7 +476,8 @@ class TagPatternWidget(QWidget):
         try:
             self.list_tags.clear()
             general_tags, included_tags = get_included_tags(
-                modality, self.parent.tag_infos, avoid_special_tags=avoid_special_tags)
+                modality, self.parent.tag_infos,
+                avoid_special_tags=avoid_special_tags)
             self.list_tags.addItems(included_tags)
             if self.lock_on_general is False:
                 for i in range(self.list_tags.count()):
@@ -527,7 +539,7 @@ class FormatDialog(ImageQCDialog):
         hlo_suffix.addWidget(self.suffix)
         vlo.addLayout(hlo_suffix)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -794,7 +806,7 @@ class TagPatternTreeTestDCM(TagPatternTree):
         super().__init__(
             parent, title=tit, typestr='format', editable=False)
         toolb = QToolBar()
-        toolb.setOrientation(Qt.Vertical)
+        toolb.setOrientation(Qt.Orientation.Vertical)
         act_edit = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}edit.png'),
             'Edit tag pattern', self)
@@ -946,7 +958,7 @@ class TagPatternImportDialog(ImageQCDialog):
         vlo.addWidget(self.table_pattern)
         self.table_pattern.setRootIsDecorated(False)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)

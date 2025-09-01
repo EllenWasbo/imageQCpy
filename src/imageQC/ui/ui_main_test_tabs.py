@@ -10,12 +10,12 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
     QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QFormLayout, QGroupBox, QPushButton, QLabel, QDoubleSpinBox, QCheckBox,
-    QComboBox, QAction, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
+    QComboBox, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
     QMessageBox, QInputDialog, QFileDialog, QDialogButtonBox, QHeaderView
     )
 
@@ -103,7 +103,7 @@ class EditParamsetValues(ImageQCDialog):
         for info, widget in info_widget_pairs:
             self.flo.addRow(QLabel(info), widget)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -472,7 +472,7 @@ class ParamsTabCommon(QTabWidget):
                         self, title='Warnings',
                         msg=msg,
                         info='See details',
-                        icon=QMessageBox.Warning,
+                        icon=QMessageBox.Icon.Warning,
                         details=log)
                     dlg.exec()
 
@@ -1394,7 +1394,7 @@ class ParamsTabCommon(QTabWidget):
                         self, title='No image marked',
                         msg=('QuickTests option is active, but no image is marked '
                              f'for the current test {self.main.current_test}'),
-                        icon=QMessageBox.Warning)
+                        icon=QMessageBox.Icon.Warning)
                     dlg.exec()
                 else:
                     tests = [[self.main.current_test]] * len(self.main.imgs)
@@ -2823,7 +2823,7 @@ class WidgetReferenceImage(QWidget):
                 </body></html>""")
         vlo = QVBoxLayout()
         vlo.addWidget(dlg.infotext)
-        buttons = QDialogButtonBox.Ok
+        buttons = QDialogButtonBox.StandardButton.Ok
         dlg.buttonBox = QDialogButtonBox(buttons)
         dlg.buttonBox.accepted.connect(dlg.accept)
         vlo.addWidget(dlg.buttonBox)
@@ -4293,7 +4293,7 @@ class SimpleTableWidget(QTableWidget):
         if self.row_labels:
             self.setRowCount(len(self.row_labels))
             self.setVerticalHeaderLabels(self.row_labels)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         if self.row_labels is None:
             self.verticalHeader().setVisible(False)
         self.resizeRowsToContents()
@@ -4442,7 +4442,7 @@ class PositionWidget(QWidget):
         toolb = QToolBar()
         toolb.addActions([self.act_import, self.act_copy, self.act_add,
                           self.act_delete, self.act_get_pos])
-        toolb.setOrientation(Qt.Vertical)
+        toolb.setOrientation(Qt.Orientation.Vertical)
         hlo.addWidget(toolb)
         hlo.addWidget(self.table)
         self.update_on_rectangle_change(silent=True)
@@ -4471,8 +4471,8 @@ class PositionWidget(QWidget):
                     self, 'Copy current table to clipboard?',
                     'Table will be reset. '
                     'Copy content to clipboard to save current values?',
-                    QMessageBox.Yes, QMessageBox.No)
-                if reply == QMessageBox.Yes:
+                    QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+                if reply == QMessageBox.StandardButton.Yes:
                     self.copy_table()
                 self.table.current_table = cfc.PositionTable()
                 self.table.update_table()
@@ -4512,7 +4512,7 @@ class PositionWidget(QWidget):
                         dlg = messageboxes.MessageBoxWithDetails(
                             self, title='Failed reading table',
                             msg='Failed reading table. See details.',
-                            details=errmsg, icon=QMessageBox.Warning)
+                            details=errmsg, icon=QMessageBox.Icon.Warning)
                         dlg.exec()
                 else:
                     input_table = self.validate_input_dataframe(dataf)
@@ -4792,7 +4792,7 @@ class PositionTableWidget(QTableWidget):
         self.clear()
         self.setColumnCount(len(self.headers))
         self.setHorizontalHeaderLabels(self.headers)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         values = None
         n_rows = 0
         try:
@@ -4865,7 +4865,7 @@ class CTnTableWidget(QWidget):  # TODO PositionWidget
         act_get_pos.triggered.connect(self.get_pos_mouse)
         toolb = QToolBar()
         toolb.addActions([act_import, act_copy, act_add, act_delete, act_get_pos])
-        toolb.setOrientation(Qt.Vertical)
+        toolb.setOrientation(Qt.Orientation.Vertical)
         hlo.addWidget(toolb)
         self.table = CTnTable(self.parent, self.main)
         hlo.addWidget(self.table)
@@ -4903,7 +4903,7 @@ class CTnTableWidget(QWidget):  # TODO PositionWidget
                 dlg = messageboxes.MessageBoxWithDetails(
                     self, title='Failed reading table',
                     msg='Failed reading table. See details.',
-                    details=errmsg, icon=QMessageBox.Warning)
+                    details=errmsg, icon=QMessageBox.Icon.Warning)
                 dlg.exec()
             else:
                 ctn_table = cfc.HUnumberTable()

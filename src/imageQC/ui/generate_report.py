@@ -15,11 +15,11 @@ from time import time
 import pandas as pd
 import numpy as np
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import (
     QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QToolBar,
-    QLabel, QPushButton, QAction, QTreeWidget, QTreeWidgetItem,
+    QLabel, QPushButton, QTreeWidget, QTreeWidgetItem,
     QComboBox, QPlainTextEdit, QSpinBox, QCheckBox, QLineEdit,
     QFileDialog, QInputDialog, QMessageBox
     )
@@ -172,7 +172,7 @@ class GenerateReportDialog(ImageQCDialog):
         hlo_table.addWidget(self.table)
 
         self.toolbar = QToolBar()
-        self.toolbar.setOrientation(Qt.Vertical)
+        self.toolbar.setOrientation(Qt.Orientation.Vertical)
         hlo_table.addWidget(self.toolbar)
         act_clear = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}clear.png'),
@@ -615,8 +615,8 @@ class GenerateReportDialog(ImageQCDialog):
         reply = QMessageBox.question(
             self, 'Unsaved changes',
             f'Save changes to {self.fname}?',
-            QMessageBox.Yes, QMessageBox.No)
-        if reply == QMessageBox.Yes:
+            QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
             self.save_current_template(before_select_new=before_select_new)
         else:
             self.flag_edit(False)

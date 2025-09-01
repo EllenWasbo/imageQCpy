@@ -13,12 +13,12 @@ import webbrowser
 import numpy as np
 import pandas as pd
 
-from PyQt5.QtGui import QIcon, QScreen
-from PyQt5.QtCore import Qt, pyqtSignal, QTimer
-from PyQt5.QtWidgets import (
-    QApplication, qApp, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStackedWidget, QSplitter, QGroupBox, QTabWidget, QPushButton,
-    QLabel, QCheckBox, QButtonGroup, QRadioButton, QComboBox, QMenu, QAction,
+from PyQt6.QtGui import QIcon, QAction, QScreen
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QStackedWidget, QSplitter, QGroupBox, QTabWidget,
+    QLabel, QCheckBox, QButtonGroup, QRadioButton, QComboBox, QMenu,
     QMessageBox, QFileDialog, QScrollArea
     )
 import matplotlib.pyplot as plt
@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
         self.create_test_tab_CT()
         # set main layout (left/right)
         bbox = QHBoxLayout()
-        self.split_lft_rgt = QSplitter(Qt.Horizontal)
+        self.split_lft_rgt = QSplitter(Qt.Orientation.Horizontal)
         wid_lft = QWidget()
         wid_rgt = QWidget()
         lo_lft = QVBoxLayout()
@@ -167,9 +167,9 @@ class MainWindow(QMainWindow):
         bbox.addWidget(self.split_lft_rgt)
 
         # Fill left box
-        self.split_list_rest = QSplitter(Qt.Vertical)
-        self.split_img_header = QSplitter(Qt.Vertical)
-        self.split_lft_img = QSplitter(Qt.Horizontal)
+        self.split_list_rest = QSplitter(Qt.Orientation.Vertical)
+        self.split_img_header = QSplitter(Qt.Orientation.Vertical)
+        self.split_lft_img = QSplitter(Qt.Orientation.Horizontal)
         wid_win_lev_center = QWidget()
         vlo_win_lev_center = QVBoxLayout()
         vlo_win_lev_center.addWidget(self.wid_window_level)
@@ -186,7 +186,7 @@ class MainWindow(QMainWindow):
         lo_lft.addWidget(self.split_list_rest)
 
         # Fill right box
-        self.split_rgt_top_rest = QSplitter(Qt.Vertical)
+        self.split_rgt_top_rest = QSplitter(Qt.Orientation.Vertical)
         wid_rgt_top = QWidget()
         vlo_top = QVBoxLayout()
         wid_rgt_top.setLayout(vlo_top)
@@ -201,7 +201,7 @@ class MainWindow(QMainWindow):
         vlo_top.addWidget(self.wid_paramset)
         self.split_rgt_top_rest.addWidget(wid_rgt_top)
 
-        self.split_rgt_mid_btm = QSplitter(Qt.Vertical)
+        self.split_rgt_mid_btm = QSplitter(Qt.Orientation.Vertical)
         self.split_rgt_top_rest.addWidget(self.split_rgt_mid_btm)
         self.split_rgt_mid_btm.addWidget(self.stack_test_tabs)
         self.split_rgt_mid_btm.addWidget(self.tab_results)
@@ -212,8 +212,8 @@ class MainWindow(QMainWindow):
         self.wid_full.setFixedSize(2*self.gui.panel_width, self.gui.panel_height)
 
         scroll = QScrollArea()
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.wid_full)
 
@@ -232,7 +232,7 @@ class MainWindow(QMainWindow):
             self, title='Warnings',
             msg='Found issues during startup',
             info='See details',
-            icon=QMessageBox.Warning,
+            icon=QMessageBox.Icon.Warning,
             details=warnings)
         dlg.exec()
 
@@ -283,7 +283,7 @@ class MainWindow(QMainWindow):
             ignored_files = []
             warnings = []
             new_img_infos = []
-            if file_list[0][-4:].lower() == '.raw':
+            if str(file_list[0])[-4:].lower() == '.raw':
                 dlg = OpenRawDialog(self, file_list)
                 res = dlg.exec()
                 if res:
@@ -303,13 +303,13 @@ class MainWindow(QMainWindow):
                     self, title='Some files ignored',
                     msg=f'{len(ignored_files)} files ignored missing DICOM image data',
                     info='Try File->Read DICOM header. Ignored files in details.',
-                    details=ignored_files, icon=QMessageBox.Information)
+                    details=ignored_files, icon=QMessageBox.Icon.Information)
                 dlg.exec()
             if len(warnings) > 0:
                 dlg = messageboxes.MessageBoxWithDetails(
                     self, title='Some files opened with warnings',
                     msg='See details for warning messages',
-                    details=warnings, icon=QMessageBox.Warning)
+                    details=warnings, icon=QMessageBox.Icon.Warning)
                 dlg.exec()
             if len(new_img_infos) > 0:
                 self.update_on_new_images(new_img_infos)
@@ -864,7 +864,7 @@ class MainWindow(QMainWindow):
                 info=('If large datasets or slow file-access you might have to refresh '
                       'the webpage. Look for "Serving on http... in the command window '
                       'when finished (or issues).'),
-                icon=QMessageBox.Information)
+                icon=QMessageBox.Icon.Information)
             dlg.exec()
             url = f'http://{dash_settings.host}:{dash_settings.port}'
             webbrowser.open(url=url, new=1)
@@ -908,8 +908,8 @@ class MainWindow(QMainWindow):
             msg = f'There are unsaved changes to {txt}. Ignore and continue?'
             reply = QMessageBox.question(
                 self, 'Save changes first?', msg,
-                QMessageBox.Yes, QMessageBox.No)
-            if reply == QMessageBox.No:
+                QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No:
                 proceed = False
         if proceed:
             if initial_view == '':
@@ -929,8 +929,9 @@ class MainWindow(QMainWindow):
             print('Reading configuration settings...')
         self.lastload = time()
         _, _, self.user_prefs = cff.load_user_prefs()
-        if self.user_prefs.dark_mode:
+        if 'dark' in os.environ[ENV_ICON_PATH]:
             plt.style.use('dark_background')
+
         _, _, self.paramsets = cff.load_settings(
             fname=f'paramsets_{self.current_modality}')
         _, _, self.quicktest_templates = cff.load_settings(
@@ -1006,8 +1007,8 @@ class MainWindow(QMainWindow):
             reply = QMessageBox.question(
                 self, 'Reset warnings?',
                 'Reset saved warnings?',
-                QMessageBox.Yes, QMessageBox.No)
-            if reply == QMessageBox.Yes:
+                QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
                 self.status_bar.saved_warnings = []
                 self.act_warning.setEnabled(False)
         else:
@@ -1017,14 +1018,14 @@ class MainWindow(QMainWindow):
 
     def start_wait_cursor(self):
         """Block mouse events by wait cursor."""
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        qApp.processEvents()
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.instance().processEvents()
 
     def stop_wait_cursor(self):
         """Return to normal mouse cursor after wait cursor."""
         while QApplication.overrideCursor() is not None:
             QApplication.restoreOverrideCursor()
-        qApp.processEvents()
+        QApplication.instance().processEvents()
 
     def finish_cleanup(self):
         """Cleanup/save before exit."""

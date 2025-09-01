@@ -10,11 +10,11 @@ from time import time
 import webbrowser
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QThread
-from PyQt5.QtGui import QIcon, QBrush, QColor
-from PyQt5.QtWidgets import (
-    QApplication, qApp, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
-    QToolBar, QLabel, QLineEdit, QPushButton, QAction, QSpinBox, QCheckBox,
+from PyQt6.QtCore import Qt, QThread
+from PyQt6.QtGui import QIcon, QAction, QBrush, QColor
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
+    QToolBar, QLabel, QLineEdit, QPushButton, QSpinBox, QCheckBox,
     QListWidget, QComboBox, QDoubleSpinBox, QAbstractItemView, QTableWidget,
     QMessageBox, QDialogButtonBox, QInputDialog, QFileDialog, QColorDialog
     )
@@ -118,7 +118,7 @@ class AutoDeleteDialog(ImageQCDialog):
         toolb.addActions([self.act_search])
         hlo.addWidget(toolb)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -165,7 +165,7 @@ class AutoCommonWidget(StackWidget):
         self.fname = 'auto_common'
 
         if self.import_review_mode:
-            tb_marked = ToolBarImportIgnore(self, orientation=Qt.Horizontal)
+            tb_marked = ToolBarImportIgnore(self, orientation=Qt.Orientation.Horizontal)
             self.import_review_mark_txt = QLabel('Import and overwrite current')
             tb_marked.addWidget(self.import_review_mark_txt)
             hlo_import_tb = QHBoxLayout()
@@ -205,7 +205,7 @@ class AutoCommonWidget(StackWidget):
         hlo_auto_delete.addWidget(self.list_auto_delete)
 
         self.tb_auto_delete = QToolBar()
-        self.tb_auto_delete.setOrientation(Qt.Vertical)
+        self.tb_auto_delete.setOrientation(Qt.Orientation.Vertical)
         self.btn_push_crit_delete = QPushButton('<<')
         self.btn_push_crit_delete.setToolTip(
             'Add tag from DICOM tag list to Auto delete list with criterium.')
@@ -563,7 +563,8 @@ class LimitsAndPlotContent(QWidget):
 
         self.list_headers = QListWidget()
         self.list_headers.setFixedWidth(300)
-        self.list_headers.setSelectionMode(QListWidget.ExtendedSelection)
+        self.list_headers.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection)
         self.list_headers.currentItemChanged.connect(self.item_selected)
         self.list_headers.itemClicked.connect(self.update_data_selected)
 
@@ -617,7 +618,7 @@ class LimitsAndPlotContent(QWidget):
         vlo_list.addWidget(btn_ungroup_selected)
 
         toolb = QToolBar()
-        toolb.setOrientation(Qt.Vertical)
+        toolb.setOrientation(Qt.Orientation.Vertical)
         act_up = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
             'Move tag(s) up in pattern list', self)
@@ -1287,7 +1288,7 @@ class LimitsAndPlotFixHeadersDialog(ImageQCDialog):
         self.list_template_headers.addItems(missing_in_output)
         self.list_output_headers.setFixedWidth(400)
         self.list_template_headers.setFixedWidth(400)
-        self.list_template_headers.setDragDropMode(QAbstractItemView.InternalMove)
+        self.list_template_headers.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
 
         info_txt = [
             'Header of output file and Limits template need to match.', '',
@@ -2099,8 +2100,8 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                     self, open_title, filter=file_filter)
             if len(fname[0]) > 0:
                 self.status_label.setText('Please wait while reading file....')
-                QApplication.setOverrideCursor(Qt.WaitCursor)
-                qApp.processEvents()
+                QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+                QApplication.instance().processEvents()
                 if self.current_modality == 'CT':
                     txt = read_vendor_QC_reports.get_pdf_txt(fname[0])
                     res = read_vendor_QC_reports.read_Siemens_CT_QC(txt)
@@ -2191,7 +2192,7 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                     self, 'Locate output folder',
                     'You will now be asked to set the folder for the output files...')
                 dlg = QFileDialog()
-                dlg.setFileMode(QFileDialog.Directory)
+                dlg.setFileMode(QFileDialog.FileMode.Directory)
                 if dlg.exec():
                     fname = dlg.selectedFiles()
                     output_folder = fname[0]
@@ -2306,7 +2307,7 @@ class DashSettingsWidget(StackWidget):
         self.fname = 'dash_settings'
 
         if self.import_review_mode:
-            tb_marked = ToolBarImportIgnore(self, orientation=Qt.Horizontal)
+            tb_marked = ToolBarImportIgnore(self, orientation=Qt.Orientation.Horizontal)
             self.import_review_mark_txt = QLabel('Import and overwrite current')
             tb_marked.addWidget(self.import_review_mark_txt)
             hlo_import_tb = QHBoxLayout()
@@ -2378,7 +2379,8 @@ class DashSettingsWidget(StackWidget):
         self.n_colors = 7
         self.colortable = QTableWidget(1, self.n_colors)
         self.colortable.setFixedHeight(50)
-        self.colortable.setSelectionMode(QTableWidget.SingleSelection)
+        self.colortable.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection)
         self.colortable.horizontalHeader().setVisible(False)
         self.colortable.verticalHeader().setVisible(False)
         for i in range(self.n_colors):
@@ -2499,7 +2501,7 @@ class DashSettingsWidget(StackWidget):
                 info=('If large datasets or slow file-access you might have to refresh '
                       'the webpage. Look for "Serving on http... in the command window '
                       'when finished (or issues).'),
-                icon=QMessageBox.Information)
+                icon=QMessageBox.Icon.Information)
             dlg.exec()
             url = f'http://{self.templates.host}:{self.templates.port}'
             webbrowser.open(url=url, new=1)

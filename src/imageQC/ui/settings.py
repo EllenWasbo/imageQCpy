@@ -12,13 +12,13 @@ from time import ctime
 from dataclasses import dataclass, field, asdict
 import copy
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
-    QApplication, qApp,
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import (
+    QApplication,
     QTreeWidget, QTreeWidgetItem, QStackedWidget,
     QVBoxLayout, QHBoxLayout, QGroupBox, QToolBar,
-    QLabel, QLineEdit, QPlainTextEdit, QPushButton, QAction, QSpinBox, QCheckBox,
+    QLabel, QLineEdit, QPlainTextEdit, QPushButton, QSpinBox,
     QListWidget, QMessageBox, QFileDialog
     )
 import yaml
@@ -29,7 +29,6 @@ from imageQC.config.iQCconstants import (
     )
 from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
-from imageQC.config.read_config_idl import ConfigIdl2Py
 from imageQC.ui.ui_dialogs import ImageQCDialog, SelectTextsDialog
 from imageQC.ui.settings_reusables import StackWidget, QuickTestTreeView
 from imageQC.ui import settings_automation
@@ -268,7 +267,7 @@ class SettingsDialog(ImageQCDialog):
         """Update visible widget in stack when selection in tree change."""
         prevtxtitem = self.current_selected_txt
         item = self.tree_settings.indexFromItem(item)
-        txtitem = item.data(Qt.DisplayRole)
+        txtitem = item.data(Qt.ItemDataRole.DisplayRole)
 
         # Settings changed - saved? Go back to prev if regret leaving unchanged
         _, prev_widget = self.get_item_widget_from_txt(prevtxtitem)
@@ -316,8 +315,8 @@ class SettingsDialog(ImageQCDialog):
                 self, 'Cancel import?',
                 'To finish import go to first page (Settings for import) and '
                 'select what to include in the import. Proceed cancel import?',
-                QMessageBox.Yes, QMessageBox.No)
-            if reply == QMessageBox.Yes:
+                QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
                 event.accept()
             else:
                 event.ignore()
@@ -333,8 +332,8 @@ class SettingsDialog(ImageQCDialog):
                 reply = QMessageBox.question(
                     self, 'Unsaved changes',
                     'Close and loose unsaved changes?',
-                    QMessageBox.Yes, QMessageBox.No)
-                if reply == QMessageBox.Yes:
+                    QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+                if reply == QMessageBox.StandardButton.Yes:
                     event.accept()
                 else:
                     event.ignore()
@@ -355,7 +354,7 @@ class SettingsDialog(ImageQCDialog):
             return filenames
 
         dlg = QFileDialog(self, 'Locate config folder to import settings from')
-        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
         filenames = []
         if dlg.exec():
             import_folder = dlg.selectedFiles()[0]
@@ -656,7 +655,6 @@ class UserSettingsWidget(StackWidget):
 
         self.config_folder = QLineEdit()
         self.lbl_user_prefs_path = QLabel()
-        self.chk_dark_mode = QCheckBox()
         self.font_size = QSpinBox()
 
         self.vlo.addWidget(self.lbl_user_prefs_path)
@@ -688,14 +686,6 @@ class UserSettingsWidget(StackWidget):
         hlo_font_size.addWidget(QLabel('(Restart to update GUI)'))
         hlo_font_size.addStretch()
         vlo_gui.addLayout(hlo_font_size)
-        hlo_dark_mode = QHBoxLayout()
-        self.chk_dark_mode.clicked.connect(
-            lambda: self.flag_edit(True))
-        hlo_dark_mode.addWidget(QLabel('Dark mode'))
-        hlo_dark_mode.addWidget(self.chk_dark_mode)
-        hlo_dark_mode.addWidget(QLabel('(restart to update)'))
-        hlo_dark_mode.addStretch()
-        vlo_gui.addLayout(hlo_dark_mode)
         gb_gui.setLayout(vlo_gui)
         vlo_1.addWidget(gb_gui)
         vlo_1.addSpacing(50)
@@ -721,7 +711,6 @@ class UserSettingsWidget(StackWidget):
         self.lbl_user_prefs_path.setText('User preferences saved in: ' + path)
         self.config_folder.setText(self.user_prefs.config_folder)
         self.font_size.setValue(self.user_prefs.font_size)
-        self.chk_dark_mode.setChecked(self.user_prefs.dark_mode)
         self.flag_edit(False)
 
     def save_user(self):
@@ -730,7 +719,6 @@ class UserSettingsWidget(StackWidget):
             cff.remove_user_from_active_users()
         self.user_prefs.config_folder = self.config_folder.text()
         self.user_prefs.font_size = self.font_size.value()
-        self.user_prefs.dark_mode = self.chk_dark_mode.isChecked()
 
         status_ok, path = cff.save_user_prefs(self.user_prefs, parentwidget=self)
         if status_ok:
@@ -740,7 +728,7 @@ class UserSettingsWidget(StackWidget):
             self.dlg_settings.main.update_settings()
             cff.version_control(self.dlg_settings.main)
         else:
-            QMessageBox.Warning(self, 'Warning',
+            QMessageBox.Icon.Warning(self, 'Warning',
                                 f'Failed to save changes to {path}')
 
 
@@ -771,20 +759,15 @@ class SharedSettingsWidget(StackWidget):
         btn_import = QPushButton(
             'Import from another config folder')
         btn_import.clicked.connect(self.dlg_settings.import_from_yaml)
-        btn_import_idl_config = QPushButton(
-            'Import config from IDL version of ImageQC')
-        btn_import_idl_config.clicked.connect(self.import_idl_config)
         btn_verify_config = QPushButton((
             'Verify config files (connections between related templates)'))
         btn_verify_config.clicked.connect(self.verify_config_files)
         self.vlo.addWidget(btn_locate_config)
         self.vlo.addWidget(btn_import)
-        self.vlo.addWidget(btn_import_idl_config)
         self.vlo.addWidget(btn_verify_config)
 
         if self.save_blocked:
             btn_locate_config.setEnabled(False)
-            btn_import_idl_config.setEnabled(False)
 
         self.vlo.addWidget(self.list_files)
 
@@ -839,7 +822,7 @@ class SharedSettingsWidget(StackWidget):
     def locate_config(self):
         """Browse to config folder."""
         dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
         if dlg.exec():
             config_folder = dlg.selectedFiles()[0]
             self.change_config_user_prefs(config_folder)
@@ -855,8 +838,8 @@ class SharedSettingsWidget(StackWidget):
 
     def verify_config_files(self):
         """Verify content of config files (that linked templates are defined)."""
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        qApp.processEvents()
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.instance().processEvents()
         _, _, tag_infos = cff.load_settings(fname='tag_infos')
         _, _, tag_patterns_special = cff.load_settings(fname='tag_patterns_special')
         _, _, tag_patterns_format = cff.load_settings(fname='tag_patterns_format')
@@ -915,66 +898,15 @@ class SharedSettingsWidget(StackWidget):
 
         if len(details) > 0:
             msg = 'Found issues with the templates. See details.'
-            icon = QMessageBox.Warning
+            icon = QMessageBox.Icon.Warning
         else:
             msg = 'All templates are ok.'
-            icon = QMessageBox.Information
+            icon = QMessageBox.Icon.Information
 
         QApplication.restoreOverrideCursor()
         dlg = messageboxes.MessageBoxWithDetails(
             self, title='Results', msg=msg, details=details, icon=icon)
         dlg.exec()
-
-    def import_idl_config(self):
-        """Import config settings from IDL version of imageQC."""
-        if self.lbl_config_folder.text() == '':
-            QMessageBox.information(
-                self,
-                'Config path missing',
-                'A config folder need to be defined to save the imported settings.'
-                )
-        else:
-            fname = QFileDialog.getOpenFileName(
-                self, 'Import config.dat from IDL version',
-                filter="dat file (*.dat)")
-            if fname[0] != '':
-                _, _, self.tag_infos = cff.load_settings(fname='tag_infos')
-                config_idl = ConfigIdl2Py(fname[0], self.tag_infos)
-                if len(config_idl.errmsg) > 0:
-                    dlg = messageboxes.MessageBoxWithDetails(
-                        parent=self, title='Information',
-                        msg='Imported parameters will now be presented for review.',
-                        info=(
-                            'See details for warnings regarding the imported '
-                            'config file'),
-                        details=config_idl.errmsg)
-                    dlg.exec()
-                import_main = ImportMain(
-                    tag_infos=config_idl.tag_infos_new,
-                    rename_patterns=config_idl.rename_patterns,
-                    paramsets=config_idl.paramsets,
-                    quicktest_templates=config_idl.quicktest_templates,
-                    auto_common=config_idl.auto_common,
-                    auto_templates=config_idl.auto_templates,
-                    auto_vendor_templates=config_idl.auto_vendor_templates
-                    )
-                if config_idl.paramsets:
-                    import_main.current_paramset = config_idl.paramsets['CT'][0]
-                dlg = SettingsDialog(
-                    import_main, initial_view='Config folder',
-                    width1=self.width1, width2=self.width2,
-                    import_review_mode=True)
-                res = dlg.exec()
-                if res:
-                    import_main = dlg.get_marked()
-                    same_names = cff.import_settings(import_main)
-                    if same_names:
-                        QMessageBox.information(
-                            self, 'Information',
-                            ('Imported one or more templates with same name as '
-                             'templates already set. The imported template names '
-                             'was marked with _import.'))
-                self.update_from_yaml()
 
 
 class SharedSettingsImportWidget(StackWidget):
@@ -1045,21 +977,21 @@ class QuickTestTemplatesWidget(StackWidget):
         vlo.addWidget(self.wid_test_table)
 
         hlo_selimg = QHBoxLayout()
-        hlo_selimg.setAlignment(Qt.AlignLeft)
+        hlo_selimg.setAlignment(Qt.AlignmentFlag.AlignLeft)
         vlo.addLayout(hlo_selimg)
         hlo_selimg.addWidget(QLabel('Selected image index: '))
         self.lbl_selimg = QLabel('')
         hlo_selimg.addWidget(self.lbl_selimg)
 
         hlo_nimgs = QHBoxLayout()
-        hlo_nimgs.setAlignment(Qt.AlignLeft)
+        hlo_nimgs.setAlignment(Qt.AlignmentFlag.AlignLeft)
         vlo.addLayout(hlo_nimgs)
         hlo_nimgs.addWidget(QLabel('Minimum number of images expected: '))
         self.lbl_nimgs = QLabel('')
         hlo_nimgs.addWidget(self.lbl_nimgs)
 
         self.toolb = QToolBar()
-        self.toolb.setOrientation(Qt.Vertical)
+        self.toolb.setOrientation(Qt.Orientation.Vertical)
         self.hlo.addWidget(self.toolb)
         act_add = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),

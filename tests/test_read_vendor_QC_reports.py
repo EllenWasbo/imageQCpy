@@ -62,7 +62,7 @@ def test_Siemens_CT_QC():
          '', '', '', '', None, None, None, None],
         ['08.02.2017', 'CH Gundersen', 'SOMATOM Definition Edge', '83211',
          '276301531', '-', 0.14, 0.56, -0.43, 0.37, 0.73, 1.16,
-         3.54, 4.13, 4.55, 4.68, 4.83, 5.24, 3.36, 5.756666666666668,
+         3.54, 4.13, 4.55, 4.68, 4.83, 5.24, 3.36, 5.756666666666667,
          3.13, 5.83, 11.37, 13.93, 17.165, 22.195, '', '', '', '',
          '', '', '', '', '', '', '', '', None, None, None, None],
         ['10.12.2015', 'Knut G', 'SOMATOM Definition Flash', '73537',
@@ -73,7 +73,7 @@ def test_Siemens_CT_QC():
         ['11.02.2021', 'Siemens v/Andreas', 'SOMATOM Force', '76311',
          '490282004', '674422072', -0.34, 0.44, -0.79, 1.43, 1.45, 2.14,
          3.5, 3.88, 4.84, 5.05, 4.83, 5.05, 3.3, 5.4, 3.2475, 5.8575,
-         12.86, 15.79, 24.02, 28.786666666666665, -0.11, 1.84, -1.25,
+         12.86, 15.790000000000001, 24.02, 28.786666666666665, -0.11, 1.84, -1.25,
          0.09, 2.52, 1.68, 3.9, 4.0, 4.84, 5.04, 4.91, 5.07, 3.3, 5.4, 3.28, 5.385],
         ['31.05.2022', 'Fysiker', 'SOMATOM Drive', '105158',
          '173312102', '-', 0.13, 0.53, -0.22, 0.88, 0.68, 0.94, 3.27,
@@ -111,7 +111,7 @@ def test_Siemens_CT_QC_Intevo():
          4.4, 4.61, '', '', '', '', '', '', '', '', '', ''],
         ['26.10.2021', 'Siemens v/Gundersen Stavanger Universitetssykehus',
          'Symbia Intevo 16', '98164', '289262083', '', '', '', '', '', '', '',
-         '', '', '', '', '', 3.7074999999999996, 6.942500000000001, 3.005,
+         '', '', '', '', '', 3.7075, 6.9425, 3.005,
          6.355, 9.71, 13.65]
         ]
 
@@ -123,7 +123,7 @@ def test_Siemens_CT_QC_Intevo():
         assert res['values'] == expected_res[i]
 
 
-def test_Siemens_CT_QC_Symia():
+def test_Siemens_CT_QC_Symbia():
     """Not ready - return status false."""
     file_names = ['Siemens_CT_constancy_2007E_VA60A_Symbia_homogeneity.pdf',
                   'Siemens_CT_constancy_2007E_VA60C_Symbia_homogeneity_Norwegian.pdf',

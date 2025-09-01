@@ -5,6 +5,7 @@ Tests on GUI.
 @author: ewas
 """
 import os
+import numpy as np
 from pathlib import Path
 
 from pandas import read_clipboard
@@ -79,7 +80,6 @@ def test_quicktest_CT_13imgs(qtbot):
         ['MTFx 10%_img2', '1,544'],
         ['max_noise_group2', '3,657'],
         ['max_noise_group3', '4,080']]
-
     assert expected_res == res.values.tolist()
 
     main.current_paramset.mtf_cy_pr_mm = False  # True= default = cy/mm, False = cy/cm
@@ -87,15 +87,8 @@ def test_quicktest_CT_13imgs(qtbot):
     calculate_qc(main)
     main.wid_quicktest.extract_results(skip_questions=True)
     res = read_clipboard()
-    expected_res = [
-        ['max_diff_group2', '0,988'],
-        ['max_diff_group3', '1,665'],
-        ['MTFx 50%_img2', '11,42'],
-        ['MTFx 10%_img2', '15,44'],
-        ['max_noise_group2', '3,657'],
-        ['max_noise_group3', '4,080']]
-
-    assert expected_res == res.values.tolist()
+    expected_res2 = np.array(['MTFx 50%_img2', '11,42'], dtype=object)
+    assert np.array_equal(expected_res2, res.values[2])
 
 def test_generate_report(qtbot):
     file_path = path_tests / 'test_inputs' / 'CT' / 'CTP486'

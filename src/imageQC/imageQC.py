@@ -13,9 +13,10 @@ import logging
 # import cProfile
 # import pstats
 
-from PyQt5.QtGui import QPixmap, QFont, QFontMetrics, QPalette, QColor
-from PyQt5.QtWidgets import QApplication, QSplashScreen
-from PyQt5.QtCore import Qt
+from PyQt6.QtGui import (
+    QPixmap, QFont, QFontMetrics, QPalette, QColor, QGuiApplication)
+from PyQt6.QtWidgets import QApplication, QSplashScreen
+from PyQt6.QtCore import Qt
 
 # imageQC block start
 import imageQC.resources
@@ -29,7 +30,7 @@ from imageQC.config.iQCconstants import (
 def prepare_debug():
     """Set a tracepoint in PDB that works with Qt."""
     # https://stackoverflow.com/questions/1736015/debugging-a-pyqt4-app
-    from PyQt5.QtCore import pyqtRemoveInputHook
+    from PyQt6.QtCore import pyqtRemoveInputHook
     import pdb
     pyqtRemoveInputHook()
     # set up the debugger
@@ -97,80 +98,74 @@ def main_ui():
 
     splash_img = QPixmap(':/icons/iQC_splash.png')
     splash = QSplashScreen(
-        splash_img, Qt.WindowStaysOnTopHint)
+        splash_img, Qt.WindowType.WindowStaysOnTopHint)
     splash.show()
 
     app.setStyle('Fusion')
-    if user_prefs.dark_mode:
-        gb_background = 'background-color: #484848;'
-        hover_background = 'background-color: #585858;'
-        pressed_background = 'background-color: #686868;'
-    else:
-        gb_background = 'background-color: #e7e7e7;'
-        hover_background = 'background-color: #d7d7d7;'
-        pressed_background = 'background-color: #c7c7c7;'
-    app.setStyleSheet(
-        f"""QSplitter::handle:horizontal {{
+    app.setStyleSheet("""
+        QSplitter::handle:horizontal {
             width: 4px;
             background-color: #6e94c0;
-            }}
-        QSplitter::handle:vertical {{
+            }
+        QSplitter::handle:vertical {
             height: 4px;
             background-color: #6e94c0;
-            }}
-        QWidget {{
+            }
+        QWidget {
             padding: 2px;
-            }}
-        QGroupBox {{
-            {gb_background}
+            }
+        QGroupBox {
             border-radius: 5px;
             border: 1px solid grey;
             margin-top: 10px;
-            }}
-        QGroupBox::title {{
+            }
+        QGroupBox::title {
             subcontrol-origin: margin;
             subcontrol-position: top left;
             padding-left: 10px;
             padding-top: -7px;
             font-style: italic;
-            }}
-        QPushButton {{
+            }
+        QPushButton {
             border-style: solid;
             border-width: 2px;
             border-color: #888888;
             border-radius: 10px;
             padding: 6px;
-            {gb_background}
-            }}
-        QPushButton::hover {{
-            {hover_background}
-            }}
-        QPushButton:pressed {{
-            {pressed_background}
-            }}""")
+            }
+        """)
+
     myFont = QFont()
     myFont.setPointSize(user_prefs.font_size)
     app.setFont(myFont)
     font_metric = QFontMetrics(myFont)
     char_width = font_metric.averageCharWidth()
 
-    if user_prefs.dark_mode:
+    bg_color = app.palette().window().color().value()
+    font_color = app.palette().windowText().color().value()
+    if bg_color < font_color:
+        dark_mode = True
+    else:
+        dark_mode = False
+    os.environ[ENV_ICON_PATH] = cff.get_icon_path(dark_mode)
+
+    if dark_mode:
         palette = QPalette()
-        palette.setColor(QPalette.Window, QColor(53, 53, 53))
-        palette.setColor(QPalette.WindowText, Qt.white)
-        palette.setColor(QPalette.Base, QColor(25, 25, 25))
+        palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+        palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
+        palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
         palette.setColor(
-            QPalette.AlternateBase, QColor(53, 53, 53))
-        palette.setColor(QPalette.ToolTipBase, Qt.black)
-        palette.setColor(QPalette.ToolTipText, Qt.white)
-        palette.setColor(QPalette.Text, Qt.white)
-        palette.setColor(QPalette.Button, QColor(53, 53, 53))
-        palette.setColor(QPalette.ButtonText, Qt.white)
-        palette.setColor(QPalette.BrightText, Qt.red)
-        palette.setColor(QPalette.Link, QColor(42, 130, 218))
+            QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+        palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.black)
+        palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
+        palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
+        palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+        palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
+        palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
+        palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
         palette.setColor(
-            QPalette.Highlight, QColor(42, 130, 218))
-        palette.setColor(QPalette.HighlightedText, Qt.black)
+            QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+        palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
         app.setPalette(palette)
 
     if os.environ[ENV_USER_PREFS_PATH] == '':
@@ -197,7 +192,7 @@ def main_ui():
 if __name__ == '__main__':
     print('imageQC is starting up...', flush=True)
     warnings = []
-    developer_mode = False
+    developer_mode = True
     if developer_mode:
         prepare_debug()  # type c to continue, developer_mode=False in imageQC.py to deactivate debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
@@ -210,7 +205,6 @@ if __name__ == '__main__':
             warnings.append(msg)
 
     os.environ[ENV_USER_PREFS_PATH] = user_prefs_path
-    os.environ[ENV_ICON_PATH] = cff.get_icon_path(user_prefs.dark_mode)
     os.environ[ENV_CONFIG_FOLDER] = user_prefs.config_folder
 
     log_mode = 'w'

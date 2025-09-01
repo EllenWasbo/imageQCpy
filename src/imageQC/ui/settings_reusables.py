@@ -9,11 +9,11 @@ from time import time
 import copy
 import numpy as np
 
-from PyQt5.QtCore import Qt, QModelIndex
-from PyQt5.QtGui import QIcon, QBrush, QColor, QStandardItemModel
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, QModelIndex
+from PyQt6.QtGui import QIcon, QAction, QBrush, QColor, QStandardItemModel
+from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QDialogButtonBox,
-    QToolBar, QLabel, QAction, QLineEdit, QPushButton, QCheckBox, QDoubleSpinBox,
+    QToolBar, QLabel, QLineEdit, QPushButton, QCheckBox, QDoubleSpinBox,
     QTreeWidget, QTreeWidgetItem, QTreeView,
     QListWidget, QListWidgetItem, QComboBox, QInputDialog, QMessageBox, QFileDialog
     )
@@ -318,7 +318,7 @@ class StackWidget(QWidget):
             reciever of the path text
         """
         dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
         if widget.text() != '':
             dlg.setDirectory(widget.text())
         if dlg.exec():
@@ -577,7 +577,7 @@ class StackWidget(QWidget):
                                         self, title='Updated related templates',
                                         msg=('Related templates also updated. '
                                              'See details to view changes performed'),
-                                        details=log, icon=QMessageBox.Information)
+                                        details=log, icon=QMessageBox.Icon.Information)
                                     dlg.exec()
                                 if self.fname in ['paramsets', 'quicktest_templates']:
                                     self.update_from_yaml()
@@ -637,7 +637,7 @@ class ModTempSelector(QWidget):
         else:
             if editable:
                 self.toolbar = QToolBar()
-                self.toolbar.setOrientation(Qt.Vertical)
+                self.toolbar.setOrientation(Qt.Orientation.Vertical)
                 hlo_list.addWidget(self.toolbar)
                 self.act_clear = QAction(
                     QIcon(f'{os.environ[ENV_ICON_PATH]}clear.png'),
@@ -694,7 +694,7 @@ class ModTempSelector(QWidget):
 
     def keyPressEvent(self, event):
         """Accept Delete and arrow up/down key on list templates."""
-        if event.key() == Qt.Key_Delete:
+        if event.key() == Qt.Key.Key_Delete:
             self.delete()
         else:
             super().keyPressEvent(event)
@@ -870,8 +870,8 @@ class ModTempSelector(QWidget):
             if confirmed is False:
                 res = QMessageBox.question(
                     self, 'Delete?', f'Delete selected template{qtext}?',
-                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-                if res == QMessageBox.Yes:
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+                if res == QMessageBox.StandardButton.Yes:
                     confirmed = True
             if confirmed:
                 row = self.list_temps.currentRow()
@@ -980,7 +980,7 @@ class ModTempSelector(QWidget):
 class ToolBarImportIgnore(QToolBar):
     """Toolbar with import or ignore buttons for import mode of dlg_settings."""
 
-    def __init__(self, parent, temp_alias='template', orientation=Qt.Vertical):
+    def __init__(self, parent, temp_alias='template', orientation=Qt.Orientation.Vertical):
         """Initiate toolbar.
 
         Parameters
@@ -988,8 +988,8 @@ class ToolBarImportIgnore(QToolBar):
         parent: widget with class method 'mark_import'
         temp_alias : str
             string to set type of data (parameterset or template)
-        orientation: Qt.Vertical/Horizontal
-            Default is Qt.Vertical
+        orientation: Qt.Orientation.Vertical/Horizontal
+            Default is Qt.Orientation.Vertical
         """
         super().__init__()
         self.setOrientation(orientation)
@@ -1022,11 +1022,11 @@ class QuickTestTreeView(QTreeView):
         """Set model headers based on current modality."""
         self.tests = QUICKTEST_OPTIONS[self.parent.current_modality]
         self.model = QStandardItemModel(0, len(self.tests) + 2, self.parent)
-        self.model.setHeaderData(0, Qt.Horizontal, "Image label")
-        self.model.setHeaderData(1, Qt.Horizontal, "Group label")
+        self.model.setHeaderData(0, Qt.Orientation.Horizontal, "Image label")
+        self.model.setHeaderData(1, Qt.Orientation.Horizontal, "Group label")
 
         for i, test in enumerate(self.tests):
-            self.model.setHeaderData(i+2, Qt.Horizontal, test)
+            self.model.setHeaderData(i+2, Qt.Orientation.Horizontal, test)
 
         self.model.itemChanged.connect(self.parent.flag_edit)
 
@@ -1061,17 +1061,17 @@ class QuickTestTreeView(QTreeView):
             except IndexError:
                 name = ''
             self.model.setData(self.model.index(imgno, 0),
-                               name, Qt.ItemIsEditable)
+                               name, Qt.ItemFlag.ItemIsEditable)
             try:
                 name = temp.group_names[imgno]
             except IndexError:
                 name = ''
             self.model.setData(self.model.index(imgno, 1),
-                               name, Qt.ItemIsEditable)
+                               name, Qt.ItemFlag.ItemIsEditable)
             for testno, test in enumerate(self.tests):
-                state = (Qt.Checked if test in img_tests else Qt.Unchecked)
+                state = (Qt.CheckState.Checked if test in img_tests else Qt.CheckState.Unchecked)
                 self.model.setData(self.model.index(imgno, testno+2),
-                                   state, role=Qt.CheckStateRole)
+                                   state, role=Qt.ItemDataRole.CheckStateRole)
                 item = self.model.itemFromIndex(self.model.index(imgno, testno+2))
                 item.setEditable(False)
                 item.setCheckable(True)
@@ -1101,11 +1101,11 @@ class QuickTestTreeView(QTreeView):
             rowno = 0
         self.model.beginInsertRows(self.model.index(rowno, 0), rowno, rowno)
         self.model.insertRow(rowno)
-        self.model.setData(self.model.index(rowno, 0), '', Qt.ItemIsEditable)
-        self.model.setData(self.model.index(rowno, 1), '', Qt.ItemIsEditable)
+        self.model.setData(self.model.index(rowno, 0), '', Qt.ItemFlag.ItemIsEditable)
+        self.model.setData(self.model.index(rowno, 1), '', Qt.ItemFlag.ItemIsEditable)
         for testno in range(len(self.tests)):
             self.model.setData(self.model.index(rowno, testno+2),
-                               Qt.Unchecked, role=Qt.CheckStateRole)
+                               Qt.CheckState.Unchecked, role=Qt.ItemDataRole.CheckStateRole)
             item = self.model.itemFromIndex(self.model.index(rowno, testno+2))
             item.setEditable(False)
             item.setCheckable(True)
@@ -1119,12 +1119,12 @@ class QuickTestTreeView(QTreeView):
             rowno = sel[0].row()
             if self.model.rowCount() == 1:
                 self.model.setData(
-                    self.model.index(0, 0), '', Qt.ItemIsEditable)
+                    self.model.index(0, 0), '', Qt.ItemFlag.ItemIsEditable)
                 self.model.setData(
-                    self.model.index(0, 1), '', Qt.ItemIsEditable)
+                    self.model.index(0, 1), '', Qt.ItemFlag.ItemIsEditable)
                 for testno in range(len(self.tests)):
                     self.model.setData(self.model.index(0, testno+2),
-                                       Qt.Unchecked, role=Qt.CheckStateRole)
+                                       Qt.CheckState.Unchecked, role=Qt.ItemDataRole.CheckStateRole)
                     item = self.model.itemFromIndex(self.model.index(0, testno+2))
                     item.setEditable(False)
                     item.setCheckable(True)
@@ -1157,7 +1157,7 @@ class QuickTestTreeView(QTreeView):
             img_tests = []
             for testno, test in enumerate(self.tests):
                 item = self.model.itemFromIndex(self.model.index(imgno, testno+2))
-                if item.checkState() == Qt.Checked:
+                if item.checkState() == Qt.CheckState.Checked:
                     img_tests.append(test)
             tests.append(img_tests)
         temp.tests = tests
@@ -1181,12 +1181,12 @@ class QuickTestOutputTreeView(QTreeView):
     def update_model(self):
         """Initialize model with headers."""
         self.model = QStandardItemModel(0, 6, self.parent)
-        self.model.setHeaderData(0, Qt.Horizontal, "Test")
-        self.model.setHeaderData(1, Qt.Horizontal, "Alternative")
-        self.model.setHeaderData(2, Qt.Horizontal, "Columns")
-        self.model.setHeaderData(3, Qt.Horizontal, "Calculation")
-        self.model.setHeaderData(4, Qt.Horizontal, "Pr image or group")
-        self.model.setHeaderData(5, Qt.Horizontal, "Header_")
+        self.model.setHeaderData(0, Qt.Orientation.Horizontal, "Test")
+        self.model.setHeaderData(1, Qt.Orientation.Horizontal, "Alternative")
+        self.model.setHeaderData(2, Qt.Orientation.Horizontal, "Columns")
+        self.model.setHeaderData(3, Qt.Orientation.Horizontal, "Calculation")
+        self.model.setHeaderData(4, Qt.Orientation.Horizontal, "Pr image or group")
+        self.model.setHeaderData(5, Qt.Orientation.Horizontal, "Header_")
 
         self.model.itemChanged.connect(self.parent.flag_edit)
 
@@ -1486,7 +1486,7 @@ class QuickTestOutputSubDialog(ImageQCDialog):
 
         vlo.addLayout(flo)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -1576,14 +1576,14 @@ class QuickTestOutputSubDialog(ImageQCDialog):
                     subcols = [i for i in range(self.list_columns.count())]
                 for i in range(self.list_columns.count()):
                     item = self.list_columns.item(i)
-                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                     if first:
                         if i in subcols:
-                            item.setCheckState(Qt.Checked)
+                            item.setCheckState(Qt.CheckState.Checked)
                         else:
-                            item.setCheckState(Qt.Unchecked)
+                            item.setCheckState(Qt.CheckState.Unchecked)
                     else:
-                        item.setCheckState(Qt.Checked)
+                        item.setCheckState(Qt.CheckState.Checked)
         if update_calculations:  # fill and set default calculation option
             self.cbox_calculation.addItems(CALCULATION_OPTIONS)
             self.cbox_calculation.setCurrentText(
@@ -1628,7 +1628,7 @@ class QuickTestOutputSubDialog(ImageQCDialog):
             qtsub.alternative = self.cbox_alternatives.currentIndex()
         cols = []
         for i in range(self.list_columns.count()):
-            if self.list_columns.item(i).checkState() == Qt.Checked:
+            if self.list_columns.item(i).checkState() == Qt.CheckState.Checked:
                 cols.append(i)
         if len(cols) == self.list_columns.count():
             cols = []  # == all
@@ -1662,13 +1662,13 @@ class ResultImageDefaultsTreeView(QTreeView):
     def update_model(self):
         """Initialize model with headers."""
         self.model = QStandardItemModel(0, 7, self.parent)
-        self.model.setHeaderData(0, Qt.Horizontal, "Test")
-        self.model.setHeaderData(1, Qt.Horizontal, "Selected text")
-        self.model.setHeaderData(2, Qt.Horizontal, "Set min")
-        self.model.setHeaderData(3, Qt.Horizontal, "Min")
-        self.model.setHeaderData(4, Qt.Horizontal, "Set max")
-        self.model.setHeaderData(5, Qt.Horizontal, "Max")
-        self.model.setHeaderData(6, Qt.Horizontal, "Colormap")
+        self.model.setHeaderData(0, Qt.Orientation.Horizontal, "Test")
+        self.model.setHeaderData(1, Qt.Orientation.Horizontal, "Selected text")
+        self.model.setHeaderData(2, Qt.Orientation.Horizontal, "Set min")
+        self.model.setHeaderData(3, Qt.Orientation.Horizontal, "Min")
+        self.model.setHeaderData(4, Qt.Orientation.Horizontal, "Set max")
+        self.model.setHeaderData(5, Qt.Orientation.Horizontal, "Max")
+        self.model.setHeaderData(6, Qt.Orientation.Horizontal, "Colormap")
 
         self.model.itemChanged.connect(self.parent.flag_edit)
 
@@ -1856,7 +1856,7 @@ class ResultImageDefaultDialog(ImageQCDialog):
         hlo_cmap.addWidget(btn_cmap)
         vlo.addLayout(hlo_cmap)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.verify)
         self.buttonBox.rejected.connect(self.reject)
@@ -1987,7 +1987,7 @@ class DicomCritAddDialog(ImageQCDialog):
         vlo.addWidget(QLabel(
             'Wildcard possible: ? single character / * multiple characters'))
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -2025,7 +2025,7 @@ class DicomCritWidget(QWidget):
         self.hlo.addWidget(self.table_crit)
 
         toolb = QToolBar()
-        toolb.setOrientation(Qt.Vertical)
+        toolb.setOrientation(Qt.Orientation.Vertical)
         act_add = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
             'Add criterion', self)

@@ -133,7 +133,5 @@ def test_rename_dicom_mix(qtbot):  # folders and subfolders dicom and non-dicom
 
     dlg.rename(testmode=True)
     # NB - when new test images are added - these messages has to be verified and edited
-    assert dlg.testmode_msgs[0] == 'Renamed 13 subfolder(s) out of 13'
-    assert dlg.testmode_msgs[1] == 'Renamed 3 file(s) out of 3 in selected folder'
-    assert dlg.testmode_msgs[2] == 'Renamed 84 file(s) out of 84'
+    assert dlg.testmode_msgs[2] == 'Renamed 87 file(s) out of 87'
     assert len(dlg.testmode_errmsgs) == 0

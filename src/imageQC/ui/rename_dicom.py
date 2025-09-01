@@ -8,11 +8,11 @@ User interface for dialog Rename Dicom.
 import os
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import (
     QWidget, QSplitter, QVBoxLayout, QHBoxLayout, QToolBar,
-    QLabel, QLineEdit, QPushButton, QAction, QTreeWidget, QTreeWidgetItem, QFileDialog,
+    QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem, QFileDialog,
     QMessageBox
     )
 
@@ -46,7 +46,7 @@ class RenameDicomDialog(ImageQCDialog):
         self.testmode_errmsgs = []
 
         self.setWindowTitle('Rename DICOM')
-        splitter = QSplitter(Qt.Vertical)
+        splitter = QSplitter(Qt.Orientation.Vertical)
         vlo = QVBoxLayout()
         self.setLayout(vlo)
         vlo.addWidget(splitter)
@@ -151,7 +151,7 @@ class RenameDicomDialog(ImageQCDialog):
     def browse(self):
         """Locate folder."""
         dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
         if dlg.exec():
             fname = dlg.selectedFiles()
             self.path.setText(os.path.normpath(fname[0]))
@@ -217,7 +217,7 @@ class RenameDicomDialog(ImageQCDialog):
                         self, title='Issues',
                         msg=(f'Moved {count_renamed} of {len(dcm_dict["files"])}.'
                              'See details for paths failing.'),
-                        details=failed_paths, icon=QMessageBox.Warning)
+                        details=failed_paths, icon=QMessageBox.Icon.Warning)
                     dlg.exec()
 
                 proceed = messageboxes.proceed_question(
@@ -366,7 +366,7 @@ class RenameDicomDialog(ImageQCDialog):
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Issues',
                 msg='There were issues moving one or more files. See details.',
-                details=errmsg, icon=QMessageBox.Warning)
+                details=errmsg, icon=QMessageBox.Icon.Warning)
             dlg.exec()
 
     def test_10_first(self):
@@ -638,13 +638,13 @@ class RenameDicomDialog(ImageQCDialog):
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Failed renaming',
                 msg='Failed renaming one or more files. See details',
-                details=errmsg, icon=QMessageBox.Warning)
+                details=errmsg, icon=QMessageBox.Icon.Warning)
             dlg.exec()
         if len(confirm_msgs) > 0 and testmode is False:
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Finished renaming',
                 msg='Finished renaming:',
-                info='\n'.join(confirm_msgs), icon=QMessageBox.Information)
+                info='\n'.join(confirm_msgs), icon=QMessageBox.Icon.Information)
             dlg.exec()
         if testmode:
             self.testmode_msgs = confirm_msgs

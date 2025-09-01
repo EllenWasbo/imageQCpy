@@ -13,14 +13,14 @@ from pathlib import Path
 import pandas as pd
 
 import yaml
-from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5 import QtCore
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import (
-    QApplication, qApp, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
+from PyQt6.QtGui import QIcon, QAction, QPixmap
+from PyQt6 import QtCore
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtWidgets import (
+    QApplication, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QButtonGroup, QDialogButtonBox, QSpinBox, QDoubleSpinBox,
     QLineEdit, QTextEdit, QPushButton, QLabel, QRadioButton, QCheckBox,
-    QComboBox, QListWidget, QWidget, QToolBar, QAction, QDateTimeEdit,
+    QComboBox, QListWidget, QAbstractItemView, QWidget, QToolBar, QDateTimeEdit,
     QTableWidget, QTableWidgetItem, QTabWidget, QMessageBox, QFileDialog
     )
 
@@ -51,14 +51,14 @@ class ImageQCDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.CustomizeWindowHint)
         self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+            self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
     def start_wait_cursor(self):
         """Block mouse events by wait cursor."""
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        qApp.processEvents()
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.instance().processEvents()
 
     def stop_wait_cursor(self):
         """Return to normal mouse cursor after wait cursor."""
@@ -74,7 +74,7 @@ class AboutDialog(ImageQCDialog):
         self.setWindowTitle("imageQC")
 
         layout = QVBoxLayout()
-        layout.setAlignment(QtCore.Qt.AlignCenter)
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(20)
         logo = QLabel()
         im = QPixmap(':/icons/iQC_icon128.png')
@@ -108,8 +108,8 @@ class AboutDialog(ImageQCDialog):
         layout.addWidget(label)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok,
-            QtCore.Qt.Horizontal, self)
+            QDialogButtonBox.StandardButton.Ok,
+            QtCore.Qt.Orientation.Horizontal, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addSpacing(20)
@@ -127,7 +127,7 @@ class StartUpDialog(ImageQCDialog):
         self.setWindowTitle("Welcome to imageQC")
 
         layout = QVBoxLayout()
-        layout.setAlignment(QtCore.Qt.AlignCenter)
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(20)
         logo = QLabel()
         im = QPixmap(':/icons/iQC_icon128.png')
@@ -191,8 +191,8 @@ class StartUpDialog(ImageQCDialog):
         layout.addStretch()
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok,
-            QtCore.Qt.Horizontal, self)
+            QDialogButtonBox.StandardButton.Ok,
+            QtCore.Qt.Orientation.Horizontal, self)
         buttons.accepted.connect(self.press_ok)
         buttons.rejected.connect(self.reject)
         layout.addSpacing(20)
@@ -220,7 +220,7 @@ class StartUpDialog(ImageQCDialog):
                 locate = False
         if locate:
             dlg = QFileDialog()
-            dlg.setFileMode(QFileDialog.Directory)
+            dlg.setFileMode(QFileDialog.FileMode.Directory)
             if dlg.exec():
                 fname = dlg.selectedFiles()
                 config_folder = os.path.normpath(fname[0])
@@ -316,7 +316,7 @@ class OpenRawDialog(ImageQCDialog):
                 self.shape_y.setValue(shape[0])
                 self.shape_x.setValue(shape[1])
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         button_box = QDialogButtonBox(buttons)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -435,7 +435,7 @@ class PostProcessingDialog(ImageQCDialog):
         flo.addRow('Flip left/right', self.flip_lr)
         flo.addRow('Flip up/down', self.flip_ud)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         button_box = QDialogButtonBox(buttons)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -474,7 +474,7 @@ class SelectTextsDialog(ImageQCDialog):
         self.btn_select_all.clicked.connect(self.select_all)
         vlo.addWidget(self.btn_select_all)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         button_box = QDialogButtonBox(buttons)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -483,10 +483,10 @@ class SelectTextsDialog(ImageQCDialog):
     def select_all(self):
         """Select or deselect all in list."""
         if self.btn_select_all.text() == 'Deselect all':
-            set_state = Qt.Unchecked
+            set_state = Qt.CheckState.Unchecked
             self.btn_select_all.setText('Select all')
         else:
-            set_state = Qt.Checked
+            set_state = Qt.CheckState.Checked
             self.btn_select_all.setText('Deselect all')
 
         for i in range(len(self.list_widget.texts)):
@@ -536,7 +536,7 @@ class EditAnnotationsDialog(ImageQCDialog):
         self.chk_show_overlay.setChecked(show_overlay)
         flo.addRow(self.chk_show_overlay)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -707,7 +707,7 @@ class AddArtifactsDialog(ImageQCDialog):
         vlo_aa.addLayout(hlo_aa)
         hlo_aa.addWidget(self.list_artifacts)
         toolbar = QToolBar()
-        toolbar.setOrientation(Qt.Vertical)
+        toolbar.setOrientation(Qt.Orientation.Vertical)
         hlo_aa.addWidget(toolbar)
 
         act_clear = QAction(
@@ -1342,7 +1342,7 @@ class AddArtifactsDialog(ImageQCDialog):
                             self, title='Warnings',
                             msg='Found issues when loading pattern of artifacts',
                             info='See details',
-                            icon=QMessageBox.Warning,
+                            icon=QMessageBox.Icon.Warning,
                             details=warnings)
                         dlg.exec()
         if len(new_labels) > 0:
@@ -1426,7 +1426,7 @@ class WindowLevelEditDialog(ImageQCDialog):
         if show_lock_wl:
             fLO.addRow(QLabel('Lock WL for all images'), self.chk_lock)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.button_box = QDialogButtonBox(buttons)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
@@ -1434,7 +1434,7 @@ class WindowLevelEditDialog(ImageQCDialog):
 
     def accept(self):
         """Avoid close on enter if not ok button focus."""
-        if self.button_box.button(QDialogButtonBox.Ok).hasFocus():
+        if self.button_box.button(QDialogButtonBox.StandardButton.Ok).hasFocus():
             if self.spin_width.value() == 0:
                 QMessageBox.warning(
                     self, 'Warning',
@@ -1504,7 +1504,7 @@ class CmapSelectDialog(ImageQCDialog):
         hlo_buttons = QHBoxLayout()
         vlo.addLayout(hlo_buttons)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -1572,7 +1572,7 @@ class QuickTestClipboardDialog(ImageQCDialog):
         self.chk_transpose_table.setChecked(transpose_table)
         vlo_vals.addWidget(self.chk_transpose_table)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -1649,7 +1649,8 @@ class ResetAutoTemplateDialog(ImageQCDialog):
             self.txt_by_name_or_date[int(self.sort_by_name)])
         self.btn_by_name_or_date.clicked.connect(self.update_sort)
         self.list_file_or_dirs = QListWidget()
-        self.list_file_or_dirs.setSelectionMode(QListWidget.ExtendedSelection)
+        self.list_file_or_dirs.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection)
         if self.sort_by_name:
             list_elements = copy.deepcopy(self.list_elements)
         else:
@@ -1686,7 +1687,7 @@ class ResetAutoTemplateDialog(ImageQCDialog):
         if self.import_Mammo:
             self.list_file_or_dirs.selectAll()
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -1737,7 +1738,7 @@ class TextDisplay(ImageQCDialog):
         txtEdit.setMinimumWidth(min_width)
         txtEdit.setMinimumHeight(min_height)
         vlo.addWidget(txtEdit)
-        buttons = QDialogButtonBox.Close
+        buttons = QDialogButtonBox.StandardButton.Close
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -1772,7 +1773,7 @@ class DataFrameDisplay(ImageQCDialog):
         table.resizeColumnsToContents()
         table.resizeRowsToContents()
         vlo.addWidget(table)
-        buttons = QDialogButtonBox.Close
+        buttons = QDialogButtonBox.StandardButton.Close
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -1886,7 +1887,7 @@ class ProjectionPlotDialog(ImageQCDialog):
 
         hlo_buttons = QHBoxLayout()
         vlo.addLayout(hlo_buttons)
-        buttons = QDialogButtonBox.Close
+        buttons = QDialogButtonBox.StandardButton.Close
         buttonBox = QDialogButtonBox(buttons)
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
@@ -1904,7 +1905,7 @@ class ProjectionPlotDialog(ImageQCDialog):
 
     def keyPressEvent(self, event):
         """Avoid close dialog on enter in widgets."""
-        if event.key() == Qt.Key_Return:
+        if event.key() == Qt.Key.Key_Return:
             pass
         else:
             super().keyPressEvent(event)

@@ -5,8 +5,8 @@ QMessageBoxes with specific settings for different uses and reuses in ImageQC.
 
 @author: Ellen Wasbo
 """
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox, QLabel, QPushButton
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QMessageBox, QLabel, QPushButton
 
 # imageQC block start
 # imageQC block end
@@ -35,12 +35,12 @@ def proceed_question(widget, question,
     proceed = False
 
     msg_box = QMessageBox(
-        QMessageBox.Question,
+        QMessageBox.Icon.Question,
         'Proceed?', question,
-        buttons=QMessageBox.Yes | QMessageBox.No,
+        buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         parent=widget
         )
-    msg_box.setDefaultButton(QMessageBox.No)
+    msg_box.setDefaultButton(QMessageBox.StandardButton.No)
     if detailed_text is not None:
         if isinstance(detailed_text, list):
             detailed_text = '\n'.join(detailed_text)
@@ -56,9 +56,9 @@ def proceed_question(widget, question,
             width: {msg_width}px;
             }}
         """)
-    msg_box.exec_()
+    msg_box.exec()
     reply = msg_box.standardButton(msg_box.clickedButton())
-    if reply == QMessageBox.Yes:
+    if reply == QMessageBox.StandardButton.Yes:
         proceed = True
 
     return proceed
@@ -68,14 +68,14 @@ class MessageBoxWithDetails(QMessageBox):
     """QMessageBox with details and richtext for shorter definition when reused."""
 
     def __init__(self, parent=None, title='', msg='', info='', details=[],
-                 msg_width=700, icon=QMessageBox.Information):
+                 msg_width=700, icon=QMessageBox.Icon.Information):
         super().__init__()
         self.setIcon(icon)
         self.setWindowTitle(title)
         self.setText(msg)
         if info != '':
             self.setInformativeText(info)
-        self.setTextFormat(Qt.RichText)
+        self.setTextFormat(Qt.TextFormat.RichText)
         if details != []:
             self.setDetailedText('\n'.join(details))
         _qlabels = self.findChildren(QLabel)
@@ -125,21 +125,21 @@ class QuestionBox(QMessageBox):
 
         """
         super().__init__(
-            QMessageBox.Question, title, msg, parent=parent)
-        self.setIcon(QMessageBox.Question)
+            QMessageBox.Icon.Question, title, msg, parent=parent)
+        self.setIcon(QMessageBox.Icon.Question)
         self.setWindowTitle(title)
         self.setText(msg)
-        self.setTextFormat(Qt.RichText)
+        self.setTextFormat(Qt.TextFormat.RichText)
         if info != '':
             self.setInformativeText(info)
         if details != []:
             self.setDetailedText('\n'.join(details))
         _qlabels = self.findChildren(QLabel)
         _qlabels[1].setFixedWidth(msg_width)
-        self.addButton(no_text, QMessageBox.NoRole)
-        self.addButton(yes_text, QMessageBox.YesRole)
+        self.addButton(no_text, QMessageBox.ButtonRole.NoRole)
+        self.addButton(yes_text, QMessageBox.ButtonRole.YesRole)
         if cancel:
-            self.addButton('Cancel', QMessageBox.RejectRole)
+            self.addButton('Cancel', QMessageBox.ButtonRole.RejectRole)
         _qbuttons = self.findChildren(QPushButton)
         if default_yes:
             _qbuttons[0].setAutoDefault(False)

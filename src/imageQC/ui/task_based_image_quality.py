@@ -11,13 +11,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
-    QApplication, qApp,
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import (
+    QApplication,
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QToolBar, QGroupBox,
     QTabWidget, QStackedWidget, QTableWidget, QTableWidgetItem,
-    QLabel, QPushButton, QAction, QListWidget, QComboBox, QLineEdit, QCheckBox,
+    QLabel, QPushButton, QListWidget, QComboBox, QLineEdit, QCheckBox,
     QDialogButtonBox, QMessageBox, QFileDialog
     )
 
@@ -112,8 +112,8 @@ class RangeDialog(ImageQCDialog):
             self.txt_max.setText(str(range_input[3]))
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
-            Qt.Horizontal, self)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            Qt.Orientation.Horizontal, self)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         vlo.addWidget(buttons)
@@ -213,7 +213,7 @@ class RangeWidget(QWidget):
         toolb = QToolBar()
         toolb.addActions([self.act_add, self.act_edit, self.act_delete,
                           self.act_auto_ranges])
-        #toolb.setOrientation(Qt.Vertical)
+        #toolb.setOrientation(Qt.Orientation.Vertical)
         hlo.addWidget(self.table)
         vlo_toolb = QVBoxLayout()
         hlo.addLayout(vlo_toolb)
@@ -303,7 +303,7 @@ class RangeTableWidget(QTableWidget):
         ch_w = self.parent.task_main.gui.char_width
         for i, width in enumerate([12, 30, 12, 12, 12]):
             self.setColumnWidth(i, width*ch_w)
-        #self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        #self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
         if self.current_table:
             self.setRowCount(len(self.current_table))
@@ -311,7 +311,7 @@ class RangeTableWidget(QTableWidget):
                 for colno, val in enumerate(row):
                     twi = QTableWidgetItem(str(val))
                     twi.setTextAlignment(4)
-                    twi.setFlags(twi.flags() ^ Qt.ItemIsEditable)
+                    twi.setFlags(twi.flags() ^ Qt.ItemFlag.ItemIsEditable)
                     self.setItem(rowno, colno, twi)
 
             self.verticalHeader().setVisible(False)
@@ -436,8 +436,8 @@ class ExportDialog(ImageQCDialog):
         #vlo.addWidget(self.dpr)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
-            Qt.Horizontal, self)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            Qt.Orientation.Horizontal, self)
         buttons.accepted.connect(self.verify_accept)
         buttons.rejected.connect(self.reject)
         vlo.addWidget(buttons)
@@ -453,7 +453,7 @@ class ExportDialog(ImageQCDialog):
     def browse(self):
         """Browse to result folder."""
         dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
         if dlg.exec():
             self.path.setText(dlg.selectedFiles()[0])
 
@@ -647,7 +647,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
 
     def keyPressEvent(self, event):
         """Avoid Return actions."""
-        if event.key() == Qt.Key_Return:
+        if event.key() == Qt.Key.Key_Return:
             pass
         else:
             super().keyPressEvent(event)
@@ -982,7 +982,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Finished with issues',
                 msg=msg,
-                details=details, icon=QMessageBox.Warning)
+                details=details, icon=QMessageBox.Icon.Warning)
             dlg.exec()
 
     def refresh_results_display(self, update_table=True):
@@ -1125,7 +1125,7 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Missing results',
                 msg='Calculate all first to generate results for export',
-                icon=QMessageBox.Information)
+                icon=QMessageBox.Icon.Information)
             dlg.exec()
 
         if path:
@@ -1286,11 +1286,11 @@ class TaskBasedImageQualityDialog(ImageQCDialog):
 
     def start_wait_cursor(self):
         """Block mouse events by wait cursor."""
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        qApp.processEvents()
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.instance().processEvents()
 
     def stop_wait_cursor(self):
         """Return to normal mouse cursor after wait cursor."""
         while QApplication.overrideCursor() is not None:
             QApplication.restoreOverrideCursor()
-        qApp.processEvents()
+        QApplication.instance().processEvents()

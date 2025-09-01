@@ -6,7 +6,7 @@ Functions used for iQCconstants on startup.
 @author: Ellen Wasbo
 """
 from copy import deepcopy
-from PyQt5.QtCore import QFile, QTextStream
+from PyQt6.QtCore import QFile, QIODevice, QTextStream
 import yaml
 
 # imageQC block start
@@ -51,7 +51,7 @@ def read_tag_infos_from_yaml():
     f_text = ''
 
     file = QFile(":/config_defaults/tag_infos.yaml")
-    file.open(QFile.ReadOnly | QFile.Text)
+    file.open(QIODevice.OpenModeFlag.ReadOnly | QIODevice.OpenModeFlag.Text)
     f_text = QTextStream(file).readAll()
 
     if f_text != '':

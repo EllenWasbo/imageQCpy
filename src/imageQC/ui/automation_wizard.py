@@ -10,12 +10,12 @@ from pathlib import Path
 import copy
 from time import time
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction, QPixmap
+from PyQt6.QtWidgets import (
     QWizard, QWizardPage,
     QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QButtonGroup,
-    QLabel, QCheckBox, QLineEdit, QPushButton, QRadioButton, QAction, QComboBox,
+    QLabel, QCheckBox, QLineEdit, QPushButton, QRadioButton, QComboBox,
     QMessageBox, QFileDialog, QDialogButtonBox
     )
 
@@ -234,7 +234,7 @@ class SelectOverrideDialog(ImageQCDialog):
             )
         vlo.addWidget(self.list_widget)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -425,7 +425,7 @@ class SavePage(QWizardPage):
     def locate_folder(self, widget):
         """Select folder from FileDialog."""
         dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
         if widget.text() != '':
             dlg.setDirectory(widget.text())
         if dlg.exec():
@@ -544,16 +544,16 @@ class AutomationWizard(QWizard):
 
         self.setWindowTitle('Automation wizard')
         self.setWindowIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}iQC_icon.png'))
-        self.setWindowFlags(self.windowFlags() | Qt.CustomizeWindowHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.CustomizeWindowHint)
         self.setWindowFlags(
-            self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-        self.setWizardStyle(QWizard.ModernStyle)
+            self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         self.setOptions(
-            QWizard.IndependentPages | QWizard.NoBackButtonOnStartPage)
-        self.setPixmap(QWizard.WatermarkPixmap,
+            QWizard.WizardOption.IndependentPages | QWizard.WizardOption.NoBackButtonOnStartPage)
+        self.setPixmap(QWizard.WizardPixmap.WatermarkPixmap,
                        QPixmap(
                            f'{os.environ[ENV_ICON_PATH]}watermark_gears.png'))
-        self.setPixmap(QWizard.LogoPixmap,
+        self.setPixmap(QWizard.WizardPixmap.LogoPixmap,
                        QPixmap(f'{os.environ[ENV_ICON_PATH]}iQC_icon128.png'))
         self.main = main
 
@@ -594,7 +594,7 @@ class AutomationWizard(QWizard):
             self.addPage(self.finish_page)
 
         self.finished = False
-        self.button(QWizard.FinishButton).clicked.connect(self.finish_clicked)
+        self.button(QWizard.WizardButton.FinishButton).clicked.connect(self.finish_clicked)
 
     def finish_clicked(self):
         """Continue to Settings manager if specified."""

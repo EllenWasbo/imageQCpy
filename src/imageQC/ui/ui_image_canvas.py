@@ -12,7 +12,7 @@ import matplotlib
 import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib import patches
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 from skimage.transform import resize
 
 # imageQC block start

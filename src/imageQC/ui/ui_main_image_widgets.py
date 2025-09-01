@@ -8,9 +8,9 @@ import os
 import numpy as np
 from skimage import draw
 
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QAction, QToolBar, QToolButton
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QToolBar, QToolButton
     )
 
 # imageQC block start

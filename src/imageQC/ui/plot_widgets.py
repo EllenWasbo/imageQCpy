@@ -9,10 +9,10 @@ import os
 
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAction, QLabel,
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QLabel,
     QInputDialog, QMessageBox)
 import matplotlib
 import matplotlib.figure
@@ -63,7 +63,7 @@ class PlotWidget(QWidget):
             tb_plot_copy.addActions([act_copy, act_min_max])
         else:
             tb_plot_copy.addActions([act_copy])
-        tb_plot_copy.setOrientation(Qt.Vertical)
+        tb_plot_copy.setOrientation(Qt.Orientation.Vertical)
 
         vlo_tb.addWidget(tb_plot_copy)
         vlo_tb.addWidget(tb_plot)
@@ -213,7 +213,7 @@ class PlotNavigationToolbar(NavigationToolbar2QT):
         for x in self.actions():
             if x.text() in ['Back', 'Forward', 'Pan', 'Subplots']:
                 self.removeAction(x)
-        self.setOrientation(Qt.Vertical)
+        self.setOrientation(Qt.Orientation.Vertical)
 
     def set_message(self, s):
         """Hide cursor position and value text."""
@@ -225,7 +225,7 @@ class PlotCanvas(FigureCanvasQTAgg):
 
     def __init__(self, main):
         self.main = main
-        if self.main.user_prefs.dark_mode:
+        if 'dark' in os.environ[ENV_ICON_PATH]:
             matplotlib.pyplot.style.use('dark_background')
         self.fig = matplotlib.figure.Figure(dpi=150)
         FigureCanvasQTAgg.__init__(self, self.fig)

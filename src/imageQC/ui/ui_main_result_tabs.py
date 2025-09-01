@@ -9,10 +9,10 @@ import copy
 import numpy as np
 import pandas as pd
 
-from PyQt5.QtGui import QIcon, QKeyEvent, QKeySequence
-from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QAction, QToolBar, QToolButton, QMenu,
+from PyQt6.QtGui import QIcon, QAction, QKeyEvent, QKeySequence
+from PyQt6.QtCore import Qt, QEvent
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QToolButton, QMenu,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QAbstractScrollArea,
     QSplitter, QLabel
     )
@@ -50,7 +50,7 @@ class ResultTableWidget(QWidget):
             'Copy table to clipboard', self)
         act_copy.triggered.connect(self.copy_table)
         toolb = QToolBar()
-        toolb.setOrientation(Qt.Vertical)
+        toolb.setOrientation(Qt.Orientation.Vertical)
         toolb.addActions([act_copy])
         vlo_tb.addWidget(toolb)
         self.tb_copy = uir.ToolBarTableExport(
@@ -68,7 +68,7 @@ class ResultTableWidget(QWidget):
         toolb = QToolBar()
         self.tool_resultsize = ToolMaximizeResults(self.main)
         toolb.addWidget(self.tool_resultsize)
-        toolb.setOrientation(Qt.Vertical)
+        toolb.setOrientation(Qt.Orientation.Vertical)
         hlo.addWidget(toolb)
 
     def copy_table(self, row_range=None, col_range=None):
@@ -128,14 +128,14 @@ class ResultTable(QTableWidget):
         self.main = main
         self.linked_image_list = True
         self.cellClicked.connect(self.cell_selected)
-        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
         self.values = [[]]  # always as columns, converted if input is rows
         self.row_labels = []
         self.col_labels = []
         self.installEventFilter(self)
 
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.generate_ctxmenu)
 
     def generate_ctxmenu(self, pos):
@@ -143,16 +143,16 @@ class ResultTable(QTableWidget):
         menu = QMenu(self)
         act_copy = menu.addAction('Copy selected cells to clipboard (Ctrl+C)')
         act_copy.triggered.connect(self.copy_selection)
-        menu.exec_(self.mapToGlobal(pos))
+        menu.exec(self.mapToGlobal(pos))
 
     def eventFilter(self, source, event):
         """Handle arrow up/down events."""
         if isinstance(event, QKeyEvent):
-            if event.type() == QEvent.KeyRelease:
-                if event.key() in [Qt.Key_Up, Qt.Key_Down]:
+            if event.type() == QEvent.Type.KeyRelease:
+                if event.key() in [Qt.Key.Key_Up, Qt.Key.Key_Down]:
                     self.cell_selected()
-            elif event.type() == QEvent.KeyPress:
-                if event == QKeySequence.Copy:
+            elif event.type() == QEvent.Type.KeyPress:
+                if event == QKeySequence.StandardKey.Copy:
                     self.copy_selection()
                     return True
         return False
@@ -322,7 +322,7 @@ class ResultPlotWidget(PlotWidget):
         toolb = QToolBar()
         self.tool_resultsize = ToolMaximizeResults(main)
         toolb.addWidget(self.tool_resultsize)
-        toolb.setOrientation(Qt.Vertical)
+        toolb.setOrientation(Qt.Orientation.Vertical)
         self.hlo.addWidget(toolb)
 
     def min_max_curves(self):
@@ -338,7 +338,7 @@ class ResultPlotCanvas(PlotCanvas):
         self.color_k = 'k'
         self.color_gray = 'gray'
         self.color_darkgray = 'darkgray'
-        if main.user_prefs.dark_mode:
+        if 'dark' in os.environ[ENV_ICON_PATH]:
             self.color_k = 'w'
             self.color_gray = 'whitesmoke'
             self.color_darkgray = 'lightgray'
@@ -2989,7 +2989,7 @@ class ResultImageWidget(GenericImageWidget):
         tb_right_top = QToolBar()
         self.tool_resultsize = ToolMaximizeResults(self.main)
         tb_right_top.addWidget(self.tool_resultsize)
-        tb_right_top.setOrientation(Qt.Vertical)
+        tb_right_top.setOrientation(Qt.Orientation.Vertical)
         tb_right_top.addWidget(self.tool_profile)
         tb_right_top.addWidget(self.tool_cmap)
         tb_right_top.addWidget(self.tool_rectangle)
@@ -3016,7 +3016,7 @@ class ResultImageWidget(GenericImageWidget):
         self.wid_window_level = uir.WindowLevelWidget(
             self, show_dicom_wl=False, show_lock_wl=False)
 
-        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.addWidget(wid_image_toolbars)
         self.splitter.addWidget(self.wid_window_level)
         hlo_ = QHBoxLayout()
@@ -3053,4 +3053,4 @@ class ResultImageNavigationToolbar(ImageNavigationToolbar):
         for act in self.actions():
             if act.text() in ['Customize']:
                 self.removeAction(act)
-        self.setOrientation(Qt.Vertical)
+        self.setOrientation(Qt.Orientation.Vertical)

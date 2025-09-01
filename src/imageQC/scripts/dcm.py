@@ -15,7 +15,7 @@ import numpy as np
 from scipy import ndimage
 import pydicom
 import pandas
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 # imageQC block start
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS

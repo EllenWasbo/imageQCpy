@@ -9,9 +9,9 @@ import copy
 from time import time
 import pandas as pd
 
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QGroupBox, QLabel, QComboBox, QAction, QToolBar,
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import (
+    QWidget, QHBoxLayout, QGroupBox, QLabel, QComboBox, QToolBar,
     QMessageBox, QInputDialog
     )
 
@@ -177,8 +177,8 @@ class SelectTemplateWidget(QWidget):
         reply = QMessageBox.question(
             self, 'Unsaved changes',
             f'Save changes to {self.fname}?',
-            QMessageBox.Yes, QMessageBox.No)
-        if reply == QMessageBox.Yes:
+            QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
             self.save_current_template(before_select_new=before_select_new)
         else:
             self.flag_edit(False)
@@ -297,8 +297,8 @@ class SelectQuickTestWidget(SelectTemplateWidget):
                         f'specified for {len(self.current_template.tests)} images. '
                         f'Only {len(self.main.imgs)} images loaded. Add {diff} '
                         'dummy image(s) to fill template?',
-                        QMessageBox.Yes, QMessageBox.No)
-                    if reply == QMessageBox.Yes:
+                        QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+                    if reply == QMessageBox.StandardButton.Yes:
                         self.main.add_dummy(n_dummies=diff)
                         QMessageBox.information(
                             self, 'Reload after sorting',
@@ -359,8 +359,8 @@ class SelectQuickTestWidget(SelectTemplateWidget):
             msg = ('There are unsaved changes to QuickTest template. '
                    'Ignore and continue?')
             reply = QMessageBox.question(
-                self, 'Save changes first?', msg, QMessageBox.Yes, QMessageBox.No)
-            if reply == QMessageBox.No:
+                self, 'Save changes first?', msg, QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No:
                 proceed = False
 
         if proceed:

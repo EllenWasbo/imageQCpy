@@ -8,13 +8,13 @@ import os
 import numpy as np
 import pandas as pd
 
-from PyQt5 import QtWidgets
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtWidgets import (
+from PyQt6 import QtWidgets
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtCore import Qt, QEvent
+from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QMenu, QAction, QToolBar,
+    QMenu, QToolBar,
     QMessageBox, QInputDialog, QTreeWidget, QTreeWidgetItem, QFileDialog,
     QDialogButtonBox
     )
@@ -38,7 +38,8 @@ class TreeFileList(QTreeWidget):
         super().__init__()
         self.main = parent
         self.setColumnCount(5)
-        self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setAcceptDrops(True)
         self.setHeaderLabels(['Idx', 'Image', 'Frame', 'Test', 'Image name', 'Group name'])
         self.setColumnHidden(4, True)  # image name
@@ -167,7 +168,7 @@ class TreeFileList(QTreeWidget):
     def dropEvent(self, event):
         """Accept drop event with file paths."""
         if event.mimeData().hasUrls:
-            event.setDropAction(Qt.CopyAction)
+            event.setDropAction(Qt.DropAction.CopyAction)
             event.accept()
             file_paths = []
             for url in event.mimeData().urls():
@@ -179,7 +180,7 @@ class TreeFileList(QTreeWidget):
 
     def eventFilter(self, source, event):
         """Handle context menu events (rightclicks)."""
-        if event.type() == QEvent.ContextMenu:
+        if event.type() == QEvent.Type.ContextMenu:
             ctx_menu = QMenu(self)
             if self.main.wid_quicktest.gb_quicktest.isChecked():
                 act_edit_mark = QAction('Edit marked tests...')
@@ -406,7 +407,7 @@ class SelectTestcodeDialog(ImageQCDialog):
             )
         vLO.addWidget(self.list_widget)
 
-        buttons = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         self.buttonBox = QDialogButtonBox(buttons)
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
@@ -582,7 +583,7 @@ class CenterWidget(QGroupBox):
         self.chk_delta_use.setChecked(True)
 
         self.val_delta_x.setFixedSize(110, 48)
-        self.val_delta_x.setAlignment(Qt.AlignCenter)
+        self.val_delta_x.setAlignment(Qt.AlignmentFlag.AlignCenter)
         url_left = f'{os.environ[ENV_ICON_PATH]}arrowLeft.png'
         url_right = f'{os.environ[ENV_ICON_PATH]}arrowRight.png'
         css = f"""QSpinBox {{
@@ -608,7 +609,7 @@ class CenterWidget(QGroupBox):
         self.val_delta_x.setStyleSheet(css)
 
         self.val_delta_y.setFixedSize(64, 96)
-        self.val_delta_y.setAlignment(Qt.AlignCenter)
+        self.val_delta_y.setAlignment(Qt.AlignmentFlag.AlignCenter)
         url_up = f'{os.environ[ENV_ICON_PATH]}arrowUp.png'
         url_down = f'{os.environ[ENV_ICON_PATH]}arrowDown.png'
         css = f"""QSpinBox {{

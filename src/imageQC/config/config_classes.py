@@ -14,7 +14,6 @@ class UserPreferences:
     """Class holding local settings."""
 
     config_folder: str = ''
-    dark_mode: bool = False
     font_size: int = 8
     annotations_line_thick: int = 1
     annotations_font_size: int = 8

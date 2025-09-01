@@ -13,8 +13,8 @@ from dataclasses import asdict
 import numpy as np
 
 import yaml
-from PyQt5.QtCore import QFile, QIODevice, QTextStream
-from PyQt5.QtWidgets import QMessageBox, QFileDialog
+from PyQt6.QtCore import QFile, QIODevice, QTextStream
+from PyQt6.QtWidgets import QMessageBox, QFileDialog
 
 # imageQC block start
 from imageQC.config.iQCconstants import (
@@ -143,8 +143,8 @@ def version_control(input_main):
                                 input_main, 'Sort tags?',
                                 'Added tags are currently at end of list. '
                                 'Sort tags alphabetically?',
-                                QMessageBox.Yes, QMessageBox.No)
-                            if reply == QMessageBox.Yes:
+                                QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+                            if reply == QMessageBox.StandardButton.Yes:
                                 new_tag_infos = sorted(
                                     new_tag_infos,
                                     key=lambda x: x.attribute_name.upper())
@@ -155,8 +155,8 @@ def version_control(input_main):
                         reply = QMessageBox.question(
                             input_main, 'Keep asking?',
                             'Ask again next time on startup?',
-                            QMessageBox.Yes, QMessageBox.No)
-                        if reply == QMessageBox.No:
+                            QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+                        if reply == QMessageBox.StandardButton.No:
                             # update version number
                             _, _ = save_settings(
                                 input_main.tag_infos, fname='tag_infos')
@@ -194,7 +194,7 @@ def version_control(input_main):
             'ROIs as intented for these parameter sets and save '
             'to avoid this warning to appear once again.',
             info='See details for which Parameter sets this might be an issue',
-            icon=QMessageBox.Warning,
+            icon=QMessageBox.Icon.Warning,
             details=warnings)
         dlg.exec()
 
@@ -230,17 +230,17 @@ def verify_config_folder(widget):
         quest = '''Config folder not specified.
         Do you want to locate or initate a config folder now?'''
         msg_box = QMessageBox(
-            QMessageBox.Question,
+            QMessageBox.Icon.Question,
             'Proceed?', quest,
-            buttons=QMessageBox.Yes | QMessageBox.No,
+            buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             parent=widget
             )
-        res = msg_box.exec_()
-        if res == QMessageBox.Yes:
+        res = msg_box.exec()
+        if res == QMessageBox.StandardButton.Yes:
             proceed = True
         if proceed:
             dlg = QFileDialog()
-            dlg.setFileMode(QFileDialog.Directory)
+            dlg.setFileMode(QFileDialog.FileMode.Directory)
             if dlg.exec():
                 fname = dlg.selectedFiles()
                 os.environ[ENV_CONFIG_FOLDER] = fname[0]
@@ -536,7 +536,7 @@ def load_default_dcm_test_tag_patterns():
     """
     settings = {}
     file = QFile(":/config_defaults/tag_patterns_test_dcm.yaml")
-    file.open(QFile.ReadOnly | QFile.Text)
+    file.open(QIODevice.OpenModeFlag.ReadOnly | QIODevice.OpenModeFlag.Text)
     f_text = QTextStream(file).readAll()
     docs = yaml.safe_load(f_text)
     for mod, doc in docs.items():
@@ -555,7 +555,8 @@ def load_default_ct_number_tables():
     """
     ct_number_tables = {}
     file = QFile(":/config_defaults/CTnumberSensitometry.yaml")
-    if file.open(QIODevice.ReadOnly | QFile.Text):
+    if file.open(
+            QIODevice.OpenModeFlag.ReadOnly | QIODevice.OpenModeFlag.Text):
         data = QTextStream(file).readAll()
         file.close()
         docs = yaml.safe_load_all(data)
@@ -576,7 +577,8 @@ def load_default_pos_tables(filename='Siemens_AutoQC'):
     """
     tables = {}
     file = QFile(f":/config_defaults/{filename}.yaml")
-    if file.open(QIODevice.ReadOnly | QFile.Text):
+    if file.open(
+            QIODevice.OpenModeFlag.ReadOnly | QIODevice.OpenModeFlag.Text):
         data = QTextStream(file).readAll()
         file.close()
         docs = yaml.safe_load_all(data)
@@ -598,7 +600,8 @@ def load_cdmam(filename='cdmam'):
     """
     tables = {}
     file = QFile(f":/config_defaults/{filename}.yaml")
-    if file.open(QIODevice.ReadOnly | QFile.Text):
+    if file.open(
+            QIODevice.OpenModeFlag.ReadOnly | QIODevice.OpenModeFlag.Text):
         data = QTextStream(file).readAll()
         file.close()
         docs = yaml.safe_load_all(data)
@@ -1192,13 +1195,13 @@ def import_settings(import_main):
                  'By default these will be added to the end of tag-list. '
                  'Sort all tags by attribute name?')
         msg_box = QMessageBox(
-            QMessageBox.Question,
+            QMessageBox.Icon.Question,
             'Sort DICOM tags?', quest,
-            buttons=QMessageBox.Yes | QMessageBox.No,
+            buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             parent=None
             )
-        res = msg_box.exec_()
-        if res == QMessageBox.Yes:
+        res = msg_box.exec()
+        if res == QMessageBox.StandardButton.Yes:
             tag_infos = sorted(tag_infos, key=lambda x: x.attribute_name.upper())
 
         taginfos_reset_sort_index(tag_infos)
@@ -2036,10 +2039,10 @@ def verify_tag_infos(main):
     return (status, log)
 
 
-def get_icon_path(user_pref_dark_mode):
+def get_icon_path(dark_mode):
     """Get path for icons depending on darkmode settings."""
     path_icons = ':/icons/'
-    if user_pref_dark_mode:
+    if dark_mode:
         path_icons = ':/icons_darkmode/'
 
     return path_icons

@@ -5,8 +5,8 @@
 """
 import os
 
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
+from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem,
     QPushButton, QMessageBox, QFileDialog)
 
@@ -159,12 +159,12 @@ class ParamsTabVendor(QWidget):
                     self, title='Files not matched',
                     msg=('Some files did not match the content of the first file.'
                          ' See details for files not matching first file.'),
-                    details=file_not_match, icon=QMessageBox.Warning)
+                    details=file_not_match, icon=QMessageBox.Icon.Warning)
                 dlg.exec()
         if len(res_failed) > 0:
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Files not recognized',
                 msg=('Some files did not match the expected content for filetype '
                      f'{template.file_type}. See details for files not recognized.'),
-                details=res_failed, icon=QMessageBox.Warning)
+                details=res_failed, icon=QMessageBox.Icon.Warning)
             dlg.exec()

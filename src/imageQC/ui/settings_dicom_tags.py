@@ -6,12 +6,12 @@
 """
 import os
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QBrush, QColor
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QAction, QBrush, QColor
+from PyQt6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem,
     QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QToolBar, QButtonGroup,
-    QLabel, QLineEdit, QAction, QCheckBox, QListWidget, QComboBox,
+    QLabel, QLineEdit, QCheckBox, QListWidget, QComboBox,
     QAbstractScrollArea, QMessageBox, QDialogButtonBox, QFileDialog
     )
 
@@ -135,8 +135,8 @@ class DicomTagDialog(ImageQCDialog):
         hlo.addWidget(gb_modality)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
-            Qt.Horizontal, self)
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            Qt.Orientation.Horizontal, self)
         buttons.accepted.connect(self.verify_accept)
         buttons.rejected.connect(self.reject)
         vlo.addWidget(buttons)
@@ -400,9 +400,9 @@ class DicomTagsWidget(StackWidget):
         self.table_tags.setColumnWidth(8, 12*ch_w)
         self.sort_col_id = 7
         self.table_tags.setSizeAdjustPolicy(
-            QAbstractScrollArea.AdjustToContents)
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
         self.table_tags.setSortingEnabled(True)
-        self.table_tags.sortByColumn(self.sort_col_id, Qt.AscendingOrder)
+        self.table_tags.sortByColumn(self.sort_col_id, Qt.SortOrder.AscendingOrder)
         self.table_tags.setRootIsDecorated(False)
         self.table_tags.header().sectionClicked.connect(self.sort_header)
 
@@ -441,7 +441,7 @@ class DicomTagsWidget(StackWidget):
             toolb = ToolBarImportIgnore(self, temp_alias='tag')
         else:
             toolb = QToolBar()
-            toolb.setOrientation(Qt.Vertical)
+            toolb.setOrientation(Qt.Orientation.Vertical)
             act_add = QAction(
                 QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
                 'Add new tag to list', self)
@@ -784,7 +784,7 @@ class DicomTagsWidget(StackWidget):
                             self, title='Tag in use', msg=txt,
                             info='See details for which templates it is used.',
                             details=details_txt,
-                            icon=QMessageBox.Warning)
+                            icon=QMessageBox.Icon.Warning)
                         dlg.exec()
                 if proceed:
                     self.templates.pop(idx)
@@ -841,14 +841,14 @@ class DicomTagsWidget(StackWidget):
                     log.append('Aborted saving tag_infos.yaml')
 
                 if status and ok:
-                    ico = QMessageBox.Information
+                    ico = QMessageBox.Icon.Information
                     tit = 'Changes saved'
                     if len(log) > 0:
                         txt = 'See details to view changes performed'
                     else:
                         txt = 'Changes saved to tag_infos.yaml'
                 else:
-                    ico = QMessageBox.Warning
+                    ico = QMessageBox.Icon.Warning
                     tit = 'Issues on saving changes'
                     txt = 'Something went wrong while saving. See details.'
                 dlg = messageboxes.MessageBoxWithDetails(

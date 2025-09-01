@@ -12,11 +12,11 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QAbstractItemView,
-    QLabel, QLineEdit, QAction, QSpinBox, QCheckBox, QListWidget,
+    QLabel, QLineEdit, QSpinBox, QCheckBox, QListWidget,
     QFileDialog, QMessageBox
     )
 
@@ -116,7 +116,7 @@ def reset_auto_template(auto_template=None, parent_widget=None):
                 dlg = messageboxes.MessageBoxWithDetails(
                     parent_widget, title='Issues when moving files',
                     msg='Some files could not be moed. See details.',
-                    details=errmsgs, icon=QMessageBox.Warning)
+                    details=errmsgs, icon=QMessageBox.Icon.Warning)
                 dlg.exec()
             else:
                 QMessageBox.information(
@@ -220,13 +220,15 @@ class OpenAutomationDialog(ImageQCDialog):
             'Run automation templates', 4))
 
         self.list_templates = QListWidget()
-        self.list_templates.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.list_templates.currentItemChanged.connect(self.update_template_selected)
+        self.list_templates.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.list_templates.currentItemChanged.connect(
+            self.update_template_selected)
 
         hlo_temps = QHBoxLayout()
         vlo.addLayout(hlo_temps)
         tb_temps = QToolBar()
-        tb_temps.setOrientation(Qt.Vertical)
+        tb_temps.setOrientation(Qt.Orientation.Vertical)
         hlo_temps.addWidget(tb_temps)
         act_refresh = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}refresh.png'),
@@ -272,7 +274,7 @@ class OpenAutomationDialog(ImageQCDialog):
             texts=all_modalities, set_checked_ids=checked_modalities)
         hlo_mod = QHBoxLayout()
         tb_filter = QToolBar()
-        tb_filter.setOrientation(Qt.Vertical)
+        tb_filter.setOrientation(Qt.Orientation.Vertical)
         tb_filter.addAction(act_refresh)
         hlo_mod.addWidget(tb_filter)
         vlo_buttons.addWidget(uir.LabelItalic('Filter:'))
@@ -354,7 +356,7 @@ class OpenAutomationDialog(ImageQCDialog):
             reciever of the path text
         """
         dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
         if dlg.exec():
             fname = dlg.selectedFiles()
             widget.setText(os.path.normpath(fname[0]))
@@ -479,7 +481,7 @@ class OpenAutomationDialog(ImageQCDialog):
     def import_qap(self):
         """Select folder with QAP results (all history), select from date."""
         dlg = QFileDialog(self, 'Select folder with QAP results')
-        dlg.setFileMode(QFileDialog.Directory)
+        dlg.setFileMode(QFileDialog.FileMode.Directory)
         files = []
         folder = ''
         if dlg.exec():
@@ -682,7 +684,7 @@ class OpenAutomationDialog(ImageQCDialog):
             dlg = messageboxes.MessageBoxWithDetails(
                 self, title='Issues when searching for files',
                 msg='Something went wrong while searching for files. See details.',
-                details=errormsgs, icon=QMessageBox.Warning)
+                details=errormsgs, icon=QMessageBox.Icon.Warning)
             dlg.exec()
         self.progress_bar.reset()
         self.status_label.clearMessage()
@@ -896,8 +898,8 @@ class OpenAutomationDialog(ImageQCDialog):
                                     self, 'Open results file?',
                                     'Open template results file for easy access to '
                                     'editing if corrections are needed?',
-                                    QMessageBox.Yes, QMessageBox.No)
-                                if reply == QMessageBox.Yes:
+                                    QMessageBox.StandardButton.Yes, QMessageBox.StandardButton.No)
+                                if reply == QMessageBox.StandardButton.Yes:
                                     self.open_result_file()
 
     def run_templates(self, selected_only=False):

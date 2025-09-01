@@ -8,7 +8,7 @@ Collection of small functions used in ImageQC.
 import os
 from fnmatch import fnmatch
 from pathlib import Path
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 # imageQC block start
 from imageQC.config.iQCconstants import QUICKTEST_OPTIONS

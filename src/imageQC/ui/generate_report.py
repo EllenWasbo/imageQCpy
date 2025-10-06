@@ -394,8 +394,8 @@ class GenerateReportDialog(ImageQCDialog):
                             msg='Add element to selected table or as next element?',
                             yes_text='Add to table',
                             no_text='Add as next element')
-                        yes = dlg.exec()
-                        if yes:
+                        dlg.exec()
+                        if dlg.clickedButton() == dlg.yes:
                             if col is None:
                                 col = -1
                                 row += 1

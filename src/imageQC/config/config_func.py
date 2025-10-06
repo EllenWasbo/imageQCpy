@@ -137,7 +137,8 @@ def version_control(input_main):
                         details=(tags_in_added + tags_adjusted + mammo_msg),
                         msg_width=800
                         )
-                    if res.exec():
+                    res.exec()
+                    if res.clickedButton() == res.yes:
                         if len(tags_in_added) > 0:
                             reply = QMessageBox.question(
                                 input_main, 'Sort tags?',
@@ -427,7 +428,11 @@ def save_user_prefs(userpref, parentwidget=None):
             res = messageboxes.QuestionBox(
                 parentwidget, title='Save as', msg=quest,
                 yes_text=f'{APPDATA}', no_text=f'{TEMPDIR}')
-            path_local = APPDATA if res.exec() == 0 else TEMPDIR
+            res.exec()
+            if res.clickedButton() == res.yes:
+                path_local = APPDATA
+            else:
+                path_local = TEMPDIR
             _, path, userpref = init_user_prefs(
                     path=path_local, config_folder=os.environ[ENV_CONFIG_FOLDER])
         else:

@@ -136,8 +136,8 @@ class QuestionBox(QMessageBox):
             self.setDetailedText('\n'.join(details))
         _qlabels = self.findChildren(QLabel)
         _qlabels[1].setFixedWidth(msg_width)
-        self.addButton(no_text, QMessageBox.ButtonRole.NoRole)
-        self.addButton(yes_text, QMessageBox.ButtonRole.YesRole)
+        self.no = self.addButton(no_text, QMessageBox.ButtonRole.NoRole)
+        self.yes = self.addButton(yes_text, QMessageBox.ButtonRole.YesRole)
         if cancel:
             self.addButton('Cancel', QMessageBox.ButtonRole.RejectRole)
         _qbuttons = self.findChildren(QPushButton)

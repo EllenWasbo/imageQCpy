@@ -47,32 +47,50 @@ class AutoInfoWidget(StackWidget):
     def __init__(self, dlg_settings):
         header = 'Automation'
         subtxt = (
-            '''The main task for automation in imageQC is analysing constancy
+            '''The main task for automation in imageQC is analysing constancy 
             tests i.e. repeated tests with standardized output to follow trends.
             <br><br>
             <b>Import settings</b><br>
-            ImageQC can be set to automatically sort (and rename) incoming images to
-            the image pool into their respective folders defined in the Templates
-            (DICOM).<br>
+            ImageQC can be set to automatically sort (and rename) incoming 
+            DICOM images to the image pool and move these into their respective 
+            folders defined in Templates DICOM.<br>
             Use the Import settings tab to set the details of this sorting process.
             <br><br>
             <b>Templates DICOM</b><br>
-            These templates are meant for image based inputs.<br>
-            Define settings for how to rename and sort incoming images into
-             folders based on DICOM information.<br>
+            These templates are for DICOM image based inputs.<br>
+            Define settings for how to rename and sort incoming images into 
+            folders based on DICOM information.<br>
             Combine settings from parametersets and QuickTest templates to
             define how to analyse the images and where/how to output the
             results.
             <br><br>
-            <b>Templates vendor reports</b><br>
-            These templates are meant for vendor-report based inputs.<br>
+            <b>Templates vendor files</b><br>
+            These templates are for vendor-report based inputs.<br>
+            A set of different interpreters for specific report files from 
+            specific vendors and equipment are defined in imageQC.<br>
             Define where to find the reports, type of report and output path.
             <br><br>
+            <b>Limits and plot templates</b><br>
+            For the outputs from the automated analysis of DICOM or vendor 
+            specific reports, limits to the different parameters can be set 
+            using the Limits ad plot templates.<br>
+            If limits are defined and violated, a warning will be added to 
+            the log displayed after finishing the automated analysis.<br>
+            If a warning file is defined for the template causing the violation 
+            this warning will be added to that file. Using Teams one may set up 
+            an automated email when this warning file changes.<br>
+            <br>
+            Together with (or instead of) the limits causing warnings one may 
+            define plot limits which will be used for the trend-line display 
+            using Dashboards (see below).<br>
+            The plot limits sets the y-range for the plots. Parameters may be 
+            grouped to be displayed in the same sub-plot or hidden from the plots.
+            <br><br>
             <b>Dashboard settings</b><br>
-            This is work in progress. Currently imageQC have no visualization tools
-            for the trends (output of automation templates above).<br>
-            Until that is in place, use f.x. Excel or PowerBI to visualize
-            the trends.<br>
+            imageQC may display each parameters outputted from the automated 
+            analysis as trend-lines.<br>
+            Optionally, use the Limits and plot templates to customize the 
+            plots.<br>
             '''
             )
         super().__init__(dlg_settings, header, subtxt)
@@ -708,7 +726,8 @@ class LimitsAndPlotContent(QWidget):
                 msg='Locate output file from DICOM or vendor templates?',
                 yes_text='DICOM based templates',
                 no_text='Vendor report templates')
-            if res.exec():
+            res.exec()
+            if res.clickedButton() == res.yes:
                 type_vendor = False
             else:
                 type_vendor = True
@@ -808,7 +827,8 @@ class LimitsAndPlotContent(QWidget):
                     details=missing_in_template,
                     yes_text='Add missing headers to LimitsAndPlot template',
                     no_text='Ignore missing headers')
-                if res.exec():  # overwrite
+                res.exec()
+                if res.clickedButton() == res.yes:  # overwrite
                     for header in missing_in_template:
                         self.parent.current_template.add_group([header])
                     self.parent.flag_edit(True)
@@ -1220,7 +1240,8 @@ class LimitsAndPlotEditDialog(ImageQCDialog):
                                     'templates.'),
                                 yes_text='Overwrite limits and plot template',
                                 no_text='Save as new template')
-                            if res.exec():  # overwrite
+                            res.exec()
+                            if res.clickedButton() == res.yes:  # overwrite
                                 labels = [temp.label for temp
                                           in self.templates[self.current_modality]]
                                 idx = labels.index(curr_label)
@@ -1932,7 +1953,8 @@ class AutoTemplateWidget(AutoTempWidgetBasic):
                     msg='Reset settings that only affect analysis or just deactivate',
                     yes_text='Yes, reset',
                     no_text='No, just deactivate')
-                if res.exec():
+                res.exec()
+                if res.clickedButton() == res.yes:
                     self.current_template.paramset_label = ''
                     self.current_template.quicktemp_label = ''
                     self.current_template.path_output = ''
@@ -2144,7 +2166,8 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                     info='', details=['Already exists:'] + already_labels,
                     yes_text='Overwrite existing templates',
                     no_text='Add only new templates')
-                if not res.exec():  # add only new
+                res.exec()
+                if res.clickedButton() == res.no:  # add only new
                     ids_to_delete = [i for i, temp in enumerate(new_templates)
                                      if temp.label in already_labels]
                     ids_to_delete.reverse()
@@ -2225,7 +2248,8 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                     yes_text='Yes, proceed',
                     no_text='No')
                 templates_lim = []
-                if res.exec():
+                res.exec()
+                if res.clickedButton() == res.yes:
                     for template in templates:
                         act_files = [x for x in filenames
                                      if x.startswith(template.file_prefix)]
@@ -2347,6 +2371,8 @@ class DashSettingsWidget(StackWidget):
         self.txt_table_headers_2.editingFinished.connect(lambda: self.flag_edit(True))
         self.txt_table_headers_3 = QLineEdit()
         self.txt_table_headers_3.editingFinished.connect(lambda: self.flag_edit(True))
+        self.txt_table_headers_4 = QLineEdit()
+        self.txt_table_headers_4.editingFinished.connect(lambda: self.flag_edit(True))
 
         hlo_form = QHBoxLayout()
         flo = QFormLayout()
@@ -2373,7 +2399,8 @@ class DashSettingsWidget(StackWidget):
         hlo_table_headers.addWidget(self.txt_table_headers_0)
         hlo_table_headers.addWidget(self.txt_table_headers_1)
         hlo_table_headers.addWidget(self.txt_table_headers_2)
-        #TODO add when ready status: hlo_table_headers.addWidget(self.txt_table_headers_3)
+        hlo_table_headers.addWidget(self.txt_table_headers_3)
+        #TODO add when ready status: hlo_table_headers.addWidget(self.txt_table_headers_4)
         hlo_table_headers.addStretch()
 
         self.n_colors = 7
@@ -2435,10 +2462,10 @@ class DashSettingsWidget(StackWidget):
         self.header.setText(self.templates.header)
         self.days_since_limit.setValue(self.templates.days_since_limit)
         self.plot_height.setValue(self.templates.plot_height)
-        self.txt_table_headers_0.setText(self.templates.overview_table_headers[0])
-        self.txt_table_headers_1.setText(self.templates.overview_table_headers[1])
-        self.txt_table_headers_2.setText(self.templates.overview_table_headers[2])
-        self.txt_table_headers_3.setText(self.templates.overview_table_headers[3])
+        self.txt_table_headers_0.setText(self.templates.table_headers[0])
+        self.txt_table_headers_1.setText(self.templates.table_headers[1])
+        self.txt_table_headers_2.setText(self.templates.table_headers[2])
+        self.txt_table_headers_3.setText(self.templates.table_headers[3])
 
         for i in range(self.n_colors):
             w = self.colortable.cellWidget(0, i)
@@ -2465,10 +2492,10 @@ class DashSettingsWidget(StackWidget):
         self.templates.header = self.header.text()
         self.templates.days_since_limit = self.days_since_limit.value()
         self.templates.plot_height = self.plot_height.value()
-        self.templates.overview_table_headers[0] = self.txt_table_headers_0.text()
-        self.templates.overview_table_headers[1] = self.txt_table_headers_1.text()
-        self.templates.overview_table_headers[2] = self.txt_table_headers_2.text()
-        self.templates.overview_table_headers[3] = self.txt_table_headers_3.text()
+        self.templates.table_headers[0] = self.txt_table_headers_0.text()
+        self.templates.table_headers[1] = self.txt_table_headers_1.text()
+        self.templates.table_headers[2] = self.txt_table_headers_2.text()
+        self.templates.table_headers[3] = self.txt_table_headers_3.text()
 
     def save_dashboard_settings(self):
         """Get current settings and save to yaml file."""

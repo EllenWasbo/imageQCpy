@@ -13,8 +13,7 @@ import logging
 # import cProfile
 # import pstats
 
-from PyQt6.QtGui import (
-    QPixmap, QFont, QFontMetrics, QPalette, QColor, QGuiApplication)
+from PyQt6.QtGui import QPixmap, QFont, QFontMetrics, QPalette, QColor
 from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtCore import Qt
 
@@ -133,6 +132,8 @@ def main_ui():
             border-radius: 10px;
             padding: 6px;
             }
+        QPushButton::hover {
+            background-color: #aaaaaa}
         """)
 
     myFont = QFont()

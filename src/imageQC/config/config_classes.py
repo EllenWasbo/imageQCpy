@@ -1141,16 +1141,20 @@ class ReportTemplate:
 
 @dataclass
 class DashSettings:
-    """Dataclass for dash settings (display of automation results)."""
+    """Dataclass for dash settings (display of automation results).
+
+    NB if changes: copy to imageQC_dash/config_func_dash/DashSettingsDefault
+    """
 
     label: str = ''
     host: str = '127.0.0.1'
     port: int = 8050
+    server: str = 'waitress'  # public or local
     url_logo: str = ''
     header: str = 'Constancy controls'
-    overview_table_headers: list[
+    table_headers: list[
         str] = field(default_factory=lambda: [
-            'Template', 'Last results', 'Days since', 'Status'])
+            'Modality', 'Template', 'Last results', 'Elapsed days', 'Status'])
     days_since_limit: int = 30
     plot_height: int = 200
     colors: list[

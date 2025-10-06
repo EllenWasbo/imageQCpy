@@ -1,15 +1,17 @@
 # v3.2.0
 _MMM DD, 2025_
 
-Upgrade to python v3.13 and upgrade on packages (PyQt5 to PyQt6, numpy 2.0+, pandas ... and more).
+Upgrade to python v3.11-3.13 and upgrade on packages (PyQt5 to PyQt6, numpy 2.0+, pandas ... and more).
 If you are used to just replace the files when upgrading imageQC, this time you will have to install the packages too.
-Best to create a new virtual enviroment with the python version specified:
+Create a new virtual enviroment with the python version specified (if default is not within 3.11-3.13):
 
 conda create --name viQC python=3.13.5
 
 Changes that affect usage of imageQC:
 - Dark mode now follow the system settings for this. Dark mode setting of user preferences removed.
-- Conversiont from IDL version of imageQC removed as IDL-users assumed to already have converted.
+- Conversion from IDL version of imageQC removed as IDL-users assumed to already have converted.
+- Dashboards to display results of automated templates now as a standalone application:
+	- Also changed visually to be more compact, highlight values outside limits (if limits defined)
 
 # v3.1.30
 _Aug 07, 2025_

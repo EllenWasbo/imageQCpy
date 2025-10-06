@@ -2576,7 +2576,7 @@ class ParamsTabMammo(ParamsTabCommon):
         self.cdm_center_disc_option.addItems([
             'do not use',
             'corner = False if center = False',
-            'min af corner and center detection matrix'
+            'min of corner and center detection matrix'
             ])
         #self.cdm_fit = QCheckBox()
         #self.cdm_fit.toggled.connect(
@@ -4492,7 +4492,8 @@ class PositionWidget(QWidget):
                 msg='Import table from...',
                 yes_text='Clipboard',
                 no_text='Predefined tables')
-            proceed = dlg.exec()
+            dlg.exec()
+            proceed = True if dlg.clickedButton() == dlg.yes else False
         input_table = None
         if proceed:  # clipboard
             try:
@@ -4520,6 +4521,10 @@ class PositionWidget(QWidget):
                 QMessageBox.warning(
                     self, 'Validation failed',
                     f'Trouble validating input table: {err}')
+            except pd.errors.EmptyDataError:
+                QMessageBox.warning(
+                    self, 'Missing input',
+                    'Empty clipboard while trying to import.')
         else:  # predefined tables
             if self.test_name == 'num' and self.main.current_modality == 'NM':
                 table_dict = cff.load_default_pos_tables(filename='Siemens_AutoQC')
@@ -4884,7 +4889,8 @@ class CTnTableWidget(QWidget):  # TODO PositionWidget
                 msg='Import table from...',
                 yes_text='Clipboard',
                 no_text='Predefined tables')
-            proceed = dlg.exec()
+            dlg.exec()
+            proceed = True if dlg.clickedButton() == dlg.yes else False
         ctn_table = None
         if proceed:
             try:

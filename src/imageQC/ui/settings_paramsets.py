@@ -155,8 +155,8 @@ class ParametersOutputWidget(QWidget):
                              'information is needed.'),
                         yes_text='Save and refresh group information now',
                         no_text='No, skip save/refresh.')
-                    res = dlg.exec()
-                    if res:
+                    dlg.exec()
+                    if dlg.clickedButton() == dlg.yes:
                         self.parent.wid_mod_temp.save()
                         self.update_group_indicators()
 
@@ -206,8 +206,8 @@ class ParametersOutputWidget(QWidget):
                              ' for testing is with headers and transposed table.'),
                         yes_text='Use recommended settings for testing',
                         no_text='Keep settings for testing of parameter set as is')
-                    res = dlg.exec()
-                    if res:
+                    dlg.exec()
+                    if dlg.clickedButton() == dlg.yes:
                         test_output.include_header = True
                         test_output.transpose_table = True
                 main.current_paramset.output = test_output

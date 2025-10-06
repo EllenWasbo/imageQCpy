@@ -216,7 +216,8 @@ class StartUpDialog(ImageQCDialog):
             res = messageboxes.QuestionBox(
                 self, title='Shared config folder', msg=quest,
                 yes_text='Yes, now', no_text='No, later')
-            if res.exec() == 0:
+            res.exec()
+            if res.clickedButton() == res.no:
                 locate = False
         if locate:
             dlg = QFileDialog()
@@ -1006,7 +1007,8 @@ class AddArtifactsDialog(ImageQCDialog):
                 self, title='Delete selected artifact',
                 msg=f'Delete selected artifact {label}',
                 yes_text='Yes', no_text='Cancel')
-            if res.exec() == 1:
+            res.exec()
+            if res.clickedButton() == res.yes:
                 self.main.artifacts.pop(idx)
                 edit_artifact_label(label, '', self.main)
                 self.update_labels()
@@ -1083,7 +1085,8 @@ class AddArtifactsDialog(ImageQCDialog):
                 self, title='Start with empty image(s)',
                 msg='Empty (set to zero) all images or just selected image',
                 yes_text='All', no_text='Selected')
-            if res.exec() == 1:
+            res.exec()
+            if res.clickedButton() == res.yes:
                 apply_idxs = np.copy(all_idxs)
             else:
                 apply_idxs = [self.cbox_imgs.currentIndex()]
@@ -1102,7 +1105,8 @@ class AddArtifactsDialog(ImageQCDialog):
                 self, title='Add noise to image(s)',
                 msg='Add noise to all images or just selected image',
                 yes_text='All', no_text='Selected')
-            if res.exec() == 1:
+            res.exec()
+            if res.clickedButton() == res.yes:
                 apply_idxs = np.copy(all_idxs)
             else:
                 apply_idxs = [self.cbox_imgs.currentIndex()]
@@ -1201,7 +1205,8 @@ class AddArtifactsDialog(ImageQCDialog):
                     res = messageboxes.QuestionBox(
                         self, title='Save applied artifacts?', msg=quest,
                         yes_text='Yes', no_text='No')
-                    if res.exec() == 1:
+                    res.exec()
+                    if res.clickedButton() == res.yes:
                         pp = Path(path)
                         path_applied = pp.parent / f'{pp.stem}_applied.yaml'
                         fname = QFileDialog.getSaveFileName(
@@ -1223,7 +1228,8 @@ class AddArtifactsDialog(ImageQCDialog):
         res = messageboxes.QuestionBox(
             self, title='Reset artifacts?', msg=quest,
             yes_text='Yes', no_text='No')
-        if res.exec() == 1:
+        res.exec()
+        if res.clickedButton() == res.yes:
             self.main.artifacts = []
             self.image_delete_artifacts(delete_all=True)
             self.update_labels()
@@ -1236,7 +1242,8 @@ class AddArtifactsDialog(ImageQCDialog):
             res = messageboxes.QuestionBox(
                 self, title='Reset artifacts?', msg=quest,
                 yes_text='Yes', no_text='No')
-            if res.exec() == 1:
+            res.exec()
+            if res.clickedButton() == res.yes:
                 self.reset_all()
         fname = QFileDialog.getOpenFileName(
             self, 'Open saved artifacts',
@@ -1274,7 +1281,8 @@ class AddArtifactsDialog(ImageQCDialog):
             res = messageboxes.QuestionBox(
                 self, title='Load applied artifacts?', msg=quest,
                 yes_text='Yes', no_text='No')
-            if res.exec() == 1:
+            res.exec()
+            if res.clickedButton() == res.yes:
                 # any artifacts already applied?
                 already_applied = []
                 for idx, img in enumerate(self.main.imgs):
@@ -1286,7 +1294,8 @@ class AddArtifactsDialog(ImageQCDialog):
                     res = messageboxes.QuestionBox(
                         self, title='Overwrite or add applied artifacts?', msg=quest,
                         yes_text='Overwrite', no_text='Add')
-                    if res.exec() == 0:
+                    res.exec()
+                    if res.clickedButton() == res.no:
                         overwrite = False
 
                 if fname[0] != '':
@@ -1728,7 +1737,7 @@ class TextDisplay(ImageQCDialog):
     def __init__(self, parent_widget, text, title='',
                  read_only=True,
                  min_width=1000, min_height=1000):
-        super().__init__()
+        super().__init__(parent=parent_widget)
         vlo = QVBoxLayout()
         self.setLayout(vlo)
         txtEdit = QTextEdit('', self)

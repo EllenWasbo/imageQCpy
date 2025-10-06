@@ -855,6 +855,7 @@ class MainWindow(QMainWindow):
         filenames = [x.stem for x in Path(config_folder).glob('*')
                      if x.suffix == '.yaml']
         if 'auto_templates' in filenames or 'auto_vendor_templates' in filenames:
+            '''
             _, _, dash_settings = cff.load_settings(fname='dash_settings')
             self.dash_worker = DashWorker(dash_settings=dash_settings)
             self.dash_worker.start()
@@ -869,6 +870,23 @@ class MainWindow(QMainWindow):
             url = f'http://{dash_settings.host}:{dash_settings.port}'
             webbrowser.open(url=url, new=1)
             self.dash_worker.exit()
+            '''
+            run_as_exe = getattr(sys, 'forzen', False)
+            if run_as_exe:
+                print('Run as exe - dash not ready')  # TODO
+            else:
+                import subprocess
+                print(f'file {__file__}')
+                print(f'sys path {sys.path}')
+                try:
+                    subprocess.run([
+                        'conda','run', '-n', 'viQC13',
+                        'python', '-m', 'imageQC_dash.imageQC_dash'])
+                except ModuleNotFoundError:
+                    print(
+                        'imageQC_dash Module not found. Make sure to install '
+                        'the app as described in the Wiki')
+
         else:
             QMessageBox.information(
                 self, 'Missing automation templates',

@@ -160,7 +160,8 @@ class StackWidget(QWidget):
                 res = messageboxes.QuestionBox(
                     parent=self, title='Save changes?',
                     msg='Save changes before changing modality?')
-                if res.exec():
+                res.exec()
+                if res.clickedButton() == res.yes:
                     self.wid_mod_temp.save()
             else:
                 pass
@@ -279,7 +280,8 @@ class StackWidget(QWidget):
             res = messageboxes.QuestionBox(
                 parent=self, title='Save changes?',
                 msg='Save changes before changing template?')
-            if res.exec():
+            res.exec()
+            if res.clickedButton() == res.yes:
                 self.wid_mod_temp.save(label=self.current_template.label)
             else:
                 self.flag_edit(False)
@@ -765,7 +767,8 @@ class ModTempSelector(QWidget):
                     Save changes before rename?''',
                     yes_text='Yes',
                     no_text='Cancel')
-                if res.exec():
+                res.exec()
+                if res.clickedButton() == res.yes:
                     self.save()
                 else:
                     proceed = False
@@ -803,7 +806,8 @@ class ModTempSelector(QWidget):
                     Add with current parameters or duplicate original?''',
                     yes_text='Add new with current parameter',
                     no_text='Duplicate original')
-                if res.exec():
+                res.exec()
+                if res.clickedButton() == res.yes:
                     self.add()
                     proceed = False
 
@@ -2056,7 +2060,8 @@ class DicomCritWidget(QWidget):
                 res = messageboxes.QuestionBox(
                     self.parent, title='Replace?',
                     msg='Attribute name already in table. Replace?')
-                if not res.exec():
+                res.exec()
+                if res.clickedButton() == res.no:
                     proceed = False
             if proceed:
                 self.parent.current_template.dicom_crit_attributenames.append(

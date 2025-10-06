@@ -220,11 +220,6 @@ class SettingsDialog(ImageQCDialog):
                            widget=settings_automation.AutoVendorTemplateWidget(self),
                            exclude_if_empty=False)
 
-            add_widget(parent=self.item_auto_info, snake='dash_settings',
-                       title='Dashboard settings',
-                       widget=settings_automation.DashSettingsWidget(self),
-                       exclude_if_empty=False)
-
             proceed = True
             if import_review_mode:
                 if len(self.main.limits_and_plot_templates) == 0:
@@ -235,6 +230,11 @@ class SettingsDialog(ImageQCDialog):
                            title='Limits and plot templates',
                            widget=settings_automation.LimitsAndPlotWidget(self),
                            exclude_if_empty=False)
+
+            add_widget(parent=self.item_auto_info, snake='dash_settings',
+                       title='Dashboard settings',
+                       widget=settings_automation.DashSettingsWidget(self),
+                       exclude_if_empty=False)
 
         item, widget = self.get_item_widget_from_txt(initial_view)
         self.tree_settings.setCurrentItem(item)

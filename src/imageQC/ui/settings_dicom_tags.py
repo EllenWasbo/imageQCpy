@@ -647,7 +647,8 @@ class DicomTagsWidget(StackWidget):
                              Change all these to {tag_info.attribute_name}?''',
                         yes_text='Yes, change all names',
                         no_text='No, change only this as an unlinked tag')
-                    if res.exec():
+                    res.exec()
+                    if res.clickedButton() == res.yes:
                         # Change name of all other than index
                         for idx in idx_same_name:
                             if idx != index:
@@ -761,7 +762,8 @@ class DicomTagsWidget(StackWidget):
             res = messageboxes.QuestionBox(
                 parent=self, title='Delete?',
                 msg=f'Delete tag {self.templates[idx].attribute_name}')
-            if res.exec():
+            res.exec()
+            if res.clickedButton() == res.yes:
                 idx_same_name = self.get_idx_same_name(
                     name=self.templates[idx].attribute_name, mod_dict=True)
                 n_idx_same_mod = [len(idxs) for m, idxs in idx_same_name.items()]
@@ -807,7 +809,8 @@ class DicomTagsWidget(StackWidget):
                     res = messageboxes.QuestionBox(
                         parent=self, title='Save order?',
                         msg='Also save order of tags as displayed?')
-                    if res.exec():
+                    res.exec()
+                    if res.clickedButton() == res.yes:
                         new_templates = []
                         for idx in self.indexes:
                             new_templates.append(self.templates[idx])

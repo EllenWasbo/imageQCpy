@@ -10,30 +10,13 @@ import logging
 from datetime import date, datetime
 import numpy as np
 import pandas as pd
-try:
-    import dash
-    # TODO from dash import dcc, html when bootstrap ready
-    import dash_core_components as dcc
-    import dash_html_components as html
-    from dash.dependencies import Input, Output, ALL
-    import dash_bootstrap_components as dbc
-    from waitress import serve
-    from plotly.subplots import make_subplots
-    import plotly.graph_objects as go
-    try:
-        from dash import ctx
-    except:
-        from dash import callback_context
-except (ImportError, ModuleNotFoundError) as err:
-    print(f'Warning: {err}')
-    print('To run the dash application you will need to install dash '
-          '+ dash_bootstrap_components + waitress.')
-    if "cannot import name 'json' from 'itsdangerous'" in str(err):
-        print('You might have to downgrade itsdangerous: '
-              'pip install itsdangerous==2.0.1 --force-reinstall')
-    if "cannot import name 'BaseResponse' from 'werkzeug.wrappers'" in str(err):
-        print('You might have to downgrade werkzeug: '
-              'pip install werkzeug==2.0.3 --force-reinstall')
+import dash
+from dash import dcc, html, ctx
+from dash.dependencies import Input, Output, ALL
+import dash_bootstrap_components as dbc
+import dash_ag_grid as dag
+from waitress import serve
+import plotly.graph_objects as go
 
 # imageQC block start
 from imageQC.config import config_func as cff
@@ -258,74 +241,75 @@ def run_dash_app(dash_settings=None):
                 ])),
             ])
 
-    def table_overview(modality):
-        if modality in modality_dict:
-            table_data = {
-                dash_settings.overview_table_headers[0]:
-                    [temp.label for temp in modality_dict[modality]],
-                dash_settings.overview_table_headers[1]:
-                    [temp.newest_date for temp in modality_dict[modality]],
-                dash_settings.overview_table_headers[2]:
-                    [temp.days_since for temp in modality_dict[modality]],
-                # TODO 'Status': [status_to_text(temp.status)
-                #           for temp in modality_dict[modality]],
-                }
-            dataframe = pd.DataFrame(table_data)
-            data = dataframe.to_dict('records')
-            content = html.Div([
-                dbc.Button(
-                    modality, color='secondary',
-                    id={
-                        'type': 'overview_modality_button',
-                        'index': modality
-                        },
-                    n_clicks=0,
-                    className='d-grid gap-2 col-6 mx-auto'
-                    ),
-                dash.dash_table.DataTable(
-                    id={
-                        'type': 'overview_modality_table',
-                        'index': modality
-                        },
-                    columns=[{'name': header, 'id': header} for header
-                             in dash_settings.overview_table_headers[:3]],
-                    data=data,
-                    style_data_conditional=[
-                       {
-                           'if': {
-                               'filter_query': (
-                                   '{' + dash_settings.overview_table_headers[2] + '} '
-                                   '> ' + str(dash_settings.days_since_limit)),
-                               'column_id': dash_settings.overview_table_headers[2]
-                           },
-                           'color': 'red'
-                           },
-                       ],
-                    style_header={
-                        'color': 'white',
-                        'backgroundColor': '#799DBF',
-                        'fontWeight': 'bold',
-                        },
-                    style_cell={'padding-right': '10px', 'padding-left': '10px',
-                                'text-align': 'center'},
-                    ),
-                ])
-        else:
-            content = html.Div()
-        return content
+    def table_overview():
+        mods = [[mod] * len(modality_dict[mod])
+                for mod in modality_dict.keys()]
+        labels = [[temp.label for temp in modality_dict[mod]]
+                for mod in modality_dict.keys()]
+        dates = [[temp.newest_date for temp in modality_dict[mod]]
+                 for mod in modality_dict.keys()]
+        days = [[temp.days_since for temp in modality_dict[mod]]
+                for mod in modality_dict.keys()]
+        table_data = {
+            'modality': [j for i in mods for j in i],
+            'template_label': [j for i in labels for j in i],
+            'last_date': [j for i in dates for j in i],
+            'days_since': [j for i in days for j in i],
+            }
+        dataframe = pd.DataFrame(table_data)
+        data = dataframe.to_dict('records')
+
+        columnDefs = [
+            {
+                'field': 'modality',
+                'headerName': dash_settings.table_headers[0],
+                'cellDataType': 'text',
+                'filter': True,
+                'width': 100,
+                },
+            {
+                'field': 'template_label',
+                'headerName': dash_settings.table_headers[1],
+                'cellDataType': 'text',
+                'filter': True,
+                },
+            {
+                'field': 'last_date',
+                'headerName': dash_settings.table_headers[2],
+                'cellDataType': 'dateString',
+                'width': 100,
+                },
+            {
+                'field': 'days_since',
+                'headerName': dash_settings.table_headers[3],
+                'cellDataType': 'number',
+                'filter': True,
+                'width': 100,
+                'cellStyle': {
+                    'styleConditions': [
+                        {
+                            'condition':
+                                f'params.value >= {dash_settings.days_since_limit}',
+                            'style': {'backgroundColor': 'pink'},
+                        }],
+                    }
+
+                },
+            ]
+
+        grid = dag.AgGrid(
+            id='overview_modality_table',
+            rowData=data,
+            columnDefs=columnDefs,
+            dashGridOptions={'pagination':True}
+        )
+
+        return html.Div([grid])
 
     def tab_overview():
         return html.Div([
             dbc.Row([
-                dbc.Col(table_overview('CT')),
-                dbc.Col(table_overview('Xray')),
-                dbc.Col(table_overview('Mammo')),
-                dbc.Col([
-                    dbc.Row(table_overview('NM')),
-                    dbc.Row(table_overview('SPECT')),
-                    dbc.Row(table_overview('PET')),
-                    ]),
-                dbc.Col(table_overview('MR')),
+                dbc.Col(table_overview()),
                 ]),
             dbc.Row(dbc.Alert(
                 f'Last update {datetime.today().strftime("%Y-%m-%d %H:%M:%S")}',
@@ -372,6 +356,86 @@ def run_dash_app(dash_settings=None):
         return [{'label': temp.label, 'value': i}
                 for i, temp in enumerate(template_list)]
 
+    def generate_figure_list(data, lim_plots):
+        figures = []
+        colorlist = dash_settings.colors
+        for group_idx, group in enumerate(lim_plots.groups):
+            fig = ''
+            if lim_plots.groups_hide[group_idx] is False:
+                fig = go.Figure()
+                for lineno, header in enumerate(group):
+                    color = colorlist[lineno % len(colorlist)]
+                    fig.add_trace(
+                        go.Scatter(
+                            x=data[data.columns[0]], y=data[header],
+                            line_color=color,
+                            name=header, 
+                            mode='lines+markers',
+                            showlegend=False, legendgroup=str(group_idx),
+                            ),
+                        )
+
+                if any(lim_plots.groups_limits[group_idx]):
+                    lims = lim_plots.groups_limits[group_idx]
+                    lim_text = [None, None]
+                    if isinstance(lims[0], str):
+                        if lims[0] == 'text':
+                            lims = [None, None]
+                        elif lims[0] == 'relative_first':
+                            first_val = data[header][0]
+                            tol = first_val * 0.01 * lims[1]
+                            lim_text = [f'first +/- {lims[1]}%', '']
+                            lims = [first_val - tol, first_val + tol]
+                        else:  # 'relative_median'
+                            med_val = np.median(data[header][:-1])
+                            tol = med_val * 0.01 * lims[1]
+                            lim_text = [f'median +/- {lims[1]}%', '']
+                            lims = [med_val - tol, med_val + tol]
+                    else:
+                        lim_text = [f'min {lims[0]}', f'max {lims[1]}']
+                    yanchors = ['bottom', 'top']
+                    for limno, lim in enumerate(lims):
+                        if lim is not None:
+                            label_dict = dict(
+                                text=lim_text[limno], textposition='start',
+                                font=dict(color='red'),
+                                yanchor=yanchors[limno])
+                            fig.add_hline(
+                                y=lim, line_dash='dot', line_color='red',
+                                label=label_dict)
+
+                            for header in group:
+                                if limno == 0:  # lower limit
+                                    data_off = data[data[header] < lim]
+                                else:
+                                    data_off = data[data[header] > lim]
+                                if len(data_off) > 0:
+                                    fig.add_trace(
+                                        go.Scatter(
+                                            x=data_off[data_off.columns[0]],
+                                            y=data_off[header],
+                                            name=header,
+                                            mode='markers', 
+                                            marker=dict(
+                                                color='red', size=15),
+                                            showlegend=False,
+                                            ),
+                                        )
+
+                set_range = lim_plots.groups_ranges[group_idx]
+                if set_range[0] is None and set_range[1] is None:
+                    autorange = True
+                elif set_range[0] is not None and set_range[1] is not None:
+                    autorange = False
+                elif set_range[0] is None and set_range[1] is not None:
+                    autorange = "min"
+                elif set_range[1] is None and set_range[0] is not None:
+                    autorange = "max"
+                fig.update_yaxes(
+                    range=set_range, autorange=autorange)
+            figures.append(fig)
+        return figures
+
     @app.callback(
         Output('tabs', 'active_tab'),
         Output('modality_select', 'value'),
@@ -379,16 +443,16 @@ def run_dash_app(dash_settings=None):
     )
     def go_to_modality(n_clicks):
         mod_value = 0
-        try:
-            if ctx.triggered_id:
-                mod_value = [*modality_dict].index(ctx.triggered_id.index)
-        except NameError:
-            triggered_id = callback_context.triggered[0]['prop_id'].split('.')
-            if triggered_id[0]:
-                dd = eval(triggered_id[0])
-                if isinstance(dd, dict):
-                    if 'index' in dd:
-                        mod_value = [*modality_dict].index(dd['index'])
+        #try:
+        if ctx.triggered_id:
+            mod_value = [*modality_dict].index(ctx.triggered_id.index)
+        #except NameError:
+        #   triggered_id = callback_context.triggered[0]['prop_id'].split('.')
+        #   if triggered_id[0]:
+        #       dd = eval(triggered_id[0])
+        #       if isinstance(dd, dict):
+        #           if 'index' in dd:
+        #               mod_value = [*modality_dict].index(dd['index'])
 
         return 'results', mod_value
 
@@ -416,27 +480,97 @@ def run_dash_app(dash_settings=None):
         except IndexError:
             proceed = False
         if proceed:
+            data = modality_dict[mod][template_value].data
+            lim_plots = modality_dict[mod][template_value].limits_and_plot_template
+            titles = [title for i, title in enumerate(lim_plots.groups_title)
+                      if lim_plots.groups_hide[i] is False]
+            n_rows = len(titles)
+
+            table_data = {'title': titles}
+            df = pd.DataFrame(table_data)
+            df['graph'] = ''
+            figures = generate_figure_list(data, lim_plots)
+
+            fig_height = dash_settings.plot_height * n_rows
+
+            for i, r in df.iterrows():
+                fig = figures[i]
+                fig.update_layout(
+                    margin=dict(t=0, b=0, l=0, r=0),
+                    plot_bgcolor='#eee',
+                    height=fig_height)
+                fig.update_xaxes(showgrid=False)
+                fig.update_yaxes(showgrid=False, visible=False)
+                df.at[i, 'graph'] = fig
+
+            columnDefs = [
+                {'field': 'title', 'headerName': 'Plot title'},
+                {
+                    'field': 'graph',
+                    'cellRenderer': 'DCC_GraphClickData',
+                    'headerName': 'Plot',
+                    'maxWidth': 500,
+                    'minWidth': 300,
+                }
+                ]
+
+            grid = dag.AgGrid(
+                id='graph_table',
+                rowData=df.to_dict("records"),
+                columnDefs=columnDefs,
+                dashGridOptions={"rowHeight": 100, "animateRows": False},
+            )
+
+            template_content = html.Div([grid])
+        else:
+            template_content = html.Div([])
+        return template_content
+
+    @app.callback(
+        Output("custom-component-graph-output", "children"),
+        Input("custom-component-graph-grid", "cellRendererData")
+    )
+    def graphClickData(d):
+        return json.dumps(d)
+
+    """
+    @app.callback(
+        Output('template_graphs', 'children'),
+        [
+            Input('modality_select', 'value'),
+            Input('template_select', 'value'),
+        ],
+    )
+    def on_template_select(modality_value, template_value):
+        proceed = True
+        try:
+            mod = [*modality_dict][modality_value]
+        except IndexError:
+            proceed = False
+        if proceed:
             colorlist = dash_settings.colors
             data = modality_dict[mod][template_value].data
             lim_plots = modality_dict[mod][template_value].limits_and_plot_template
             titles = [title for i, title in enumerate(lim_plots.groups_title)
                       if lim_plots.groups_hide[i] is False]
             n_rows = len(titles)
-            fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=True,
-                                subplot_titles=titles)
+            fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=True)
             rowno = 1
             for group_idx, group in enumerate(lim_plots.groups):
                 if lim_plots.groups_hide[group_idx] is False:
                     for lineno, header in enumerate(group):
+                        color = colorlist[lineno % len(colorlist)]
                         fig.add_trace(
                             go.Scatter(
                                 x=data[data.columns[0]], y=data[header],
-                                line_color=colorlist[lineno % len(colorlist)],
-                                name=header, mode='lines+markers',
-                                showlegend=True, legendgroup=str(group_idx)
+                                line_color=color,
+                                name=header, 
+                                mode='lines+markers',
+                                showlegend=False, legendgroup=str(group_idx),
                                 ),
                             row=rowno, col=1,
                             )
+
                     if any(lim_plots.groups_limits[group_idx]):
                         lims = lim_plots.groups_limits[group_idx]
                         lim_text = [None, None]
@@ -454,7 +588,7 @@ def run_dash_app(dash_settings=None):
                                 lim_text = [f'median +/- {lims[1]}%', '']
                                 lims = [med_val - tol, med_val + tol]
                         else:
-                            lim_text = [str(lims[0]), str(lims[1])]
+                            lim_text = [f'min {lims[0]}', f'max {lims[1]}']
                         yanchors = ['bottom', 'top']
                         for limno, lim in enumerate(lims):
                             if lim is not None:
@@ -463,30 +597,71 @@ def run_dash_app(dash_settings=None):
                                     font=dict(color='red'),
                                     yanchor=yanchors[limno])
                                 fig.add_hline(
-                                    y=lim, line_dash='dash', line_color='red',
+                                    y=lim, line_dash='dot', line_color='red',
                                     label=label_dict, row=rowno, col=1)
-                    if any(lim_plots.groups_ranges[group_idx]):
-                        set_range = lim_plots.groups_ranges[group_idx]
-                        # TODO if None in set_range:
-                        fig.update_yaxes(range=set_range, row=rowno, col=1)
+
+                                for header in group:
+                                    if limno == 0:  # lower limit
+                                        data_off = data[data[header] < lim]
+                                    else:
+                                        data_off = data[data[header] > lim]
+                                    if len(data_off) > 0:
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=data_off[data_off.columns[0]],
+                                                y=data_off[header],
+                                                name=header,
+                                                mode='markers', 
+                                                marker=dict(
+                                                    color='red', size=15),
+                                                showlegend=False,
+                                                ),
+                                            row=rowno, col=1,
+                                            )
+
+                    set_range = lim_plots.groups_ranges[group_idx]
+                    if set_range[0] is None and set_range[1] is None:
+                        autorange = True
+                    elif set_range[0] is not None and set_range[1] is not None:
+                        autorange = False
+                    elif set_range[0] is None and set_range[1] is not None:
+                        autorange = "min"
+                    elif set_range[1] is None and set_range[0] is not None:
+                        autorange = "max"
+                    fig.update_yaxes(
+                        range=set_range, row=rowno, col=1, autorange=autorange)
+
                     rowno += 1
             fig.update_xaxes(
-                dtick="M1",
-                tickformat="%b\n%Y",
-                ticklabelmode="period")
+                dtick="M3", tickformat="%b\n%Y", ticklabelmode="period")
+            
             fig_height = dash_settings.plot_height * n_rows
+            '''
             tracegroupgap = (
-                fig.layout.yaxis.domain[1] - fig.layout.yaxis.domain[0]) * fig_height
-            fig.update_layout(margin=dict(t=100, b=0, l=0, r=0))
-            fig.update_layout(height=fig_height,
-                              title_text=modality_dict[mod][template_value].label,
-                              legend_tracegroupgap=tracegroupgap)
+                fig.layout.yaxis.domain[1]
+                - fig.layout.yaxis.domain[0]) * (fig_height + top_margin*2)
+            '''
+            fig.update_layout(
+                margin=dict(t=0, b=0, l=250, r=0),
+                plot_bgcolor='#eee',
+                height=fig_height)
+            for idx, title in enumerate(titles):
+                #fig['layout'][f'yaxis{idx+1}_title'] = title
+                fig.add_annotation(text=title,
+                  xref="paper", yref="paper", align="right",
+                  x=-0.3, y=1 - (idx + 0.5)/len(titles), showarrow=False)
+            #fig.update_layout(,
+            #                  title_text=modality_dict[mod][template_value].label)
+            #                  legend_tracegroupgap=tracegroupgap)
+            fig.update_xaxes(showgrid=False)
+            fig.update_yaxes(showgrid=False, visible=False)
             template_content = html.Div([
                 dcc.Graph(figure=fig),
                 ])
         else:
             template_content = html.Div([])
         return template_content
+    """
 
     try:
         app.layout = layout

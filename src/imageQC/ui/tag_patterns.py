@@ -709,7 +709,8 @@ class TagPatternEditDialog(ImageQCDialog):
             res = messageboxes.QuestionBox(
                 self, title='Save changes?',
                 msg='Save changes before changing template?')
-            if res.exec():
+            res.exec()
+            if res.clickedButton() == res.yes:
                 self.save(label=self.current_template.label)
 
         tempno = self.cbox_templist.currentIndex()

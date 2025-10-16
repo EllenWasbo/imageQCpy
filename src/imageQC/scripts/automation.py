@@ -32,7 +32,6 @@ from imageQC.scripts.mini_methods_format import valid_path, val_2_str
 import imageQC.config.config_classes as cfc
 from imageQC.ui.messageboxes import proceed_question
 from imageQC.ui import reusable_widgets as uir
-from imageQC.ui.settings_automation import DashWorker
 # imageQC block end
 
 logger = logging.getLogger('imageQC')
@@ -277,13 +276,8 @@ def run_automation_non_gui(args):
             logger.info('NB! Dashboard runs as long as this program runs. '
                         'PRESS ENTER to EXIT program.')
             _, _, dash_settings = cff.load_settings(fname='dash_settings')
-            dash_worker = DashWorker(dash_settings=dash_settings)
-            dash_worker.start()
             url = f'http://{dash_settings.host}:{dash_settings.port}'
             webbrowser.open(url=url, new=1)
-            _ = input(
-                'Dashboard runs as long as this program runs. '
-                'Press enter to exit program')
 
 
 def import_incoming(auto_common, templates, tag_infos, parent_widget=None,

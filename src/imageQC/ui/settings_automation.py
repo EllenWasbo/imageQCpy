@@ -37,7 +37,6 @@ from imageQC.scripts.mini_methods_format import valid_template_name
 from imageQC.scripts import read_vendor_QC_reports
 from imageQC.scripts import dcm
 from imageQC.scripts.read_vendor_QC_reports import read_vendor_template
-from imageQC.dash_app import dash_app
 # imageQC block end
 
 
@@ -87,8 +86,12 @@ class AutoInfoWidget(StackWidget):
             grouped to be displayed in the same sub-plot or hidden from the plots.
             <br><br>
             <b>Dashboard settings</b><br>
-            imageQC may display each parameters outputted from the automated 
-            analysis as trend-lines.<br>
+            Use the standalone imageQC_dash to run the dash application where 
+            each parameters outputted from the automated analysis are 
+            visualized interactively.<br>
+            Read more about imageQC_dash on
+            <a href="https://github.com/EllenWasbo/imageQC_dash/wiki">
+            GitHub (https://github.com/EllenWasbo/imageQC_dash/wiki)</a><br>
             Optionally, use the Limits and plot templates to customize the 
             plots.<br>
             '''
@@ -2299,18 +2302,6 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                 self.save(save_more=save_more, more=more, more_fnames=more_fnames)
 
 
-class DashWorker(QThread):
-    """Refresh dash and display in webbrowser."""
-
-    def __init__(self, dash_settings=None):
-        super().__init__()
-        self.dash_settings = dash_settings
-
-    def run(self):
-        """Run worker if possible."""
-        dash_app.run_dash_app(dash_settings=self.dash_settings)
-
-
 class DashSettingsWidget(StackWidget):
     """Widget holding settings for dashboard visualization."""
 
@@ -2428,7 +2419,7 @@ class DashSettingsWidget(StackWidget):
         if self.import_review_mode:
             wid_settings.setEnabled(False)
         else:
-            btn_dash = QPushButton('Start dash_app')
+            btn_dash = QPushButton('Open URL')
             btn_dash.setIcon(QIcon(f'{os.environ[ENV_ICON_PATH]}globe.png'))
             btn_dash.clicked.connect(self.run_dash)
             vlo_settings.addWidget(btn_dash)
@@ -2515,25 +2506,5 @@ class DashSettingsWidget(StackWidget):
 
     def run_dash(self):
         """Show results in browser."""
-        config_folder = cff.get_config_folder()
-        filenames = [x.stem for x in Path(config_folder).glob('*')
-                     if x.suffix == '.yaml']
-        if 'auto_templates' in filenames or 'auto_vendor_templates' in filenames:
-            self.get_current_template()
-            self.dash_worker = DashWorker(dash_settings=self.templates)
-            self.dash_worker.start()
-            dlg = messageboxes.MessageBoxWithDetails(
-                self, title='Dashboard in webbrowser',
-                msg='Results will open in a webbrowser.',
-                info=('If large datasets or slow file-access you might have to refresh '
-                      'the webpage. Look for "Serving on http... in the command window '
-                      'when finished (or issues).'),
-                icon=QMessageBox.Icon.Information)
-            dlg.exec()
-            url = f'http://{self.templates.host}:{self.templates.port}'
-            webbrowser.open(url=url, new=1)
-            self.dash_worker.exit()
-        else:
-            QMessageBox.information(
-                self, 'Missing automation templates',
-                '''Found no automation templates to display results from.''')
+        url = f'http://{self.templates.host}:{self.templates.port}'
+        webbrowser.open(url=url, new=1)

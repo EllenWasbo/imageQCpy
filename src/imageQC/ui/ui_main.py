@@ -39,11 +39,11 @@ from imageQC.ui import automation_wizard
 from imageQC.ui import open_multi
 from imageQC.ui import open_automation
 from imageQC.ui.ui_dialogs import (
-    TextDisplay, AboutDialog, AddArtifactsDialog, OpenRawDialog)
+    TextDisplay, AboutDialog, ShowDashDialog, AddArtifactsDialog,
+    OpenRawDialog)
 from imageQC.ui.tag_patterns import TagPatternEditDialog
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
-from imageQC.ui.settings_automation import DashWorker
 from imageQC.config import config_func as cff
 from imageQC.config.iQCconstants import (
     QUICKTEST_OPTIONS, VERSION,
@@ -851,46 +851,12 @@ class MainWindow(QMainWindow):
 
     def run_dash(self):
         """Show automation results in browser."""
-        config_folder = cff.get_config_folder()
-        filenames = [x.stem for x in Path(config_folder).glob('*')
-                     if x.suffix == '.yaml']
-        if 'auto_templates' in filenames or 'auto_vendor_templates' in filenames:
-            '''
+        dlg = ShowDashDialog(self)
+        res = dlg.exec()
+        if res:
             _, _, dash_settings = cff.load_settings(fname='dash_settings')
-            self.dash_worker = DashWorker(dash_settings=dash_settings)
-            self.dash_worker.start()
-            dlg = messageboxes.MessageBoxWithDetails(
-                self, title='Dashboard in webbrowser',
-                msg='Results will open in a webbrowser.',
-                info=('If large datasets or slow file-access you might have to refresh '
-                      'the webpage. Look for "Serving on http... in the command window '
-                      'when finished (or issues).'),
-                icon=QMessageBox.Icon.Information)
-            dlg.exec()
             url = f'http://{dash_settings.host}:{dash_settings.port}'
             webbrowser.open(url=url, new=1)
-            self.dash_worker.exit()
-            '''
-            run_as_exe = getattr(sys, 'forzen', False)
-            if run_as_exe:
-                print('Run as exe - dash not ready')  # TODO
-            else:
-                import subprocess
-                print(f'file {__file__}')
-                print(f'sys path {sys.path}')
-                try:
-                    subprocess.run([
-                        'conda','run', '-n', 'viQC13',
-                        'python', '-m', 'imageQC_dash.imageQC_dash'])
-                except ModuleNotFoundError:
-                    print(
-                        'imageQC_dash Module not found. Make sure to install '
-                        'the app as described in the Wiki')
-
-        else:
-            QMessageBox.information(
-                self, 'Missing automation templates',
-                '''Found no automation templates to display results from.''')
 
     def run_rename_dicom(self):
         """Start Rename Dicom dialog."""

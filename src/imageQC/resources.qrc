@@ -40,6 +40,7 @@
 		<file alias="globe.png">icons\globe.png</file>
 		<file alias="import.png">icons\import.png</file>
 		<file alias="info.png">icons\info.png</file>
+		<file alias="iQCdash_icon128.png">icons\iQCdash_icon128.png</file>
 		<file alias="iQC_icon.png">icons\iQC_icon.png</file>
 		<file alias="iQC_icon256.png">icons\iQC_icon256.png</file>
 		<file alias="iQC_icon32.png">icons\iQC_icon32.png</file>
@@ -130,12 +131,13 @@
 		<file alias="globe.png">icons\darkmode\globe.png</file>
 		<file alias="import.png">icons\darkmode\import.png</file>
 		<file alias="info.png">icons\darkmode\info.png</file>
-		<file alias="iQC_icon.png">icons\darkmode\iQC_icon.png</file>
-		<file alias="iQC_icon256.png">icons\darkmode\iQC_icon256.png</file>
-		<file alias="iQC_icon32.png">icons\darkmode\iQC_icon32.png</file>
-		<file alias="iQC_icon48.png">icons\darkmode\iQC_icon48.png</file>
-		<file alias="iQC_icon64.png">icons\darkmode\iQC_icon64.png</file>
-		<file alias="iQC_icon128.png">icons\darkmode\iQC_icon128.png</file>
+		<file alias="iQCdash_icon128.png">icons\iQCdash_icon128.png</file>
+		<file alias="iQC_icon.png">icons\iQC_icon.png</file>
+		<file alias="iQC_icon256.png">icons\iQC_icon256.png</file>
+		<file alias="iQC_icon32.png">icons\iQC_icon32.png</file>
+		<file alias="iQC_icon48.png">icons\iQC_icon48.png</file>
+		<file alias="iQC_icon64.png">icons\iQC_icon64.png</file>
+		<file alias="iQC_icon128.png">icons\iQC_icon128.png</file>
 		<file alias="layout.png">icons\darkmode\layout.png</file>
 		<file alias="layout_maximg.png">icons\darkmode\layout_maximg.png</file>
 		<file alias="layout_resetimg.png">icons\darkmode\layout_resetimg.png</file>

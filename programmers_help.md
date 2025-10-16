@@ -30,11 +30,14 @@ Edit the content of variable search_string and run the script. This will list al
 
 ## Update resources.py after changes
 If adding icons or file-based default configuration settings, resources.qrc will have to be updated and a new resources.py need de be recreated.
-If adding icons, a dark-mode icon is also needed.
+If adding icons, a dark-mode icon is also needed. Create a separate virtual environment and import PySide6 (as PyQt6 no longer have pyrcc5 to convert
+.qrc to .py.
 
 - add file to folder icons or config_defaults and add file name to resouces.qrc
-- cd C:\...\imageQCpy\src\imageQC
-- pyrcc5 resources.qrc -o resources.py
+- with PySide6 installed:
+	- cd C:\...\imageQCpy\src\imageQC
+	- pyside6-rcc resources.qrc -o resources.py
+- open the resources.py file and replace the PySide6 import to PyQt6
 
 ## Adding new modality
 - add modality to all relevant dictionaries in config/iQCconstants.py

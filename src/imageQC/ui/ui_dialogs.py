@@ -259,6 +259,54 @@ class StartUpDialog(ImageQCDialog):
             self.accept()
 
 
+class ShowDashDialog(ImageQCDialog):
+    """QDialog with info on imageQC_dash and option to display url."""
+
+    def __init__(self, parent_widget):
+        super().__init__()
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+
+        layout = QVBoxLayout()
+        layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(20)
+        logo = QLabel()
+        im = QPixmap(':/icons/iQCdash_icon128.png')
+        logo.setPixmap(im)
+        hlo_top = QHBoxLayout()
+        layout.addLayout(hlo_top)
+        hlo_top.addStretch()
+        hlo_top.addWidget(logo)
+        hlo_top.addStretch()
+
+        info_text = """<html><head/><body>
+            <p>To visualize automation results on dashboards you may use the 
+            dash application imageQC_dash.<br>
+            Make sure imageQC_dash is running on the url defined in 
+            Settings - Automation - Dash settings<br><br>
+            Read more about imageQC_dash on
+            <a href="https://github.com/EllenWasbo/imageQC_dash/wiki">
+            GitHub (https://github.com/EllenWasbo/imageQC_dash/wiki)</a>
+            </p>
+            </body></html>"""
+        label = QLabel()
+        label.setText(info_text)
+        layout.addWidget(label)
+        vlo.addLayout(layout)
+
+        hlo_btns = QHBoxLayout()
+        btnCancel = QPushButton('Cancel')
+        btnUrl = QPushButton('Open URL')
+        btnCancel.clicked.connect(self.reject)
+        btnUrl.clicked.connect(self.accept)
+        hlo_btns.addStretch()
+        hlo_btns.addWidget(btnCancel)
+        hlo_btns.addWidget(btnUrl)
+        vlo.addLayout(hlo_btns)
+
+        self.setWindowTitle('Open URL where imageQC_dash is running')
+
+
 class OpenRawDialog(ImageQCDialog):
     """Dialog to open .raw images."""
 

@@ -7,11 +7,17 @@ Create a new virtual enviroment with the python version specified (if default is
 
 conda create --name viQC python=3.13.5
 
+If issues about PyQt5 / PyQt6 mix (f.x. with matplotlib) you might have to run 'pip uninstall PyQt5' if your virtual environment 
+for some reason have both PyQt5 and PyQt6.
+
 Changes that affect usage of imageQC:
 - Dark mode now follow the system settings for this. Dark mode setting of user preferences removed.
 - Conversion from IDL version of imageQC removed as IDL-users assumed to already have converted.
-- Dashboards to display results of automated templates now as a standalone application:
-	- Also changed visually to be more compact, highlight values outside limits (if limits defined)
+- Dashboards for interactive visualization of results from automated analysis is now extracted into a standalone application
+	- Why standalone:
+		- Running the dash-application no longer require imageQC (full GUI) to run.
+		- Start developing options for publishing the dash-application on intranet using MinIO buckets for access to config and result files.
+	- Dashboards also have a visual refresh.
 
 # v3.1.30
 _Aug 07, 2025_

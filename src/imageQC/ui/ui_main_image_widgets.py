@@ -10,7 +10,8 @@ from skimage import draw
 
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QToolBar, QToolButton
+    QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
+    QLabel, QToolBar, QToolButton
     )
 
 # imageQC block start
@@ -161,11 +162,14 @@ class GenericImageWidget(QWidget):
 class GenericImageToolbarPosVal(QToolBar):
     """Toolbar for showing cursor position and value."""
 
-    def __init__(self, canvas, window):
+    def __init__(self, canvas, window, fixed_width=0):
         super().__init__()
 
         self.xypos = QLabel('')
-        self.xypos.setMinimumWidth(500)
+        if fixed_width:
+            self.xypos.setFixedWidth(fixed_width)
+        else:
+            self.xypos.setMinimumWidth(500)
         self.addWidget(self.xypos)
         self.window = window
 
@@ -208,7 +212,10 @@ class ImageDisplayWidget(GenericImageWidget):
         self.main = parent
 
         tbimg = ImageNavigationToolbar(self.canvas, self.main)
-        tbimg2 = GenericImageToolbarPosVal(self.canvas, self.main)
+        tbimg2 = QToolBar()
+        tbimg_pos = GenericImageToolbarPosVal(
+            self.canvas, self.main, fixed_width=170)
+        tbimg2.addWidget(tbimg_pos)
         hlo = QHBoxLayout()
         vlo_tb = QVBoxLayout()
         hlo.addLayout(vlo_tb)
@@ -233,23 +240,31 @@ class ImageDisplayWidget(GenericImageWidget):
             self.tool_imgsize = QAction(
                 QIcon(f'{os.environ[ENV_ICON_PATH]}layout_maximg.png'),
                 'Maximize image')
-            #self.tool_imgsize.setToolTip('Maximize image')
-            #self.tool_imgsize.setIcon(QIcon(
-            #    f'{os.environ[ENV_ICON_PATH]}layout_maximg.png'))
             self.tool_imgsize.triggered.connect(self.clicked_imgsize)
             self.tool_imgsize.setCheckable(True)
             act_projection_plot = QAction(
                 QIcon(f'{os.environ[ENV_ICON_PATH]}projections.png'),
                 'Show 3d projection and optionally plot values from result table', self)
             act_projection_plot.triggered.connect(self.projection_plot)
-            tbimg.addAction(act_redraw)
-            tbimg.addWidget(self.tool_cmap)
-            tbimg.addWidget(self.tool_rectangle)
-            tbimg.addAction(act_projection_plot)
+
+            spacer = QWidget()
+            spacer.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            tbimg.addWidget(spacer)
             tbimg.addWidget(self.tool_profile)
-            tbimg.addWidget(self.tool_sum)
             tbimg.addAction(act_edit_annotations)
             tbimg.addAction(self.tool_imgsize)
+
+            spacer2 = QWidget()
+            spacer2.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            tbimg2.addWidget(spacer2)
+            tbimg2.addAction(act_redraw)
+            tbimg2.addWidget(self.tool_cmap)
+            tbimg2.addWidget(self.tool_rectangle)
+            tbimg2.addAction(act_projection_plot)
+
+            tbimg2.addWidget(self.tool_sum)
 
         vlo_img = QVBoxLayout()
         vlo_img.addWidget(tbimg)

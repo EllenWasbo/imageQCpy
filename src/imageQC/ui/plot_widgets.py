@@ -9,11 +9,10 @@ import os
 
 import numpy as np
 import pandas as pd
-from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QLabel,
-    QInputDialog, QMessageBox)
+    QInputDialog, QMessageBox, QSizePolicy)
 import matplotlib
 import matplotlib.figure
 from matplotlib.backends.backend_qt5agg import (FigureCanvasQTAgg, NavigationToolbar2QT)
@@ -46,11 +45,13 @@ class PlotWidget(QWidget):
 
         self.plotcanvas = plotcanvas
         tb_plot = PlotNavigationToolbar(self.plotcanvas, self)
-        self.hlo = QHBoxLayout()
-        vlo_tb = QVBoxLayout()
-        self.hlo.addLayout(vlo_tb)
+        vlo = QVBoxLayout()
+        self.hlo_top = QHBoxLayout()
+        vlo.addLayout(self.hlo_top)
 
         tb_plot_copy = QToolBar()
+        tb_plot_copy.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         act_copy = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}copy.png'),
             'Copy curve as table to clipboard', self)
@@ -63,18 +64,16 @@ class PlotWidget(QWidget):
             tb_plot_copy.addActions([act_copy, act_min_max])
         else:
             tb_plot_copy.addActions([act_copy])
-        tb_plot_copy.setOrientation(Qt.Orientation.Vertical)
-
-        vlo_tb.addWidget(tb_plot_copy)
-        vlo_tb.addWidget(tb_plot)
-        vlo_tb.addStretch()
+        # tb_plot_copy.setOrientation(Qt.Orientation.Vertical)
 
         tb_message = PlotNavigationToolbarMessage(self.plotcanvas, self)
-        vlo_plot = QVBoxLayout()
-        vlo_plot.addWidget(tb_message)
-        vlo_plot.addWidget(self.plotcanvas)
-        self.hlo.addLayout(vlo_plot)
-        self.setLayout(self.hlo)
+
+        self.hlo_top.addWidget(tb_plot_copy)
+        self.hlo_top.addWidget(tb_plot)
+        self.hlo_top.addWidget(tb_message)
+
+        vlo.addWidget(self.plotcanvas)
+        self.setLayout(vlo)
 
     def min_max_curves(self):
         pass  # included in widgets with include_min_max_button = True
@@ -213,7 +212,8 @@ class PlotNavigationToolbar(NavigationToolbar2QT):
         for x in self.actions():
             if x.text() in ['Back', 'Forward', 'Pan', 'Subplots']:
                 self.removeAction(x)
-        self.setOrientation(Qt.Orientation.Vertical)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
     def set_message(self, s):
         """Hide cursor position and value text."""

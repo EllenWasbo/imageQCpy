@@ -8,7 +8,6 @@ import os
 import copy
 from dataclasses import dataclass, field
 from time import time, ctime
-from pathlib import Path
 import webbrowser
 import numpy as np
 import pandas as pd
@@ -343,7 +342,9 @@ class MainWindow(QMainWindow):
             self.imgs = new_img_info_list
             self.results = {}
 
+        keep_active = True
         if append is False or n_img_before == 0:
+            keep_active = False
             self.gui.active_img_no = 0
             # update GUI according to first image
             if self.current_modality != self.imgs[0].modality:
@@ -362,7 +363,7 @@ class MainWindow(QMainWindow):
 
         if self.summed_img is not None:
             self.reset_summed_img()
-        self.tree_file_list.update_file_list()
+        self.tree_file_list.update_file_list(keep_active=keep_active)
         self.current_sort_pattern = None
 
     def read_header(self):

@@ -357,7 +357,6 @@ class OpenRawDialog(ImageQCDialog):
         name = Path(self.raw_paths[0]).stem
         name_parts = name.split('_')
         if len(name_parts) == 3:
-            acq_date = name_parts[0]
             shape_parts = name_parts[-1].split('x')
             if len(shape_parts) == 2:
                 shape = (int(shape_parts[0]), int(shape_parts[1]))

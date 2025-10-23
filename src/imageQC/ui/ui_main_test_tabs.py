@@ -519,7 +519,6 @@ class ParamsTabCommon(QTabWidget):
                  QDoubleSpinBox(
                     decimals=0, minimum=1, maximum=300, singleStep=1,
                     value=vals[0]))]
-            n_diam = len(self.main.current_paramset.rec_sphere_diameters)
             for i, diam in enumerate(
                     self.main.current_paramset.rec_sphere_diameters):
                 info_widget_pairs.append(
@@ -4823,7 +4822,8 @@ class PositionTableWidget(QTableWidget):
         if self.table_attribute_name == 'ttf_table':
             self.parent.update_ttf_plot_options()
 
-        self.parent.main.update_roi(clear_results_test=True)
+        if self.parent.main.current_test.lower == self.table_attribute_name[0:3]:
+            self.parent.main.update_roi(clear_results_test=True)
 
     def get_prepared_fill_values(self):
         """Fill table with values in self.current_table."""
@@ -5124,4 +5124,5 @@ class CTnTable(QTableWidget):
         self.resizeColumnsToContents()
         self.resizeRowsToContents()
         self.blockSignals(False)
-        self.parent.main.update_roi(clear_results_test=True)
+        if self.parent.main.current_test == 'CTn':
+            self.parent.main.update_roi(clear_results_test=True)

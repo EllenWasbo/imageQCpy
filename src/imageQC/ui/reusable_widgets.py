@@ -293,7 +293,8 @@ class ToolBarDots(QToolBar):
 class ToolBarTableExport(QToolBar):
     """Toolbar for reuse with setting table export options."""
 
-    def __init__(self, parent, parameters_output=None, flag_edit=False):
+    def __init__(self, parent, parameters_output=None, flag_edit=False,
+                 orientation=''):
         """Initialize ToolBarTableExport.
 
         Parameters
@@ -304,10 +305,13 @@ class ToolBarTableExport(QToolBar):
             QuickTestOuput template. The default is None.
         flag_edit : bool, optional
             Set option to flag parent as edited. The default is False.
+        orientation : str, optional
+            Horizontal toolbar if 'horisontal'. Default is '' which means vertical
         """
         super().__init__()
 
-        self.setOrientation(Qt.Orientation.Vertical)
+        if not orientation == 'horizontal':
+            self.setOrientation(Qt.Orientation.Vertical)
         self.parent = parent
         self.parameters_output = parameters_output
         self.flag_edit = flag_edit

@@ -12,7 +12,8 @@ import pandas as pd
 from PyQt6.QtGui import QIcon, QAction, QKeyEvent, QKeySequence
 from PyQt6.QtCore import Qt, QEvent
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QToolButton, QMenu,
+    QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
+    QToolBar, QToolButton, QMenu,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QAbstractScrollArea,
     QSplitter, QLabel
     )
@@ -40,36 +41,35 @@ class ResultTableWidget(QWidget):
         super().__init__()
         self.main = parent
 
-        hlo = QHBoxLayout()
-        self.setLayout(hlo)
-        vlo_tb = QVBoxLayout()
-        hlo.addLayout(vlo_tb)
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        hlo_tb = QHBoxLayout()
+        vlo.addLayout(hlo_tb)
 
         act_copy = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}copy.png'),
             'Copy table to clipboard', self)
         act_copy.triggered.connect(self.copy_table)
         toolb = QToolBar()
-        toolb.setOrientation(Qt.Orientation.Vertical)
+        toolb.setOrientation(Qt.Orientation.Horizontal)
         toolb.addActions([act_copy])
-        vlo_tb.addWidget(toolb)
+        hlo_tb.addWidget(toolb)
         self.tb_copy = uir.ToolBarTableExport(
-            self, parameters_output=self.main.current_paramset.output)
-        vlo_tb.addWidget(self.tb_copy)
-        vlo_tb.addStretch()
+            self, parameters_output=self.main.current_paramset.output,
+            orientation='horizontal')
+        hlo_tb.addWidget(self.tb_copy)
+        self.table_info = uir.LabelItalic('')
+        hlo_tb.addWidget(self.table_info)
+        hlo_tb.addStretch()
 
         self.result_table = ResultTable(parent=self, main=self.main)
-        self.table_info = uir.LabelItalic('')
-        vlo_table = QVBoxLayout()
-        vlo_table.addWidget(self.table_info)
-        vlo_table.addWidget(self.result_table)
-        hlo.addLayout(vlo_table)
+        vlo.addWidget(self.result_table)
 
         toolb = QToolBar()
         self.tool_resultsize = ToolMaximizeResults(self.main)
         toolb.addWidget(self.tool_resultsize)
         toolb.setOrientation(Qt.Orientation.Vertical)
-        hlo.addWidget(toolb)
+        hlo_tb.addWidget(toolb)
 
     def copy_table(self, row_range=None, col_range=None):
         """Copy contents of table to clipboard."""
@@ -323,7 +323,7 @@ class ResultPlotWidget(PlotWidget):
         self.tool_resultsize = ToolMaximizeResults(main)
         toolb.addWidget(self.tool_resultsize)
         toolb.setOrientation(Qt.Orientation.Vertical)
-        self.hlo.addWidget(toolb)
+        self.hlo_top.addWidget(toolb)
 
     def min_max_curves(self):
         """Set ranges to min-max of x and y according to content."""
@@ -2984,34 +2984,42 @@ class ResultImageWidget(GenericImageWidget):
         super().__init__(main, canvas)
         self.main = main
         toolb = ResultImageNavigationToolbar(self.canvas, self)
-        hlo = QHBoxLayout()
+        vlo = QVBoxLayout()
 
         tb_right_top = QToolBar()
-        self.tool_resultsize = ToolMaximizeResults(self.main)
-        tb_right_top.addWidget(self.tool_resultsize)
-        tb_right_top.setOrientation(Qt.Orientation.Vertical)
+        spacer = QWidget()
+        spacer.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        tb_right_top.addWidget(spacer)
         tb_right_top.addWidget(self.tool_profile)
         tb_right_top.addWidget(self.tool_cmap)
         tb_right_top.addWidget(self.tool_rectangle)
         tb_right_top.addWidget(self.tool_zoom_as_active_image)
-        hlo_right = QHBoxLayout()
-        hlo_right.addWidget(toolb)
-        hlo_right.addWidget(tb_right_top)
-        hlo_right.addStretch()
+        self.tool_resultsize = ToolMaximizeResults(self.main)
+        tb_right_top.addWidget(self.tool_resultsize)
+        #tb_right_top.setFixedWidth(
+        #    int(tb_right_top.iconSize().width()*1.7 * 5))
 
         self.image_title = QLabel()
-        tb_top = QToolBar()
-        tb_top.addWidget(GenericImageToolbarPosVal(self.canvas, self))
+        tb_pos = QToolBar()
+        tb_pos.addWidget(GenericImageToolbarPosVal(
+            self.canvas, self, fixed_width=400))
 
-        vlo_left = QVBoxLayout()
-        vlo_left.addWidget(self.image_title)
-        vlo_left.addWidget(tb_top)
-        vlo_left.addWidget(self.canvas)
-        hlo.addLayout(vlo_left)
-        hlo.addLayout(hlo_right)
+        hlo_top = QHBoxLayout()
+        vlo.addLayout(hlo_top)
+        hlo_top.addWidget(toolb)
+        hlo_top.addStretch()
+        hlo_top.addWidget(tb_right_top)
+
+        hlo_pos = QHBoxLayout()
+        vlo.addLayout(hlo_pos)
+        hlo_pos.addWidget(tb_pos)
+        hlo_pos.addWidget(self.image_title)
+
+        vlo.addWidget(self.canvas)
 
         wid_image_toolbars = QWidget()
-        wid_image_toolbars.setLayout(hlo)
+        wid_image_toolbars.setLayout(vlo)
 
         self.wid_window_level = uir.WindowLevelWidget(
             self, show_dicom_wl=False, show_lock_wl=False)
@@ -3035,7 +3043,7 @@ class ResultImageWidget(GenericImageWidget):
         """Set and reset QSplitter sizes."""
         default_rgt_panel = self.main.gui.panel_width*0.8
         self.splitter.setSizes(
-            [round(default_rgt_panel*0.7), round(default_rgt_panel*0.3)])
+            [round(default_rgt_panel*0.6), round(default_rgt_panel*0.4)])
 
     def hide_window_level(self):
         """Set window level widget to zero width."""
@@ -3053,4 +3061,4 @@ class ResultImageNavigationToolbar(ImageNavigationToolbar):
         for act in self.actions():
             if act.text() in ['Customize']:
                 self.removeAction(act)
-        self.setOrientation(Qt.Orientation.Vertical)
+        self.setFixedWidth(int(self.iconSize().width()*1.7*6))

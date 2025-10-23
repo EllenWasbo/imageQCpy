@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QPlainTextEdit, QSpinBox, QCheckBox, QLineEdit,
     QFileDialog, QInputDialog, QMessageBox
     )
+import matplotlib.pyplot as plt
 
 # imageQC block start
 from imageQC.ui.ui_dialogs import ImageQCDialog
@@ -779,28 +780,29 @@ class GenerateReportDialog(ImageQCDialog):
 
     def add_figure(self, element, width_px=0, image_name=''):
         html_code = ''
-        buffer = BytesIO()
-        if element.variant == 'result_plot':
-            self.plot_canvas.plot(selected_text=element.text)
-            self.plot_canvas.fig.savefig(buffer, format='png')
-        elif element.variant == 'result_image':
-            self.wid_result_image.canvas.result_image_draw(
-                selected_text=element.text)
-            self.wid_result_image.canvas.fig.savefig(buffer, format='png')
-        elif element.variant == 'image':
-            self.main.wid_image_display.canvas.fig.savefig(
-                buffer, format='png')
+        with plt.style.context('classic'):  # ensure white background
+            buffer = BytesIO()
+            if element.variant == 'result_plot':
+                self.plot_canvas.plot(selected_text=element.text)
+                self.plot_canvas.fig.savefig(buffer, format='png')
+            elif element.variant == 'result_image':
+                self.wid_result_image.canvas.result_image_draw(
+                    selected_text=element.text)
+                self.wid_result_image.canvas.fig.savefig(buffer, format='png')
+            elif element.variant == 'image':
+                self.main.wid_image_display.canvas.fig.savefig(
+                    buffer, format='png')
 
-        buffer.seek(0)
-        img = base64.b64encode(buffer.getbuffer()).decode('utf-8')
-        if width_px > 0:
-            wtxt = f'width="{width_px}px" '
-        else:
-            wtxt = f'width="{element.width}%" '
-        html_code = (
-            f'<img {wtxt}src="data:image/png;base64,{img}">')
-        if image_name != '' and element.include_image_name:
-            html_code = f'{html_code}<br><div style="text-align: center;">{image_name}</div>'
+            buffer.seek(0)
+            img = base64.b64encode(buffer.getbuffer()).decode('utf-8')
+            if width_px > 0:
+                wtxt = f'width="{width_px}px" '
+            else:
+                wtxt = f'width="{element.width}%" '
+            html_code = (
+                f'<img {wtxt}src="data:image/png;base64,{img}">')
+            if image_name != '' and element.include_image_name:
+                html_code = f'{html_code}<br><div style="text-align: center;">{image_name}</div>'
 
         return html_code
 

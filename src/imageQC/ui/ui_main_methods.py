@@ -35,6 +35,7 @@ def update_roi(main, clear_results_test=False):
             pass
     else:
         main.current_roi = None
+
     try:
         main.wid_image_display.canvas.roi_draw()
     except AttributeError:

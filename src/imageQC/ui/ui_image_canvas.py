@@ -400,7 +400,7 @@ class ImageCanvas(GenericImageCanvas):
                     self.add_contours_to_all_rois()
             except (TypeError, IndexError, AttributeError):
                 pass
-        self.draw()
+        self.draw_idle()
         if 'InputMain' in str(type(self.main)):
             sleep(.2)
 
@@ -514,14 +514,17 @@ class ImageCanvas(GenericImageCanvas):
                     xs = xs[idxs]
                     ys = ys[idxs]
             self.scatters = []
-            scatter = self.ax.scatter(xs, ys, s=40, c='green', marker='+')
+            marker = '+'
+            if self.main.current_roi['phantom'] == 40:
+                marker = 'x'
+            scatter = self.ax.scatter(xs, ys, s=20, c='green', marker=marker)
             self.scatters.append(scatter)
             if 'CDM' in self.main.results:
                 idx_diam = self.main.tab_mammo.cdm_cbox_diameter.currentIndex()
                 idx_thick = self.main.tab_mammo.cdm_cbox_thickness.currentIndex()
                 x = center_xs[idx_thick, idx_diam]
                 y = center_ys[idx_thick, idx_diam]
-                scatter = self.ax.scatter(x, y, s=40, c='blue', marker='+')
+                scatter = self.ax.scatter(x, y, s=20, c='blue', marker=marker)
                 self.scatters.append(scatter)
 
     def CTn(self):
@@ -1306,10 +1309,12 @@ class ResultImageCanvas(GenericImageCanvas):
 
                 diameter = self.main.tab_mammo.cdm_cbox_diameter.currentText()
                 thickness = self.main.results['CDM']['details_dict'][-1]['thickness']
-                if self.main.current_roi['phantom'] == 40:
-                    thick_txt = thickness[idx_thick][idx_diam]
-                else:
-                    thick_txt = self.main.tab_mammo.cdm_cbox_thickness.currentText()
+                if self.main.current_roi:
+                    if self.main.current_roi['phantom'] == 40:
+                        thick_txt = thickness[idx_thick][idx_diam]
+                    else:
+                        thick_txt = (
+                            self.main.tab_mammo.cdm_cbox_thickness.currentText())
 
                 self.title = (
                     f'Processed sub-image averaged by kernel, disc with '

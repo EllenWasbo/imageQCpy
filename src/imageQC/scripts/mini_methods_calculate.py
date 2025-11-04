@@ -692,7 +692,7 @@ def get_object_width_xy(image2d, mask_outer=0, threshold_percent_max=50):
     return [width_x, width_y]
 
 
-def optimize_center(image, mask_outer=0, max_from_part=4):
+def optimize_center(image, mask_outer=0, max_from_part=4, ignore_above=None):
     """Find center and width of object in image.
 
     Parameters
@@ -702,6 +702,8 @@ def optimize_center(image, mask_outer=0, max_from_part=4):
         Number of outer pixels to mask when searching. The default is 0.
     max_from_part : float, optional
         1/part of central image to find max from average
+    ignore_above : float or None, optional
+        Set max to ignore_above if not None. Default is None.
 
     Returns
     -------
@@ -716,6 +718,11 @@ def optimize_center(image, mask_outer=0, max_from_part=4):
     else:
         prof_y = np.max(image[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=1)
         prof_x = np.max(image[mask_outer:-mask_outer, mask_outer:-mask_outer], axis=0)
+
+    if ignore_above not in [None, False]:
+        prof_x[prof_x > ignore_above] = ignore_above
+        prof_y[prof_y > ignore_above] = ignore_above
+
     # get width at halfmax and center for profiles
     max_from_part = round(max_from_part)
     if max_from_part == 0:

@@ -1188,13 +1188,17 @@ def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
     errmsg = None
 
     if roi_size_in_pix > 0:
+        auto_center = False
         if test == 'ctn':
-            if paramset.ctn_auto_center:
-                res = mmcalc.optimize_center(image, 0)
-                if res is not None:
-                    center_x, center_y, _, _ = res
-                    delta_xya[0] = center_x - 0.5*image_info.shape[1]
-                    delta_xya[1] = center_y - 0.5*image_info.shape[0]
+            auto_center = paramset.ctn_auto_center
+        elif test == 'ttf':
+            auto_center = paramset.ttf_auto_center
+        if auto_center:
+            res = mmcalc.optimize_center(image, mask_outer=0, ignore_above=-50)
+            if res is not None:
+                center_x, center_y, _, _ = res
+                delta_xya[0] = center_x - 0.5*image_info.shape[1]
+                delta_xya[1] = center_y - 0.5*image_info.shape[0]
         filt_image = ndimage.gaussian_filter(image, sigma=5)
         pos_table = getattr(paramset, f'{test}_table')
         n_rois = len(pos_table.pos_x)
@@ -1767,7 +1771,7 @@ def get_slicethickness_start_stop(image, image_info, paramset, dxya, modality='C
     prof_half = 0.5 * paramset.sli_ramp_length / image_info.pix[0]
     if modality == 'CT':
         if paramset.sli_auto_center:
-            res = mmcalc.optimize_center(image, 0)
+            res = mmcalc.optimize_center(image, mask_outer=0, ignore_above=-50)
             if res is not None:
                 center_x, center_y, _, _ = res
                 dxya[0] = center_x - 0.5*image_info.shape[1]

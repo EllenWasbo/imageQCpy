@@ -1716,6 +1716,9 @@ class ParamsTabCT(ParamsTabCommon):
         headers = ['Material', 'pos x [mm]', 'pos y [mm]']
         self.ttf_table_widget = PositionWidget(
             self, self.main, table_attribute_name='ttf_table', headers=headers)
+        self.ttf_auto_center = QCheckBox('')
+        self.ttf_auto_center.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='ttf_auto_center'))
         self.ttf_plot_material = QComboBox()
         self.ttf_plot_material.addItems(
             ['All'] + self.main.current_paramset.ttf_table.labels)
@@ -1730,6 +1733,7 @@ class ParamsTabCT(ParamsTabCommon):
         vlo1 = QVBoxLayout()
         flo1 = QFormLayout()
         flo1.addRow(QLabel('ROI radius (mm)'), self.ttf_roi_size)
+        flo1.addRow(QLabel('Auto center'), self.ttf_auto_center)
         flo1.addRow(QLabel('Cut LSF tails'), self.ttf_cut_lsf)
         flo1.addRow(QLabel('    Cut at halfmax + n*FWHM, n='), self.ttf_cut_lsf_w)
         flo1.addRow(

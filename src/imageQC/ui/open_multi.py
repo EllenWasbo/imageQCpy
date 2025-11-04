@@ -124,24 +124,29 @@ class OpenMultiWidget(QWidget):
 
         vlo = QVBoxLayout()
         self.setLayout(vlo)
-        info_text = [
+        info_text = (
             'All DICOM files in the selected folder will be listed as groups '
-            'defined by the DICOM tag pattern below.',
-            'Use the selection rules or manually select images.',
+            'defined by the DICOM tag pattern below. <br>'
+            'Use the selection rules or manually select images.<br>'
             'Images will be displayed in the image list as defined in Settings - '
-            'Special tag patterns - File list display.',
-            ]
-        vlo.addWidget(uir.LabelMultiline(txts=info_text))
+            'Special tag patterns - File list display.<br><br>'
+            'Modality found from input images.'
+            )
+
+        #vlo.addWidget(uir.InfoTool(info_text, parent=self))
 
         hlo_browse = QHBoxLayout()
         vlo.addLayout(hlo_browse)
         lbl = QLabel('Selected folder: ')
         hlo_browse.addWidget(lbl)
         self.path = QLineEdit()
+        self.path.setMinimumWidth(600)
         hlo_browse.addWidget(self.path)
         toolb = uir.ToolBarBrowse('Browse to folder with DICOM images')
         toolb.act_browse.triggered.connect(self.browse)
         hlo_browse.addWidget(toolb)
+        hlo_browse.addStretch()
+        hlo_browse.addWidget(uir.InfoTool(info_text, parent=self))
 
         self.status_label = uir.StatusLabel(self)
         hlo_status = QHBoxLayout()
@@ -164,8 +169,8 @@ class OpenMultiWidget(QWidget):
         hlo_lists = QHBoxLayout()
         vlo.addLayout(hlo_lists)
 
-        min_height = 200
-        min_width = 400
+        min_height = 150
+        min_width = 300
 
         vlo_series = QVBoxLayout()
         hlo_lists.addLayout(vlo_series)
@@ -179,7 +184,7 @@ class OpenMultiWidget(QWidget):
             QAbstractItemView.SelectionMode.ExtendedSelection)
         self.list_series.currentRowChanged.connect(self.update_list_images)
         vlo_series.addWidget(self.list_series)
-        btn_send_all = QPushButton('Open all images >>')
+        btn_send_all = QPushButton('Add all images >>')
         btn_send_all.clicked.connect(self.push_all)
         vlo_series.addWidget(btn_send_all)
         vlo_series.addStretch()
@@ -245,10 +250,6 @@ class OpenMultiWidget(QWidget):
             'Add images to list using pattern >>')
         btn_push_pattern.clicked.connect(self.push_pattern)
         vlo_gb.addWidget(btn_push_pattern)
-        vlo_images.addWidget(uir.LabelItalic(
-            'Images listed according to found modality'))
-        vlo_images.addWidget(uir.LabelItalic(' and corresponding '
-            'Special tag patterns - File list display'))
 
         vlo_push = QVBoxLayout()
         hlo_lists.addLayout(vlo_push)

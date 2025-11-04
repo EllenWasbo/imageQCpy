@@ -429,6 +429,7 @@ class ParamSetCT(ParamSetCommon):
     ttf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
     ttf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     ttf_table:  PositionTable = field(default_factory=PositionTable)
+    ttf_auto_center: bool = False
     ctn_roi_size: float = 3.
     ctn_search_size: float = 11.
     ctn_search: bool = True

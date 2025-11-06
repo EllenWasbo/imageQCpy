@@ -515,6 +515,7 @@ VENDOR_FILE_OPTIONS = {
     'NM': ['Siemens exported energy spectrum (.txt)'],
     'SPECT': [],
     'PET': ['Siemens PET-CT DailyQC Reports (.pdf)',
+            'Siemens PET QualityGuard Reports (.pdf)',
             'Siemens PET-MR DailyQC Reports (.xml)'],
     'MR': ['Philips MR PIQT / SPT report (.pdf)',
            'Philips MR ACR report (.pdf)'],

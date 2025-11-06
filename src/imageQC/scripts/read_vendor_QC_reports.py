@@ -47,6 +47,9 @@ def read_vendor_template(template, filepath):
     elif template.file_type == 'Siemens PET-CT DailyQC Reports (.pdf)':
         txt = get_pdf_txt(filepath)
         results = read_Siemens_PET_dailyQC(txt)
+    elif template.file_type == 'Siemens PET QualityGuard Reports (.pdf)':
+        txt = get_pdf_txt(filepath)
+        results = read_Siemens_PET_QualityGuard(txt)
     elif template.file_type == 'Siemens PET-MR DailyQC Reports (.xml)':
         root = get_xml_tree(filepath)
         results = read_Siemens_PET_dailyQC_xml(root)
@@ -179,6 +182,126 @@ def read_e_spectrum_Siemens_gamma_camera(filepath):
             'values': values, 'headers': headers,
             'details': details
             }
+    return data
+
+
+def read_Siemens_PET_QualityGuard(txt):
+    """Read Siemens PET QualityGuard Report from list of str.
+
+    Parameters
+    ----------
+    txt : list of str
+        text from pdf
+
+    Returns
+    -------
+    data : dict
+        'status': bool
+        'errmsg': list of str
+        'values': list of str,
+        'headers': list of str}
+    """
+    values = []
+    headers = []
+    errmsg = []
+    status = False
+
+    if txt[0] == 'QualityGuard Report':
+        short_txt = [x[0:9] for x in txt]
+        # date
+        date = ''
+        search_txt = 'Scan Date'
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            date_str = txt[rowno].split(',')
+            date_md = date_str[0].split(' ')
+            if len(date_md) >= 4:
+                day = f'{int(date_md[3]):02}'
+                month_dt = datetime.datetime.strptime(date_md[2], '%B')
+                month = f'{month_dt.month:02}'
+                year = date_str[1].strip()
+                date = f'{day}.{month}.{year}'
+
+        # scanner name
+        ics_name = ''
+        search_txt = 'ICS Name '
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            split_txt = txt[rowno].split(' ')
+            ics_name = split_txt[-1]
+
+        # Passed?
+        result = ''
+        search_txt = 'Results:'
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            split_txt = txt[rowno + 1].split(' ')
+            result = split_txt[-1]
+
+        # Max Location Shift 5.00 [Pixels] 0.00 [Pixels] 1.41 [Pixels] Passed
+        max_location_shift = None
+        search_txt = 'Max Locat'
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            split_txt = txt[rowno].split(' ')
+            try:
+                max_location_shift = float(split_txt[-3])
+            except (IndexError, ValueError):
+                pass
+
+        # Max Energy Shift 255.00 [Bins] 0.00 [Bins] 6.90 [Bins] Passed
+        max_e_shift = None
+        search_txt = 'Max Energ'
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            split_txt = txt[rowno].split(' ')
+            try:
+                max_e_shift = float(split_txt[-3])
+            except (IndexError, ValueError):
+                pass
+
+        # Max Temperature (x 4)
+        # 2.00 [Degrees] 0.00 [Degrees] 0.19 [Degrees] Passed
+        search_txt = 'Max Tempe'
+        temps = [None, None, None, None]
+        if search_txt in short_txt:
+            indexes = [
+                index for index in range(len(short_txt))
+                if short_txt[index] == search_txt]
+            if len(indexes) == 4:
+                temps = []
+                for idx in indexes:
+                    split_txt = txt[idx + 1].split(' ')
+                    try:
+                        temp = float(split_txt[-3])
+                    except (IndexError, ValueError):
+                        temp = None
+                    temps.append(temp)
+
+        # Bad Blocks 1 [Blocks] 0 [Blocks] 0 [Blocks] Passed
+        n_bad_blocks = None
+        search_txt = 'Bad Block'
+        if search_txt in short_txt:
+            rowno = short_txt.index(search_txt)
+            split_txt = txt[rowno].split(' ')
+            try:
+                n_bad_blocks = int(split_txt[-3])
+            except (IndexError, ValueError):
+                pass
+
+        values = (
+            [date, ics_name, result, max_location_shift, max_e_shift]
+            + temps + [n_bad_blocks])
+        headers = ['Date', 'ICSname', 'Result',
+                   'Max Location Shift', 'Max Energy Shift',
+                   'Max Temp Shift Water', 'Max Temp Shift Air 1',
+                   'Max Temp Shift Air 2', 'Max Temp Shift Air 3',
+                   'Bad blocks']
+
+        status = True
+
+    data = {'status': status, 'errmsg': errmsg,
+            'values': values, 'headers': headers}
     return data
 
 

@@ -120,13 +120,18 @@ Note that code used by wikidoc are within the .md files of imageQCpy/wiki
 
 ## For building .exe
 This method reduces from ~300 MB vs ~1,2 GB compared to doing this in conda environment:
-- Install python 3.9.7 and choose to add path
-- Create an empty folder (somewhere) called imageQCpy. This folder should hold the input and output for pyinstaller.
-- Copy into the empty folder src and all files directly from folder above src except .gitignore/.pylintrc
+- Install python 3.13 and choose to add path
+- Create an empty folder (somewhere) called to_exe
+- In cmd.exe (not from Anaconda):
+	- cd to the to_exe folder
+	- python -m venv iQC (creates a virtual environment)
+	- iQC\Scripts\activate.bat (activates the venv)
+- Create an empty subfolder in to_exe called imageQCpy. This folder should hold the input and output for pyinstaller.
+- Copy into the empty imageQCpy folder src and all files directly from folder above src except .gitignore/.pylintrc
 - Delete these folders in src: icons, config_defaults + all pycache/eggs folders
 - Delete also resources.qrc
 - In cmd.exe (not from Anaconda):
-	- cd ....path...to...\imageQCpy (the new stripped folder)
+	- cd imageQCpy (the new stripped folder)
 - pip install -e . 
 	- (if error on cwd None, try this: pip install --upgrade pip setuptools wheel --user)
 - pip install pyinstaller (or pip list to see if its already installed)

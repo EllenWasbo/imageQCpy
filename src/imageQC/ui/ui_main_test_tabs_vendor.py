@@ -85,6 +85,7 @@ class ParamsTabVendor(QWidget):
                 'Siemens CT Constancy/Daily Reports (.pdf)',
                 'Planmeca CBCT report (.html)',
                 'Siemens PET-CT DailyQC Reports (.pdf)',
+                'Siemens PET QualityGuard Reports (.pdf)',
                 'Siemens PET-MR DailyQC Reports (.xml)',
                 'Siemens exported energy spectrum (.txt)',
                 'Philips MR ACR report (.pdf)',

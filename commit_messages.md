@@ -1,27 +1,24 @@
 # v3.2.0
-_MMM DD, 2025_
+_Nov 07, 2025_
 
-Upgrade to python v3.11-3.13 and upgrade on packages (PyQt5 to PyQt6, numpy 2.0+, pandas ... and more).
+Upgrade to python v3.11-3.13 and upgrade of packages (PyQt5 to PyQt6, numpy 2.0+, pandas ... and more).
 If you are used to just replace the files when upgrading imageQC, this time you will have to delete/create the virtual environment and install the packages.
 
-conda deactivate (if active)
-conda remove --name viQC --all
-
-Create a new virtual enviroment with the python version specified (if default is not within 3.11-3.13):
-
-conda create --name viQC python=3.13.5
+Make sure to create a new virtual enviroment with python version 3.11-3.13
 
 Changes to the user interface:
 - Dark mode now follow your system settings for this. Dark mode setting of user preferences removed.
 	- When generating html report, dark mode is now ignored to generate printable pdf with white background.
 - Conversion from IDL version of imageQC removed as IDL-users assumed to already have converted.
 - Changes to toolbars to avoid issues with expandable toolbars not working correctly
-- Shrinked dialog box for open images to avoid finish buttons outside screen when using small screens or low resolution.
 - Dashboards for interactive visualization of results from automated analysis is now extracted into a standalone application
 	- Why standalone:
 		- Benefits of starting/stopping the dash-application together with imageQC (full GUI).
 		- Start developing options for publishing the dash-application on intranet using MinIO buckets for access to config and result files.
 	- Dashboards also have a visual refresh.
+
+New functionalities:
+- PET: Added option to read Siemens QualityGuard Report to extract values.
 
 Fixes:
 - Fixes to auto center for CT tests of slicethickness and CT number. Added auto center option for CT test TTF.

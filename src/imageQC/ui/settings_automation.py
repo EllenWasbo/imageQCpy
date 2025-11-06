@@ -10,7 +10,7 @@ from time import time
 import webbrowser
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QThread
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QAction, QBrush, QColor
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
@@ -1993,6 +1993,7 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
         self.empty_template = cfc.AutoVendorTemplate()
 
         self.cbox_file_type = QComboBox()
+        self.cbox_file_type.setMinimumWidth(300)
 
         hlo_statname = QHBoxLayout()
         hlo_statname.addWidget(QLabel('Station ID'))
@@ -2114,7 +2115,7 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                 file_filter = "PDF file (*.pdf)"
         elif self.current_modality == 'PET':
             if 'pdf' in file_type:
-                open_title = 'Open Siemens CT QC report file'
+                open_title = 'Open Siemens PET QC report file'
                 file_filter = "PDF file (*.pdf)"
         else:
             pass
@@ -2135,7 +2136,10 @@ class AutoVendorTemplateWidget(AutoTempWidgetBasic):
                             statname = res['values'][3]
                 elif self.current_modality == 'PET' and 'pdf' in file_type:
                     txt = read_vendor_QC_reports.get_pdf_txt(fname[0])
-                    res = read_vendor_QC_reports.read_Siemens_PET_dailyQC(txt)
+                    if 'Guard' in file_type:
+                        res = read_vendor_QC_reports.read_Siemens_PET_QualityGuard(txt)
+                    else:
+                        res = read_vendor_QC_reports.read_Siemens_PET_dailyQC(txt)
                     if res['status']:
                         if len(res['values']) > 1:
                             statname = res['values'][1]

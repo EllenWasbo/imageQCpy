@@ -1,3 +1,14 @@
+# v3.2.1
+_Des 02, 2025_
+
+Changes: 
+Test ROI: Fixed confusion on which parameters in Result table and Supplement table depending on single or multiple ROIs
+
+Fixes:
+- Settings QuickTestTemplates: Fixed error on opening the template manager (issue due to upgrade from PyQt5 to PyQt6)
+- CT task based image analysis (dialog from File menu) probably prone to crashes for a while. Now these issues are fixed.
+- LimitsAndPlot Template: Fixed error when reading limits based on first values from file with comma as decimal mark
+
 # v3.2.0
 _Nov 07, 2025_
 

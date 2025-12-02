@@ -1065,13 +1065,13 @@ class QuickTestTreeView(QTreeView):
             except IndexError:
                 name = ''
             self.model.setData(self.model.index(imgno, 0),
-                               name, Qt.ItemFlag.ItemIsEditable)
+                               name, Qt.ItemDataRole.EditRole)
             try:
                 name = temp.group_names[imgno]
             except IndexError:
                 name = ''
             self.model.setData(self.model.index(imgno, 1),
-                               name, Qt.ItemFlag.ItemIsEditable)
+                               name, Qt.ItemDataRole.EditRole)
             for testno, test in enumerate(self.tests):
                 state = (Qt.CheckState.Checked if test in img_tests else Qt.CheckState.Unchecked)
                 self.model.setData(self.model.index(imgno, testno+2),
@@ -1105,8 +1105,8 @@ class QuickTestTreeView(QTreeView):
             rowno = 0
         self.model.beginInsertRows(self.model.index(rowno, 0), rowno, rowno)
         self.model.insertRow(rowno)
-        self.model.setData(self.model.index(rowno, 0), '', Qt.ItemFlag.ItemIsEditable)
-        self.model.setData(self.model.index(rowno, 1), '', Qt.ItemFlag.ItemIsEditable)
+        self.model.setData(self.model.index(rowno, 0), '', Qt.ItemDataRole.EditRole)
+        self.model.setData(self.model.index(rowno, 1), '', Qt.ItemDataRole.EditRole)
         for testno in range(len(self.tests)):
             self.model.setData(self.model.index(rowno, testno+2),
                                Qt.CheckState.Unchecked, role=Qt.ItemDataRole.CheckStateRole)
@@ -1123,9 +1123,9 @@ class QuickTestTreeView(QTreeView):
             rowno = sel[0].row()
             if self.model.rowCount() == 1:
                 self.model.setData(
-                    self.model.index(0, 0), '', Qt.ItemFlag.ItemIsEditable)
+                    self.model.index(0, 0), '', Qt.ItemDataRole.EditRole)
                 self.model.setData(
-                    self.model.index(0, 1), '', Qt.ItemFlag.ItemIsEditable)
+                    self.model.index(0, 1), '', Qt.ItemDataRole.EditRole)
                 for testno in range(len(self.tests)):
                     self.model.setData(self.model.index(0, testno+2),
                                        Qt.CheckState.Unchecked, role=Qt.ItemDataRole.CheckStateRole)

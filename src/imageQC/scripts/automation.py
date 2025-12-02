@@ -807,6 +807,10 @@ def test_limits(headers=None, values=None, output_file=None, decimal_mark='.',
                             else:
                                 try:
                                     yvals = data[header][:-1]
+                                    if isinstance(yvals[0], str):
+                                        yvals = [
+                                            string_to_float(y)
+                                            for y in yvals]
                                 except (KeyError, IndexError):
                                     pass
                             if 'relative' in limits[0]:

@@ -46,7 +46,6 @@ def get_rois(image, image_number, input_main):
     """
     roi_array = None
     errmsg = None
-
     test_code = input_main.current_test
     paramset = input_main.current_paramset
     image_info = input_main.imgs[image_number]
@@ -1186,7 +1185,6 @@ def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
 
     roi_array = None
     errmsg = None
-
     if roi_size_in_pix > 0:
         auto_center = False
         if test == 'ctn':

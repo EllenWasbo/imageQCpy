@@ -13,6 +13,7 @@ from pathlib import Path
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
+    QApplication,
     QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QFormLayout, QGroupBox, QPushButton, QLabel, QDoubleSpinBox, QCheckBox,
     QComboBox, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
@@ -181,15 +182,14 @@ class ParamsTabCommon(QTabWidget):
                         reciever.setChecked(content)
                     else:
                         reciever.setValue(content)
-                    if field.name == 'roi_use_table':
+                    if 'roi_table_val' in field.name:
+                        pass  # collected in roi_use_Table
+                    elif field.name == 'roi_use_table':
                         new_rect_pos = True if paramset.roi_use_table == 2 else False
                         if new_rect_pos != self.roi_table_widget.use_rectangle:
                             self.roi_table_widget.use_rectangle = new_rect_pos
                             self.roi_table_widget.update_on_rectangle_change()
-                        if paramset.roi_use_table == 0:
-                            self.roi_table_widget.setEnabled(False)
-                        else:
-                            self.roi_table_widget.setEnabled(True)
+                        self.update_roi_options()
                     elif field.name == 'hom_type':
                         try:
                             enable = True if content >= 3 else False
@@ -268,6 +268,35 @@ class ParamsTabCommon(QTabWidget):
                 else:
                     self.roi_a.setEnabled(True)
         # continues in subclasses if needed
+
+    def update_roi_options(self, reset_selections=None):
+        paramset = self.main.current_paramset
+        self.blockSignals(True)
+        self.roi_table_val.clear()
+        self.roi_table_val_sup.clear()
+        if paramset.roi_use_table == 0:
+            self.roi_table_widget.setEnabled(False)
+            self.roi_table_val.addItems(['Avg / Stdev'])
+            self.roi_table_val_sup.addItems(['Min / Max'])
+            QApplication.instance().processEvents()
+            self.roi_table_val.setCurrentIndex(0)
+            self.roi_table_val_sup.setCurrentIndex(0)
+        else:
+            self.roi_table_widget.setEnabled(True)
+            all_headers = (
+                HEADERS['CT']['ROI']['alt0']
+                + HEADERS_SUP['CT']['ROI']['alt0'])
+            self.roi_table_val.addItems(all_headers)
+            self.roi_table_val_sup.addItems(all_headers)
+            if reset_selections:
+                paramset.roi_table_val = 0
+                paramset.roi_table_val_sup = 1
+            self.roi_table_val.setCurrentIndex(
+                paramset.roi_table_val)
+            self.roi_table_val_sup.setCurrentIndex(
+                paramset.roi_table_val_sup)
+
+        self.blockSignals(False)
 
     def update_mtf_options(self):
         """Update options when mtf type changes."""
@@ -435,6 +464,7 @@ class ParamsTabCommon(QTabWidget):
                     else:
                         self.roi_table_widget.setEnabled(True)
                         self.set_offset('roi_offset_xy', reset=True)
+                    self.update_roi_options(reset_selections=True)
                 elif attribute == 'hom_type':
                     try:
                         enable = True if content >= 3 else False
@@ -583,7 +613,6 @@ class ParamsTabCommon(QTabWidget):
                             break
                     new_values.append(new_values_this)
 
-            print(f'update_values_mtf prefix {prefix} {len(new_values)}')
             self.main.results['MTF']['values'] = new_values
             self.main.refresh_results_display()
             self.main.status_bar.showMessage('MTF tabular values updated', 1000)
@@ -717,13 +746,10 @@ class ParamsTabCommon(QTabWidget):
         self.roi_table_widget = PositionWidget(
                 self, self.main, table_attribute_name='roi_table')
         self.roi_table_widget.setEnabled(False)  # default irresponsive
-        all_headers = HEADERS['CT']['ROI']['alt0'] + HEADERS_SUP['CT']['ROI']['alt0']
         self.roi_table_val = QComboBox()
-        self.roi_table_val.addItems(all_headers)
         self.roi_table_val.currentIndexChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_table_val'))
         self.roi_table_val_sup = QComboBox()
-        self.roi_table_val_sup.addItems(all_headers)
         self.roi_table_val_sup.currentIndexChanged.connect(
             lambda: self.param_changed_from_gui(attribute='roi_table_val_sup'))
 
@@ -756,6 +782,7 @@ class ParamsTabCommon(QTabWidget):
         hlo_opt_val.addWidget(self.roi_table_val)
         hlo_opt_val.addWidget(QLabel('Supplement table:'))
         hlo_opt_val.addWidget(self.roi_table_val_sup)
+        self.update_roi_options()
 
     def create_tab_num(self):
         """GUI of tab NUM."""

@@ -792,6 +792,8 @@ class ParamSetCT_TaskBased:
     """Parameter set used for automated task based analysis."""
 
     label: str = ''
+    postprocessing: PostProcessVariables = field(
+        default_factory=PostProcessVariables)
     output: QuickTestOutputTemplate = field(
         default_factory=QuickTestOutputTemplate)
     dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
@@ -805,6 +807,7 @@ class ParamSetCT_TaskBased:
     ttf_cut_lsf_w_fade: float = 1.  # fade out width from lsf_w x FWHM
     ttf_sampling_frequency: float = 0.01  # mm-1 for gaussian
     ttf_table:  PositionTable = field(default_factory=PositionTable)
+    ttf_auto_center: bool = False
     ranges_table: list = field(default_factory=list)  # list of [test,param,min,max]
     #  zrange: pos_x = ttf (min, max), pos_y = nps zrange (min, max)
     nps_roi_size: int = 64

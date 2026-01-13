@@ -1,3 +1,20 @@
+# v3.2.2
+_Jan 13, 2026_
+
+New functionalities:
+- PET Homogeneity: Added method based on EANM guidelines for PET-CT and PET-MR routine quality control (Koole, 2023)
+
+Changes:
+- CT/SPECT/PET MTF (Spatial resolution) for 3d line (wire or source) now include average xy offset for the found line in the supplement table 
+- Rename DICOM dialog: Rename button always active with hint if prepared names are missing. (Because inactive button looks very much like active button in dark mode.)
+
+Fixes:
+- CT/SPECT/PET MTF (Spatial resolution) for 3d line (wire or source):
+	- x and y was mixed up (results for x was actually y and vise versa). This is no fixed. 
+- CT MTF: Supplement table no longer change by a factor of 10 when switching between cy/mm and cy/cm (like the Result table should and still do)
+- Search center by threshold (spyglass-button in Center/rotation widget): Fixed crash caused by mismatch with expected integer, got float.
+- ... and other small fixes ...
+
 # v3.2.1
 _Des 02, 2025_
 

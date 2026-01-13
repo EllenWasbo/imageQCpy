@@ -164,7 +164,8 @@ def format_result_table(input_main, test, values, headers):
             if all([test == 'MTF',
                     input_main.current_modality == 'CT']):
                 if not paramset.mtf_cy_pr_mm:
-                    row = mtf_multiply_10(row)
+                    if headers[0][:3] == 'MTF':
+                        row = mtf_multiply_10(row)
             out_values = extract_values(row)
             if test == 'DCM':
                 string_list.append(
@@ -293,7 +294,8 @@ def quicktest_output(input_main):
                                             test == 'MTF',
                                             input_main.current_modality == 'CT']):
                                         if not paramset.mtf_cy_pr_mm:
-                                            row = mtf_multiply_10(row)
+                                            if not sub.alternative > 9:
+                                                row = mtf_multiply_10(row)
                                     actual_values.append(row)
                                     actual_image_names.append(image_names[rowno])
                                     actual_group_names.append(group_names[rowno])
@@ -351,7 +353,8 @@ def quicktest_output(input_main):
                                 if all([test == 'MTF',
                                         input_main.current_modality == 'CT']):
                                     if not paramset.mtf_cy_pr_mm:
-                                        row = mtf_multiply_10(row)
+                                        if not sub.alternative > 9:
+                                            row = mtf_multiply_10(row)
                                 out_values = extract_values(
                                     row,
                                     columns=sub.columns,
@@ -2630,7 +2633,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             values = []
             details_dict_all = []
             errmsgs = []
-            detail_dict_all = {}
             res = Results(headers=headers, values=values,
                           details_dict=details_dict_all,
                           pr_image=False, pr_image_sup=False,
@@ -2653,6 +2655,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             if errmsg is not None:
                 errmsgs.append(errmsg)
             avgs = []
+            stds = []
             if paramset.hom_type >= 1:
                 central_roi = roi_array[0]
             else:
@@ -2662,12 +2665,14 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     arr = np.ma.masked_array(
                         image, mask=np.invert(central_roi))
                     avgs.append(np.mean(arr))
+                    stds.append(np.std(arr))
             zpos = [float(img_info.zpos) for img_info in input_main.imgs]
             zpos = np.array(zpos)[images_to_test]
 
             sort_idx = np.argsort(zpos)
             zpos = zpos[sort_idx]
             avgs = np.array(avgs)[sort_idx]
+            stds = np.array(stds)[sort_idx]
 
             details_dict = {'roi_averages': avgs, 'zpos': zpos}
 
@@ -2684,11 +2689,13 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         start_slice = center_slice - round(width/2)
                         stop_slice = center_slice + round(width/2)
                         avgs = avgs[start_slice:stop_slice + 1]
+                        stds = stds[start_slice:stop_slice + 1]
                         zpos = zpos[start_slice:stop_slice + 1]
                 else:
                     errmsgs.append('Outer slices have average above half max. '
                                    'Auto select slice ignored.')
             details_dict['roi_averages_0'] = avgs
+            details_dict['roi_stds_0'] = stds
             details_dict['zpos_used'] = zpos
 
             if paramset.hom_type == 1:  # AAPM TG126
@@ -2796,6 +2803,28 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                               values_sup = [values_sup],
                               details_dict=details_dict, pr_image=False,
                               errmsg=errmsgs)
+            elif paramset.hom_type == 3:  # EANM 2023
+
+                global_avg = np.mean(details_dict['roi_averages_0'])
+                global_std = np.mean(details_dict['roi_stds_0'])
+                diffs_avg = 100. * (
+                    details_dict['roi_averages_0'] - global_avg) / global_avg
+                diffs_std = 100. * (
+                    details_dict['roi_stds_0'] - global_std) / global_std
+
+                details_dict['diff_avg_pr_slice'] = diffs_avg
+                details_dict['diff_std_pr_slice'] = diffs_std
+
+                values = [np.min(diffs_avg), np.max(diffs_avg), global_avg]
+                values_sup = [np.min(diffs_std), np.max(diffs_std), global_std]
+
+                headers_sup = copy.deepcopy(HEADERS_SUP['PET']['Hom']['alt3'])
+
+                res = Results(headers=headers, values=[values],
+                              headers_sup=headers_sup,
+                              values_sup = [values_sup],
+                              details_dict=details_dict, pr_image=False,
+                              errmsg=errmsgs)
 
             return res
 
@@ -2833,6 +2862,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                         sum_image = np.add(sum_image, matrix[imgNo])
                 roi_array, errmsg = get_rois(
                     sum_image, images_to_test[0], input_main)
+                
             if alt == 2 and modality == 'CT':  # circular edge
                 roi_array_inner = roi_array
             elif alt == 4:  # zres, edge
@@ -2853,6 +2883,13 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
 
             rows = np.max(roi_array_inner, axis=1)
             cols = np.max(roi_array_inner, axis=0)
+            center_roi_xy = []
+            if paramset.mtf_type == 1:  # 3d wire/line no sliding window
+                pix_x, pix_y = img_infos[images_to_test[0]].pix
+                sy, sx = img_infos[images_to_test[0]].shape
+                center_roi_xy = [
+                    (np.mean(np.where(cols)) - sx/2) * pix_x,
+                    (np.mean(np.where(rows)) - sy/2) * pix_y]
             sub = []
             for sli in matrix:
                 if sli is not None:
@@ -3022,8 +3059,13 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     try:
                         values_sup.append(
                             details_dict[0]['gMTF_details']['prefilter_sigma'])
-                    except (IndexError, KeyError):
+                    except (IndexError, KeyError, TypeError):
                         values_sup.append(None)
+                    if paramset.mtf_type == 1:  # wire/line not sliding window
+                        if paramset.mtf_auto_center:
+                            values_sup.extend(center_roi_xy)
+                        else:
+                            values_sup.extend([None, None])
                 elif paramset.mtf_type == 5:
                     values_sup = (off_xyz_mm + values_sup)
                 values_sup=[values_sup]

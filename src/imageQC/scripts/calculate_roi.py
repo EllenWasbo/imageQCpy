@@ -1151,6 +1151,9 @@ def get_roi_hom_pet(summed_image, image_info, paramset):
                     ys.append(
                         summed_image.shape[0] // 2 + center[1] + j * cm_in_pix)
         roi_array.extend([xs, ys])
+    elif paramset.hom_type == 3:  # EANM 2023, just one circle
+        roi_array = [
+            get_roi_circle(summed_image.shape, center, roi_size_in_pix)]
 
     return (roi_array, errmsg)
 

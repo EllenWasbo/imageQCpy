@@ -37,7 +37,7 @@ class RenameDicomDialog(ImageQCDialog):
         super().__init__()
         self.current_modality = main.current_modality
 
-        self.orignal_names = []  # list for found files or folders (first step)
+        self.original_names = []  # list for found files or folders (first step)
         self.new_names = []  # list for generated new names (first step)
         self.valid_dict = {}  # dict for folders (first) + files (second step)
 
@@ -111,7 +111,7 @@ class RenameDicomDialog(ImageQCDialog):
         btn_generate_names.clicked.connect(self.generate_names)
         vlo_btns_table.addWidget(btn_generate_names)
         self.btn_rename = QPushButton('Rename')
-        self.btn_rename.setDisabled(True)
+        #self.btn_rename.setDisabled(True)
         self.btn_rename.clicked.connect(self.rename)
         vlo_btns_table.addWidget(self.btn_rename)
         vlo_btns_table.addStretch()
@@ -130,7 +130,7 @@ class RenameDicomDialog(ImageQCDialog):
         self.orignal_names = []
         self.new_names = []
         self.table.clear()
-        self.btn_rename.setDisabled(True)
+        #self.btn_rename.setDisabled(True)
 
     def fill_table(self, limit=None):
         """Fill table with original and generated names."""
@@ -224,13 +224,26 @@ class RenameDicomDialog(ImageQCDialog):
                     self, 'Remove empty folders?')
 
             if proceed:
+                errmsgs = []
                 for root, dirs, _ in os.walk(
                         self.path.text(), topdown=False):
                     for name in dirs:
-                        if len(os.listdir(os.path.join(root, name))) == 0:
-                            os.rmdir(os.path.join(root, name))
+                        path_this = os.path.join(root, name)
+                        if len(os.listdir(path_this)) == 0:
+                            try:
+                                os.rmdir(path_this)
+                            except (PermissionError, OSError) as e:
+                                errmsgs.append(
+                                    f'{path_this}: {e}')
                         else:
                             pass
+                if len(errmsgs) > 0:
+                    dlg = messageboxes.MessageBoxWithDetails(
+                        self, title='Failed removing empty folders',
+                        msg=('Failed removing one or more of the empty folders.'
+                             'See details for paths failing.'),
+                        details=errmsgs, icon=QMessageBox.Icon.Warning)
+                    dlg.exec()
 
     def split_series(self):
         """Split series into subfolders based on subfolder tag pattern."""
@@ -463,9 +476,14 @@ class RenameDicomDialog(ImageQCDialog):
                                 pyd, tag_pattern, self.wid_rename_pattern.tag_infos,
                                 prefix_separator='', suffix_separator='',
                                 not_found_text='')
-                            new_name = "_".join(name_parts)
-                            new_name = valid_path(new_name) + '.dcm'
-                            self.new_names.append(file.parent / new_name)
+                            try:
+                                new_name = "_".join(name_parts)
+                                new_name = valid_path(new_name) + '.dcm'
+                                self.new_names.append(file.parent / new_name)
+                            except TypeError:
+                                self.new_names.append('')
+                                print(f'Failed joining name parts {name_parts}')
+                                print(f'for file: {file.resolve()}')
                         else:
                             self.new_names.append('')
                             print(errmsg)
@@ -548,6 +566,12 @@ class RenameDicomDialog(ImageQCDialog):
                 if progress_modal.wasCanceled():
                     break
             progress_modal.reset()
+        else:
+            QMessageBox.warning(
+                self, 'Missing prepared names',
+                ('Press button "Prepare names" to generate lists of original '
+                 'and new names to be used for the renaming process.'))
+
         if n_first_folders + n_first_files > 0:
             if Path(self.path.text()) in self.new_names:
                 n_folders = n_folders - 1  # this selected folder is ignored

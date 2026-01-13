@@ -147,7 +147,7 @@ Fixed missing module when using import-hidden by adding from charset_normalizer 
 - Copy NM_Auto_QC from the original config_defaults to this new empty folder.
 - Add latest pdf user manual to dist.
 
-- zip content of folder dist to distribute imageQCpy_versionXXX.zip
+- zip content of folder dist to distribute imageQCpy.zip
 
 To run the exe file from cmd.exe:
 - cd .....\dist\imageQC

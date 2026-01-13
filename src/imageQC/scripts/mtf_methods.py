@@ -585,9 +585,10 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
     if proceed:
         pix = image_infos[images_to_test[0]].pix[0]
 
-        if paramset.mtf_type == 1:
+        if paramset.mtf_type == 1:  # not sliding window
             for i in [0, 1]:
-                axis = 2 if i == 0 else 1
+                axis = 1 if i == 0 else 2
+                # axis 0 = z, 1 = y, 2 = x, first sum over y - i.e. res in x
                 matrix_xz = np.sum(matrix, axis=axis)
 
                 details_dict_this, errmsg_this = calculate_MTF_2d_line_edge(
@@ -607,7 +608,7 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
                     details_dict.append(None)
                 else:
                     for i in [0, 1]:
-                        axis = 2 if i == 0 else 1
+                        axis = 1 if i == 0 else 2
                         matrix_xz = np.sum(matrix_this, axis=axis)
                         details_dict_this, errmsg_this = calculate_MTF_2d_line_edge(
                             matrix_xz, pix, paramset, mode='line',
@@ -674,7 +675,7 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
                         idxs[group] : idxs_end[group]] = zpos[
                             idxs[group] : idxs_end[group]]
                     matrix_this = matrix[idxs[group] : idxs_end[group]]
-                    matrix_xz = np.sum(matrix_this, axis=1)  # assume line in ~x dir 
+                    matrix_xz = np.sum(matrix_this, axis=1)  # assume line in ~x dir
                     # TODO allow also vertical line
 
                     # rotate matrix and use slice_thick as pix and xrange as vertical range

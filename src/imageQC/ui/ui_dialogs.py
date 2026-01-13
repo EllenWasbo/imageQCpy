@@ -1014,9 +1014,11 @@ class AddArtifactsDialog(ImageQCDialog):
             new_label = validate_new_artifact_label(self.main, artifact, edit=True)
             if new_label is not None:
                 if artifact.type_3d:
+                    self.start_wait_cursor()
                     self.artifacts_3d = update_artifact_3d(
                         self.main.imgs, artifact, self.main.artifacts_3d,
                         new_label=new_label)
+                    self.stop_wait_cursor()
                 artifact.label = new_label
                 idx = self.label.currentIndex() - 1
                 self.main.artifacts[idx] = artifact
@@ -1041,8 +1043,10 @@ class AddArtifactsDialog(ImageQCDialog):
                 artifact.label = new_label
                 self.main.artifacts.append(artifact)
                 if artifact.type_3d:
+                    self.start_wait_cursor()
                     self.artifacts_3d = update_artifact_3d(
                         self.main.imgs, artifact, self.main.artifacts_3d)
+                    self.stop_wait_cursor()
                 self.update_labels(set_text=new_label)
 
     def delete(self):

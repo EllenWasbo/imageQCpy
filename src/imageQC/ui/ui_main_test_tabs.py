@@ -3501,6 +3501,9 @@ class ParamsTabPET(ParamsTabCommon):
             elif paramset.hom_type == 2:
                 self.hom_roi_distance.setEnabled(False)
                 self.hom_plot.setEnabled(True)
+            elif paramset.hom_type == 3:
+                self.hom_roi_distance.setEnabled(False)
+                self.hom_plot.setEnabled(True)
 
     def update_hom_options(self):
         """Update ROI size based on selected method for test Hom."""
@@ -3530,6 +3533,14 @@ class ParamsTabPET(ParamsTabCommon):
                     'Non-uniformity pr slice',
                     'Coefficient of Variation pr slice',
                     'Averages pr ROI for selected slice',
+                    'z-profile central ROI, slice selection']
+                self.hom_plot.addItems(plot_options)
+            elif curr_type == 3:
+                plot_options = [
+                    'Average in ROI pr slice',
+                    'Stdev in ROI pr slice',
+                    'Difference from global average pr slice',
+                    'Difference from global stdev pr slice',
                     'z-profile central ROI, slice selection']
                 self.hom_plot.addItems(plot_options)
         self.blockSignals(False)
@@ -3596,7 +3607,13 @@ class ParamsTabPET(ParamsTabCommon):
         PET and PET/CT Systems (2009).<br>
         Circular large ROI (17.5cm) with smaller 1x1 cm ROIs within.<br>
         Calculate maximum non-uniformity and coefficient of variation pr slice 
-        and for the full volume.
+        and for the full volume.<br>
+        <br>
+        <b>EANM 2023</b><br>
+        Based on EANM guidelines for PET-CT and PET-MR QC (Koole et al, 
+                                                Z Med Phys 33, 103-113).<br>
+        Calculate average and standard deviation for each slice and compare to 
+        global values.
         """
         self.tab_hom.hlo_top.addWidget(uir.InfoTool(info_txt, parent=self.main))
         self.tab_hom.hlo_top.addStretch()

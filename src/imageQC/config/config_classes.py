@@ -670,7 +670,8 @@ class ParamSetSPECT(ParamSetCommon):
 class ParamSetPET(ParamSetCommon):
     """Set of parameters regarding PET tests."""
 
-    hom_type: int = 0  # 0 = pr image 5 ROIs, 1 = AAPM TG 126, 2 = NEMA NU-2 1994 / IAEA 2009
+    hom_type: int = 0
+    # 0=pr image 5 ROIs, 1=AAPM TG 126, 2=NEMA NU-2 1994/IAEA 2009, 3=EANM 2023
     hom_roi_size: float = 15.
     hom_roi_distance: float = 60.
     hom_auto_center: bool = False

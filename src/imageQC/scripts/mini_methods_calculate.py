@@ -369,7 +369,7 @@ def get_w_task(contrast, diameter, power):
     else:  # designer contrast profile
         radial_profile = contrast * (1 - (2 * dists / diameter)**2) **power
     w_task = np.fft.fft(radial_profile)
-    return w_taskw_task
+    return w_task
 
 
 def get_radial_profile(array_2d, pix=1., start_dist=0, stop_dist=None,
@@ -585,8 +585,14 @@ def get_width_center_at_threshold(
 
     def get_width_one_above_below(profile, idx):
         # interpolate to find width when only one value above or below threshold
-        r1 = (profile[idx] - threshold) / (profile[idx] - profile[idx - 1])
-        r2 = (profile[idx] - threshold) / (profile[idx] - profile[idx + 1])
+        try:
+            r1 = (profile[idx] - threshold) / (profile[idx] - profile[idx - 1])
+        except IndexError:
+            r1 = 0
+        try:
+            r2 = (profile[idx] - threshold) / (profile[idx] - profile[idx + 1])
+        except IndexError:
+            r2 = 0
         return r1 + r2
 
     if isinstance(profile, list):

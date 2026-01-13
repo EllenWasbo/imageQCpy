@@ -691,8 +691,8 @@ class CenterWidget(QGroupBox):
                               for indices in np.where(
                                       self.main.active_img > num)]
                     sz_act = np.shape(self.main.active_img)
-                    self.val_delta_x.setValue(center[1] - sz_act[1]*0.5)
-                    self.val_delta_y.setValue(center[0] - sz_act[0]*0.5)
+                    self.val_delta_x.setValue(round(center[1] - sz_act[1]*0.5))
+                    self.val_delta_y.setValue(round(center[0] - sz_act[0]*0.5))
                     self.update_delta()
         else:
             QMessageBox.information(self, 'Information',

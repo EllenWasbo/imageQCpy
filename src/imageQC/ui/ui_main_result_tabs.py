@@ -37,9 +37,10 @@ from imageQC.scripts.mini_methods_calculate import (
 class ResultTableWidget(QWidget):
     """Results table widget."""
 
-    def __init__(self, parent):
+    def __init__(self, parent, supplement=False):
         super().__init__()
         self.main = parent
+        self.supplement = supplement
 
         vlo = QVBoxLayout()
         self.setLayout(vlo)
@@ -243,9 +244,11 @@ class ResultTable(QTableWidget):
                     row for i, row in enumerate(values_rows_copy) if i in marked_imgs]
             if self.main.current_test == 'MTF' and self.main.current_modality == 'CT':
                 if self.main.current_paramset.mtf_cy_pr_mm is False:
-                    # factor 10 to get /cm instead of /mm
-                    for i in range(len(values_rows_copy)):
-                        values_rows_copy[i] = mtf_multiply_10(values_rows_copy[i])
+                    if self.parent.supplement is False:
+                        # factor 10 to get /cm instead of /mm
+                        for i in range(len(values_rows_copy)):
+                            values_rows_copy[i] = mtf_multiply_10(
+                                values_rows_copy[i])
         if len(row_labels) != 0:
             n_cols = len(values_cols)
             n_rows = len(row_labels)
@@ -451,23 +454,25 @@ class ResultPlotCanvas(PlotCanvas):
                 self.default_range_x = [None, None]
                 self.default_range_y = [None, None]
                 for curve in self.curves:
-                    min_x = np.min(curve['xvals'])
-                    max_x = np.max(curve['xvals'])
-                    min_y = np.min(curve['yvals'])
-                    max_y = np.max(curve['yvals'])
-                    if None in self.default_range_x:
-                        self.default_range_x = [min_x, max_x]
-                        self.default_range_y = [min_y, max_y]
-                    else:
-                        self.default_range_x[0] = min(
-                            [min_x, self.default_range_x[0]])
-                        self.default_range_x[1] = max(
-                            [max_x, self.default_range_x[1]])
-                        self.default_range_y[0] = min(
-                            [min_y, self.default_range_y[0]])
-                        self.default_range_y[1] = max(
-                            [max_y, self.default_range_y[1]])
-
+                    try:
+                        min_x = np.min(curve['xvals'])
+                        max_x = np.max(curve['xvals'])
+                        min_y = np.min(curve['yvals'])
+                        max_y = np.max(curve['yvals'])
+                        if None in self.default_range_x:
+                            self.default_range_x = [min_x, max_x]
+                            self.default_range_y = [min_y, max_y]
+                        else:
+                            self.default_range_x[0] = min(
+                                [min_x, self.default_range_x[0]])
+                            self.default_range_x[1] = max(
+                                [max_x, self.default_range_x[1]])
+                            self.default_range_y[0] = min(
+                                [min_y, self.default_range_y[0]])
+                            self.default_range_y[1] = max(
+                                [max_y, self.default_range_y[1]])
+                    except TypeError:
+                        pass
             if None not in self.default_range_x:
                 try:
                     self.ax.set_xlim(self.default_range_x)
@@ -1092,6 +1097,7 @@ class ResultPlotCanvas(PlotCanvas):
                 self.title = sel_text
                 self.xtitle = 'zpos (mm)'
                 xvals = details_dict['zpos_used']
+
                 if sel_text == 'z-profile central ROI, slice selection':
                     self.curves.append(
                         {'label': 'All slices', 'xvals': details_dict['zpos'],
@@ -1103,14 +1109,38 @@ class ResultPlotCanvas(PlotCanvas):
                          'style': '-r'})
                     self.ytitle = 'z-profile for Auto select slices'
                 elif sel_text == 'Average in ROI pr slice':
-                    labels = ['Center', 'at12', 'at15', 'at18', 'at21']
-                    styles = ['-r', '-b', '-g', '-y', '-c']
-                    for i in  range(5):
-                        yvals = details_dict[f'roi_averages_{i}']
+                    if self.main.current_paramset.hom_type == 1:
+                        labels = ['Center', 'at12', 'at15', 'at18', 'at21']
+                        styles = ['-r', '-b', '-g', '-y', '-c']
+                        for i in  range(5):
+                            yvals = details_dict[f'roi_averages_{i}']
+                            self.curves.append(
+                                {'label': labels[i], 'xvals': xvals,
+                                 'yvals': yvals, 'style': styles[i]})
+                    else:
                         self.curves.append(
-                            {'label': labels[i], 'xvals': xvals,
-                             'yvals': yvals, 'style': styles[i]})
+                            {'label': 'Average in ROI', 'xvals': xvals,
+                             'yvals': details_dict['roi_averages_0'],
+                             'style': '-' + self.color_k})
                     self.ytitle = 'Average pixel value'
+                elif sel_text == 'Stdev in ROI pr slice':
+                    self.curves.append(
+                        {'label': 'Stdev in ROI', 'xvals': xvals,
+                         'yvals': details_dict['roi_stds_0'],
+                         'style': '-' + self.color_k})
+                    self.ytitle = 'Stdev'
+                elif sel_text == 'Difference from global average pr slice':
+                    self.curves.append(
+                        {'label': 'Diff from global avg (%)', 'xvals': xvals,
+                         'yvals': details_dict['diff_avg_pr_slice'],
+                         'style': '-' + self.color_k})
+                    self.ytitle = 'Diff from global avg (%)'
+                elif sel_text == 'Difference from global stdev pr slice':
+                    self.curves.append(
+                        {'label': 'Diff from global std (%)', 'xvals': xvals,
+                         'yvals': details_dict['diff_std_pr_slice'],
+                         'style': '-' + self.color_k})
+                    self.ytitle = 'Diff from global std (%)'
                 elif sel_text == 'Integral uniformity pr slice':
                     yvals = details_dict['uniformity_pr_slice']
                     self.ytitle = 'Integral uniformity (%)'

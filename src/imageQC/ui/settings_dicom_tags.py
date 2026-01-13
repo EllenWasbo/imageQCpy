@@ -213,17 +213,18 @@ class DicomTagDialog(ImageQCDialog):
         options = ['']
         if self.pydict is not None:
             taginfo_this = self.get_tag_info()
-            data_element = dcm.get_tag_data(self.pydict, tag_info=taginfo_this)
-            if isinstance(data_element, list):
-                data_element = data_element[0]
-            if data_element is not None:
-                self.data_element = data_element
-                if data_element.VM > 1:
-                    options = [str(i) for i in range(data_element.VM)]
-                    options.insert(0, 'all values')
-                    frames = self.pydict.get('NumberOfFrames', -1)
-                    if frames > 1:
-                        options.insert(1, 'per frame')
+            if taginfo_this is not None:
+                data_element = dcm.get_tag_data(self.pydict, tag_info=taginfo_this)
+                if isinstance(data_element, list):
+                    data_element = data_element[0]
+                if data_element is not None:
+                    self.data_element = data_element
+                    if data_element.VM > 1:
+                        options = [str(i) for i in range(data_element.VM)]
+                        options.insert(0, 'all values')
+                        frames = self.pydict.get('NumberOfFrames', -1)
+                        if frames > 1:
+                            options.insert(1, 'per frame')
         self.cbox_value_id.clear()
         self.cbox_value_id.addItems(options)
         self.update_value()
@@ -302,46 +303,55 @@ class DicomTagDialog(ImageQCDialog):
         new_tag_info : TagInfo
         """
         tag_str = self.tag_string.text()
-        tag_group = hex(int('0x' + tag_str[0:4], 16))
-        tag_elem = hex(int('0x' + tag_str[5:9], 16))
+        try:
+            tag_group = hex(int('0x' + tag_str[0:4], 16))
+            tag_elem = hex(int('0x' + tag_str[5:9], 16))
+        except ValueError:
+            tag_group = None
 
-        self.validate_factor()  # probably overkill
-        new_tag_info = cfc.TagInfo(
-            sort_index=self.tag_input.sort_index,
-            attribute_name=self.txt_attribute_name.text(),
-            tag=[tag_group, tag_elem],
-            unit=self.txt_unit.text(),
-            factor=float(self.txt_factor.text())
-            )
-        # get sequence from list as sample empty if input sequence (edit)
-        if self.list_sequences.count() > 0:
-            seq_list = []
-            for i in range(self.list_sequences.count()):
-                seq_list.append(self.list_sequences.item(i).text())
-            if len(seq_list) > 0:
-                new_tag_info.sequence = seq_list
-        # value_id
-        if self.cbox_value_id.count() > 0:
-            cur_text = self.cbox_value_id.currentText()
-            if cur_text == 'per frame':
-                new_tag_info.value_id = -2
-            elif cur_text in ['all', '']:
-                new_tag_info.value_id = -1
-            else:
-                try:
-                    new_tag_info.value_id = int(cur_text)
-                except ValueError:
+        if tag_group is None:
+            new_tag_info = None
+            QMessageBox.warning(
+                self, 'Unexpected tag format',
+                f'Tag format expected as XXXX,XXXX. Found: {tag_str}.')
+        else:
+            self.validate_factor()  # probably overkill
+            new_tag_info = cfc.TagInfo(
+                sort_index=self.tag_input.sort_index,
+                attribute_name=self.txt_attribute_name.text(),
+                tag=[tag_group, tag_elem],
+                unit=self.txt_unit.text(),
+                factor=float(self.txt_factor.text())
+                )
+            # get sequence from list as sample empty if input sequence (edit)
+            if self.list_sequences.count() > 0:
+                seq_list = []
+                for i in range(self.list_sequences.count()):
+                    seq_list.append(self.list_sequences.item(i).text())
+                if len(seq_list) > 0:
+                    new_tag_info.sequence = seq_list
+            # value_id
+            if self.cbox_value_id.count() > 0:
+                cur_text = self.cbox_value_id.currentText()
+                if cur_text == 'per frame':
+                    new_tag_info.value_id = -2
+                elif cur_text in ['all', '']:
                     new_tag_info.value_id = -1
+                else:
+                    try:
+                        new_tag_info.value_id = int(cur_text)
+                    except ValueError:
+                        new_tag_info.value_id = -1
 
-        checked_strings = []
-        for idx in range(len([*QUICKTEST_OPTIONS])):
-            if self.btngr_modality.button(idx).isChecked():
-                checked_strings.append(
-                    self.btngr_modality.button(idx).text())
-        if (len(checked_strings) == 0
-                or len(checked_strings) == len([*QUICKTEST_OPTIONS])):
-            checked_strings = ['']
-        new_tag_info.limited2mod = checked_strings
+            checked_strings = []
+            for idx in range(len([*QUICKTEST_OPTIONS])):
+                if self.btngr_modality.button(idx).isChecked():
+                    checked_strings.append(
+                        self.btngr_modality.button(idx).text())
+            if (len(checked_strings) == 0
+                    or len(checked_strings) == len([*QUICKTEST_OPTIONS])):
+                checked_strings = ['']
+            new_tag_info.limited2mod = checked_strings
 
         return new_tag_info
 
@@ -678,7 +688,8 @@ class DicomTagsWidget(StackWidget):
         res = dlg.exec()
         if res:
             newtag = dlg.get_tag_info()
-            self.update_tag_info(newtag)
+            if newtag is not None:
+                self.update_tag_info(newtag)
 
     def duplicate_tag(self):
         """Open Dialog to add tag with current tag settings."""
@@ -689,7 +700,8 @@ class DicomTagsWidget(StackWidget):
         res = dlg.exec()
         if res:
             newtag = dlg.get_tag_info()
-            self.update_tag_info(newtag)
+            if newtag is not None:
+                self.update_tag_info(newtag)
 
     def edit_tag(self):
         """Open Dialog to edit tag."""
@@ -706,7 +718,8 @@ class DicomTagsWidget(StackWidget):
             res = dlg.exec()
             if res:
                 edited_tag = dlg.get_tag_info()
-                self.update_tag_info(edited_tag, edit=True, index=idx)
+                if edited_tag is not None:
+                    self.update_tag_info(edited_tag, edit=True, index=idx)
 
     def move_up(self):
         """Move tag before tag above."""

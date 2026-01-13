@@ -785,7 +785,7 @@ def test_SPECT_MTF_linesource():
     calculate_qc.calculate_qc(input_main)
     assert len(input_main.results['MTF']['values'][0]) == 4
     values10 = np.round(10.*np.array(input_main.results['MTF']['values'][0]))
-    assert np.array_equal(values10, np.array([92., 168.,  93., 170.]))
+    assert np.array_equal(values10, np.array([93., 170., 92., 168.]))
 
 
 def test_PET_Cro():

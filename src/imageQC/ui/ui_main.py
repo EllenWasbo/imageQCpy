@@ -1288,11 +1288,13 @@ class MainWindow(QMainWindow):
         self.tab_results = QTabWidget()
         self.tab_results.currentChanged.connect(
             lambda: self.refresh_results_display(update_table=True))
-        self.wid_res_tbl = ui_main_result_tabs.ResultTableWidget(self)
+        self.wid_res_tbl = ui_main_result_tabs.ResultTableWidget(
+            self, supplement=False)
         self.wid_res_plot = ui_main_result_tabs.ResultPlotWidget(
             self, ui_main_result_tabs.ResultPlotCanvas(self))
         self.wid_res_image = ui_main_result_tabs.ResultImageWidget(self)
-        self.wid_res_tbl_sup = ui_main_result_tabs.ResultTableWidget(self)
+        self.wid_res_tbl_sup = ui_main_result_tabs.ResultTableWidget(
+            self, supplement=True)
 
         self.tab_results.addTab(self.wid_res_tbl, 'Results table')
         self.tab_results.addTab(self.wid_res_plot, 'Results plot')

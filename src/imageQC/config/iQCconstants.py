@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when fundamental changes or B turns 99, B when major changes,
 #   C new python release (or small fix)
-VERSION = '3.2.1'
+VERSION = '3.2.2'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -109,7 +109,7 @@ ALTERNATIVES = {
     'PET': {
         'ROI': ALTERNATIVES_ROI,
         'Hom': ['pr image 5 ROIs', 'AAPM TG 126',
-                'NEMA NU-2 1994 / IAEA 2009'],
+                'NEMA NU-2 1994 / IAEA 2009', 'EANM 2023'],
         'Rec': ['Recovery coefficients, average',
                 'Recovery coefficients, max',
                 'Recovery coefficients, peak',
@@ -316,6 +316,10 @@ HEADERS = {
             'alt2': ['Max intra slice non-uniformity',
                      'Max CoV pr slice',
                      'Volume non_uniformity', 'Volume CoV'],
+            'alt3': ['Min diff from global avg (%)',
+                     'Max diff from global avg (%)',
+                     'Global average'
+                     ],
             },
         'Cro': {
             'alt0': [
@@ -380,7 +384,8 @@ HEADERS_SUP = {
             'alt0': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
                      'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y', 'sigma_prefilt'],
             'alt1': ['A1_x', 'sigma1_x', 'A2_x', 'sigma2_x',
-                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y', 'sigma_prefilt'],
+                     'A1_y', 'sigma1_y', 'A2_y', 'sigma2_y', 'sigma_prefilt',
+                     'ROI x_offset (mm)', 'ROI y_offset (mm)'],
             'alt2': ['A1', 'sigma1', 'A2', 'sigma2', 'sigma_prefilt'],
             'alt3': ['A1 line1', 'sigma1 line1', 'A2 line1', 'sigma2 line1',
                      'A1 line2', 'sigma1 line2', 'A2 line2', 'sigma2 line2',
@@ -455,7 +460,8 @@ HEADERS_SUP = {
         'ROI': {'alt0': roi_headers_sup},
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
-            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
+            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt',
+                     'ROI x_offset (mm)', 'ROI y_offset (mm)'],
             'alt2': ['FWHM x', 'FWHM y',
                      'x offset (mm)', 'y offset (mm)',
                      'A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],
@@ -470,16 +476,22 @@ HEADERS_SUP = {
         },
     'PET':  {
         'ROI': {'alt0': roi_headers_sup},
-        'Hom': {'alt2': ['Min total counts pr slice',
-                         'Max total counts pr slice',
-                         'Avg total counts pr slice']},
+        'Hom': {
+            'alt2': ['Min total counts pr slice',
+                     'Max total counts pr slice',
+                     'Avg total counts pr slice'],
+            'alt3': ['Min diff from global stdev (%)',
+                     'Max diff from global stdev (%)',
+                     'Global stdev'],
+            },
         'Rec': {
             'alt0': ['Scan start (HHMMSS)', 'Spheres at scan start (Bq/mL)',
                      'Background at scan start (Bq/mL)'],
             },
         'MTF': {
             'alt0': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
-            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt'],
+            'alt1': ['A1_x', 'sigma1_x', 'A1_y', 'sigma1_y', 'sigma_prefilt',
+                     'ROI x_offset (mm)', 'ROI y_offset (mm)'],
             'alt2': ['FWHM x', 'FWHM y',
                      'x offset (mm)', 'y offset (mm)',
                      'A1_x', 'sigma1_x', 'A1_y', 'sigma1_y'],

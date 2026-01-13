@@ -1429,7 +1429,7 @@ class ResultImageCanvas(GenericImageCanvas):
             self.contours_to_add.append(
                 [details_dict['roi_found_y'], 'b', '-'])
 
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, TypeError):
             pass
 
     def Hom(self, sel_txt):

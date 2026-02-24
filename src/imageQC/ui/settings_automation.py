@@ -756,12 +756,13 @@ class LimitsAndPlotContent(QWidget):
             self.txt_sample_file_path.setText(path)
             self.update_from_sample_file()
 
-    def generate_empty_template(self):
+    def generate_empty_template(self, label=''):
         """Generate empty template based on available headers."""
         groups = [[header] for header in self.headers]
         self.parent.current_template = cfc.LimitsAndPlotTemplate(
-            groups=groups, type_vendor=self.type_vendor)
+            label=label, groups=groups, type_vendor=self.type_vendor)
         self.group_numbers = list(range(len(self.headers)))
+        self.parent.flag_edit(True)
 
     def set_template_from_label(self, label=''):
         """Set current template to already defined template with given label."""
@@ -784,22 +785,23 @@ class LimitsAndPlotContent(QWidget):
             tuple = (group_index, header)
             if any header in original header list not in updated template
         """
-        orig_headers = copy.deepcopy(self.headers)
-        orig_first_values = copy.deepcopy(self.first_values)
         ignored = []
         if self.parent.current_template:
-            self.headers = []
-            self.group_numbers = []
-            self.first_values = []
-            for idx, group in enumerate(self.parent.current_template.groups):
-                self.group_numbers.extend([idx] * len(group))
-                for header in group:
-                    if header in orig_headers:
-                        self.headers.append(header)
-                        orig_idx = orig_headers.index(header)
-                        self.first_values.append(orig_first_values[orig_idx])
-                    else:
-                        ignored.append((idx, header))
+            if len(self.parent.current_template.groups) > 0:
+                orig_headers = copy.deepcopy(self.headers)
+                orig_first_values = copy.deepcopy(self.first_values)
+                self.headers = []
+                self.group_numbers = []
+                self.first_values = []
+                for idx, group in enumerate(self.parent.current_template.groups):
+                    self.group_numbers.extend([idx] * len(group))
+                    for header in group:
+                        if header in orig_headers:
+                            self.headers.append(header)
+                            orig_idx = orig_headers.index(header)
+                            self.first_values.append(orig_first_values[orig_idx])
+                        else:
+                            ignored.append((idx, header))
         return ignored
 
     def validate_headers(self):
@@ -990,7 +992,8 @@ class LimitsAndPlotContent(QWidget):
                 self.validate_headers()
             else:
                 if len(self.parent.current_template.groups) == 0:  # empty template
-                    self.generate_empty_template()
+                    self.generate_empty_template(
+                        label=self.parent.current_template.label)
                 else:
                     # changed sample file
                     self.validate_headers()

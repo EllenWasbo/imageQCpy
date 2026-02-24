@@ -1,3 +1,12 @@
+# v3.2.4
+_Feb 24, 2026_
+
+Changes:
+- PET reading vendor file: Added the missing mini-blocks out of range for Energy Resolution and Location for 'Siemens PET-CT DailyQC Reports, Vision (.pdf)'
+
+Fixes:
+- Limits and plot templates: Fixes to adding new empty template reading from a new sample file.
+
 # v3.2.3
 _Feb 24, 2026_
 

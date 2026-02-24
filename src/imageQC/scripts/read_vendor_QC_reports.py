@@ -563,13 +563,37 @@ def read_Siemens_PET_dailyQC(txt, vision=False):
                     n_blocks_energy_peak = split_txt[0]
                 except IndexError:
                     pass
+            n_blocks_energy_res = None
+            search_txt = 'Energy Re'
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                try:
+                    split_txt = txt[rowno-1].split(' ')
+                    split_txt = [x for x in split_txt if x != '']
+                    n_blocks_energy_res = split_txt[0]
+                except IndexError:
+                    pass
+            n_blocks_energy_loc = None
+            search_txt = 'Location '
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                try:
+                    split_txt = txt[rowno-2].split(' ')
+                    split_txt = [x for x in split_txt if x != '']
+                    n_blocks_energy_loc = split_txt[2]
+                except IndexError:
+                    pass
             
             values.extend([n_blocks_timing_offset,
                            n_blocks_timing_width,
-                           n_blocks_energy_peak])
+                           n_blocks_energy_peak,
+                           n_blocks_energy_res,
+                           n_blocks_energy_loc])
             headers.extend(['Blocks out of range timing offset',
                             'Blocks out of range timing width',
-                            'Blocks out of range energy peak'])
+                            'Blocks out of range energy peak',
+                            'Blocks out of range energy resolution',
+                            'Blocks out of range energy location'])
 
         status = True
 

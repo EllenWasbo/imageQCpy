@@ -530,8 +530,8 @@ def read_Siemens_PET_dailyQC(txt, vision=False):
 
         if vision:
             # Block Timing
-            n_blocks_timing_offset = '-1'
-            n_blocks_timing_width = '-1'
+            n_blocks_timing_offset = None
+            n_blocks_timing_width = None
             search_txt = 'Block Ave'
             if search_txt in short_txt:  # VG80B or similar
                 search_txt = 'Timing Re'
@@ -553,7 +553,7 @@ def read_Siemens_PET_dailyQC(txt, vision=False):
                     except IndexError:
                         pass
             # Energy Peak
-            n_blocks_energy_peak = '-1'
+            n_blocks_energy_peak = None
             search_txt = 'Energy Pe'
             if search_txt in short_txt:
                 rowno = short_txt.index(search_txt)

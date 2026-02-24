@@ -757,7 +757,7 @@ class ResultPlotCanvas(PlotCanvas):
                       'xvals': [min(cdmam_table_dict['thickness']),
                                 max(cdmam_table_dict['thickness'])],
                       'yvals': [0.65, 0.65],
-                      'style': '-k' })
+                      'style': '-' + self.color_k})
             self.default_range_y = [0.0, 1.1]
 
         def prepare_threshold_plot():
@@ -786,7 +786,7 @@ class ResultPlotCanvas(PlotCanvas):
             curve = {'label': 'achievalble',
                      'xvals': limits['diameters'],
                      'yvals': limits['achievable_thresholds_thickness'],
-                     'style': 'k'}
+                     'style': self.color_k}
             self.curves.append(curve)
             self.default_range_x = [0.05, 2]
             self.default_range_y = [0.01, 5]
@@ -1691,7 +1691,7 @@ class ResultPlotCanvas(PlotCanvas):
                             'label': legend[i],
                             'xvals': xvals[i],
                             'yvals': profiles[i],
-                            'style': linestyles[i] + 'k'
+                            'style': linestyles[i] + self.color_k
                              })
                 else:
                     linestyles = ['-', '--']  # x, y
@@ -1864,12 +1864,14 @@ class ResultPlotCanvas(PlotCanvas):
             yvals = common_details['profile_xyz'][idx]
             self.curves.append({
                 'label': 'pixel values',
-                'xvals': xvals, 'yvals': yvals, 'style': '-k.'})
+                'xvals': xvals, 'yvals': yvals,
+                'style': '-' + self.color_k+ '.'})
             xvals = common_details['NEMA_modified_profiles'][idx][0]
             yvals = common_details['NEMA_modified_profiles'][idx][1]
             self.curves.append({
                 'label': 'parabolic fit',
-                'xvals': xvals[2:-2], 'yvals': yvals[2:-2], 'style': ':k'})
+                'xvals': xvals[2:-2], 'yvals': yvals[2:-2],
+                'style': ':' + self.color_k})
             self.curves.append({
                 'label': '_no_legend_', 'style': '-r',
                 'xvals': [xvals[1], xvals[-2]],
@@ -2099,7 +2101,7 @@ class ResultPlotCanvas(PlotCanvas):
             rec_types = [wid_rec_type.itemText(i) for i
                          in range(wid_rec_type.count())]
             rec_type = rec_types.index(sel_text)
-            subtr = -1 if rec_type < 3 else -2
+            subtr = -2 if rec_type in [3, 4, 5] else -1
             self.curves.append(
                 {'label': 'measured values', 'xvals': roi_sizes,
                  'yvals': details_dict['values'][rec_type][:subtr], 'style': '-bo'})
@@ -2108,7 +2110,7 @@ class ResultPlotCanvas(PlotCanvas):
                 self.ytitle = 'Recovery coefficient'
                 idx = test_widget.rec_earl.currentIndex()
                 if idx > 0:
-                    proceed = True
+                    proceed = True  # peak EARL 1 not defined
                     if idx == 1 and rec_type == 2:
                         proceed = False
                     if roi_sizes != [10., 13., 17., 22., 28., 37.]:  # EARL tolerances
@@ -2126,8 +2128,44 @@ class ResultPlotCanvas(PlotCanvas):
                                      [.61, .86, .97, .99, .97, 1.],  # upper A50
                                      [.52, .85, 1., 1.01, 1.01, 1.05],  # lower max
                                      [.88, 1.22, 1.38, 1.32, 1.26, 1.29],  # upper max
-                                     [.3, .46, 0.75, 0.9, 0.9, 0.9],  # lower peak
-                                     [.43, .7, 0.98, 1.1, 1.1, 1.1]  # upper peak
+                                     [.27, .45, 0.75, 0.9, 0.9, 0.9],  # lower peak
+                                     [.41, .7, 0.99, 1.1, 1.1, 1.1]  # upper peak
+                                     ]
+                        idx_lower = 2 * (rec_type % 3)
+                        tolmin = {'label': f'EARL{idx} lower',
+                                  'xvals': roi_sizes,
+                                  'yvals': yvals[idx_lower],
+                                  'style': '--' + self.color_k}
+                        tolmax = {'label': f'EARL{idx} upper',
+                                  'xvals': roi_sizes,
+                                  'yvals': yvals[idx_lower + 1],
+                                  'style': '--' + self.color_k}
+                        self.curves.append(tolmin)
+                        self.curves.append(tolmax)
+            elif rec_type > 5:
+                self.ytitle = 'Contrast recovery coefficient'
+                idx = test_widget.rec_earl.currentIndex()
+                if idx > 0:
+                    proceed = True
+                    if idx == 1 and rec_type == 2:
+                        proceed = False  # peak EARL 1 not defined
+                    if roi_sizes != [10., 13., 17., 22., 28., 37.]:  # EARL tolerances
+                        proceed = False
+                    if proceed:
+                        if idx == 1:  # EARL 1
+                            yvals = [[.17, .36, .51, .58, .68, .73],  # lower A50
+                                     [.35, .54, .69, .75, .83, .87],  # upper A50
+                                     [.25, .53, .69, .81, .9, .94],  # lower max
+                                     [.51, .83, 1.01, 1.10, 1.15, 1.18],  # upper max
+                                     [None] * 6, [None] * 6  # peak
+                                     ]
+                        elif idx == 2:  # EARL 2
+                            yvals = [[.30, .58, .73, .77, .79, .83],  # lower A50
+                                     [.55, .84, .97, .99, .97, 1.],  # upper A50
+                                     [.45, .83, 1., 1.01, 1.01, 1.06],  # lower max
+                                     [.86, 1.25, 1.43, 1.37, 1.3, 1.33],  # upper max
+                                     [.17, .37, 0.71, 0.89, 0.89, 0.89],  # lower peak
+                                     [.33, .66, 0.99, 1.11, 1.11, 1.11]  # upper peak
                                      ]
                         idx_lower = 2 * (rec_type % 3)
                         tolmin = {'label': f'EARL{idx} lower',
@@ -2521,12 +2559,12 @@ class ResultPlotCanvas(PlotCanvas):
                 labels = ['Human visual response filter']
             self.curves.append(
                 {'label': labels[0],
-                 'xvals': xvals, 'yvals': yvals, 'style': '-k'})
+                 'xvals': xvals, 'yvals': yvals, 'style': '-' + self.color_k})
             if len(labels) == 2:
                 yvals = yvals = details_dict['eye_filter_small']['V2']
                 self.curves.append(
                     {'label': labels[1],
-                     'xvals': xvals, 'yvals': yvals, 'style': ':k'})
+                     'xvals': xvals, 'yvals': yvals, 'style': ':' + self.color_k})
             self.title = 'Frequency filter(s)'
             self.ytitle = 'Ratio'
             self.default_range_y = [0, 1.1]
@@ -2578,12 +2616,12 @@ class ResultPlotCanvas(PlotCanvas):
                             'label': 'Central 10% rows ref. corr.',
                             'xvals': np.arange(len(prof_x)),
                             'yvals': prof_x,
-                            'style': 'k'})
+                            'style': self.color_k})
                         self.curves.append({
                             'label': 'Central 10% columns ref. corr.',
                             'xvals': np.arange(len(prof_y)),
                             'yvals': prof_y,
-                            'style': ':k'})
+                            'style': ':' + self.color_k})
 
         if sel_text == '':
             test_widget = self.main.stack_test_tabs.currentWidget()

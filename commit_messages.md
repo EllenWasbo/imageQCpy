@@ -1,3 +1,18 @@
+# v3.2.3
+_Feb 24, 2026_
+
+Changes:
+- PET test Recovery coefficient updated from EARL pr 2026: 
+    - Added option to tabulate average, max and peak in spheres as Contrast RC (in addition to Recovery Coefficient and Bq/ml). 
+    - Updated peak tolerances for RC curves.
+    - Added option with single syringe method (rest from spheres added to background).
+	- NB - not validated against EARL yet. Give me a hands up if you find errors/discrepancies.
+- PET reading vendor file: Reading Daily QC (with phantom) from Siemens PET-CT Vision now include extracting number of mini-blocks out of range for: 
+Timing Residual Offset, Timing Width and Energy Peak. Use Expected file type 'Siemens PET-CT DailyQC Reports, Vision (.pdf)'
+
+Fixes:
+- Plots: In dark mode, lines should not be black (invisible). Now converted to white lines in dark mode.
+
 # v3.2.2
 _Jan 13, 2026_
 

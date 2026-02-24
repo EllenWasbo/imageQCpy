@@ -682,7 +682,8 @@ class ParamSetPET(ParamSetCommon):
     cro_auto_select_slices: bool = True
     cro_percent_slices: float = 75  # % within fwhm of signal profile to include
     rec_roi_size: float = 20.
-    rec_type: int = 0  # 0 = RC avg, 1 = RC max, 2 = RC peak, 3,4,5 Bq/mL avg,max,peak
+    rec_type: int = 0
+    # 0,1,2 = RC avg,max,peak, 3,4,5 Bq/mL avg,max,peak, 6,7,8 = CRC avg,max,peak
     rec_auto_select_slices: bool = True
     rec_percent_slices: int = 90  # % within fwhm of background profile to include
     rec_table: RecTable = field(default_factory=RecTable)
@@ -693,6 +694,7 @@ class ParamSetPET(ParamSetCommon):
     rec_plot: int = 0  # 0 = table values, 1 = z-profile
     rec_earl: int = 1  # tolerances from 0 = None, 1 = EARL1, 2 = EARL2
     rec_background_volume: int = 9500
+    rec_one_syringe: bool = False  # True if one syringe and rest in background
     mtf_type: int = 2
     # 0=point xy, 1=line, 2=line sliding window,, 3=z-res line, 4=zres edge,
     #5=xyzres point, 6=xyzres point NEMA

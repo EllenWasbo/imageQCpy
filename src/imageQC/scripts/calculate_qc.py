@@ -995,12 +995,7 @@ def calculate_qc(input_main, wid_auto=None,
             if input_main.current_test != 'CDM':
                 input_main.refresh_results_display()
             # refresh image display if result contain rois to display
-            if input_main.current_modality == 'CT':
-                if 'MTF' in input_main.results and paramset.mtf_type == 2:
-                    input_main.refresh_img_display()
-                if 'TTF' in input_main.results:
-                    input_main.refresh_img_display()
-            elif input_main.current_modality in ['CT', 'SPECT', 'PET']:
+            if input_main.current_modality in ['CT', 'SPECT', 'PET']:
                 if 'MTF' in input_main.results:
                     if paramset.mtf_type in [5, 6]:
                         try:
@@ -1009,18 +1004,22 @@ def calculate_qc(input_main, wid_auto=None,
                                     'max_slice_idx'])
                         except (KeyError, IndexError):
                             pass
+                    elif input_main.current_modality == 'CT' and paramset.mtf_type == 2:
+                        input_main.refresh_img_display()
+                elif 'TTF' in input_main.results:
+                    input_main.refresh_img_display()
+                elif 'Rec' in input_main.results:
+                    try:
+                        input_main.wid_window_level.tb_wl.set_window_level(
+                            'min_max', set_tools=True)
+                        input_main.set_active_img(
+                            input_main.results['Rec']['details_dict']['max_slice_idx'])
+                    except KeyError:
+                        pass
             elif 'Foc' in input_main.results:
                 input_main.refresh_img_display()
             elif 'Pha' in input_main.results:
                 input_main.refresh_img_display()
-            elif 'Rec' in input_main.results:
-                try:
-                    input_main.wid_window_level.tb_wl.set_window_level(
-                        'min_max', set_tools=True)
-                    input_main.set_active_img(
-                        input_main.results['Rec']['details_dict']['max_slice_idx'])
-                except KeyError:
-                    pass
             elif 'CDM' in input_main.results:
                 try:
                     input_main.tab_mammo.cdm_cbox_diameter.clear()
@@ -3083,7 +3082,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
         """PET Recovery Curve."""
         alt = paramset.rec_type
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt' + str(alt)])
-        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt0'])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
         errmsgs = []
         proceed = True
         if extra_taglists[0][-1] != 'BQML':
@@ -3219,6 +3218,8 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 acq_times = [t[0] for t in extra_taglists]
                 acq_times.sort()
                 scan_start = acq_times[0].split('.')[0]
+                rc_values_all = []
+                crc_values_all = []
                 if activity_dict:
                     acq_time = datetime.strptime(scan_start, fmt)
                     tdiff_h = acq_time.hour - activity_dict['sphere_time'].hour
@@ -3233,27 +3234,34 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     time_diff = tdiff_h * 60 + tdiff_m + tdiff_s / 60
                     bg_act_at_scan = activity_dict['background_Bq_ml'] * np.exp(
                         -np.log(2)*time_diff/HALFLIFE['F18'])
-                    rc_values_all = []
                     for i in range(3):
                         img_values = np.array(details_dict['values'][i])
                         rc_values = img_values[:n_spheres] / sph_act_at_scan
                         rc_values = list(rc_values) + [img_values[-2] / bg_act_at_scan]
                         rc_values_all.append(rc_values)
+                        # CRC
+                        actuals = (sph_act_at_scan - bg_act_at_scan) / bg_act_at_scan
+                        bg_meas = img_values[-2]
+                        crc_values = (img_values[:n_spheres] - bg_meas) / bg_meas
+                        crc_values = list(crc_values/actuals) + [bg_meas / bg_act_at_scan]
+                        crc_values_all.append(crc_values)
                     values_sup = [scan_start, sph_act_at_scan, bg_act_at_scan]
                 else:
                     rc_values = [None for i in range(n_spheres + 1)]
                     rc_values_all = [rc_values for i in range(3)]
-                    if rec_type < 3:
-                        rec_type = rec_type + 3  # image values, not RC values
+                    crc_values_all = [rc_values for i in range(3)]
+                    if rec_type not in [3, 4 ,5]:
+                        rec_type = 3  # image values as no RC values can be calcululated
+                        try:
+                            input_main.tab_pet.rec_type.setCurrentIndex(rec_type)
+                        except AttributeError:
+                            pass
                     headers = copy.deepcopy(
                         HEADERS[modality][test_code]['alt' + str(rec_type)])
-                    try:
-                        input_main.tab_pet.rec_type.setCurrentIndex(rec_type)
-                    except AttributeError:
-                        pass
                     values_sup = [scan_start, None, None]
 
-                details_dict['values'] = rc_values_all + details_dict['values']
+                details_dict['values'] = (
+                    rc_values_all + details_dict['values'] + crc_values_all)
                 values = details_dict['values'][rec_type]
                 res = Results(headers=headers, values=[values],
                               headers_sup=headers_sup,

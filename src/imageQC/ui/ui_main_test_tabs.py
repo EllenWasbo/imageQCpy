@@ -627,13 +627,18 @@ class ParamsTabCommon(QTabWidget):
                 proceed = False
             if proceed:
                 if 'values' in self.main.results['Rec']:
-                    self.main.results['Rec']['values'] = (
-                        [self.main.results['Rec']['details_dict']['values'][rec_type]])
-                    self.main.results['Rec']['headers'] = (
-                        HEADERS[self.main.current_modality]['Rec'][
-                            'alt' + str(rec_type)])
-                    self.main.refresh_results_display()
-                    self.main.status_bar.showMessage('Tabular values updated', 1000)
+                    try:
+                        self.main.results['Rec']['values'] = (
+                            [self.main.results['Rec']['details_dict'][
+                                'values'][rec_type]])
+                        self.main.results['Rec']['headers'] = (
+                            HEADERS[self.main.current_modality]['Rec'][
+                                'alt' + str(rec_type)])
+                        self.main.refresh_results_display()
+                        self.main.status_bar.showMessage(
+                            'Tabular values updated', 1000)
+                    except (AttributeError, KeyError):
+                        pass  # TODO errormessage displayed?
 
     def update_NPS_independent_pixels(self):
         """Calculate independent pixels for NPS Xray."""
@@ -3504,6 +3509,12 @@ class ParamsTabPET(ParamsTabCommon):
             elif paramset.hom_type == 3:
                 self.hom_roi_distance.setEnabled(False)
                 self.hom_plot.setEnabled(True)
+            if self.main.current_test == 'Rec':
+                two = not paramset.rec_one_syringe
+                self.flo1b.setRowVisible(0, two)
+                self.flo1b.setRowVisible(1, two)
+                self.flo2b.setRowVisible(0, two)
+                self.flo2b.setRowVisible(1, two)
 
     def update_hom_options(self):
         """Update ROI size based on selected method for test Hom."""
@@ -3780,6 +3791,9 @@ class ParamsTabPET(ParamsTabCommon):
         self.rec_background_volume.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='rec_background_volume',
                                                 update_roi=False))
+        self.rec_one_syringe = QCheckBox('Single syringe method')
+        self.rec_one_syringe.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='rec_one_syringe'))
         self.rec_time_sph = QTimeEdit(self)
         self.rec_time_sph.setDisplayFormat('hh:mm:ss')
         self.rec_time_sph.editingFinished.connect(self.clear_results_current_test)
@@ -3812,18 +3826,24 @@ class ParamsTabPET(ParamsTabCommon):
         flo2.addRow(QLabel('at'), self.rec_time_sph_resid)
         flo1.addRow(QLabel('Total volume (mL)'), self.rec_vol_sph)
 
-        vlo_left.addWidget(uir.LabelHeader('Background', 3))
+        hlo_bg_top = QHBoxLayout()
+        vlo_left.addLayout(hlo_bg_top)
+        hlo_bg_top.addWidget(uir.LabelHeader('Background', 3))
+        hlo_bg_top.addWidget(self.rec_one_syringe)
         hlo_bg = QHBoxLayout()
         vlo_left.addLayout(hlo_bg)
-        flo1b = QFormLayout()
-        flo2b = QFormLayout()
-        hlo_bg.addLayout(flo1b)
-        hlo_bg.addLayout(flo2b)
-        flo1b.addRow(QLabel('Activity (MBq)'), self.rec_act_bg)
-        flo2b.addRow(QLabel('at'), self.rec_time_bg)
-        flo1b.addRow(QLabel('Residual (MBq)'), self.rec_act_bg_resid)
-        flo2b.addRow(QLabel('at'), self.rec_time_bg_resid)
-        flo1b.addRow(QLabel('Volume background (mL)'), self.rec_background_volume)
+        self.flo1b = QFormLayout()
+        self.flo2b = QFormLayout()
+        hlo_bg.addLayout(self.flo1b)
+        hlo_bg.addLayout(self.flo2b)
+        self.flo1b.addRow(QLabel('Activity (MBq)'), self.rec_act_bg)
+        self.flo2b.addRow(QLabel('at'), self.rec_time_bg)
+        self.flo1b.addRow(QLabel('Residual (MBq)'), self.rec_act_bg_resid)
+        self.flo2b.addRow(QLabel('at'), self.rec_time_bg_resid)
+        hlo_vol_bg = QHBoxLayout()
+        vlo_left.addLayout(hlo_vol_bg)
+        hlo_vol_bg.addWidget(QLabel('Volume background (mL)'))
+        hlo_vol_bg.addWidget(self.rec_background_volume)
 
         hlo_avg_perc = QHBoxLayout()
         hlo_avg_perc.addWidget(QLabel('Average in sphere within threshold (%)'))
@@ -3896,8 +3916,7 @@ class ParamsTabPET(ParamsTabCommon):
         """Get values for Recovery curve test."""
         if all([
                 self.rec_vol_sph.value() > 0,
-                self.rec_act_sph.value() > 0,
-                self.rec_act_bg.value() > 0
+                self.rec_act_sph.value() > 0
                 ]):
             if self.rec_act_sph_resid.value() > 0:
                 resid_time = self.rec_time_sph_resid.time().toPyTime()
@@ -3915,21 +3934,30 @@ class ParamsTabPET(ParamsTabCommon):
                 sph_act = self.rec_act_sph.value()
                 sph_time = self.rec_time_sph.time().toPyTime()
 
-            if self.rec_act_bg_resid.value() > 0:
-                resid_time = self.rec_time_bg_resid.time().toPyTime()
-                act_time = self.rec_time_bg.time().toPyTime()
-                minutes = (
-                    (resid_time.hour - act_time.hour) * 60 +
-                    (resid_time.minute - act_time.minute) +
-                    (resid_time.second - act_time.second) / 60
-                    )
-                bg = self.rec_act_bg.value() * np.exp(
-                    -np.log(2)*minutes/HALFLIFE['F18'])
-                bg_act = bg - self.rec_act_bg_resid.value()
-                bg_time = self.rec_time_bg_resid.time().toPyTime()
+            if self.rec_one_syringe.isChecked() is False:
+                if self.rec_act_bg_resid.value() > 0:
+                    resid_time = self.rec_time_bg_resid.time().toPyTime()
+                    act_time = self.rec_time_bg.time().toPyTime()
+                    minutes = (
+                        (resid_time.hour - act_time.hour) * 60 +
+                        (resid_time.minute - act_time.minute) +
+                        (resid_time.second - act_time.second) / 60
+                        )
+                    bg = self.rec_act_bg.value() * np.exp(
+                        -np.log(2)*minutes/HALFLIFE['F18'])
+                    bg_act = bg - self.rec_act_bg_resid.value()
+                    bg_time = self.rec_time_bg_resid.time().toPyTime()
+                else:
+                    bg_act = self.rec_act_bg.value()
+                    bg_time = self.rec_time_bg.time().toPyTime()
             else:
-                bg_act = self.rec_act_bg.value()
-                bg_time = self.rec_time_bg.time().toPyTime()
+                # rest from spheres
+                diams = self.main.current_paramset.rec_sphere_diameters
+                vol_spheres = np.sum(4/3*np.pi*(np.array(diams)/2/10)**3)  # mL
+                fraction_act_bg = (
+                    self.rec_vol_sph.value() - vol_spheres) / self.rec_vol_sph.value()
+                bg_time = sph_time
+                bg_act = sph_act * fraction_act_bg
 
             sph_act = sph_act * 1000000 / self.rec_vol_sph.value()
             bg_act = bg_act * 1000000 / self.rec_background_volume.value()

@@ -46,7 +46,10 @@ def read_vendor_template(template, filepath):
         results = read_e_spectrum_Siemens_gamma_camera(filepath)
     elif template.file_type == 'Siemens PET-CT DailyQC Reports (.pdf)':
         txt = get_pdf_txt(filepath)
-        results = read_Siemens_PET_dailyQC(txt)
+        results = read_Siemens_PET_dailyQC(txt, vision=False)
+    elif template.file_type == 'Siemens PET-CT DailyQC Reports, Vision (.pdf)':
+        txt = get_pdf_txt(filepath)
+        results = read_Siemens_PET_dailyQC(txt, vision=True)
     elif template.file_type == 'Siemens PET QualityGuard Reports (.pdf)':
         txt = get_pdf_txt(filepath)
         results = read_Siemens_PET_QualityGuard(txt)
@@ -305,13 +308,15 @@ def read_Siemens_PET_QualityGuard(txt):
     return data
 
 
-def read_Siemens_PET_dailyQC(txt):
+def read_Siemens_PET_dailyQC(txt, vision=False):
     """Read Siemens PET dailyQC report from list of str.
 
     Parameters
     ----------
     txt : list of str
         text from pdf
+    vision : bool
+        True if Vision type scanner (reading timeing offset/width and energy peak)
 
     Returns
     -------
@@ -476,51 +481,6 @@ def read_Siemens_PET_dailyQC(txt):
             except ValueError:
                 pass
 
-        # Block Timing
-        '''
-        n_blocks_timing_offset = '-1'
-        n_blocks_timing_width = '-1'
-        search_txt = 'Block Ave'
-        if search_txt in short_txt:  # VG80B or similar
-            search_txt = 'Timing Re'
-            if search_txt in short_txt:
-                rowno = short_txt.index(search_txt)
-                try:
-                    split_txt = txt[rowno-1].split(' ')
-                    split_txt = [x for x in split_txt if x != '']
-                    n_blocks_timing_offset = split_txt[0]
-                except IndexError:
-                    pass
-            search_txt = 'Timing Wi'
-            if search_txt in short_txt:
-                rowno = short_txt.index(search_txt)
-                try:
-                    split_txt = txt[rowno-2].split(' ')
-                    split_txt = [x for x in split_txt if x != '']
-                    n_blocks_timing_width = split_txt[2]
-                except IndexError:
-                    pass
-        else:
-            search_txt = 'Offset'
-            if search_txt in short_txt:
-                rowno = short_txt.index(search_txt)
-                try:
-                    split_txt = txt[rowno-2].split(' ')
-                    split_txt = [x for x in split_txt if x != '']
-                    n_blocks_timing_offset = split_txt[2]
-                except IndexError:
-                    pass
-            search_txt = 'Width'
-            if search_txt in short_txt:
-                rowno = short_txt.index(search_txt)
-                try:
-                    split_txt = txt[rowno-2].split(' ')
-                    split_txt = [x for x in split_txt if x != '']
-                    n_blocks_timing_width = split_txt[2]
-                except IndexError:
-                    pass
-        '''
-
         # Phantom position
         phantom_pos_x = None
         phantom_pos_y = None
@@ -567,6 +527,49 @@ def read_Siemens_PET_dailyQC(txt):
                    'Image planes out of range efficiency',
                    'Phantom Pos x', 'Phantom Pos y'
                    ]
+
+        if vision:
+            # Block Timing
+            n_blocks_timing_offset = '-1'
+            n_blocks_timing_width = '-1'
+            search_txt = 'Block Ave'
+            if search_txt in short_txt:  # VG80B or similar
+                search_txt = 'Timing Re'
+                if search_txt in short_txt:
+                    rowno = short_txt.index(search_txt)
+                    try:
+                        split_txt = txt[rowno-1].split(' ')
+                        split_txt = [x for x in split_txt if x != '']
+                        n_blocks_timing_offset = split_txt[2]
+                    except IndexError:
+                        pass
+                search_txt = 'Timing Wi'
+                if search_txt in short_txt:
+                    rowno = short_txt.index(search_txt)
+                    try:
+                        split_txt = txt[rowno-3].split(' ')
+                        split_txt = [x for x in split_txt if x != '']
+                        n_blocks_timing_width = split_txt[0]
+                    except IndexError:
+                        pass
+            # Energy Peak
+            n_blocks_energy_peak = '-1'
+            search_txt = 'Energy Pe'
+            if search_txt in short_txt:
+                rowno = short_txt.index(search_txt)
+                try:
+                    split_txt = txt[rowno-1].split(' ')
+                    split_txt = [x for x in split_txt if x != '']
+                    n_blocks_energy_peak = split_txt[0]
+                except IndexError:
+                    pass
+            
+            values.extend([n_blocks_timing_offset,
+                           n_blocks_timing_width,
+                           n_blocks_energy_peak])
+            headers.extend(['Blocks out of range timing offset',
+                            'Blocks out of range timing width',
+                            'Blocks out of range energy peak'])
 
         status = True
 

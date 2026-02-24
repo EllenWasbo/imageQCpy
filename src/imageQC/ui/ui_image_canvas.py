@@ -781,6 +781,11 @@ class ImageCanvas(GenericImageCanvas):
                                                 colors='blue', alpha=0.5,
                                                 linewidths=self.linewidth)
                                             self.contours.append(contour)
+                                    if len(self.contours) > 0:
+                                        h1, _ = self.contours[-1].legend_elements()
+                                    else:
+                                        h1 = None
+                                    anypeak = False
                                     for roi in dd['roi_peaks']:
                                         if roi[idx] is not None:
                                             mask = np.where(roi[idx], 0, 1)
@@ -789,18 +794,11 @@ class ImageCanvas(GenericImageCanvas):
                                                 colors='green', alpha=0.5,
                                                 linewidths=self.linewidth)
                                             self.contours.append(contour)
-                                    mask = np.where(
-                                        np.zeros(self.main.active_img.shape) == 0)
-                                    c1 = self.ax.contour(
-                                        mask, colors='blue', alpha=0.5,
-                                        linewidths=self.linewidth)
-                                    h1, _ = c1.legend_elements()
-                                    c2 = self.ax.contour(
-                                        mask, colors='green', alpha=0.5,
-                                        linewidths=self.linewidth)
-                                    h2, _ = c2.legend_elements()
-                                    self.ax.legend(
-                                        [h1[0], h2[0]], ['Sphere VOI', 'Peak VOI'])
+                                            anypeak = True
+                                    if anypeak:
+                                        h2, _ = self.contours[-1].legend_elements()
+                                        self.ax.legend(
+                                            [h1[0], h2[0]], ['Sphere VOI', 'Peak VOI'])
 
     def ROI(self):
         """Drow ROIs with labels if any."""

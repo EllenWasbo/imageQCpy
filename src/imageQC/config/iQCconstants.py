@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when fundamental changes or B turns 99, B when major changes,
 #   C new python release (or small fix)
-VERSION = '3.2.2'
+VERSION = '3.2.3'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -115,7 +115,11 @@ ALTERNATIVES = {
                 'Recovery coefficients, peak',
                 'Bq/ml from images, average',
                 'Bq/ml from images, max',
-                'Bq/ml from images, peak'],
+                'Bq/ml from images, peak',
+                'CRC, average',
+                'CRC, max',
+                'CRC, peak',
+                ],
         'MTF': ['Point source (2d, xy)', 'Line source (3d, xy)',
                 'Line source, sliding window (3d, xy)',
                 'z-resolution, line source(s)', 'z-resolution, edge',
@@ -335,6 +339,9 @@ HEADERS = {
             'alt3': [f'Avg {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
             'alt4': [f'Max {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
             'alt5': [f'Peak {i+1}' for i in range(6)] + ['Avg backgr', 'Avg Std backgr'],
+            'alt6': [f'Avg {i+1}' for i in range(6)] + ['Avg backgr'],
+            'alt7': [f'Max {i+1}' for i in range(6)] + ['Avg backgr'],
+            'alt8': [f'Peak {i+1}' for i in range(6)] + ['Avg backgr'],
             },
         'MTF': {
             'alt0': ['FWHM x', 'FWTM x', 'FWHM y', 'FWTM y'],
@@ -485,7 +492,7 @@ HEADERS_SUP = {
                      'Global stdev'],
             },
         'Rec': {
-            'alt0': ['Scan start (HHMMSS)', 'Spheres at scan start (Bq/mL)',
+            'altAll': ['Scan start (HHMMSS)', 'Spheres at scan start (Bq/mL)',
                      'Background at scan start (Bq/mL)'],
             },
         'MTF': {
@@ -527,6 +534,7 @@ VENDOR_FILE_OPTIONS = {
     'NM': ['Siemens exported energy spectrum (.txt)'],
     'SPECT': [],
     'PET': ['Siemens PET-CT DailyQC Reports (.pdf)',
+            'Siemens PET-CT DailyQC Reports, Vision (.pdf)',
             'Siemens PET QualityGuard Reports (.pdf)',
             'Siemens PET-MR DailyQC Reports (.xml)'],
     'MR': ['Philips MR PIQT / SPT report (.pdf)',

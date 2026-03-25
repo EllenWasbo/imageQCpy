@@ -645,12 +645,12 @@ class UserSettingsWidget(StackWidget):
             Default is False.
         """
         header = 'Local settings'
-        subtxt = '''Settings specific for the current user.<br>
-        To be able to save any other settings, you will need to
-        specify a config folder.<br>
-        This config folder will hold all other settings and may
-        be shared between users.<br>
-        From start this may be an empty folder.'''
+        subtxt = '''Primary purpose: Save, locally on current computer, where 
+        to find the config folder with all the other settings.<br>
+        From start this global config folder may be an empty folder.<br>
+        <br>
+        And some other user preferences are also saved in the same file (see info below).
+        '''
         super().__init__(dlg_settings, header, subtxt)
 
         self.config_folder = QLineEdit()
@@ -686,13 +686,18 @@ class UserSettingsWidget(StackWidget):
         hlo_font_size.addWidget(QLabel('(Restart to update GUI)'))
         hlo_font_size.addStretch()
         vlo_gui.addLayout(hlo_font_size)
+        vlo_gui.addWidget(QLabel(
+            'Annotation line thickness and font size for the image display is '
+            'saved on exit = remembers last used settings.'))
         gb_gui.setLayout(vlo_gui)
         vlo_1.addWidget(gb_gui)
+        vlo_1.addWidget(QLabel(
+            'And selected modalities in the automation dialog is saved on exit.'))
         vlo_1.addSpacing(50)
 
         hlo_mid.addStretch()
 
-        btn_save_user_prefs = QPushButton('Save user preferences')
+        btn_save_user_prefs = QPushButton('Save local settings')
         btn_save_user_prefs.setIcon(QIcon(
             f'{os.environ[ENV_ICON_PATH]}save.png'))
         btn_save_user_prefs.clicked.connect(self.save_user)
@@ -708,7 +713,8 @@ class UserSettingsWidget(StackWidget):
     def update_from_yaml(self, initial_template_label=''):
         """Load settings from yaml and fill form."""
         _, path, self.user_prefs = cff.load_user_prefs()
-        self.lbl_user_prefs_path.setText('User preferences saved in: ' + path)
+        self.lbl_user_prefs_path.setText(
+            'Local settings (user preferences) saved in: ' + path)
         self.config_folder.setText(self.user_prefs.config_folder)
         self.font_size.setValue(self.user_prefs.font_size)
         self.flag_edit(False)

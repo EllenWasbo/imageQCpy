@@ -2,7 +2,7 @@ matplotlib==3.10.5
 numpy=2.3.2
 pandas==2.2.3
 pdfplumber==0.11.7
-pydicom==3.0.1
+pydicom==3.0.2
 PyQt6==6.8.1
 PyYAML==6.0.2
 scikit_image==0.25.2

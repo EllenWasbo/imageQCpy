@@ -1,3 +1,13 @@
+# v3.2.5
+_Mar 25, 2026_
+
+Dependecies:
+- Replaced requirement of pydicom 3.0.1 with pydicom 3.0.2 due to security issue fix (fix released 19.03.2026)
+
+Fixes:
+- In warning file when violated limits: Template name now always comes on a new line (not appending last line)
+
+
 # v3.2.4
 _Feb 24, 2026_
 

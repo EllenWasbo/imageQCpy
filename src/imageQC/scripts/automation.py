@@ -1107,7 +1107,7 @@ def run_template(auto_template, modality, paramsets, qt_templates, digit_templat
     if len(log) > 0:
         log.insert(0, log_pre)
     if len(warnings) > 0:
-        warnings.insert(0, f'Template {auto_template.label}')
+        warnings.insert(0, f'\nTemplate {auto_template.label}')
         warnings.insert(0, auto_template.path_warnings)
     return (log, warnings, not_written)
 
@@ -1246,7 +1246,7 @@ def run_template_vendor(auto_template, modality,
         else:
             log = [log_pre, '\tNo files read correctly']
     if len(warnings) > 0:
-        warnings.insert(0, f'Template {auto_template.label}')
+        warnings.insert(0, f'\nTemplate {auto_template.label}')
         warnings.insert(0, auto_template.path_warnings)
     return (log, warnings, not_written)
 

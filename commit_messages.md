@@ -1,3 +1,10 @@
+# v3.2.7
+_Jul 29, 2026_
+
+small fixes to bugs from last version in test CT number (if selecting specific images, not using full stack).
+
+And avoiding "CONTAINER" fields of SR ContentSequence with test "Extract event details".
+
 # v3.2.6
 _Jul 29, 2026_
 

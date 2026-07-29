@@ -2602,18 +2602,18 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     y_vals = []
                     values_sli = []
                     roi_array, errmsg = get_rois(
-                        sli, images_to_test[i], input_main)
+                        sli, i, input_main)
                     if errmsg is not None:
                         errmsgs.append(
-                            f'CTn get ROI image {images_to_test[i]}:')
+                            f'CTn get ROI image {i}:')
                         errmsgs.append(errmsg)
 
-                    for i in range(len(paramset.ctn_table.labels)):
+                    for mat in range(len(paramset.ctn_table.labels)):
                         arr = np.ma.masked_array(
-                            sli, mask=np.invert(roi_array[i]))
+                            sli, mask=np.invert(roi_array[mat]))
                         values_sli.append(np.mean(arr))
                         try:
-                            y_val = float(paramset.ctn_table.linearity_axis[i])
+                            y_val = float(paramset.ctn_table.linearity_axis[mat])
                             x_vals.append(np.mean(arr))
                             y_vals.append(y_val)
                         except (ValueError, TypeError):
@@ -2633,7 +2633,7 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                     if paramset.ctn_type == 1:
                         values_sup_sli.append(None)
                         if 'matched_materials' in details_dict_common:
-                            HU_values_match = [values_sli[i] for i in details_dict_common['matched_materials_idxs']]
+                            HU_values_match = [values_sli[idx] for idx in details_dict_common['matched_materials_idxs']]
                             xs = np.array(HU_values_match)
                             x0 = xs - xs.mean()
                             ys = np.array(details_dict_common['attenuation_x_density']).transpose()

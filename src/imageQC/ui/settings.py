@@ -1343,6 +1343,10 @@ class CTattenuationWidget(StackWidget):
         energy_object = cfc.CTattenuationMaterial(
             label='Energy', attenuation=self.energies)
         self.templates.insert(0, energy_object)
+        QMessageBox.information(
+            self, 'Restart to update',
+            'After saving, please restart imageQC to make the changes of '
+            'CT attenuation table to have effect on calculations.')
         super().save()
         self.templates.pop(0)
 

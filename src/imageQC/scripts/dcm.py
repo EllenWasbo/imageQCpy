@@ -1619,7 +1619,8 @@ def parse_SR_content_sequence(filename, sort_irr_event_uids=False):
                     table_out_grouped_obj.append(output_this_group_obj)
                     if i > 0:
                         cds_events.extend(
-                            [row[1] for row in output_this_group])
+                            [row[1] for row in output_this_group
+                             if row[2] != 'CONTAINER'])
                 available_code_meanings = list(set(cds_events))
                 available_code_meanings.sort()
                 table_out = table_out_grouped

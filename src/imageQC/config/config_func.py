@@ -868,6 +868,11 @@ def load_settings(fname='', temp_config_folder=''):
                                 if fname == 'tag_infos':
                                     updated_doc = verify_input_dict(doc, cfc.TagInfo())
                                     settings.append(cfc.TagInfo(**updated_doc))
+                                elif fname == 'CT_attenuation_table':
+                                    updated_doc = verify_input_dict(
+                                        doc, cfc.CTattenuationMaterial())
+                                    settings.append(
+                                        cfc.CTattenuationMaterial(**updated_doc))
                         if fname == 'tag_infos':
                             taginfos_reset_sort_index(settings)
                     except OSError as error:
@@ -1212,6 +1217,11 @@ def import_settings(import_main):
         taginfos_reset_sort_index(tag_infos)
         _, _ = save_settings(tag_infos, fname=fname)
 
+    # ct_attenuation_table (object_list all or none)
+    if import_main.CT_attenuation_table != []:
+        _, _ = save_settings(
+            import_main.CT_attenuation_table, fname='CT_attenuation_table')
+
     # templates using modality dictionary
     list_dicts = [fname for fname, item in CONFIG_FNAMES.items()
                   if item['saved_as'] == 'modality_dict']
@@ -1534,7 +1544,7 @@ def get_test_alternative(paramset, testcode):
     """
     alt = None
     testcode = testcode.lower()
-    if testcode in ['hom', 'sli', 'mtf', 'rec', 'snr']:
+    if testcode in ['hom', 'ctn', 'sli', 'mtf', 'rec', 'snr']:
         alt = getattr(paramset, f'{testcode}_type', None)
     elif testcode == 'roi':
         alt = getattr(paramset, 'roi_use_table', None)

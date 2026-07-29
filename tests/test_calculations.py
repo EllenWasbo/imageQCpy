@@ -40,6 +40,22 @@ def read_tag_infos_from_yaml():
 
     return tag_infos
 
+def read_CT_attenuation_from_yaml():
+    """Get default values if CT_attenuation_table.yaml.
+
+    Returns
+    -------
+    materials : list of CTattenuationMaterial including first (Energy)
+    """
+    materials = []
+
+    file_path = path_src_imageQC / 'config_defaults' / 'CT_attenuation_table.yaml'
+    with open(file_path, "r") as f:
+        docs = yaml.safe_load_all(f)
+        for doc in docs:
+            materials.append(cfc.CTattenuationMaterial(**doc))
+
+    return materials
 
 tag_infos = read_tag_infos_from_yaml()
 
@@ -64,6 +80,18 @@ def test_CTn():
 
     assert round(input_main.results['CTn']['values'][0][0]) == 931
     assert round(input_main.results['CTn']['values'][0][7]) == -1006
+
+    input_main.current_paramset.ctn_type = 1
+    input_main.current_paramset.ctn_table = cfc.HUnumberTable(  # remove water
+        labels=['Teflon', 'Delrin', 'Acrylic', 'Polystyrene', 'LDPE', 'PMP', 'Air'],
+        linearity_unit='Rel. e-density',
+        linearity_axis=[1.868, 1.363, 1.147, 0.998, 0.945, 0.853, 0.001],
+        pos_x=[-28.0, -58.0, -28.0, 28.0, 58.0, 28.0, 0.0],
+        pos_y=[50.0, 0.0, -50.0, -50.0, 0.0, 50.0, 58.0], min_HU=[], max_HU=[])
+    input_main.CT_attenuation_table = read_CT_attenuation_from_yaml()
+    calculate_qc.calculate_qc(input_main)
+
+    assert round(input_main.results['CTn']['values_sup'][0][-1]) == 76
 
 
 def test_CT_Sli_axial():
@@ -938,3 +966,28 @@ def test_MR_Geo():
     values = np.round(np.array(input_main.results['Geo']['values'][5]))
     assert np.array_equal(
         values[:4], np.array([189., 189., 189., 189.]))
+
+def test_SR_Eve():
+
+    tests = [['Eve']]
+    input_main = InputMain(
+        current_modality='SR',
+        current_test='Eve',
+        current_paramset=cfc.ParamSetSR(),
+        current_quicktest=cfc.QuickTestTemplate(tests=tests),
+        tag_infos=tag_infos,
+        automation_active=False
+        )
+
+    file_path = (
+        path_tests / 'test_inputs' / 'SR' / 'SR_Dose_Report_CT_QA.dcm')
+    img_infos, ignored_files, _ = dcm.read_dcm_info(
+        [file_path], GUI=False, tag_infos=input_main.tag_infos)
+    input_main.imgs = img_infos
+
+    calculate_qc.calculate_qc(input_main)
+
+    acq_names = [row[0] for row in input_main.results['Eve'][0]['values']]
+    assert np.array_equal(
+        np.array(acq_names),
+        np.array(['Topogram', 'wire', 'Hode vann', 'Body vann']))

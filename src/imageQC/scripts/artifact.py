@@ -219,7 +219,7 @@ def generate_3d_meshgrid(imgs):
     ys = pix[1] * (np.arange(sz_y) - sz_y / 2)
 
     X, Y, Z = np.meshgrid(xs, ys, zpos, indexing='ij')
-    
+
     return (X, Y, Z)
 
 

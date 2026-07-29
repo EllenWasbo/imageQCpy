@@ -19,7 +19,7 @@ import imageQC.scripts.mini_methods_calculate as mmcalc
 
 
 def calculate_phantom_xray(image, image_info, roi_array, paramset):
-    if paramset.pha_alt == 0:
+    if paramset.pha_type == 0:
         res = calculate_tor(image, image_info, roi_array, paramset)
     return res
 
@@ -68,61 +68,123 @@ def find_cnr_from_sub(sub, radius_disc):
     -------
     (cnr, inner_mean, inner_std, outer_mean, outer_std)
     """
-    res = mmcalc.find_center_object(sub, sigma=3)
-    if res:
-        cx, cy, width_x, width_y = res
-        if cx is not None and cy is not None:
-            cx, cy = (cx - sub.shape[1] / 2, cy - sub.shape[0] / 2)
-        else:
-            cx, cy = (0, 0)
-    else:
-        cx, cy = (0, 0)
+    #res = mmcalc.find_center_object(sub, sigma=3)
+    #if res:
+    #    cx, cy, width_x, width_y = res
+    #    if cx is not None and cy is not None:
+    #        cx, cy = (cx - sub.shape[1] / 2, cy - sub.shape[0] / 2)
+    #    else:
+    #        cx, cy = (0, 0)
+    #else:
+    cx, cy = (0, 0)
 
     dists = mmcalc.get_distance_map_point(
         sub.shape, center_dx=cx, center_dy=cy)
     inner = np.where(dists < radius_disc * 0.7)
     inner_mean = np.mean(sub[inner])
     inner_std = np.std(sub[inner])
+    sub_roi_inner = np.zeros(sub.shape, dtype=bool)
+    sub_roi_inner[inner] = True
     
     outer = np.where(np.logical_and(
         dists > radius_disc * 1.2, dists < radius_disc * 1.5))
     outer_mean = np.mean(sub[outer])
     outer_std = np.std(sub[outer])
+    sub_roi_outer = np.zeros(sub.shape, dtype=bool)
+    sub_roi_outer[outer] = True
 
     cnr = np.abs(inner_mean - outer_mean) / outer_std
     res = {
         'cnr': cnr, 'inner_mean': inner_mean, 'inner_std': inner_std,
         'outer_mean': outer_mean, 'outer_std': outer_std,
-        'center_xy': np.array([cx, cy]) + sub.shape[0] // 2}
+        'center_xy': np.array([cx, cy]) + sub.shape[0] // 2,
+        'roi_sub_inner': sub_roi_inner, 'roi_sub_outer': sub_roi_outer}
     return res
 
 
 def calculate_tor(image, image_info, roi_array, paramset):
-    # define linepairs and positions
-    details_dict = {
-        'spatial_frequencies': [0.5, 0.56, 0.63,
-                                0.71, 0.8, 0.9,
-                                1., 1.12, 1.25,
-                                1.4, 1.6, 1.8,
-                                2., 2.24, 2.5,
-                                2.8, 3.15, 3.55,
-                                4., 4.5, 5],
-        'contrast_percents': [
-            16.7, 14.8, 12.8, 10.9, 8.8, 7.5, 6.7, 5.3, 4.5,
-            3.9, 3.2, 2.7, 2.2, 1.7, 1.5, 1.3, 1.1, 0.9]}
+    """Calculate low contrast and spatial resolution."""
 
     errmsgs = None
     values = []
     pix = image_info.pix[0]
+    temp_shape = (1510,1510)
 
-    # search for full phantom (circle)
-    radius_large = 75./pix
-    off_xy, radius = mmcalc.find_circle(
-        image, radius_large,
-        expected_radius_range=[0.9*radius_large, 1.1*radius_large],
-        n_steps=9, downscale=5., edge_method='sobel', binary_threshold=0.1)
+    if roi_array[1] is not None:  # high contrast at bar pattern found
+        # find center of phantom / bar pattern rectangle
+        # first find center of high contrast square
+        mask_pos = np.where(roi_array[1] == 0)
+        center_xy = (np.mean(mask_pos[1]), np.mean(mask_pos[0]))
+        #sub_image = 
+        pol, (ax_dists, angs) = mmcalc.topolar(sub_image)
+        diff_dist = np.abs(ax_dists - 15./pix)
+        aa = np.where(diff_dist == np.min(diff_dist))[0][0]
+        prof = np.sum(pol[aa-5:aa+5], axis=0)
+        prof = prof - np.min(prof)
+        breakpoint()
 
-    edge_image = filters.sobel(image)
+        # create template for bar pattern unit = 0.1mm
+        dx = [-70, 60, 180]  # centers of 3 columns
+        dy = [130, 35, -35, -80, -115, -140, -155]  # centers of 7 rows
+        h = [60, 50, 30, 25, 20, 10, 5] # height of ROI each row
+        w = 80
+        res_fields = [
+            get_roi_rectangle(
+                temp_shape, roi_width=w, roi_height=h[i//7],
+                offcenter_xy=(dx[i%3], dy[i//7]))
+            for i in range(21)]
+        rr, cc = 0, 0
+        details_dict = {
+            'rows_bar_rois': rr,
+            'cols_bar_rois': cc,
+            'spatial_frequencies': [0.5, 0.56, 0.63,
+                                    0.71, 0.8, 0.9,
+                                    1., 1.12, 1.25,
+                                    1.4, 1.6, 1.8,
+                                    2., 2.24, 2.5,
+                                    2.8, 3.15, 3.55,
+                                    4., 4.5, 5]}
+
+        if roi_array[0] is not None:  # high constrast square found
+            # create template for contrast circles
+            details_dict['contrast_percents'] = [
+                16.7, 14.8, 12.8, 10.9, 8.8, 7.5, 6.7, 5.3, 4.5,
+                3.9, 3.2, 2.7, 2.2, 1.7, 1.5, 1.3, 1.1, 0.9]
+
+            # search for full phantom (circle)
+            radius_large = 75./pix
+            off_xy, radius = mmcalc.find_circle(
+                image, radius_large,
+                expected_radius_range=[0.9*radius_large, 1.1*radius_large],
+                n_steps=9, downscale=5., edge_method='sobel', binary_threshold=0.1)
+
+            # generate template for 0.1mm pix size and 150 mm matrix
+            # resize to actual pixelsize and rotate/flip according to found squares
+
+            
+            # template squares
+            high_contrast_square = get_roi_rectangle(
+                temp_shape, roi_width=250, roi_height=250,
+                offcenter_xy=(0, 500))
+            background_square = get_roi_rectangle(
+                temp_shape, roi_width=50, roi_height=50,
+                offcenter_xy=(-200, -140))
+            max_square = get_roi_rectangle(
+                temp_shape, roi_width=50, roi_height=50,
+                offcenter_xy=(-200, 20))
+            # cnr circles
+            angles = (np.arange(24) + 2) * (2*np.pi)/24  # 24 circles if all were there
+            xys = [((600*np.sin(ang), 600*np.cos(ang)))  # cnr pos, distance 60 mm
+                   for i, ang in enumerate(angles)
+                   if i not in [9, 10, 11, 21, 22, 23]]
+            cnr_circles = [get_roi_circle(temp_shape, xy, 25) for xy in xys]
+            cnr_rims = [np.logical_xor(
+                get_roi_circle(temp_shape, xy, 130),
+                get_roi_circle(temp_shape, xy, 100)) for xy in xys]
+
+
+            template = [high_contrast_square, background_square, max_square] + \
+                        cnr_circles + cnr_rims + res_fields
 
     # for bar pattern template:
     freq_0 = np.array([0.5, 0.71, 1., 1.4, 2., 2.8, 4.])
@@ -131,12 +193,13 @@ def calculate_tor(image, image_info, roi_array, paramset):
     group_center_pos = np.cumsum(group_widths) - group_widths/2
 
     phantom_rot = 0  # rotation to square with highlight
+
     if radius:  # full phantom circle found
         # find contrast circle with highest contrast
         phantom_scale = radius / radius_large
         radius_small = 4./pix * phantom_scale  # contrast circles 8mm
+        # center to contrast circles = 60mm, margin 2mm
         start, end = (phantom_scale / pix) * np.array([58, 62])
-        # center of contrast circles 60mm
         roi_array = get_roi_circle(image.shape, off_xy, end)
         rows = np.max(roi_array, axis=1)
         cols = np.max(roi_array, axis=0)
@@ -161,11 +224,13 @@ def calculate_tor(image, image_info, roi_array, paramset):
             # 15 degrees between circles
 
         # find cnr pr disc
+        roi_inner = np.zeros(image.shape, dtype=bool)
+        roi_outer = np.zeros(image.shape, dtype=bool)
         if angles is not None:
             res_pr_disc = []
             dist = 60 * (phantom_scale / pix)
-            eval_angles = np.append(angles + zero_ang,
-                                    np.flip(-angles + zero_ang))
+            eval_angles = angles + zero_ang
+            print(f'eval angels {eval_angles}')
             cx, cy = get_xy_from_angles_dist(eval_angles, dist)
             for i, ang in enumerate(eval_angles):
                 dx_dy = np.array([cx[i], cy[i]])
@@ -178,7 +243,15 @@ def calculate_tor(image, image_info, roi_array, paramset):
                 res['center_xy'] = res['center_xy'] + off_xy + dx_dy
                 res_pr_disc.append(res)
 
+                x0, x1 = np.where(cols)[0][0], np.where(cols)[0][-1]+1
+                y0, y1 = np.where(rows)[0][0], np.where(rows)[0][-1]+1
+                roi_inner[y0:y1, x0:x1] += res['roi_sub_inner']
+                roi_outer[y0:y1, x0:x1] += res['roi_sub_outer']
+
         details_dict['cnr_results_pr_disc'] = res_pr_disc
+        details_dict['roi_array'] = get_roi_circle(image.shape, off_xy, radius)
+        details_dict['roi_inner_circles'] = roi_inner
+        details_dict['roi_outer_circles'] = roi_outer
         values = []
 
         phantom_rot = zero_ang
@@ -186,8 +259,6 @@ def calculate_tor(image, image_info, roi_array, paramset):
     '''
     else:  # search for bar pattern at center of image
         # find center of rounded square
-        ang = find_ang_object((0, 0), round(paramset.pha_roi_mm/pix))
-        
         def find_ang_object(c_xy, radius_test_range):
             roi_array = get_roi_circle(image.shape, c_xy, radius_test_range[1])
             rows = np.max(roi_array, axis=1)
@@ -208,7 +279,9 @@ def calculate_tor(image, image_info, roi_array, paramset):
             ang_idx = np.where(first_row == np.min(first_row))
             ang = angs[round(np.mean(ang_idx))]
             return ang, np.min(first_row)
-        
+
+        ang = find_ang_object((0, 0), round(paramset.pha_roi_mm/pix))
+
         max_ang, max_dist = find_ang_dist_object(
             off_xy, [0, round(paramset.pha_roi_mm/pix)])
         tanang = np.tan(ang)
@@ -261,7 +334,5 @@ def calculate_tor(image, image_info, roi_array, paramset):
         peaks2 = find_peaks(prof2, distance=group_widths[0]/2/pix)
         if peaks1[0][0] < peaks2[0][0]:
             print('Test probably fails, try flipping left/right')
-        
-    '''
-
+            '''
     return (details_dict, values, errmsgs)

@@ -158,7 +158,6 @@ def get_MTF_gauss(LSF, dx=1., prefilter_sigma=None, gaussfit='single'):
             errmsg = 'Failed fitting LSF to gaussian.'
         else:
             n_steps = 200  # sample 20 steps from 0 to 1 stdv MTF curve (stdev = 1/sigma1)
-            # TODO user configurable n_steps
             k_vals = np.arange(n_steps) * (10./n_steps) / sigma1
             MTF = mmcalc.gauss(k_vals, A1*sigma1, 1/sigma1)
             if A2 is not None and sigma2 is not None:
@@ -394,19 +393,7 @@ def calculate_MTF_point(matrix, img_info, paramset, vertical_pix_mm=None):
                 else:  # NM, SPECT or PET
                     profile = res['LSF_fit']
                     res['values'] = [res['FWHM'], res['FWTM']]
-                    '''
-                    fwhm, _ = mmcalc.get_width_center_at_threshold(
-                        profile, np.max(profile)/2)
-                    fwtm, _ = mmcalc.get_width_center_at_threshold(
-                        profile, np.max(profile)/10)
-                    if fwhm is not None:
-                        fwhm = fwhm * pix
-                    if fwtm is not None:
-                        fwtm = fwtm * pix
-                    res['values'] = [fwhm, fwtm]
-                    '''
                 details_dict['gMTF_details'] = res
-
                 details.append(details_dict)
 
     return (details, errmsgs)
@@ -631,7 +618,8 @@ def calculate_MTF_3d_line(matrix, roi, images_to_test, image_infos, paramset):
             z_diffs = np.diff(zpos)
             z_dist = z_diffs[0]
             if np.min(z_diffs) < np.max(z_diffs):
-                errmsg.append('NB: z-increment differ for the slices. Could cause erroneous results.')
+                errmsg.append(
+                    'NB: z-increment differ for the slices. Could cause erroneous results.')
 
             margin = paramset.mtf_roi_size // z_dist
             if margin < 2:
@@ -933,7 +921,7 @@ def calculate_MTF_2d_line_edge(matrix, pix, paramset, mode='edge',
                     errmsg.append(err)
                 else:
                     if isinstance(
-                            paramset, 
+                            paramset,
                             (cfc.ParamSetNM, cfc.ParamSetSPECT, cfc.ParamSetPET
                              )):
                         fwhm, _ = mmcalc.get_width_center_at_threshold(

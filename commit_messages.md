@@ -1,7 +1,26 @@
+# v3.2.6
+_Jul 29, 2026_
+
+New functionalities:
+- CT number: Added option to estimate effective energy f.x. from monoenergetic images of defined materials like in Catphan. 
+(If you load new attenuation curves in settings restart imageQC before running test CTn. Some bug yet to be found and fixed, but quickfix is restart).
+- Reading DICOM header (option from File menu) now with more advanced options to explore the header and option to parse ContentSequence of RDSR file to compress information.
+- Added Test "Extract event details" for modality SR, reading and extracting information pr irradiation event in ContentSequence. Option to set which named parameters to extract.
+
+Changes:
+- MR tests: Test SNR, PIU, Gho and Geo all use optimize center to circular object. Previously only test Ghost with option to turn this off. Now added this option for all these tests.
+- Settings - Automation Template: Reduced minimum width of LimitAndPlot selection tool + warnings path to allow for smaller screen.
+
+Fixes:
+- Dark mode, anchored text on plot no longer as filled white box with white text...
+- Settings - Dicom tags - Add/edit DICOM tags: fixes to validation of user input on tag number.
+
 # v3.2.5
 _Mar 25, 2026_
 
-Dependecies:
+New .exe version published
+
+Dependencies:
 - Replaced requirement of pydicom 3.0.1 with pydicom 3.0.2 due to security issue fix (fix released 19.03.2026)
 
 Fixes:

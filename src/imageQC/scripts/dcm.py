@@ -74,6 +74,17 @@ class DcmInfoGui(DcmInfo):
     window_center: int = 0
 
 
+@dataclass
+class SR_TagInfo():
+    """Class for parse_SR_content_sequence to save each sequence."""
+
+    level: int = 0  # nested level
+    code_meaning: str = ''
+    value_type: str = ''
+    value: str | int | float | list = ''
+    unit: str = ''
+
+
 def fix_sop_class(elem, **kwargs):
     """Fix for Carestream DX unprocessed."""
     if elem.tag == 0x00020002:
@@ -358,7 +369,7 @@ def read_dcm_info(filenames, GUI=True, tag_infos=[],
                     list_of_DcmInfo.append(dcm_obj)
         else:
             ignore = True
-            if pyd and GUI:
+            if pyd:
                 if pyd.get('Modality') == 'SR':
                     ignore = False
                     attrib = {
@@ -1489,3 +1500,135 @@ def read_raw_info(filenames_raw, info_preread=None, read_mode='manual',
             ignored_files.append(file)
 
     return (list_of_DcmInfo, ignored_files, warnings_this)
+
+
+def parse_SR_content_sequence(filename, sort_irr_event_uids=False):
+    """Parse Content Sequence of SR file.
+
+    Parameters
+    ----------
+    filename : str
+    sort_irr_event_uids: bool
+        True if output should be grouped into [genereal, event 1, event 2...]
+
+    Returns
+    -------
+    output : dict
+        "table" list of lists
+            sublist for each element [level (int), Code Meaning (str),
+                                      Value Type (str), Value, Unit (str)]
+            if sort_irr_event_uids, list with number of irr events + 2 sublists:
+                first element of list is output rows before irr_events
+                next elements of list are pr irr_event
+                last element is available code meanings within irr_events
+        "available_code_meanings" list of all code meanings found within event
+        "table_object" as with table, but each element SR_TagInfo instead of list
+    errmsg : list of str
+    """
+
+    errmsg = []
+    output = {}
+    table_out = []
+    table_out_obj = []
+
+    def parse_node(datasubset, level=0):
+        for item in datasubset.ContentSequence:
+            concept_name = ''
+            if 'ConceptNameCodeSequence' in item:
+                if len(item.ConceptNameCodeSequence) > 0:
+                    concept_name = item.ConceptNameCodeSequence[0].CodeMeaning
+
+            value_type = getattr(item, 'ValueType', '')
+            value = ''
+            unit = ''
+
+            match value_type:
+                case 'NUM':
+                    try:
+                        meas_seq = item.MeasuredValueSequence[0]
+                        value = meas_seq.NumericValue
+                        try:
+                            if 'DSfloat' in str(type(value)):
+                                if value.is_integer():
+                                    value = int(value)
+                                else:
+                                    value = float(value)
+                        except (AttributeError, TypeError, ValueError):
+                            pass
+                        unit = (
+                            meas_seq.MeasurementUnitsCodeSequence[0].CodeMeaning
+                            if 'MeasurementUnitsCodeSequence' in meas_seq
+                            else '')
+                        if 'no_unit' in unit:
+                            unit = ''
+                    except (AttributeError, IndexError):
+                        pass
+                case 'CODE':
+                    try:
+                        value = item.ConceptCodeSequence[0].CodeMeaning
+                    except (AttributeError, IndexError):
+                        pass
+                case 'TEXT':
+                    value = getattr(item, 'TextValue', '')
+                case 'DATETIME':
+                    value = getattr(item, 'DateTime', '')
+                case 'CONTAINER':
+                    value = None #'[Container]'
+                case 'UIDREF':
+                    value = getattr(item, 'UID', '')
+                case _:
+                    value = ''
+
+            table_out.append([level, concept_name, value_type, value, unit])
+            sr_obj = SR_TagInfo(level=level, code_meaning=concept_name,
+                                value_type=value_type, value=value, unit=unit)
+            table_out_obj.append(sr_obj)
+
+            if 'ContentSequence' in item:
+                parse_node(item, level=level+1)
+
+    pyd, _, errmsg_read = read_dcm(filename, stop_before_pixels=True)
+    errmsg.append(errmsg_read)
+    if pyd:
+        if 'Modality' in pyd:
+                if not pyd.Modality == 'SR':
+                    errmsg.append('Selected file not SR-file (modality = SR)')
+        if 'ContentSequence' in pyd:
+            parse_node(pyd)
+
+            if sort_irr_event_uids is True:
+                # group output [general, pr event, all CodeMeanings available]
+                idx_starts = []
+                for idx, row in enumerate(table_out):
+                    if row[1] == 'Irradiation Event UID':
+                        idxs_before = [r[0] for r in table_out[:idx]]
+                        last_level_0_rev = idxs_before[::-1].index(0)
+                        idx_starts.append(idx - last_level_0_rev)
+                table_out_grouped = []
+                table_out_grouped_obj = []
+                n_events = len(idx_starts)
+                idx_starts.insert(0, 0)
+                idx_starts.append(len(table_out))
+                cds_events = []
+                for i in range(n_events + 1):
+                    output_this_group = table_out[
+                        idx_starts[i]:idx_starts[i + 1]]
+                    table_out_grouped.append(output_this_group)
+                    output_this_group_obj = table_out_obj[
+                        idx_starts[i]:idx_starts[i + 1]]
+                    table_out_grouped_obj.append(output_this_group_obj)
+                    if i > 0:
+                        cds_events.extend(
+                            [row[1] for row in output_this_group])
+                available_code_meanings = list(set(cds_events))
+                available_code_meanings.sort()
+                table_out = table_out_grouped
+                table_out_obj = table_out_grouped_obj
+                output['table'] = table_out
+                output['table_object'] = table_out_obj
+                output['available_code_meanings'] = available_code_meanings
+        else:
+            errmsg.append('Found no Content Sequence in file. Could not extract data.')
+
+    return (output, errmsg)
+

@@ -75,7 +75,7 @@ If adding icons, a dark-mode icon is also needed. Create a separate virtual envi
  
 ## When adding new types of templates (settings)
 - add to iQCconstants CONFIG_FNAMES
-- add template type to config_classes + add to last_modified
+- add template type to config_classes + add to class LastModified
 - start with a widget (inheriting from StackWidget of settings_reusables) that will have a similar use
 - create the widgets and add to SettingsDialog __init__ (settings.py)
 - in config_func.py load_settings - add code to if fname == '&lt;the new fname&gt;'
@@ -92,14 +92,8 @@ If adding icons, a dark-mode icon is also needed. Create a separate virtual envi
 	- SharedSettings - verify_config_files
 - if PositionTable to set column headers - settings_reusables.py QuickTestOutputSubDialog elif testcode == in update data
 
-## Update requirements.txt
-- cd to src-folder
-- pipreqs 
-- requirements will now be in the src-folder. Move it to folder above src.
-- remove skimage...?
-- remove charset_normalizer (only for pyinstaller)
-- remove plotly/dash_core_components/dash_html_components (already included with dash)
-- Copy also new content to setup.cfg
+## Update requirements / dependencies
+Update both requirements.txt and setup.cfg.
 
 ## Update pdf version of Wiki
 - download wikidoc code from https://github.com/jobisoft/wikidoc

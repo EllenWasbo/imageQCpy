@@ -1,5 +1,5 @@
 matplotlib==3.10.5
-numpy=2.3.2
+numpy==2.3.2
 pandas==2.2.3
 pdfplumber==0.11.7
 pydicom==3.0.2

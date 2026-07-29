@@ -238,6 +238,8 @@ class GenerateReportDialog(ImageQCDialog):
         self.tags_active, self.values_active = self.get_active_tags()
 
     def get_active_tags(self):
+        """Get general and modality specific extracted DICOM tags for 
+        currently active image in main window."""
         tags = []
         values = []
         if len(self.main.imgs) > 0:
@@ -253,6 +255,7 @@ class GenerateReportDialog(ImageQCDialog):
         return (tags, values)
 
     def get_tag_value(self, imgno, attribute):
+        """Get value of a given DICOM attribute for a given image."""
         value_string = '-'
         if len(self.main.imgs) > imgno:
             img_info = self.main.imgs[imgno]
@@ -886,7 +889,7 @@ class GenerateReportDialog(ImageQCDialog):
                 html_this = ['<table class="image_table"><tr>']
                 total_width = element.width
                 width_px = (full_width - 2*margin) * element.width / 100
-                
+
                 for img_no in img_nos:
                     html_this.append(
                         '<td valign="middle" align="center">')
@@ -924,7 +927,7 @@ class GenerateReportDialog(ImageQCDialog):
                 n_pr_row = element.width
                 single_width = 100 / n_pr_row
                 width_px = (full_width - 2*margin) * single_width / 100
-                
+
                 for idx, img_no in enumerate(img_nos):
                     html_this.append(
                         '<td valign="middle" align="center">')

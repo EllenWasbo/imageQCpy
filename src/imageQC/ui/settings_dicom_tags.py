@@ -260,6 +260,7 @@ class DicomTagDialog(ImageQCDialog):
                 self.get_all_tags_in_file()
                 self.act_level_up.setEnabled(True)
                 self.cbox_value_id.clear()
+                self.lbl_tag_content.setText('')
             else:
                 idx = self.sample_attribute_names.index(cur_text)
                 self.txt_attribute_name.setText(cur_text)
@@ -271,16 +272,17 @@ class DicomTagDialog(ImageQCDialog):
     def str_to_tag(self, txt):
         """Convert string input to tag hex and back to string."""
         try:
-            txt_group = hex(int('0x' + txt[0:4], 16))
-            txt_elem = hex(int('0x' + txt[5:9], 16))
-            tagstring = f'{txt_group},{txt_elem}'
+            gg= int('0x' + txt[0:4], 16)
+            ee = int('0x' + txt[5:9], 16)
+            tagstring = f'{gg:04x},{ee:04x}'
         except ValueError:
             tagstring = '0000,0000'
 
         return tagstring
 
-    def correct_tag_input(self, txt):
+    def correct_tag_input(self):
         """Correct string defining tag."""
+        txt = self.tag_string.text()
         if len(txt) != 9:
             QMessageBox.warning(
                 self, 'Unexpected tag format', 'Tag format expected as XXXX,XXXX.')
@@ -363,6 +365,13 @@ class DicomTagDialog(ImageQCDialog):
             proceed = False
         if proceed:
             dcm.dump_dicom(self, filename=self.sample_filepath.text())
+
+    def keyPressEvent(self, event):
+        """Avoid close dialog on enter in widgets."""
+        if event.key() == Qt.Key.Key_Return:
+            pass
+        else:
+            super().keyPressEvent(event)
 
 
 class DicomTagsWidget(StackWidget):

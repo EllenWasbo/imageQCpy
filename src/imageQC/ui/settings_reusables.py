@@ -123,6 +123,9 @@ class StackWidget(QWidget):
                         fname='auto_vendor_templates')
             elif self.fname == 'digit_templates':
                 _, _, self.paramsets = cff.load_settings(fname='paramsets')
+            elif self.fname == 'CT_attenuation_table':
+                self.energies = self.templates[0].attenuation
+                self.templates.pop(0)  # pop off energy list
 
             if self.fname == 'auto_templates':
                 _, _, self.auto_common = cff.load_settings(fname='auto_common')
@@ -250,6 +253,8 @@ class StackWidget(QWidget):
                 for i, active_this in enumerate(active):
                     if active_this is False:
                         self.wid_mod_temp.list_temps.item(i).setForeground(brush)
+        elif self.fname == 'CT_attenuation_table':
+            self.draw_curves()
         self.update_data()
 
     def refresh_templist_icons(self):
@@ -276,7 +281,7 @@ class StackWidget(QWidget):
 
     def update_clicked_template(self):
         """Update data after new template selected (clicked)."""
-        if self.edited:
+        if self.edited and self.fname != 'CT_attenuation_table':
             res = messageboxes.QuestionBox(
                 parent=self, title='Save changes?',
                 msg='Save changes before changing template?')
@@ -634,7 +639,8 @@ class ModTempSelector(QWidget):
         hlo_list.addWidget(self.list_temps)
 
         if import_review_mode:
-            self.toolbar = ToolBarImportIgnore(self, temp_alias=self.parent.temp_alias)
+            self.toolbar = ToolBarImportIgnore(
+                self, temp_alias=self.parent.temp_alias)
             hlo_list.addWidget(self.toolbar)
         else:
             if editable:

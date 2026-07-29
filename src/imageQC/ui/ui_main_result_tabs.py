@@ -90,22 +90,27 @@ class ResultTableWidget(QWidget):
             values = [col[row_range[0]: row_range[1]+1] for col in values]
 
         if self.tb_copy.tool_header.isChecked():  # insert headers
-            if self.result_table.row_labels[0] == '':
-                if col_range is None or col_range is False:
-                    for i in range(len(values)):
-                        values[i].insert(0, self.result_table.col_labels[i])
-                else:
-                    col_labels = self.result_table.col_labels[
-                        col_range[0]:col_range[1]+1]
-                    for i in range(len(values)):
-                        values[i].insert(0, col_labels[i])
-            else:
-                # row headers true headers
+            if self.result_table.row_labels[0] != '':  # all ''
+                # include row labels
                 if row_range is None or row_range is False:
                     values.insert(0, self.result_table.row_labels)
                 else:
                     values.insert(0, self.result_table.row_labels[
                         row_range[0]:row_range[1]+1])
+            if self.result_table.col_labels[0] != '0':  # all '<idx>'
+                # include column labels
+                if col_range is None or col_range is False:
+                    col_labels = copy.deepcopy(self.result_table.col_labels)
+                    if len(col_labels) == len(values) - 1:
+                        col_labels.insert(0, '')  # both row and col labels
+                    for i in range(len(values)):
+                        values[i].insert(0, col_labels[i])
+                else:
+                    col_labels = self.result_table.col_labels[
+                        col_range[0]:col_range[1]+1]
+                    for i in range(len(values)):
+                        values[i].insert(0, col_labels[i])
+
         if self.tb_copy.tool_transpose.isChecked() is False:
             values = np.array(values).T.tolist()
 
@@ -181,7 +186,8 @@ class ResultTable(QTableWidget):
 
     def fill_table(self, row_labels=[], col_labels=[],
                    values_cols=[[]], values_rows=[[]],
-                   linked_image_list=True, table_info='', vendor=False):
+                   linked_image_list=True, table_info='',
+                   vendor=False):
         """Populate table.
 
         Parameters
@@ -222,7 +228,9 @@ class ResultTable(QTableWidget):
             return new_row
 
         values_rows_copy = copy.deepcopy(values_rows)
+        transposed = False
         if vendor:
+            transposed = True
             try:
                 row_labels = self.main.results['vendor']['headers']
                 values_cols = self.main.results['vendor']['values']
@@ -237,6 +245,55 @@ class ResultTable(QTableWidget):
                 linked_image_list = False
             except (KeyError, TypeError):
                 pass
+        elif self.main.current_test == 'Eve':
+            transposed = True
+            idx = self.main.gui.active_img_no
+            row_labels = self.main.results['Eve'][idx]['headers']
+            values_cols = self.main.results['Eve'][idx]['values']
+
+            df = pd.DataFrame(values_cols)
+            temp_rows = df.T
+            txt_rows = []
+
+            for i in range(len(row_labels)):
+                row_list = temp_rows.loc[i, :].values.flatten().tolist()
+                try:
+                    format_string = self.main.current_paramset.eve_tagpattern[i][1]
+                except IndexError:
+                    format_string = ''
+                if format_string:
+                    txt_rows.append(mmf.format_val(row_list, format_string))
+                else:
+                    txt_rows.append([str(val) for val in row_list])
+
+            df = pd.DataFrame(txt_rows)
+            values_cols = df.T.values.tolist()
+            linked_image_list = False
+
+            unit_table = self.main.results['Eve'][idx]['details_dict']
+            df_unit_table = pd.DataFrame(unit_table)
+            unit_table = df_unit_table.T.values.tolist()
+            units = []
+            for row in unit_table:
+                unit = ''
+                avail_units = list(set(row))
+                if len(avail_units) == 1:
+                    unit = avail_units[0]
+                else:
+                    unit = f'(mix) {str(avail_units)}'
+                    if len(avail_units) == 2:
+                        idx_empty = None
+                        if '' in avail_units:
+                            idx_empty = avail_units.index('')
+                        elif None in avail_units:
+                            idx_empty = avail_units.index(None)
+                        if idx_empty is not None:
+                            avail_units.pop(idx_empty)
+                            unit = avail_units[0]
+                units.append(unit)
+            values_cols.insert(0, units)
+            col_labels = [f'Event {i}' for i in range(len(values_cols))]
+            col_labels[0] = 'Unit'
         else:
             if linked_image_list:
                 marked_imgs = self.main.get_marked_imgs_current_test()
@@ -272,7 +329,7 @@ class ResultTable(QTableWidget):
         else:
             self.verticalHeader().setVisible(False)
 
-        if len(col_labels) > 0:
+        if transposed is False:
             # convert rows to columns for better formatting -columns similar numbers
             for r in range(n_rows):
                 if len(values_rows_copy[r]) == 0:
@@ -280,9 +337,10 @@ class ResultTable(QTableWidget):
             values_cols = []
             for c in range(n_cols):
                 values_cols.append([row[c] for row in values_rows_copy])
+
         if len(values_cols[0]) > 0:
             for c in range(len(values_cols)):
-                if vendor:
+                if vendor or self.main.current_test == 'Eve':
                     this_col = values_cols[c]  # formatted above
                 else:
                     if self.main.current_test == 'DCM':
@@ -297,7 +355,11 @@ class ResultTable(QTableWidget):
                     self.setItem(r, c, twi)
 
         self.values = values_cols
-        self.resizeColumnsToContents()
+        if self.main.current_test == 'Eve':
+            for c in range(n_cols):
+                self.setColumnWidth(c, 100)
+        else:
+            self.resizeColumnsToContents()
         self.resizeRowsToContents()
 
 
@@ -442,8 +504,9 @@ class ResultPlotCanvas(PlotCanvas):
             if x_only_int:
                 if 'xticks' in self.curves[0]:
                     self.ax.set_xticks(self.curves[0]['xvals'])
-                    self.ax.set_xticklabels(self.curves[0]['xticks'], rotation=60,
-                                            ha='right', rotation_mode='anchor')
+                    self.ax.set_xticklabels(
+                        self.curves[0]['xticks'], rotation=60,
+                        ha='right', rotation_mode='anchor')
                 else:
                     self.ax.xaxis.set_major_locator(
                         matplotlib.ticker.MaxNLocator(integer=True))
@@ -488,8 +551,9 @@ class ResultPlotCanvas(PlotCanvas):
             try:
                 for bar in self.bars:
                     self.ax.bar(bar['names'], bar['values'])
-                    self.ax.set_xticklabels(bar['names'], rotation=60,
-                                            ha='right', rotation_mode='anchor')
+                    self.ax.set_xticklabels(
+                        bar['names'], rotation=60,
+                        ha='right', rotation_mode='anchor')
                     self.ax.set_aspect('auto')
             except ValueError:
                 pass
@@ -928,9 +992,43 @@ class ResultPlotCanvas(PlotCanvas):
                      'yvals': yvals, 'style': 'b:'}
                     )
                 at = matplotlib.offsetbox.AnchoredText(
-                    f'$R^2$ = {fit_r2:.4f}', loc='lower right')
+                    f'$R^2$ = {fit_r2:.4f}', loc='lower right',
+                    frameon=False,
+                    prop=dict(size=self.main.gui.annotations_font_size,
+                              color=self.color_k)
+                    )
                 self.ax.add_artist(at)
             self.xtitle = 'HU value'
+
+        def prepare_plot_r2():
+            imgno = self.main.gui.active_img_no
+            common_details = self.main.results['CTn']['details_dict'][-1]
+            details_dict = self.main.results['CTn']['details_dict'][imgno]
+
+            if details_dict:
+                self.ytitle = '$R^2$'
+                self.xtitle = 'Energy (keV)'
+                yvals = details_dict['R2']
+                xvals = common_details['energies']
+                self.curves.append(
+                    {'label': 'R2', 'xvals': xvals, 'yvals': yvals,
+                     'style': '-b'})
+                eff_e = details_dict['effective_energy']
+                self.curves.append({
+                    'label': '_nolegend_', 'xvals': [eff_e, eff_e],
+                    'yvals': [0, np.max(details_dict['R2'])],
+                    'style': ':' + self.color_k
+                     })
+
+                at = matplotlib.offsetbox.AnchoredText(
+                    f'Estimated effective energy = {eff_e:.0f}',
+                    loc='lower right', frameon=False,
+                    prop=dict(size=self.main.gui.annotations_font_size,
+                              color=self.color_k)
+                    )
+
+                self.ax.add_artist(at)
+                self.default_range_y = [0.98, 1.0]
 
         if sel_text == '':
             test_widget = self.main.stack_test_tabs.currentWidget()
@@ -941,8 +1039,10 @@ class ResultPlotCanvas(PlotCanvas):
         if 'HU' in sel_text:
             # percent = True if '%' in sel_text else False
             prepare_plot_HU_min_max()  # percent=percent)
-        else:
+        elif sel_text == 'CT number linearity':
             prepare_plot_linear()
+        else: # 'R2 pr energy':
+            prepare_plot_r2()
         self.title = sel_text
 
     def DCM(self, sel_text):
@@ -1768,7 +1868,10 @@ class ResultPlotCanvas(PlotCanvas):
                         )
 
                 at = matplotlib.offsetbox.AnchoredText(
-                    '\n'.join(txt_info), loc='lower right')
+                    '\n'.join(txt_info), loc='lower right',
+                    frameon=False,
+                    prop=dict(size=self.main.gui.annotations_font_size,
+                              color=self.color_k))
                 self.ax.add_artist(at)
 
         def prepare_plot_zprofile(sel_text):

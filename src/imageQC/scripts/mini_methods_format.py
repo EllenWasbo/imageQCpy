@@ -76,6 +76,7 @@ def format_val(val, format_string):
     if format_string != '':
         if '|' in format_string:
             prefix, format_string, suffix = get_format_strings(format_string)
+
         try:
             if not isinstance(val, str):
                 if len(val) > 1:
@@ -285,7 +286,6 @@ def val_2_str(val_list, decimal_mark='.', format_same=True, lock_format=False,
             type_list.append('int')
         else:
             type_list.append('?')
-
     if type_list.count('str') == len(actual_vals):
         string_list = val_list
     elif type_list.count('float') == len(actual_vals):

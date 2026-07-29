@@ -508,7 +508,8 @@ class PostProcessingDialog(ImageQCDialog):
 class SelectTextsDialog(ImageQCDialog):
     """Dialog to select texts."""
 
-    def __init__(self, texts, title='Select texts', select_info='Select texts'):
+    def __init__(self, texts, title='Select texts', select_info='Select texts',
+                 checkbox_info=''):
         super().__init__()
         self.setWindowTitle(title)
         vlo = QVBoxLayout()
@@ -521,6 +522,9 @@ class SelectTextsDialog(ImageQCDialog):
         self.btn_select_all = QPushButton('Deselect all')
         self.btn_select_all.clicked.connect(self.select_all)
         vlo.addWidget(self.btn_select_all)
+        if checkbox_info:
+            self.chk = QCheckBox(checkbox_info)
+            vlo.addWidget(self.chk)
 
         buttons = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         button_box = QDialogButtonBox(buttons)
@@ -544,6 +548,13 @@ class SelectTextsDialog(ImageQCDialog):
     def get_checked_texts(self):
         """Get list of checked texts."""
         return self.list_widget.get_checked_texts()
+
+    def get_checkbox_status(self):
+        try:
+            status = self.chk.isChecked()
+        except AttributeError:
+            status = False
+        return status
 
 
 class EditAnnotationsDialog(ImageQCDialog):

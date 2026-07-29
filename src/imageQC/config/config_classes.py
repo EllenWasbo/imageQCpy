@@ -38,6 +38,7 @@ class LastModified:
     paramsets_PET: list = field(default_factory=list)
     paramsets_MR: list = field(default_factory=list)
     paramsets_SR: list = field(default_factory=list)
+    CT_attenuation_table: list = field(default_factory=list)
     quicktest_templates: list = field(default_factory=list)
     report_templates: list = field(default_factory=list)
     auto_common: list = field(default_factory=list)
@@ -317,6 +318,21 @@ class HUnumberTable:
 
 
 @dataclass
+class CTattenuationMaterial:
+    """Attenuation and density for given material.
+
+    Used in test CT number to estimate effective keV.
+
+    First material should be called Energy and contain corresponding keV values
+    in attenuation parameter.
+    """
+
+    label: str = ''  # Energy (first "material") or material name
+    density: float = 0.0  # in g pr cc
+    attenuation: list[float] = field(default_factory=list)  # in cm2/g (or keV if label Energy)
+
+
+@dataclass
 class RecTable(PositionTable):
     """Set of default background roi positions with test PET Recovery Curves."""
 
@@ -435,6 +451,7 @@ class ParamSetCT(ParamSetCommon):
     ctn_search: bool = True
     ctn_table: HUnumberTable = field(default_factory=HUnumberTable)
     ctn_auto_center: bool = False
+    ctn_type: int = 0  # 0 = without est. eff. energy, 1 = with est. eff. energy
     ctn_plot: int = 0  # 0=HU min max diff, 1=HU min max diff % 2=linearity
     sli_ramp_distance: float = 38.
     sli_ramp_length: float = 60.
@@ -513,7 +530,7 @@ class ParamSetXray(ParamSetCommon):
     foc_search_margin: float = 20.  # mm margin offsenter for pattern
     foc_search_angle: float = 15.  # angle segment to average radial profile
     foc_rotate_angle: float = 0.  # rotate segments (degrees)
-    pha_alt: int = 0  # which phantom to use (ALTERNATIVE['Xray']['Pha'])
+    pha_type: int = 0  # which phantom to use (ALTERNATIVE['Xray']['Pha'])
     pha_roi_mm: float = 50.0
     def_mask_outer_mm: float = 10.
     def_fraction: float = 0.1
@@ -721,8 +738,10 @@ class ParamSetMR(ParamSetCommon):
     snr_type: int = 0  # 0 from two images, from single image
     snr_background_size: float = 10.  # mm width/height
     snr_background_dist: float = 10.  # mm from image border
+    snr_optimize_center: bool = True
     piu_roi_percent: float = 75.
     piu_roi_cut_top: int = 0
+    piu_optimize_center: bool = True
     gho_roi_central: float = 80.
     gho_roi_w: float = 40.
     gho_roi_h: float = 10.
@@ -731,6 +750,7 @@ class ParamSetMR(ParamSetCommon):
     gho_roi_cut_top: int = 0
     geo_actual_size: float = 190.
     geo_mask_outer: float = 10.
+    geo_optimize_center: bool = True
     sli_type: int = 0  # 0 = ramp, 1 = wedge
     sli_tan_a: float = 0.1  # tan(angle), default as ACR phantom
     sli_sigma: int = 0  # gaussian blur of profile
@@ -771,6 +791,7 @@ class ParamSetSR:
     postprocessing: PostProcessVariables = field(
         default_factory=PostProcessVariables)
     dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
+    eve_tagpattern: list = field(default_factory=list)
 
 
 @dataclass

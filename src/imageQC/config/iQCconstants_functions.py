@@ -41,7 +41,7 @@ def empty_template_dict(quicktest_options, dummy=None):
 
 
 def read_tag_infos_from_yaml():
-    """Get DICOM tags from tag_infos.yaml if tag_infos.yaml do not exist yet.
+    """Get DICOM tags default values if tag_infos.yaml do not exist yet.
 
     Returns
     -------
@@ -63,6 +63,28 @@ def read_tag_infos_from_yaml():
             tag_info.sort_index = i
 
     return tag_infos
+
+
+def read_CT_attenuation_from_yaml():
+    """Get default values if CT_attenuation_table.yaml.
+
+    Returns
+    -------
+    materials : list of CTattenuationMaterial including first (Energy)
+    """
+    materials = []
+    f_text = ''
+
+    file = QFile(":/config_defaults/CT_attenuation_table.yaml")
+    file.open(QIODevice.OpenModeFlag.ReadOnly | QIODevice.OpenModeFlag.Text)
+    f_text = QTextStream(file).readAll()
+
+    if f_text != '':
+        docs = yaml.safe_load_all(f_text)
+        for doc in docs:
+            materials.append(cfc.CTattenuationMaterial(**doc))
+
+    return materials
 
 
 def set_tag_patterns_special_default(quicktest_options, tag_infos):

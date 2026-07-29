@@ -12,6 +12,7 @@ import copy
 import warnings
 
 import numpy as np
+import pandas
 import scipy as sp
 from scipy.signal import find_peaks
 import skimage
@@ -208,8 +209,11 @@ def get_group_names(input_main):
         for uniq_id in uniq_group_ids_all:
             idxs_this_group = mm.get_all_matches(
                 input_main.current_group_indicators, uniq_id)
-            set_names = [input_main.current_quicktest.group_names[idx]
-                         for idx in idxs_this_group]
+            try:
+                set_names = [input_main.current_quicktest.group_names[idx]
+                             for idx in idxs_this_group]
+            except IndexError:  # TODO find what situation triggers this
+                pass  # for now- avoid crash
             if any(set_names):
                 name = next(s for s in set_names if s)
                 for idx in idxs_this_group:
@@ -523,13 +527,13 @@ def calculate_qc(input_main, wid_auto=None,
             extra_tag_pattern = None
             read_image = [False] * n_img
             NM_count = [False] * n_img
+            read_sr = [False] * n_img
             extras = None  # placeholder for extra arguments to pass to calc_2d/3d
-            if input_main.current_modality == 'NM' and 'SNI' in flattened_marked:
+            if modality == 'NM' and 'SNI' in flattened_marked:
                 if paramset.sni_ref_image != '':
                     extras = nm_methods.get_SNI_ref_image(paramset, tag_infos)
             if 'Num' in flattened_marked:
-                digit_templates = input_main.digit_templates[
-                    input_main.current_modality]
+                digit_templates = input_main.digit_templates[modality]
             else:
                 digit_templates = []
             for i in range(n_analyse):
@@ -538,7 +542,7 @@ def calculate_qc(input_main, wid_auto=None,
                         read_tags[i] = True
                     if marked[i].count('DCM') != len(marked[i]):
                         read_image[i] = True  # not only DCM
-                    if input_main.current_modality == 'NM' and 'DCM' in marked[i]:
+                    if modality == 'NM' and 'DCM' in marked[i]:
                         if 'CountsAccumulated' in paramset.dcm_tagpattern.list_tags:
                             read_image[i] = True
                             NM_count[i] = True
@@ -553,6 +557,7 @@ def calculate_qc(input_main, wid_auto=None,
             # if any 3d tests - keep loaded images
             # calculate 3d tests
             matrix = [None for i in range(n_img)]
+            sr_res = [None for i in range(n_img)]
             tag_lists = [[] for i in range(n_img)]
             extra_tag_list = None
             extra_tag_list_compare = None
@@ -588,6 +593,7 @@ def calculate_qc(input_main, wid_auto=None,
                         if 'CTn' in marked[i]:
                             if paramset.ctn_auto_center or paramset.ctn_search:
                                 force_new_roi.append('CTn')
+                            marked_3d[i].append('CTn')
                     elif modality == 'Xray':
                         if 'Noi' in marked[i]:
                             force_new_roi.append('Noi')
@@ -654,7 +660,26 @@ def calculate_qc(input_main, wid_auto=None,
                         if 'SNR' in marked[i]:
                             if paramset.snr_type == 0:
                                 marked_3d[i].append('SNR')
-                        # TODO? force_new_roi.append all with optimize center?
+                            if paramset.snr_optimize_center:
+                                force_new_roi.append('SNR')
+                        if 'PIU' in marked[i]:
+                            if paramset.piu_optimize_center:
+                                force_new_roi.append('PIU')
+                        if 'Gho' in marked[i]:
+                            if paramset.gho_optimize_center:
+                                force_new_roi.append('Gho')
+                        if 'Geo' in marked[i]:
+                            if paramset.geo_optimize_center:
+                                force_new_roi.append('Geo')
+                        if 'Sli' in marked[i]:
+                            if paramset.sli_optimize_center:
+                                force_new_roi.append('Sli')
+                        if 'MTF' in marked[i]:
+                            if paramset.mtf_auto_center:
+                                force_new_roi.append('MTF')
+                    elif modality == 'SR':
+                        if 'Eve' in marked[i]:
+                            read_sr[i] = True
 
             # list of shape + pix for testing if new roi need to be calculated
             xypix = []
@@ -677,9 +702,10 @@ def calculate_qc(input_main, wid_auto=None,
             cancelled = False
             for i in range(n_analyse):
                 if main_type in ['MainWindow', 'TaskBasedImageQualityDialog']:
+                    txt_file = 'file' if modality == 'SR' else 'image'
                     try:
                         input_main.progress_modal.setLabelText(
-                            f'Reading image {i}/{n_img}')
+                            f'Reading {txt_file} {i}/{n_img}')
                         input_main.progress_modal.setValue(
                              curr_progress_val + round(100 * i/n_analyse))
                     except AttributeError:
@@ -768,6 +794,10 @@ def calculate_qc(input_main, wid_auto=None,
                             pass
                         if len(tags) > 0:
                             input_main.current_group_indicators[i] = '_'.join(tags[0])
+                    if read_sr[i]:
+                        sr_res[i] = dcm.parse_SR_content_sequence(
+                            img_infos[i].filepath, sort_irr_event_uids=True)
+
                 if wid_auto is not None:
                     wid_auto.progress_modal.setLabelText(
                         f'{auto_template_label}: Calculating '
@@ -784,7 +814,7 @@ def calculate_qc(input_main, wid_auto=None,
 
                 for test in marked[i]:
                     input_main.current_test = test
-                    if test not in ['DCM', '']:
+                    if test not in ['DCM', 'Eve', '']:
                         if test in marked_3d[i]:
                             if matrix[i] is None:  # only once pr image
                                 matrix[i] = image  # save image for later
@@ -956,6 +986,62 @@ def calculate_qc(input_main, wid_auto=None,
                     'values_info': '',
                     'values_sup_info': ''
                     }
+
+            # For test SR - Eve - NB one result dict pr file
+            if 'Eve' in flattened_marked and cancelled is False:
+                res_list = []
+                for i in range(n_img):
+                    sr_output = None
+                    if sr_res[i]:
+                        sr_output, errmsgs_this = sr_res[i]
+                        if errmsgs_this[0]:
+                            intro = f'Test Eve, file {i}:'
+                            if errmsgs_this:
+                                errmsgs.append(intro)
+                                errmsgs.extend(errmsgs_this)
+
+                    if sr_output:
+                        if len(paramset.eve_tagpattern) == 0:
+                            # use all available
+                            headers = sr_output['available_code_meanings']
+                        else:
+                            headers = [row[0] for row in paramset.eve_tagpattern]
+
+                        dataf = {}
+                        dataf_units = {}
+                        grouped_output = sr_output['table_object']
+                        for header in headers:
+                            col_vals = []
+                            col_units = []
+                            for irr_event in grouped_output[1:]:
+                                available = [obj.code_meaning for obj in irr_event]
+                                val = None
+                                unit = None
+                                if header in available:
+                                    idx = available.index(header)
+                                    val = irr_event[idx].value
+                                    unit = irr_event[idx].unit
+                                col_vals.append(val)
+                                col_units.append(unit)
+                            dataf[header] = col_vals
+                            dataf_units[header] = col_units
+                        dataf = pandas.DataFrame(dataf)
+                        dataf_units = pandas.DataFrame(dataf_units)
+
+                        res_list.append({
+                            'headers': headers,
+                            'values': dataf.values.tolist(),
+                            'alternative': 0,
+                            'headers_sup': [],
+                            'values_sup': [[] for i in range(n_img)],
+                            'details_dict': dataf_units.values.tolist(),
+                            'pr_image': True,
+                            'pr_image_sup': True,
+                            'values_info': '',
+                            'values_sup_info': ''
+                            })
+                if len(res_list) > 0:
+                    input_main.results['Eve'] = res_list
 
     msgs = []
     if len(errmsgs) > 0:
@@ -1136,40 +1222,6 @@ def calculate_2d(image2d, roi_array, image_info, modality,
             else:
                 res = Results(headers=headers)
 
-        return res
-
-    def CTn():
-        headers = paramset.ctn_table.labels
-        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['altAll'])
-        if image2d is not None:
-            values = []
-            errmsg = []
-            x_vals = []
-            y_vals = []
-            for i in range(len(paramset.ctn_table.labels)):
-                arr = np.ma.masked_array(image2d, mask=np.invert(roi_array[i]))
-                values.append(np.mean(arr))
-                try:
-                    y_val = float(paramset.ctn_table.linearity_axis[i])
-                    x_vals.append(np.mean(arr))
-                    y_vals.append(y_val)
-                except (ValueError, TypeError):
-                    pass
-
-            if len(x_vals) > 0:
-                res = sp.stats.linregress(x_vals, y_vals)
-                values_sup = [res.rvalue**2, res.intercept, res.slope]
-            else:
-                values_sup = [None, None, None]
-                errmsg = (
-                    f'Could not linear fit HU to {paramset.ctn_table.linearity_unit}. '
-                    'Values not valid.'
-                    )
-            res = Results(headers=headers, values=values,
-                          headers_sup=headers_sup, values_sup=values_sup,
-                          errmsg=errmsg)
-        else:
-            res = Results(headers=headers, headers_sup=headers_sup)
         return res
 
     def Dim():
@@ -1756,7 +1808,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
         return res
 
     def Pha():
-        alt = paramset.pha_alt
+        alt = paramset.pha_type
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt'+str(alt)])
         #headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt'+str(alt)])
         if image2d is None:
@@ -2311,6 +2363,9 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                 except AttributeError:
                     pass
 
+            if roi_dicts[0] is None:
+                cancelled = True
+
             if cancelled is False:
                 # set templates and kernels
                 try:
@@ -2496,6 +2551,116 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                               errmsg=errmsgs)
         return res
 
+    def CTn(images_to_test):
+        # '3d' to avoid repeated matching against template if estimate energy
+        headers = paramset.ctn_table.labels
+        headers_sup = copy.deepcopy(
+            HEADERS_SUP[modality][test_code][f'alt{paramset.ctn_type}'])
+        if len(images_to_test) == 0:
+            res = Results(headers=headers, headers_sup=headers_sup)
+        else:
+            errmsgs = []
+            values = []
+            values_sup = []
+            details_dicts = []
+            details_dict_common = {}
+
+            if paramset.ctn_type == 1:
+                temps = input_main.CT_attenuation_table
+                energies = np.array(temps[0].attenuation)
+                materials = [x.label for x in temps[1:]]
+                match_materials = list(set(
+                    paramset.ctn_table.labels).intersection(materials))
+                details_dict_common = {'energies': energies}
+                if len(match_materials) < 3:
+                    errmsgs.append('At least 3 materials in ROI list have to '
+                              'match named materials in CT attenation table '
+                              f'(settings). Found only {len(match_materials)}'
+                              'matches [{match_materials}].')
+                else:
+                    match_sorted_materials = []
+                    match_sorted_materials_idxs = []
+                    attenuation_x_density = []
+                    for idx_roi, label in enumerate(paramset.ctn_table.labels):
+                        if label in match_materials:
+                            match_sorted_materials.append(label)
+                            match_sorted_materials_idxs.append(idx_roi)
+                            idx = materials.index(label) + 1
+                            attenuation_x_density.append(temps[idx].density * np.array(temps[idx].attenuation))
+                    details_dict_common.update({
+                        'matched_materials': match_sorted_materials,
+                        'matched_materials_idxs': match_sorted_materials_idxs,
+                        'attenuation_x_density': attenuation_x_density})
+
+            for i, sli in enumerate(matrix):
+                details_dict = None
+                if sli is None:
+                    values_sli = [None] * len(headers)
+                    values_sup_sli = [None] * len(headers_sup)
+                else:
+                    x_vals = []
+                    y_vals = []
+                    values_sli = []
+                    roi_array, errmsg = get_rois(
+                        sli, images_to_test[i], input_main)
+                    if errmsg is not None:
+                        errmsgs.append(
+                            f'CTn get ROI image {images_to_test[i]}:')
+                        errmsgs.append(errmsg)
+
+                    for i in range(len(paramset.ctn_table.labels)):
+                        arr = np.ma.masked_array(
+                            sli, mask=np.invert(roi_array[i]))
+                        values_sli.append(np.mean(arr))
+                        try:
+                            y_val = float(paramset.ctn_table.linearity_axis[i])
+                            x_vals.append(np.mean(arr))
+                            y_vals.append(y_val)
+                        except (ValueError, TypeError):
+                            pass
+
+                    if len(x_vals) > 0:
+                        res = sp.stats.linregress(x_vals, y_vals)
+                        values_sup_sli = [
+                            res.rvalue**2, res.intercept, res.slope]
+                    else:
+                        values_sup_sli = [None, None, None]
+                        errmsgs.append(
+                            f'Could not linear fit HU to {paramset.ctn_table.linearity_unit}. '
+                            'Values not valid.'
+                            )
+
+                    if paramset.ctn_type == 1:
+                        values_sup_sli.append(None)
+                        if 'matched_materials' in details_dict_common:
+                            HU_values_match = [values_sli[i] for i in details_dict_common['matched_materials_idxs']]
+                            xs = np.array(HU_values_match)
+                            x0 = xs - xs.mean()
+                            ys = np.array(details_dict_common['attenuation_x_density']).transpose()
+                            y0 = ys - ys.mean(axis=1, keepdims=True)
+                            # according to Copilot, validated against sp.stats.linregress(xs, y_row):
+                            R2 = ((y0 @ x0) / (np.linalg.norm(x0) * np.linalg.norm(y0, axis=1)))**2
+                            idx = np.where(R2 == np.max(R2))
+                            eff_e = float(details_dict_common['energies'][idx[0]][0])
+                            details_dict= {'R2': R2, 'effective_energy': eff_e}
+                            values_sup_sli[-1] = eff_e
+                            #R2_linregress = []  # same result
+                            #for y_row in ys:
+                            #    res = sp.stats.linregress(xs, y_row)
+                            #    R2_linregress.append(float(res.rvalue**2))
+
+                values.append(values_sli)
+                values_sup.append(values_sup_sli)
+                details_dicts.append(details_dict)
+
+            details_dicts.append(details_dict_common)
+            res = Results(headers=headers, values=values,
+                          headers_sup=headers_sup, values_sup=values_sup,
+                          details_dict=details_dicts,
+                          errmsg=errmsgs)
+
+        return res
+
     def Def(images_to_test):
         """Defective pixels."""
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt0'])
@@ -2504,9 +2669,9 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             res = Results(headers=headers)
         else:
             errmsgs = []
-            values = [None]
+            values = []
             details_dicts = []
-            
+
             kernel = np.ones((3,3))
             kernel[1,1] = 0
             kernel = kernel / 8
@@ -2517,7 +2682,6 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
             kernel_plus[1, -1] = 1
             kernel_plus = kernel_plus / 4
 
-            values = []
             n_diff_neighbours_is_zero = np.zeros(
                 matrix[images_to_test[0]][1:-1,1:-1].shape)
             n_diff_nearest_is_zero = np.copy(n_diff_neighbours_is_zero)

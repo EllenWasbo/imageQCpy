@@ -14,7 +14,8 @@ from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QApplication,
-    QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
+    QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
+    QTreeWidget, QTreeWidgetItem,
     QFormLayout, QGroupBox, QPushButton, QLabel, QDoubleSpinBox, QCheckBox,
     QComboBox, QToolBar, QTableWidget, QTableWidgetItem, QTimeEdit,
     QMessageBox, QInputDialog, QFileDialog, QDialogButtonBox, QHeaderView
@@ -28,10 +29,11 @@ from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui import messageboxes
-from imageQC.ui.tag_patterns import TagPatternTreeTestDCM
+from imageQC.ui.tag_patterns import TagPatternTreeTestDCM, FormatDialog
 from imageQC.scripts.calculate_qc import calculate_qc
 from imageQC.scripts.mini_methods import get_all_matches
-from imageQC.ui.ui_dialogs import ImageQCDialog
+from imageQC.scripts.dcm import parse_SR_content_sequence
+from imageQC.ui.ui_dialogs import ImageQCDialog, SelectTextsDialog
 # imageQC block end
 
 
@@ -243,6 +245,10 @@ class ParamsTabCommon(QTabWidget):
                     self.sni_channels_table_widget.current_table = copy.deepcopy(
                         paramset.sni_channels_table)
                     self.sni_channels_table_widget.update_table()
+                elif field.name == 'eve_tagpattern':
+                    self.eve_tagpattern_widget.eve_tagpattern = copy.deepcopy(
+                        paramset.eve_tagpattern)
+                    self.eve_tagpattern_widget.update_data()
 
         if self.main.current_modality == 'Xray':
             self.update_NPS_independent_pixels()
@@ -486,7 +492,7 @@ class ParamsTabCommon(QTabWidget):
                 # - alternative or headers changed
                 log = []
                 if attribute in [
-                        'sli_type', 'mtf_type', 'rec_type', 'snr_type',
+                        'sli_type', 'mtf_type', 'rec_type', 'snr_type', 'ctn_type',
                         'roi_use_table', 'hom_type', 'sni_alt']:
                     _, log = cff.verify_output_alternative(
                         self.main.current_paramset, testcode=self.main.current_test)
@@ -494,6 +500,10 @@ class ParamsTabCommon(QTabWidget):
                         # copy to hom_tab_alt (pre v3.1.29 name, allow using mix of versions)
                         self.main.current_paramset.hom_tab_alt = \
                             self.main.current_paramset.hom_type
+                    if attribute == 'ctn_type':
+                        self.main.current_paramset.ctn_type = int(
+                            self.main.current_paramset.ctn_type)
+                        # avoid bool
                 if log:
                     msg = ('Output settings are defined for this parameterset. '
                            'Changing this parameter will change the headers of '
@@ -1807,11 +1817,14 @@ class ParamsTabCT(ParamsTabCommon):
         self.ctn_auto_center = QCheckBox('')
         self.ctn_auto_center.toggled.connect(
             lambda: self.param_changed_from_gui(attribute='ctn_auto_center'))
+        self.ctn_type = QCheckBox('')
+        self.ctn_type.toggled.connect(
+            lambda: self.param_changed_from_gui(attribute='ctn_type'))
         self.ctn_plot = QComboBox()
         self.ctn_plot.addItems([
             'HU difference for set min/max',
-            # 'HU difference for set min/max (%)',
-            'CT number linearity'])
+            'CT number linearity',
+            'R2 pr energy'])
         self.ctn_plot.currentIndexChanged.connect(
             self.main.wid_res_plot.plotcanvas.plot)
 
@@ -1820,6 +1833,7 @@ class ParamsTabCT(ParamsTabCommon):
         flo1.addRow(QLabel('Search for circular element'), self.ctn_search)
         flo1.addRow(QLabel('Search radius (mm)'), self.ctn_search_size)
         flo1.addRow(QLabel('Auto center'), self.ctn_auto_center)
+        flo1.addRow(QLabel('Estimate effective energy?'), self.ctn_type)
         flo1.addRow(QLabel('Plot'), self.ctn_plot)
         self.tab_ctn.hlo.addLayout(flo1)
         self.tab_ctn.hlo.addWidget(uir.VLine())
@@ -2259,7 +2273,7 @@ class ParamsTabXray(ParamsTabCommon):
         self.pha_tab_alt = QComboBox()
         self.pha_tab_alt.addItems(ALTERNATIVES['Xray']['Pha'])
         self.pha_tab_alt.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='pha_alt'))
+            lambda: self.param_changed_from_gui(attribute='pha_type'))
 
         self.tab_pha.hlo_top.addWidget(QLabel('Phantom: '))
         self.tab_pha.hlo_top.addWidget(self.pha_tab_alt)
@@ -4041,6 +4055,11 @@ class ParamsTabMR(ParamsTabCommon):
         self.snr_background_dist.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='snr_background_dist'))
 
+        self.snr_optimize_center = QCheckBox('')
+        self.snr_optimize_center.toggled.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='snr_optimize_center'))
+
         flo = QFormLayout()
         flo.addRow(QLabel('ROI % of circular phantom area'), self.snr_roi_percent)
         flo.addRow(QLabel('Cut top of ROI by (mm)'), self.snr_roi_cut_top)
@@ -4049,6 +4068,7 @@ class ParamsTabMR(ParamsTabCommon):
                    self.snr_background_size)
         flo.addRow(QLabel('Background ROI distance from image border (mm)'),
                    self.snr_background_dist)
+        flo.addRow(QLabel('Optimize center'), self.snr_optimize_center)
 
         self.tab_snr.hlo.addLayout(flo)
         self.tab_snr.hlo.addStretch()
@@ -4077,9 +4097,15 @@ class ParamsTabMR(ParamsTabCommon):
         self.piu_roi_cut_top.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='piu_roi_cut_top'))
 
+        self.piu_optimize_center = QCheckBox('')
+        self.piu_optimize_center.toggled.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='piu_optimize_center'))
+
         flo = QFormLayout()
         flo.addRow(QLabel('ROI % of circular phantom area'), self.piu_roi_percent)
         flo.addRow(QLabel('Cut top of ROI by (mm)'), self.piu_roi_cut_top)
+        flo.addRow(QLabel('Optimize center'), self.piu_optimize_center)
         self.tab_piu.hlo.addLayout(flo)
         self.tab_piu.hlo.addStretch()
 
@@ -4168,10 +4194,15 @@ class ParamsTabMR(ParamsTabCommon):
             decimals=0, minimum=0)
         self.geo_mask_outer.valueChanged.connect(
             lambda: self.param_changed_from_gui(attribute='geo_mask_outer'))
+        self.geo_optimize_center = QCheckBox('')
+        self.geo_optimize_center.toggled.connect(
+            lambda: self.param_changed_from_gui(
+                attribute='geo_optimize_center'))
 
         flo = QFormLayout()
         flo.addRow(QLabel('Actual width of phantom (mm)'), self.geo_actual_size)
         flo.addRow(QLabel('Mask outer image (mm)'), self.geo_mask_outer)
+        flo.addRow(QLabel('Optimize center'), self.geo_optimize_center)
         self.tab_geo.hlo.addLayout(flo)
         self.tab_geo.hlo.addStretch()
 
@@ -4268,7 +4299,218 @@ class ParamsTabSR(ParamsTabCommon):
     def __init__(self, parent):
         super().__init__(parent, remove_roi_num=True)
 
+        self.create_tab_eve()
+
+        self.addTab(self.tab_eve, "Extract event details")
+
         self.flag_ignore_signals = False
+
+    def create_tab_eve(self):
+        """GUI of tab SR event details."""
+        self.tab_eve = ParamsWidget(self, run_txt='Extract event details')
+        self.eve_tagpattern_widget = SRtagTreeWidget(self, self.main)
+        self.tab_eve.hlo.addWidget(self.eve_tagpattern_widget)
+        btn_clear = QPushButton('Clear list')
+        btn_clear.clicked.connect(self.eve_tagpattern_widget.clear)
+        self.tab_eve.hlo.addWidget(btn_clear)
+        self.tab_eve.hlo.addStretch()
+        self.tab_eve.vlo.addWidget(QLabel(
+            'All available details will be extracted if none specified.'))
+
+
+class SRtagTreeWidget(QWidget):
+    """CT numbers table widget."""
+
+    def __init__(self, parent, main):
+        super().__init__()
+        self.parent = parent
+        self.main = main
+
+        vlo = QVBoxLayout()
+        self.setLayout(vlo)
+        hlo = QHBoxLayout()
+        vlo.addLayout(hlo)
+
+        self.tree = QTreeWidget()
+        hlo.addWidget(self.tree)
+        self.tree.setColumnCount(2)
+        self.tree.setColumnWidth(0, 200)
+        self.tree.setColumnWidth(1, 200)
+        self.tree.setHeaderLabels(['CodeMeaning', 'Format'])
+        self.tree.setRootIsDecorated(False)
+
+        self.eve_tagpattern = []
+
+        if not self.main.save_blocked:
+            toolb = QToolBar()
+            toolb.setOrientation(Qt.Orientation.Vertical)
+            act_add = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}add.png'),
+                'Add value(s) manually or from sample SR file', self)
+            act_add.triggered.connect(self.add)
+            act_format_out = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}format.png'),
+                'Format output for selected tag', self)
+            act_format_out.triggered.connect(self.format_output)
+            act_up = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}moveUp.png'),
+                'Move tag(s) up in pattern list', self)
+            act_up.triggered.connect(self.move_up)
+            act_down = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}moveDown.png'),
+                'Move tag(s) down in pattern list', self)
+            act_down.triggered.connect(self.move_down)
+            act_delete = QAction(
+                QIcon(f'{os.environ[ENV_ICON_PATH]}delete.png'),
+                'Delete selected tag(s) from pattern', self)
+            act_delete.triggered.connect(self.delete)
+            toolb.addActions(
+                [act_add, act_format_out, act_up, act_down, act_delete])
+            hlo.addWidget(toolb)
+
+    def add(self):
+        """Add tags manually or from SR file."""
+        sel = self.tree.selectedIndexes()
+        row = -1
+        if len(sel) > 0:
+            row = sel[0].row()
+        dlg = messageboxes.QuestionBox(
+            parent=self, title='Add values',
+            msg='Add Code Meaning ...',
+            yes_text='manually as input string',
+            no_text='select from sample SR file')
+        dlg.exec()
+        changed = False
+        if dlg.clickedButton() == dlg.yes:
+            txt, ok = QInputDialog.getItem(
+                self, 'Add Code Meaning                  ', 'Code Meaning:')
+            if ok and txt:
+                self.eve_tagpattern.insert(row + 1, [txt, ''])
+                changed = True
+        else:
+            filename = ''
+            try:
+                filename=self.main.imgs[
+                    self.main.gui.active_img_no].filepath
+            except (AttributeError, IndexError):
+                fname = QFileDialog.getOpenFileName(
+                    self, 'Locate sample SR file',
+                    filter="DICOM (*.dcm);;All files (*)")
+                if fname:
+                    filename = fname[0]
+            if filename:
+                output, errmsg = parse_SR_content_sequence(
+                    filename, sort_irr_event_uids=True)
+                try:
+                    dlg_list = SelectTextsDialog(
+                        texts=output['available_code_meanings'],
+                        title='Select Code Meaning strings to add',
+                        select_info='Found available Code Meaning from file:'
+                        )
+                    if dlg_list.exec():
+                        selected_texts = dlg_list.get_checked_texts()
+                        if selected_texts:
+                            nn = 1
+                            for txt in selected_texts:
+                                self.eve_tagpattern.insert(row + nn, [txt, ''])
+                                nn += 1
+                            changed = True
+                except KeyError:
+                    dlg = messageboxes.MessageBoxWithDetails(
+                        self, title='Failed reading file as SR',
+                        msg='Failed reading Content Sequence for selected file. See details.',
+                        details=errmsg, icon=QMessageBox.Icon.Warning)
+                    dlg.exec()
+
+        if changed:
+            self.update_data(set_selected=row + 1)
+            setattr(self.main.current_paramset, 'eve_tagpattern',
+                    self.eve_tagpattern)
+            self.parent.flag_edit()
+
+    def format_output(self):
+        """Edit f-string for selected tag in tag pattern."""
+        sel = self.tree.selectedIndexes()
+        row = -1
+        if len(sel) > 0:
+            row = sel[0].row()
+        if row > -1:
+            format_str = self.eve_tagpattern[row][1]
+            dlg = FormatDialog(format_string=format_str)
+            res = dlg.exec()
+            if res:
+                new_str = dlg.get_data()
+                self.eve_tagpattern[row][1] = new_str
+                self.update_data(set_selected=row)
+                setattr(self.main.current_paramset, 'eve_tagpattern',
+                        self.eve_tagpattern)
+                self.parent.flag_edit()
+        else:
+            QMessageBox.information(
+                self, 'No tag selected',
+                'Select a tag from the tag pattern to format.')
+
+    def move_up(self):
+        """Move tag up if possible."""
+        sel = self.tree.selectedIndexes()
+        row = -1
+        if len(sel) > 0:
+            row = sel[0].row()
+        if row > 0:
+            popped_row = self.eve_tagpattern.pop(row)
+            self.eve_tagpattern.insert(row - 1, popped_row)
+            self.update_data(set_selected=row - 1)
+            setattr(self.main.current_paramset, 'eve_tagpattern',
+                    self.eve_tagpattern)
+            self.parent.flag_edit()
+
+    def move_down(self):
+        """Move tag down if possible."""
+        sel = self.tree.selectedIndexes()
+        row = -1
+        if len(sel) > 0:
+            row = sel[0].row()
+            n_tags = len(self.eve_tagpattern)
+            if row < n_tags-1:
+                popped_row = self.eve_tagpattern.pop(row)
+                self.eve_tagpattern.insert(row + 1, popped_row)
+                self.update_data(set_selected=row + 1)
+                setattr(self.main.current_paramset, 'eve_tagpattern',
+                        self.eve_tagpattern)
+                self.parent.flag_edit()
+
+    def delete(self):
+        """Delete selected tag(s)."""
+        sel = self.tree.selectedIndexes()
+        row = -1
+        if len(sel) > 0:
+            row = sel[0].row()
+            self.eve_tagpattern.pop(row)
+            self.update_data()
+            setattr(self.main.current_paramset, 'eve_tagpattern',
+                    self.eve_tagpattern)
+            self.parent.flag_edit()
+
+    def clear(self):
+        """Clear pattern."""
+        if len(self.eve_tagpattern) > 0:
+            self.eve_tagpattern = []
+            self.update_data()
+            setattr(self.main.current_paramset, 'eve_tagpattern',
+                    self.eve_tagpattern)
+            self.parent.flag_edit()
+
+    def update_data(self, set_selected=0):
+        """Update table_pattern with data from current_template."""
+        self.tree.clear()
+        if len(self.eve_tagpattern) > 0:
+            for row in self.eve_tagpattern:
+                item = QTreeWidgetItem(row)
+                self.tree.addTopLevelItem(item)
+            if set_selected == -1:
+                set_selected = self.tree.topLevelItemCount() - 1
+            self.tree.setCurrentItem(
+                self.tree.topLevelItem(set_selected))
 
 
 class BoolSelectTests(uir.BoolSelect):
@@ -4304,23 +4546,6 @@ class BoolSelectTests(uir.BoolSelect):
             lambda: self.btn_changed(sel_true_false=True))
         self.btn_false.toggled.connect(
             lambda: self.btn_changed(sel_true_false=False))
-        '''
-            lambda: self.parent.param_changed_from_gui(
-                attribute=self.attribute,
-                update_roi=self.update_roi, clear_results=self.clear_results,
-                update_plot=self.update_plot,
-                update_results_table=self.update_results_table,
-                content=True)
-            )
-        self.btn_false.toggled.connect(
-            lambda: self.parent.param_changed_from_gui(
-                attribute=self.attribute,
-                update_roi=self.update_roi, clear_results=self.clear_results,
-                update_plot=self.update_plot,
-                update_results_table=self.update_results_table,
-                content=False)
-            )
-        '''
 
     def btn_changed(self, sel_true_false=None):
         if self.sender().isChecked():

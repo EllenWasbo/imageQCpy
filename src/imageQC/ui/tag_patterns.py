@@ -591,6 +591,9 @@ class FormatDialog(ImageQCDialog):
             return_string = '|'.join(
                 [self.prefix.text(), format_string, self.suffix.text()])
 
+        if return_string == '||':
+            return_string = ''
+
         return return_string
 
 

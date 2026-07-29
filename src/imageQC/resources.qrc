@@ -6,6 +6,7 @@
 		<file alias="CTnumberSensitometry.yaml">config_defaults\CTnumberSensitometry.yaml</file>
 		<file alias="Siemens_AutoQC.yaml">config_defaults\Siemens_AutoQC.yaml</file>
 		<file alias="cdmam.yaml">config_defaults\cdmam.yaml</file>
+		<file alias="CT_attenuation_table.yaml">config_defaults\CT_attenuation_table.yaml</file>
 	</qresource>
 	<qresource prefix="icons">
 		<file alias="add.png">icons\add.png</file>

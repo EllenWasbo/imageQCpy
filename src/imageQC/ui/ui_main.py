@@ -37,6 +37,7 @@ from imageQC.ui.settings import SettingsDialog
 from imageQC.ui import automation_wizard
 from imageQC.ui import open_multi
 from imageQC.ui import open_automation
+from imageQC.ui.dicom_inspect import DicomInspectDialog
 from imageQC.ui.ui_dialogs import (
     TextDisplay, AboutDialog, ShowDashDialog, AddArtifactsDialog,
     OpenRawDialog)
@@ -368,12 +369,8 @@ class MainWindow(QMainWindow):
 
     def read_header(self):
         """View file as header."""
-        fname = QFileDialog.getOpenFileName(
-            self, 'Read DICOM header',
-            filter="DICOM files (*.dcm *.IMA);;All files (*)")
-        filename = fname[0]
-        if filename != '':
-            dcm.dump_dicom(self, filename=filename)
+        dlg = DicomInspectDialog(self)
+        dlg.exec()
 
     def open_auto(self):
         """Start open automation dialog."""
@@ -400,18 +397,25 @@ class MainWindow(QMainWindow):
                     current)
             else:
                 self.gui.active_img_no = -1 if len(self.imgs) == 0 else 0
-            read_img = True
-            if self.wid_image_display.tool_sum.isChecked():
-                marked_idxs = self.get_marked_imgs_current_test()
-                if self.gui.active_img_no in marked_idxs:
-                    self.active_img = self.summed_img
-                    read_img = False
-            if read_img:
-                self.active_img, _ = dcm.get_img(
-                    self.imgs[self.gui.active_img_no],
-                    frame_number=self.imgs[self.gui.active_img_no].frame_number,
-                    tag_infos=self.tag_infos, overlay=self.gui.show_overlay,
-                    postprocessing=self.current_paramset.postprocessing)
+
+            update_table = False
+            if self.imgs[self.gui.active_img_no].modality == 'SR':
+                self.active_img = None
+                update_roi = False
+                update_table = True
+            else:
+                read_img = True
+                if self.wid_image_display.tool_sum.isChecked():
+                    marked_idxs = self.get_marked_imgs_current_test()
+                    if self.gui.active_img_no in marked_idxs:
+                        self.active_img = self.summed_img
+                        read_img = False
+                if read_img:
+                    self.active_img, _ = dcm.get_img(
+                        self.imgs[self.gui.active_img_no],
+                        frame_number=self.imgs[self.gui.active_img_no].frame_number,
+                        tag_infos=self.tag_infos, overlay=self.gui.show_overlay,
+                        postprocessing=self.current_paramset.postprocessing)
             if self.active_img is not None:
                 # apply artifacts if any
                 try:
@@ -437,6 +441,7 @@ class MainWindow(QMainWindow):
                     sz_acty, sz_actx, _ = np.shape(self.active_img)
                 self.wid_center.val_delta_x.setRange(-sz_actx//2, sz_actx//2)
                 self.wid_center.val_delta_y.setRange(-sz_acty//2, sz_acty//2)
+
             self.wid_dcm_header.refresh_img_info(
                 self.imgs[self.gui.active_img_no].info_list_general,
                 self.imgs[self.gui.active_img_no].info_list_modality)
@@ -444,7 +449,7 @@ class MainWindow(QMainWindow):
             if update_roi is not False:
                 update_roi = True
             self.refresh_img_display(update_roi=update_roi)
-            self.refresh_results_display(update_table=False)
+            self.refresh_results_display(update_table=update_table)
             self.refresh_selected_table_row()
             self.tree_file_list.blockSignals(False)
 
@@ -702,21 +707,25 @@ class MainWindow(QMainWindow):
 
     def refresh_selected_table_row(self):
         """Set selected results table row to the same as image selected file."""
+        proceed = False
         if self.current_test in self.results:
             if self.results[self.current_test] is not None:
                 wid = self.tab_results.currentWidget()
                 if isinstance(wid, ui_main_result_tabs.ResultTableWidget):
-                    marked_imgs = self.get_marked_imgs_current_test()
-                    if self.gui.active_img_no in marked_imgs:
-                        idx = marked_imgs.index(self.gui.active_img_no)
-                        if self.results[self.current_test]['pr_image']:
-                            self.wid_res_tbl.result_table.blockSignals(True)
-                            self.wid_res_tbl.result_table.selectRow(idx)
-                            self.wid_res_tbl.result_table.blockSignals(False)
-                        if self.results[self.current_test]['pr_image_sup']:
-                            self.wid_res_tbl_sup.result_table.blockSignals(True)
-                            self.wid_res_tbl_sup.result_table.selectRow(idx)
-                            self.wid_res_tbl_sup.result_table.blockSignals(False)
+                    if wid.result_table.linked_image_list:
+                        proceed = True
+        if proceed:
+            marked_imgs = self.get_marked_imgs_current_test()
+            if self.gui.active_img_no in marked_imgs:
+                idx = marked_imgs.index(self.gui.active_img_no)
+                if self.results[self.current_test]['pr_image']:
+                    self.wid_res_tbl.result_table.blockSignals(True)
+                    self.wid_res_tbl.result_table.selectRow(idx)
+                    self.wid_res_tbl.result_table.blockSignals(False)
+                if self.results[self.current_test]['pr_image_sup']:
+                    self.wid_res_tbl_sup.result_table.blockSignals(True)
+                    self.wid_res_tbl_sup.result_table.selectRow(idx)
+                    self.wid_res_tbl_sup.result_table.blockSignals(False)
 
     def sort_imgs(self):
         """Resort images by dicom info."""
@@ -876,8 +885,15 @@ class MainWindow(QMainWindow):
 
     def run_generate_report(self):
         """Run generate report."""
-        dlg = GenerateReportDialog(self)
-        dlg.exec()
+        if self.current_modality == 'SR':
+            msg = 'Generate report not possible for modality SR.'
+            QMessageBox.information(self, 'Generate report', msg)
+        elif self.btn_read_vendor_file.isChecked():
+            msg = 'Generate report not possible for vendor file mode.'
+            QMessageBox.information(self, 'Generate report', msg)
+        else:
+            dlg = GenerateReportDialog(self)
+            dlg.exec()
 
     def run_settings(self, initial_view='', initial_template_label='',
                      paramset_output=False):
@@ -922,6 +938,8 @@ class MainWindow(QMainWindow):
         _, _, self.quicktest_templates = cff.load_settings(
             fname='quicktest_templates')
         _, _, self.tag_infos = cff.load_settings(fname='tag_infos')
+        _, _, self.CT_attenuation_table = cff.load_settings(
+            fname='CT_attenuation_table')
         _, _, self.tag_patterns_special = cff.load_settings(
             fname='tag_patterns_special')
         _, _, self.digit_templates = cff.load_settings(
@@ -1084,7 +1102,7 @@ class MainWindow(QMainWindow):
 
         self.act_open = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}open.png'),
-            'Open DICOM image(s)', self)
+            'Open DICOM or raw file(s)', self)
         self.act_open.setShortcut('Ctrl+O')
         self.act_open.triggered.connect(self.open_files)
         self.act_open_adv = QAction(
@@ -1095,8 +1113,9 @@ class MainWindow(QMainWindow):
         self.act_open_adv.setEnabled(False)  # wait til init finished
         act_read_header = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}tags.png'),
-            'Read DICOM header', self)
+            'Read/inpsect DICOM header...', self)
         act_read_header.triggered.connect(self.read_header)
+        act_read_header.setShortcut('Ctrl+H')
         act_open_auto = QAction(
             QIcon(f'{os.environ[ENV_ICON_PATH]}play.png'),
             'Run automation templates', self)

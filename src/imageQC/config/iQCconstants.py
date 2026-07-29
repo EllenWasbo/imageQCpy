@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when fundamental changes or B turns 99, B when major changes,
 #   C new python release (or small fix)
-VERSION = '3.2.5'
+VERSION = '3.2.6'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -50,7 +50,7 @@ QUICKTEST_OPTIONS = {
     'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Rin'],
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec', 'MTF'],
     'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF'],
-    'SR': ['DCM']}
+    'SR': ['DCM', 'Eve']}
 
 COLORS = ['r', 'b', 'g', 'y', 'c', 'm', 'skyblue', 'orange']
 
@@ -59,15 +59,16 @@ ALTERNATIVES_ROI = ['One ROI',
                     'ROIs from table, same shape',
                     'ROIs from table, rectangle defined per ROI']
 # dict:
-#   display text for alternative methods - linked to HEADERS(_SUB)
+#   display text for alternative methods - linked to HEADERS and HEADERS_SUB
 #   if not 1-to-1 alternative text vs headers
-#        - specify in settings_reusables like for NM-SNI
+#        - specify in settings_reusables.py/QuickTestOutputSubDialog/update_data like for NM-SNI
 #   NB - to add verification output-settings vs paramset settings: add to
-#       ui_main_test_tabs.py / param_changed_from_gui (verify_output)
+#       ui_main_test_tabs.py / ParamsTabCommon / param_changed_from_gui (verify_output attributes)
 #       config_func.py / get_test_alternative
 ALTERNATIVES = {
     'CT': {
         'ROI': ALTERNATIVES_ROI,
+        'CTn': ['Without estimated effective energy', 'Estimate effective energy'],
         'Sli': ['Wire ramps Catphan (axial)',
                 'Beaded ramps Catphan (helical)',
                 'Vertical beaded ramps GE phantom',
@@ -383,7 +384,11 @@ HEADERS_SUP = {
             'altAll': ['Stdev at12', 'Stdev at15', 'Stdev at18', 'Stdev at21',
                        'Stdev Center']
             },
-        'CTn': {'altAll': ['R-squared', 'fitted intercept', 'fitted slope']},
+        'CTn': {
+            'alt0': ['R-squared', 'fitted intercept', 'fitted slope'],
+            'alt1': ['R-squared', 'fitted intercept', 'fitted slope',
+                     'Estimated effective energy (keV)']
+            },
         'TTF': {
             'alt0': ['Material', 'A1', 'sigma1', 'A2', 'sigma2'],
             },
@@ -545,6 +550,7 @@ VENDOR_FILE_OPTIONS = {
 list of vendor file types to be read."""
 
 tag_infos_default = iQCconstants_functions.read_tag_infos_from_yaml()
+CT_attenuation_default = iQCconstants_functions.read_CT_attenuation_from_yaml()
 CONFIG_FNAMES = {
     'paramsets': {
         'saved_as': 'object_list',
@@ -553,6 +559,10 @@ CONFIG_FNAMES = {
     'tag_infos': {
         'saved_as': 'object_list',
         'default': tag_infos_default
+        },
+    'CT_attenuation_table': {
+        'saved_as': 'object_list',
+        'default': CT_attenuation_default
         },
     'tag_patterns_special': {
         'saved_as': 'modality_dict',

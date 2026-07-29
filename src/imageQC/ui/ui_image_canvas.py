@@ -198,9 +198,14 @@ class ImageCanvas(GenericImageCanvas):
         self.ax.clear()
         self.img = self.ax.imshow(np.zeros((100, 100)), cmap=cmap)
         self.ax.axis('off')
+        txt = 'Pixel data not found'
+        try:
+            if self.main.imgs[self.main.gui.active_img_no].modality == 'SR':
+                txt = 'SR file, no pixel data'
+        except (AttributeError, IndexError):
+            pass
         at = matplotlib.offsetbox.AnchoredText(
-            'Pixel data not found',
-            prop=dict(size=14, color='gray'),
+            txt, prop=dict(size=14, color='gray'),
             frameon=False, loc='center')
         self.ax.add_artist(at)
         self.draw()
@@ -720,19 +725,17 @@ class ImageCanvas(GenericImageCanvas):
             try:
                 details_dict = self.main.results['Pha'][
                     'details_dict'][self.main.gui.active_img_no]
-                pix = self.main.imgs[self.main.gui.active_img_no].pix[0]
-                shape = self.main.imgs[self.main.gui.active_img_no].shape
-                cnr_dicts = details_dict['cnr_results_pr_disc']
-                center_xs = [elem['center_xy'][0] for elem in cnr_dicts]
-                center_ys = [elem['center_xy'][1] for elem in cnr_dicts]
-                center_xs = np.array(center_xs) + shape[1] / 2
-                center_ys = np.array(center_ys) + shape[0] / 2
-                self.scatters = []
-                scatter = self.ax.scatter(
-                    center_xs, center_ys, s=40, c='green', marker='x')
-                self.scatters.append(scatter)
-            except (KeyError, TypeError):
+                self.main.current_roi = [
+                    details_dict['roi_array'],
+                    details_dict['roi_inner_circles'],
+                    details_dict['roi_outer_circles'],]
+                self.add_contours_to_all_rois(
+                    colors=COLORS,
+                    labels=['found_phantom', 'inner circles', 'outer circles'])
+            except KeyError:
                 pass
+        else:
+            self.add_contours_to_all_rois(roi_indexes=[0, 1])
 
     def PIU(self):
         """Draw MR PIU ROI."""

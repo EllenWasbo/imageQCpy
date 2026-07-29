@@ -11,6 +11,11 @@ from pathlib import Path
 from time import ctime
 from dataclasses import dataclass, field, asdict
 import copy
+import pandas as pd
+import numpy as np
+import matplotlib
+from matplotlib.backends.backend_qt5agg import (
+    FigureCanvasQTAgg, NavigationToolbar2QT)
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QAction
@@ -18,7 +23,8 @@ from PyQt6.QtWidgets import (
     QApplication,
     QTreeWidget, QTreeWidgetItem, QStackedWidget,
     QVBoxLayout, QHBoxLayout, QGroupBox, QToolBar,
-    QLabel, QLineEdit, QPlainTextEdit, QPushButton, QSpinBox,
+    QTableWidget, QTableWidgetItem, QComboBox,
+    QLabel, QLineEdit, QPlainTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
     QListWidget, QMessageBox, QFileDialog
     )
 import yaml
@@ -30,7 +36,8 @@ from imageQC.config.iQCconstants import (
 from imageQC.config import config_func as cff
 from imageQC.config import config_classes as cfc
 from imageQC.ui.ui_dialogs import ImageQCDialog, SelectTextsDialog
-from imageQC.ui.settings_reusables import StackWidget, QuickTestTreeView
+from imageQC.ui.settings_reusables import (
+    StackWidget, QuickTestTreeView, ToolBarImportIgnore)
 from imageQC.ui import settings_automation
 from imageQC.ui import settings_dicom_tags
 from imageQC.ui.settings_paramsets import ParamSetsWidget
@@ -159,6 +166,9 @@ class SettingsDialog(ImageQCDialog):
         add_widget(parent=self.item_shared_settings, snake='paramsets',
                    title='Parameter sets / output',
                    widget=ParamSetsWidget(self))
+        add_widget(parent=self.item_shared_settings, snake='CT_attenuation_table',
+                   title='CT attenuation tables',
+                   widget=CTattenuationWidget(self))
         add_widget(parent=self.item_shared_settings, snake='quicktest_templates',
                    title='QuickTest templates',
                    widget=QuickTestTemplatesWidget(self))
@@ -233,8 +243,7 @@ class SettingsDialog(ImageQCDialog):
 
             add_widget(parent=self.item_auto_info, snake='dash_settings',
                        title='Dashboard settings',
-                       widget=settings_automation.DashSettingsWidget(self),
-                       exclude_if_empty=False)
+                       widget=settings_automation.DashSettingsWidget(self))
 
         item, widget = self.get_item_widget_from_txt(initial_view)
         self.tree_settings.setCurrentItem(item)
@@ -476,12 +485,23 @@ class SettingsDialog(ImageQCDialog):
                 except AttributeError:
                     pass
 
+        # not modality_dict:
+
         if self.main.auto_common.import_path != '':
             widget = self.widget_auto_common
             widget.templates = self.main.auto_common
             widget.current_template = widget.templates.filename_pattern
             widget.update_data()
             widget.flag_edit(False)
+
+        try:
+            widget = self.widget_CT_attenuation_table
+            widget.templates = self.main.CT_attenuation_table
+            widget.energies = widget.templates[0].attenuation
+            widget.templates.pop(0)  # pop off energy list
+            widget.refresh_templist()
+        except (AttributeError, IndexError):
+            pass
 
         try:
             self.widget_dash_settings.templates = self.main.dash_settings
@@ -549,6 +569,7 @@ class SettingsDialog(ImageQCDialog):
         marked = import_main.marked
         import_all = import_main.import_all
         if import_all is False:
+            # tag_infos - object list
             widget = self.widget_dicom_tags
             try:
                 if marked:
@@ -612,6 +633,7 @@ class SettingsDialog(ImageQCDialog):
             list_objects = [fname for fname, item in CONFIG_FNAMES.items()
                             if item['saved_as'] == 'object']
             list_objects.remove('last_modified')
+            list_objects.append('CT_attenuation_table')  # add all or none
             for snake in list_objects:
                 proceed = True
                 try:
@@ -628,6 +650,12 @@ class SettingsDialog(ImageQCDialog):
                     except AttributeError:  # widget.marked not set
                         if marked:
                             setattr(import_main, snake, None)
+        if import_main.CT_attenuation_table:
+            energy_object = cfc.CTattenuationMaterial(
+                label='Energy',
+                attenuation=self.widget_CT_attenuation_table.energies)
+            import_main.CT_attenuation_table.insert(
+                0, energy_object)
 
         return import_main
 
@@ -854,6 +882,7 @@ class SharedSettingsWidget(StackWidget):
         _, _, digit_templates = cff.load_settings(fname='digit_templates')
         _, _, quicktest_templates = cff.load_settings(fname='quicktest_templates')
         _, _, paramsets = cff.load_settings(fname='paramsets')
+        _, _, CT_attenuation_table = cff.load_settings(fname='CT_attenuation_table')
         _, _, auto_common = cff.load_settings(fname='auto_common')
         _, _, auto_templates = cff.load_settings(fname='auto_templates')
         _, _, auto_vendor_templates = cff.load_settings(fname='auto_vendor_templates')
@@ -870,6 +899,7 @@ class SharedSettingsWidget(StackWidget):
             digit_templates=digit_templates,
             quicktest_templates=quicktest_templates,
             paramsets=paramsets,
+            CT_attenuation_table=CT_attenuation_table,
             auto_common=auto_common,
             auto_templates=auto_templates,
             auto_vendor_templates=auto_vendor_templates,
@@ -1097,6 +1127,237 @@ class ReportTemplatesWidget(StackWidget):
             self.txt_elements.setPlainText('\n------------\n'.join(txt))
 
 
+class CTattenuationWidget(StackWidget):
+    """Widget holding CT attenuation tables."""
+
+    def __init__(self, dlg_settings):
+        header = 'CT attenuation table'
+        subtxt = '''Manage attenuation and density information for materials 
+        used in test CT number to estimate effective energy.<br>
+        Default values are found from <a href=
+        "https://physics.nist.gov/PhysRefData/Xcom/html/xcom1.html">
+        NIST XCOM</a> (total attenuation with coherent scattering) <br>
+        using information about materials from CatPhan 700 Product Guide.
+        '''
+        super().__init__(dlg_settings, header, subtxt, temp_alias='material',
+                         mod_temp=True, grouped=False)
+        self.fname = 'CT_attenuation_table'
+        self.empty_template = cfc.CTattenuationMaterial()
+        self.energies = []
+        self.finished_init = False
+
+        if self.import_review_mode:
+            self.wid_mod_temp.toolbar.setVisible(False)
+            tb_marked = ToolBarImportIgnore(
+                self, orientation=Qt.Orientation.Horizontal)
+            self.import_review_mark_txt = QLabel('Import and overwrite current')
+            tb_marked.addWidget(self.import_review_mark_txt)
+            hlo_import_tb = QHBoxLayout()
+            hlo_import_tb.addStretch()
+            hlo_import_tb.addWidget(tb_marked)
+            hlo_import_tb.addStretch()
+            self.vlo.addLayout(hlo_import_tb)
+        else:
+            self.wid_mod_temp.toolbar.removeAction(
+                self.wid_mod_temp.act_move_modality)
+            self.wid_mod_temp.toolbar.removeAction(self.wid_mod_temp.act_add)
+            self.wid_mod_temp.toolbar.removeAction(self.wid_mod_temp.act_clear)
+            self.wid_mod_temp.toolbar.removeAction(self.wid_mod_temp.act_up)
+            self.wid_mod_temp.toolbar.removeAction(self.wid_mod_temp.act_down)
+
+        btn_load = QPushButton(
+            'Load table of energy and attenuation from clipboard...')
+        btn_load.setIcon(QIcon(
+            f'{os.environ[ENV_ICON_PATH]}import.png'))
+        btn_load.clicked.connect(self.load_table)
+        btn_export = QPushButton(
+            'Copy table of energy and attenuation to clipboard...')
+        btn_export.setIcon(QIcon(
+            f'{os.environ[ENV_ICON_PATH]}copy.png'))
+        btn_export.clicked.connect(self.export_table)
+
+        if self.import_review_mode is False:
+            infotxt = '''To change data, prepare table in Excel.<br>
+            Copy current data to clipboard (button below) to view an example of structure.<br>
+            First column is energies (keV) <br>
+            and subsequent columns should be data for the different materials. <br>
+            First row = headers (material names)<br>
+            Second row = densities (g/cc)<br>
+            Following rows = attenuation values for the given keV.<br>
+            Material name need to be same as used in test CT number.<br>
+            '''
+            self.wid_mod_temp.vlo.addWidget(uir.LabelItalic(infotxt))
+            self.wid_mod_temp.vlo.addWidget(btn_load)
+            self.wid_mod_temp.vlo.addWidget(btn_export)
+
+        vlo = QVBoxLayout()
+        self.hlo.addLayout(vlo)
+
+        self.density = QDoubleSpinBox(
+            decimals=3, minimum=0, maximum=100, singleStep=1)
+        hlo_density = QHBoxLayout()
+        vlo.addLayout(hlo_density)
+        hlo_density.addWidget(QLabel('Density (g/cc):'))
+        hlo_density.addWidget(self.density)
+        hlo_density.addStretch()
+
+        hlo_table = QHBoxLayout()
+        vlo.addLayout(hlo_table)
+        self.table = QTableWidget(self)
+        self.table.setFixedWidth(300)
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(
+            ['Energy (keV)', 'Attenuation (cm2/g)'])
+        self.table.verticalHeader().setVisible(False)
+        hlo_table.addWidget(self.table)
+
+        vlo_plot = QVBoxLayout()
+        hlo_table.addLayout(vlo_plot)
+
+        self.cbox_plot = QComboBox()
+        self.cbox_plot.addItems([
+            'Plot Attenuation (cm2/g)',
+            'Plot Attenuation (cm2/g) x density (g/cm3)'])
+        self.cbox_plot.currentIndexChanged.connect(self.draw_curves)
+        self.cbox_plot.setFixedWidth(300)
+        self.fig = matplotlib.figure.Figure(dpi=150)
+        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.ax = self.fig.add_subplot(111)
+        nav_toolb = NavigationToolbar2QT(self.canvas, self)
+        vlo_plot.addWidget(self.cbox_plot)
+        vlo_plot.addWidget(nav_toolb)
+        vlo_plot.addWidget(self.canvas)
+
+        self.vlo.addWidget(uir.HLine())
+        self.vlo.addWidget(self.status_label)
+
+    def update_data(self):
+        """Update GUI with selected template."""
+        self.density.setValue(self.current_template.density)
+
+        n_energies = len(self.energies)
+        self.table.setRowCount(n_energies)
+        n_att = len(self.current_template.attenuation)
+        for r in range(n_energies):
+            twi = QTableWidgetItem(f'{self.energies[r]:.1f}')
+            self.table.setItem(r, 0, twi)
+        if n_att == n_energies:
+            for r in range(n_energies):
+                twi = QTableWidgetItem(
+                    f'{self.current_template.attenuation[r]:.3f}')
+                self.table.setItem(r, 1, twi)
+        else:
+            for r in range(n_energies):
+                twi = QTableWidgetItem('')
+                self.table.setItem(r, 1, twi)
+            if n_att > 0:
+                QMessageBox.warning(
+                    self, 'Mismatch',
+                    f'Number of energies ({n_energies}) does not match'
+                    ' number of attenuation values ({n_att}). Ignored.')
+        self.table.resizeColumnsToContents()
+        self.table.resizeRowsToContents()
+        self.highlight_curve()
+
+    def draw_curves(self):
+        self.ax.clear()
+        multiply = True if self.cbox_plot.currentIndex() == 1 else False
+        for material in self.templates:
+            if multiply:
+                yvals = material.density * np.array(material.attenuation)
+            else:
+                yvals = material.attenuation
+            self.ax.plot(self.energies, yvals,
+                         label=material.label, linewidth=1.0)
+        self.ax.legend(loc='upper right')
+        self.fig.subplots_adjust(0.15, 0.2, 0.95, .95)
+        self.ax.set_xlabel('Energy (keV)')
+        self.ax.set_ylabel('Attenuation (cm2/g)')
+        self.highlight_curve()
+        self.canvas.draw()
+
+    def highlight_curve(self):
+        for idx, material in enumerate(self.templates):
+            linewidth = 0.7
+            if material.label == self.current_template.label:
+                linewidth = 2.0
+            line = self.ax.get_lines()[idx]
+            line.set_linewidth(linewidth)
+        self.canvas.draw_idle()
+
+    def load_table(self):
+        """Read table of energy (keV) and attenuation (cm2/g) from clipboard."""
+        def tofloat(val_or_list):
+            try:
+                if isinstance(val_or_list, list):
+                    str_with_point = [x.replace(',','.') for x in val_or_list]
+                    output = [float(x) for x in str_with_point]
+                else:
+                    output = float(val_or_list.replace(',','.'))
+            except AttributeError:
+                if isinstance(val_or_list, list):
+                    output = val_or_list
+                else:
+                    output = float(val_or_list)
+            return output
+
+        try:
+            dataf = pd.read_clipboard()
+            nrows, ncols = dataf.shape
+        except pd.errors.ParserError:
+            ncols = 0
+            nrows = 0
+        if ncols > 1 and nrows > 1:
+            headers = dataf.columns.tolist()
+            self.energies = tofloat(dataf[dataf.columns[0]][1:].tolist())
+            self.templates = []
+            for idx, header in enumerate(headers[1:]):
+                this = cfc.CTattenuationMaterial(
+                    label=header, density=tofloat(dataf.iat[0, idx + 1]),
+                    attenuation=tofloat(dataf[header][1:].tolist()))
+                self.templates.append(this)
+            self.flag_edit(True)
+            self.table.setRowCount(len(self.energies))
+            self.refresh_templist()
+            self.draw_curves()
+            self.update_data()
+        else:
+            QMessageBox.warning(
+                self, 'No data',
+                'Failed to find data of expected format in clipboard.')
+
+    def export_table(self):
+        """Export table of energy and attenuation to clipboard."""
+        dict_2_pd = {'Energy_keV': ['- (density) -'] + self.energies}
+        for material in self.templates:
+            dict_2_pd.update(
+                {material.label: [material.density] + material.attenuation})
+        dataf = pd.DataFrame(dict_2_pd)
+        dataf.to_clipboard(index=False)
+        QMessageBox.information(
+            self, 'Data in clipboard',
+            'Table of data in clipboard. Paste into Excel (or similar).')
+
+    def save(self):
+        """"Add energy as first object before saving."""
+        energy_object = cfc.CTattenuationMaterial(
+            label='Energy', attenuation=self.energies)
+        self.templates.insert(0, energy_object)
+        super().save()
+        self.templates.pop(0)
+
+    def mark_import(self, ignore=False):
+        """If import review mode: Mark full template for import or ignore."""
+        if ignore:
+            self.marked = False
+            self.marked_ignore = True
+            self.import_review_mark_txt.setText('Ignore')
+        else:
+            self.marked = True
+            self.marked_ignore = False
+            self.import_review_mark_txt.setText('Import and overwrite current')
+
+
 @dataclass
 class ImportMain:
     """Class to replace MainWindow + hold imported templates when import_review_mode."""
@@ -1117,6 +1378,7 @@ class ImportMain:
     quicktest_templates: dict = field(default_factory=dict)
     report_templates: dict = field(default_factory=dict)
     paramsets: dict = field(default_factory=dict)
+    CT_attenuation_table: list = field(default_factory=list)
     auto_common: cfc.AutoCommon = field(default_factory=cfc.AutoCommon)
     auto_templates: dict = field(default_factory=dict)
     auto_vendor_templates: dict = field(default_factory=dict)

@@ -1135,11 +1135,13 @@ class LimitsAndPlotContent(QWidget):
         """Group selected headers."""
         sels = self.list_headers.selectedIndexes()
         sel_rows = [sel.row() for sel in sels]
-        sel_headers = [self.headers[row] for row in sel_rows]
-        self.parent.current_template.ungroup_headers(sel_headers)
-        _ = self.update_header_order()
-        self.update_data(set_selected_idx=sel_rows[0])
-        self.parent.flag_edit(True)
+        if len(sel_rows) > 0:
+            sel_headers = [self.headers[row] for row in sel_rows]
+            self.parent.current_template.ungroup_headers(sel_headers)
+            _ = self.update_header_order()
+            self.update_data(set_selected_idx=sel_rows[0])
+            self.parent.flag_edit(True)
+            
 
     def move_group(self, direction='up'):
         """Move selected group up or down in list.
@@ -1493,7 +1495,7 @@ class AutoTempWidgetBasic(StackWidget):
 
         self.txt_warnings_path = QLineEdit('')
         self.txt_warnings_path.textChanged.connect(self.flag_edit)
-        self.txt_warnings_path.setMinimumWidth(500)
+        self.txt_warnings_path.setMinimumWidth(300)
 
         self.wid_mod_temp.vlo.addWidget(
             QLabel('Automation templates with same input path:'))
@@ -1540,7 +1542,7 @@ class AutoTempWidgetBasic(StackWidget):
         vlo_limits_and_plot.addLayout(hlo_limits_and_plot)
         hlo_limits_and_plot.addWidget(QLabel('Use LimitsAndPlot template:'))
         self.cbox_limits_and_plot = QComboBox()
-        self.cbox_limits_and_plot.setMinimumWidth(300)
+        self.cbox_limits_and_plot.setMinimumWidth(200)
         self.cbox_limits_and_plot.currentIndexChanged.connect(
             lambda: self.flag_edit(True))
         hlo_limits_and_plot.addWidget(self.cbox_limits_and_plot)

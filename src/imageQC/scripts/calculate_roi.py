@@ -8,11 +8,13 @@ Calculation processes for the different tests.
 import numpy as np
 from scipy import ndimage
 from scipy.signal import find_peaks
-from skimage.transform import hough_line, hough_line_peaks
+from skimage.transform import hough_line, hough_line_peaks, resize
+from skimage import (measure, draw)
 
 # imageQC block start
 import imageQC.scripts.mini_methods_calculate as mmcalc
 from imageQC.scripts.cdmam_methods import find_cdmam
+import imageQC.config.config_classes as cfc
 # imageQC block end
 
 
@@ -562,10 +564,13 @@ def get_rois(image, image_number, input_main):
 
     def Pha():  ## Specific phantom
         roi_this = None
+        errmsg = None
         if 'Pha' in input_main.results:
             if input_main.results['Pha'] is not None:
                 roi_this = get_roi_circle(img_shape, (0, 0), 10)
-        return roi_this
+        else:
+            roi_this, errmsg = get_roi_Pha(image, image_info, paramset)
+        return (roi_this, errmsg)
 
     def PIU():  # MR
         return get_roi_circle_MR(
@@ -1158,6 +1163,60 @@ def get_roi_hom_pet(summed_image, image_info, paramset):
     return (roi_array, errmsg)
 
 
+def get_roi_Pha(image, image_info, paramset):
+    """Calculate roi array for spesific phantom in test Pha.
+
+    Parameters
+    ----------
+    image : np.ndarray
+    image_info : DcmInfo
+        as defined in scripts/dcm.py
+    paramset : ParamSetXray
+        as defined in config/config_classes.py
+
+    Returns
+    -------
+    roi_all : list of np.array
+    errmsg
+    """
+    roi_array = None
+    errmsg = None
+    pix = image_info.pix[0]
+    if isinstance(paramset, cfc.ParamSetXray):
+        if paramset.pha_type == 0:  # TOR 18FG
+
+            var_map = mmcalc.get_variance_map(image, round(2./pix), 'same')
+            high_contrast_rect_corners = find_rectangle_object_2(
+                var_map, pix,
+                polygon_node_dist_mm=15., range_size_mm=[20., 40.])
+            high_contrast_in_bar_corners = find_rectangle_object_2(
+                var_map, pix,
+                polygon_node_dist_mm=5., range_size_mm=[7., 15.])
+
+            # fill polygons
+            try:
+                rr, cc = draw.polygon(
+                    high_contrast_rect_corners[:, 0],
+                    high_contrast_rect_corners[:, 1])
+                mask_large = np.zeros(image.shape, dtype=bool)
+                mask_large[rr, cc] = True
+            except TypeError:
+                mask_large = None
+            try:
+                rr, cc = draw.polygon(
+                    high_contrast_in_bar_corners[:, 0],
+                    high_contrast_in_bar_corners[:, 1])
+                mask_small = np.zeros(image.shape, dtype=bool)
+                mask_small[rr, cc] = True
+            except TypeError:
+                mask_small = None
+            roi_array = [mask_large, mask_small,
+                         high_contrast_rect_corners,
+                         high_contrast_in_bar_corners]
+
+    return (roi_array, errmsg)
+
+
 def get_roi_CTn_TTF(test, image, image_info, paramset, delta_xya=[0, 0, 0.]):
     """Calculate roi array with center roi and periferral rois.
 
@@ -1688,15 +1747,18 @@ def get_roi_circle_MR(image, image_info, paramset, test_code, delta_xy):
     if test_code == 'SNR':
         radius = 0.5 * width * np.sqrt(0.01 * paramset.snr_roi_percent)
         cut_top = paramset.snr_roi_cut_top
+        optimize_center = paramset.snr_optimize_center
     elif test_code == 'PIU':
         radius = 0.5 * width * np.sqrt(0.01 * paramset.snr_roi_percent)
         cut_top = paramset.piu_roi_cut_top
+        optimize_center = paramset.piu_optimize_center
     elif test_code == 'Gho':
         radius = paramset.gho_roi_central / image_info.pix[0]
         optimize_center = paramset.gho_optimize_center
         cut_top = paramset.gho_roi_cut_top
     elif test_code == 'Geo':
         radius = paramset.geo_actual_size / image_info.pix[0] / 2
+        optimize_center = paramset.geo_optimize_center
     if optimize_center:
         delta_xy = (
             center_x - 0.5*image_info.shape[1],
@@ -2000,7 +2062,7 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
         as defined in 
         config_classes.ParamSet(Xray,Mammo,MR).mtf_auto_center_thresholds
         min_size (mm)
-        roi_size fraction of min_size
+        roi_size fraction of min_size (for generating variance image)
         max/mean variance threshold
         threshold (fraction) for finding peaks
 
@@ -2074,6 +2136,30 @@ def find_rectangle_object(image, mask_outer=0, pix=1.,
 
     return centers_of_edges_xy
 
+def find_rectangle_object_2(edgy_image, pix, polygon_node_dist_mm=5.,
+                           range_size_mm=[10., 100.]):
+    """Variant to find rectangles searching for contours, returning corners."""
+    contours = measure.find_contours(edgy_image)
+    rectangles = []
+    for contour in contours:
+        poly = measure.approximate_polygon(
+            contour, tolerance=round(polygon_node_dist_mm/pix))
+        if len(poly) == 5:  # 4 corners + home
+            rectangles.append(poly)
+    accepted_rectangles = []
+    for rect in rectangles:
+        bbox = [np.min(rect[:,0]), np.max(rect[:,0]), #xmin xmax
+                np.min(rect[:,1]), np.max(rect[:,1])] #ymin ymax
+        size_mm = np.max([bbox[1]-bbox[0], bbox[3]-bbox[2]]) * pix
+        if size_mm > range_size_mm[0] and size_mm < range_size_mm[1]:
+            accepted_rectangles.append(rect)
+
+    if len(accepted_rectangles) > 0:
+        rectangle_corners_xy = accepted_rectangles[0]
+    else:
+        rectangle_corners_xy = []
+
+    return rectangle_corners_xy
 
 def find_line_sources(image):
     """Detect 2 perpendicular lines in image and return center position of these.

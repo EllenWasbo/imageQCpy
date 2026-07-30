@@ -496,7 +496,7 @@ class SettingsDialog(ImageQCDialog):
 
         try:
             widget = self.widget_CT_attenuation_table
-            widget.templates = self.main.CT_attenuation_table
+            widget.templates = copy.deepcopy(self.main.CT_attenuation_table)
             widget.energies = widget.templates[0].attenuation
             widget.templates.pop(0)  # pop off energy list
             widget.refresh_templist()
@@ -1175,6 +1175,7 @@ class CTattenuationWidget(StackWidget):
         btn_export.setIcon(QIcon(
             f'{os.environ[ENV_ICON_PATH]}copy.png'))
         btn_export.clicked.connect(self.export_table)
+        
 
         if self.import_review_mode is False:
             infotxt = '''To change data, prepare table in Excel.<br>
@@ -1185,16 +1186,19 @@ class CTattenuationWidget(StackWidget):
             Second row = densities (g/cc)<br>
             Following rows = attenuation values for the given keV.<br>
             Material name need to be same as used in test CT number.<br>
+            Perform your changes, select the text (or cells in Excel), copy to clipboard<br>
+            and use the "Load..." button below. Then save.
             '''
             self.wid_mod_temp.vlo.addWidget(uir.LabelItalic(infotxt))
-            self.wid_mod_temp.vlo.addWidget(btn_load)
             self.wid_mod_temp.vlo.addWidget(btn_export)
+            self.wid_mod_temp.vlo.addWidget(btn_load)
 
         vlo = QVBoxLayout()
         self.hlo.addLayout(vlo)
 
         self.density = QDoubleSpinBox(
             decimals=3, minimum=0, maximum=100, singleStep=1)
+        self.density.setEnabled(False)
         hlo_density = QHBoxLayout()
         vlo.addLayout(hlo_density)
         hlo_density.addWidget(QLabel('Density (g/cc):'))
@@ -1209,6 +1213,7 @@ class CTattenuationWidget(StackWidget):
         self.table.setHorizontalHeaderLabels(
             ['Energy (keV)', 'Attenuation (cm2/g)'])
         self.table.verticalHeader().setVisible(False)
+        self.table.setEnabled(False)
         hlo_table.addWidget(self.table)
 
         vlo_plot = QVBoxLayout()
@@ -1220,7 +1225,7 @@ class CTattenuationWidget(StackWidget):
             'Plot Attenuation (cm2/g) x density (g/cm3)'])
         self.cbox_plot.currentIndexChanged.connect(self.draw_curves)
         self.cbox_plot.setFixedWidth(300)
-        self.fig = matplotlib.figure.Figure(dpi=150)
+        self.fig = matplotlib.figure.Figure(dpi=150, layout='constrained')
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.ax = self.fig.add_subplot(111)
         nav_toolb = NavigationToolbar2QT(self.canvas, self)
@@ -1270,7 +1275,7 @@ class CTattenuationWidget(StackWidget):
             self.ax.plot(self.energies, yvals,
                          label=material.label, linewidth=1.0)
         self.ax.legend(loc='upper right')
-        self.fig.subplots_adjust(0.15, 0.2, 0.95, .95)
+        #self.fig.subplots_adjust(0.15, 0.2, 0.95, .95)
         self.ax.set_xlabel('Energy (keV)')
         self.ax.set_ylabel('Attenuation (cm2/g)')
         self.highlight_curve()
@@ -1343,10 +1348,6 @@ class CTattenuationWidget(StackWidget):
         energy_object = cfc.CTattenuationMaterial(
             label='Energy', attenuation=self.energies)
         self.templates.insert(0, energy_object)
-        QMessageBox.information(
-            self, 'Restart to update',
-            'After saving, please restart imageQC to make the changes of '
-            'CT attenuation table to have effect on calculations.')
         super().save()
         self.templates.pop(0)
 

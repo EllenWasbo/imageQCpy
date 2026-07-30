@@ -1,3 +1,13 @@
+# v3.2.8
+_Jul 30, 2026_
+
+Changes:
+- Better dynamic fit to window for plots including titles. Lower limit, though. Increase size of window when needed.
+- CT test CT number with estimate energy: Added warning if maximum R2 below 0.98 and adjusted plot y-range defaults if < 0.985.
+
+Bugfixes:
+- If no saved CT attenuation table (using default), this table lost one material each time the user was inside settings. Now fixed.
+
 # v3.2.7
 _Jul 29, 2026_
 

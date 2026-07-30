@@ -227,7 +227,7 @@ class PlotCanvas(FigureCanvasQTAgg):
         self.main = main
         if 'dark' in os.environ[ENV_ICON_PATH]:
             matplotlib.pyplot.style.use('dark_background')
-        self.fig = matplotlib.figure.Figure(dpi=150)
+        self.fig = matplotlib.figure.Figure(dpi=150, layout='constrained')
         FigureCanvasQTAgg.__init__(self, self.fig)
         self.ax = self.fig.add_subplot(111)
         self.title = ''
@@ -272,9 +272,11 @@ class PlotCanvas(FigureCanvasQTAgg):
                 self.ax.legend(loc="upper right")
             if len(title) > 0:
                 self.ax.suptitle(title)
+            '''
                 self.fig.subplots_adjust(0.15, 0.25, 0.95, 0.85)
             else:
                 self.fig.subplots_adjust(0.15, 0.2, 0.95, .95)
+            '''
             self.ax.set_xlabel(xtitle)
             self.ax.set_ylabel(ytitle)
             length = xvals[0][-1] - xvals[0][0]

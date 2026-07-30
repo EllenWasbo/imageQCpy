@@ -2642,8 +2642,11 @@ def calculate_3d(matrix, marked_3d, input_main, extra_taglists):
                             R2 = ((y0 @ x0) / (np.linalg.norm(x0) * np.linalg.norm(y0, axis=1)))**2
                             idx = np.where(R2 == np.max(R2))
                             eff_e = float(details_dict_common['energies'][idx[0]][0])
+                            if np.max(R2) < 0.98:
+                                errmsgs.append(
+                                    f'Img {i}: Best R-squared expected > 0.98, found {np.max(R2):.3f}. Correct materials in ROIs?')
                             details_dict= {'R2': R2, 'effective_energy': eff_e}
-                            values_sup_sli[-1] = eff_e
+                            values_sup_sli[-1] = f'{eff_e:.0f}'  # assure int displayed, not .00
                             #R2_linregress = []  # same result
                             #for y_row in ys:
                             #    res = sp.stats.linregress(xs, y_row)

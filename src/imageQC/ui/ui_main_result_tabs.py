@@ -606,9 +606,11 @@ class ResultPlotCanvas(PlotCanvas):
             self.ax.set_ylabel(self.ytitle)
             if len(self.title) > 0:
                 self.ax.set_title(self.title)
+            '''
                 self.fig.subplots_adjust(0.15, 0.25, 0.95, 0.85)
             else:
                 self.fig.subplots_adjust(0.15, 0.2, 0.95, .95)
+            '''
 
         self.draw()
 
@@ -1028,7 +1030,10 @@ class ResultPlotCanvas(PlotCanvas):
                     )
 
                 self.ax.add_artist(at)
-                self.default_range_y = [0.98, 1.0]
+                if np.max(yvals) > 0.985:
+                    self.default_range_y = [0.98, 1.0]
+                else:
+                    self.default_range_y = [0, 1.0]
 
         if sel_text == '':
             test_widget = self.main.stack_test_tabs.currentWidget()

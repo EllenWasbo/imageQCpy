@@ -1011,7 +1011,7 @@ def load_settings(fname='', temp_config_folder=''):
             if 'paramsets' in fname:
                 settings = load_paramsets([fname], '--')
             else:
-                settings = CONFIG_FNAMES[fname]['default']
+                settings = copy.deepcopy(CONFIG_FNAMES[fname]['default'])
                 if fname == 'tag_infos':
                     taginfos_reset_sort_index(settings)
 

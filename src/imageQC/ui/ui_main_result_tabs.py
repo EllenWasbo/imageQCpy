@@ -2195,6 +2195,50 @@ class ResultPlotCanvas(PlotCanvas):
             plot_all_NPS()
         self.title = sel_text
 
+    def Pha(self, sel_text):
+        """Prepare plot for test Pha."""
+        if sel_text == '':
+            try:
+                test_widget = self.main.stack_test_tabs.currentWidget()
+                sel_text = test_widget.pha_plot.currentText()
+            except AttributeError:
+                pass
+        imgno = self.main.gui.active_img_no
+        details_dict = self.main.results['Pha']['details_dict'][imgno]
+        self.title = sel_text
+        match sel_text:
+            case 'Bar pattern: Contrast transfer function CTF':
+                self.curves.append({
+                    'label': 'CTF',
+                    'xvals': details_dict['spatial_frequencies'],
+                    'yvals': details_dict['ctf_values'],
+                    'style': '.',
+                    'color': self.color_k,
+                    'markersize': 1.,
+                     })
+                self.xtitle = 'Spatial frequency (lp/mm)'
+                self.ytitle = 'CTF'
+
+            case 'Bar pattern: Found min, max values':
+                self.curves.append({
+                    'label': 'Minimum',
+                    'xvals': details_dict['spatial_frequencies'],
+                    'yvals': details_dict['min_values'],
+                    'style': '.',
+                    'color': 'blue',
+                    'markersize': 1.,
+                     })
+                self.curves.append({
+                    'label': 'Maximum',
+                    'xvals': details_dict['spatial_frequencies'],
+                    'yvals': details_dict['max_values'],
+                    'style': '.',
+                    'color': 'red',
+                    'markersize': 1.,
+                     })
+                self.xtitle = 'Spatial frequency (lp/mm)'
+                self.ytitle = 'Pixel value'
+
     def Rec(self, sel_text):
         """Prepare plot for test PET recovery curve."""
         details_dict = self.main.results['Rec']['details_dict']

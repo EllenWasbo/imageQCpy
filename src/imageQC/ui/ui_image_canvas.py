@@ -725,17 +725,16 @@ class ImageCanvas(GenericImageCanvas):
             try:
                 details_dict = self.main.results['Pha'][
                     'details_dict'][self.main.gui.active_img_no]
-                self.main.current_roi = [
-                    details_dict['roi_array'],
-                    details_dict['roi_inner_circles'],
-                    details_dict['roi_outer_circles'],]
+                ctf_roi = details_dict['roi_ctfs'].astype(bool)
+                self.main.current_roi.append(ctf_roi)
                 self.add_contours_to_all_rois(
                     colors=COLORS,
-                    labels=['found_phantom', 'inner circles', 'outer circles'])
+                    roi_indexes=[0, 2],
+                    labels=['found_highcontrast', 'bar_pattern'])
             except KeyError:
                 pass
         else:
-            self.add_contours_to_all_rois(roi_indexes=[0, 1])
+            self.add_contours_to_all_rois(roi_indexes=[0])
 
     def PIU(self):
         """Draw MR PIU ROI."""

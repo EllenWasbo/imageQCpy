@@ -565,11 +565,7 @@ def get_rois(image, image_number, input_main):
     def Pha():  ## Specific phantom
         roi_this = None
         errmsg = None
-        if 'Pha' in input_main.results:
-            if input_main.results['Pha'] is not None:
-                roi_this = get_roi_circle(img_shape, (0, 0), 10)
-        else:
-            roi_this, errmsg = get_roi_Pha(image, image_info, paramset)
+        roi_this, errmsg = get_roi_Pha(image, image_info, paramset)
         return (roi_this, errmsg)
 
     def PIU():  # MR
@@ -1184,35 +1180,23 @@ def get_roi_Pha(image, image_info, paramset):
     pix = image_info.pix[0]
     if isinstance(paramset, cfc.ParamSetXray):
         if paramset.pha_type == 0:  # TOR 18FG
-
-            var_map = mmcalc.get_variance_map(image, round(2./pix), 'same')
-            high_contrast_rect_corners = find_rectangle_object_2(
-                var_map, pix,
-                polygon_node_dist_mm=15., range_size_mm=[20., 40.])
+            # find central high contrast object in central 50% of image
+            var_map = mmcalc.get_variance_map(
+                image, round(2./pix), 'same')
             high_contrast_in_bar_corners = find_rectangle_object_2(
                 var_map, pix,
                 polygon_node_dist_mm=5., range_size_mm=[7., 15.])
 
-            # fill polygons
-            try:
-                rr, cc = draw.polygon(
-                    high_contrast_rect_corners[:, 0],
-                    high_contrast_rect_corners[:, 1])
-                mask_large = np.zeros(image.shape, dtype=bool)
-                mask_large[rr, cc] = True
-            except TypeError:
-                mask_large = None
+            # fill polygon
             try:
                 rr, cc = draw.polygon(
                     high_contrast_in_bar_corners[:, 0],
                     high_contrast_in_bar_corners[:, 1])
-                mask_small = np.zeros(image.shape, dtype=bool)
-                mask_small[rr, cc] = True
+                mask = np.zeros(image.shape, dtype=bool)
+                mask[rr, cc] = True
             except TypeError:
-                mask_small = None
-            roi_array = [mask_large, mask_small,
-                         high_contrast_rect_corners,
-                         high_contrast_in_bar_corners]
+                mask = None
+            roi_array = [mask, high_contrast_in_bar_corners]
 
     return (roi_array, errmsg)
 

@@ -288,6 +288,17 @@ def val_2_str(val_list, decimal_mark='.', format_same=True, lock_format=False,
             type_list.append('?')
     if type_list.count('str') == len(actual_vals):
         string_list = val_list
+        if decimal_mark != '.':
+            dot_in = [True if '.' in val else False for val in val_list]
+            if True in dot_in:
+                for idx, val in enumerate(val_list):
+                    if dot_in[idx]:
+                        try:
+                            val_new = float(val)
+                            string_list[idx] = string_list[idx].replace(
+                                '.', ',')
+                        except:
+                            pass
     elif type_list.count('float') == len(actual_vals):
         format_string = ''
         if lock_format is False:

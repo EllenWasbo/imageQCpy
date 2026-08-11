@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 # imageQC block start
 from imageQC.config.iQCconstants import ENV_ICON_PATH
 from imageQC.ui import reusable_widgets as uir
-from imageQC.ui.ui_dialogs import ImageQCDialog
+from imageQC.ui.ui_dialogs import ImageQCDialog, TextDisplay
 from imageQC.scripts import dcm
 from imageQC.scripts.mini_methods import get_all_matches
 # imageQC block end
@@ -28,7 +28,7 @@ from imageQC.scripts.mini_methods import get_all_matches
 class DicomInspectDialog(ImageQCDialog):
     """Dialog to explore content of Dicom file."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, filename=''):
         super().__init__(parent=parent)
         self.setWindowTitle('Read DICOM header')
         self.sample_filepath = QLineEdit()
@@ -36,7 +36,9 @@ class DicomInspectDialog(ImageQCDialog):
         self.btn_parse_sr = QPushButton('Parse ContentSequence of SR file')
         self.btn_parse_sr.setEnabled(False)
         self.btn_parse_sr.clicked.connect(self.parse_sr)
+        self.dialog_parse = None
         self.list_tags = QListWidget()
+        self.list_tags.currentRowChanged.connect(self.attribute_selected)
         self.list_tags.itemClicked.connect(self.attribute_selected)
         self.lbl_tag_string = QLabel()
         self.list_sequences = QListWidget()
@@ -69,14 +71,14 @@ class DicomInspectDialog(ImageQCDialog):
         hlo_file.addWidget(self.sample_filepath)
         toolb = uir.ToolBarBrowse('Browse to select file')
         toolb.act_browse.triggered.connect(self.locate_file)
-        act_dcm_dump = QAction(
-            QIcon(f'{os.environ[ENV_ICON_PATH]}tags.png'),
-            "View DICOM dump", self)
-        act_dcm_dump.triggered.connect(self.dump_dicom)
-        toolb.addAction(act_dcm_dump)
+
         hlo_file.addWidget(toolb)
         hlo_btns = QHBoxLayout()
         vlo.addLayout(hlo_btns)
+        btn_dcm_dump = QPushButton('Display full DICOM dump')
+        btn_dcm_dump.clicked.connect(self.dump_dicom)
+        hlo_btns.addStretch()
+        hlo_btns.addWidget(btn_dcm_dump)
         hlo_btns.addWidget(self.btn_parse_sr)
         hlo_btns.addStretch()
         vlo.addWidget(self.chk_sort_name)
@@ -130,6 +132,9 @@ class DicomInspectDialog(ImageQCDialog):
         buttons.rejected.connect(self.reject)
         vlo.addWidget(buttons)
 
+        if filename:
+            self.sample_filepath.setText(filename)
+
     def locate_file(self):
         """Locate sample DICOM file."""
         self.reset_selected_tag()
@@ -146,6 +151,8 @@ class DicomInspectDialog(ImageQCDialog):
 
     def read_file(self):
         """Read selected dicom file."""
+        if self.dialog_parse:
+            self.dialog_parse.close()
         filename = self.sample_filepath.text()
         self.pydict = None
         self.reset_selected_tag()
@@ -179,7 +186,7 @@ class DicomInspectDialog(ImageQCDialog):
             ds = copy.deepcopy(self.pydict)
             ds_seq = None
             item = None
-            
+
             if self.sample_sequences[0] != '':
                 for keyw_item in self.sample_sequences:
                     spl_str = keyw_item.split(' ')
@@ -195,7 +202,7 @@ class DicomInspectDialog(ImageQCDialog):
                             ds = ds[keyword][item]
                         except IndexError:
                             pass
-            
+
             proceed_list_attr = True
             self.spin_item.blockSignals(True)
             self.chk_full_seq.blockSignals(True)
@@ -234,8 +241,10 @@ class DicomInspectDialog(ImageQCDialog):
                     self.sample_attribute_names[idx] = f'{ds[self.sample_tags[idx]].name.replace(' ', '')} {str(self.sample_tags[idx])}'
             else:
                 # content is full sequence
+                self.list_tags.blockSignals(True)
                 self.list_tags.clear()
                 self.list_tags.addItems(['Deselect "Display full sequence" to see content of specific item'])
+                self.list_tags.blockSignals(False)
 
         self.list_tags.blockSignals(True)
         self.list_tags.clear()
@@ -292,8 +301,10 @@ class DicomInspectDialog(ImageQCDialog):
         self.lbl_tag_string.setText('')
         self.txt_content.setPlainText('')
         self.lbl_n_items.setText('')
+        self.spin_item.blockSignals(True)
         self.spin_item.setEnabled(False)
         self.spin_item.setValue(1)
+        self.spin_item.blockSignals(False)
 
     def full_sequence_selected(self):
         """Checkbox Display full sequence (de)selected."""
@@ -346,13 +357,9 @@ class DicomInspectDialog(ImageQCDialog):
                 elem = self.current_dataset[attribute_name]
 
             txt = str(elem)
-            try:
-                if elem.VR == 'UT':
-                    if elem.value not in txt:
-                        txt = txt + '\n\n' + f'(Value = {elem.value})'
-            except:
-                print(f'Failed printing {elem} of {attribute_name}')
-            
+            if elem.VM > 1 or 'Array of' in txt:  # array
+                txt = txt + '\n\n' + f'(Value = {elem.value})'
+
             self.txt_content.setPlainText(txt)
         else:
             if 'Dataset' in str(type(self.current_dataset)):
@@ -380,53 +387,67 @@ class DicomInspectDialog(ImageQCDialog):
 
     def parse_sr(self):
         """Parse and display dose data."""
-        output = []
+        if self.dialog_parse is not None:
+            self.dialog_parse.show()
+        else:
+            output = []
 
-        def parse_node(datasubset, level=0):
-            for item in datasubset.ContentSequence:
-                concept_name = ''
-                if 'ConceptNameCodeSequence' in item:
-                    if len(item.ConceptNameCodeSequence) > 0:
-                        concept_name = item.ConceptNameCodeSequence[0].CodeMeaning
+            def parse_node(datasubset, level=0):
+                for item in datasubset.ContentSequence:
+                    concept_name = ''
+                    if 'ConceptNameCodeSequence' in item:
+                        if len(item.ConceptNameCodeSequence) > 0:
+                            concept_name = item.ConceptNameCodeSequence[0].CodeMeaning
 
-                value_type = getattr(item, 'ValueType', '')
-                value = ''
+                    value_type = getattr(item, 'ValueType', '')
+                    value = ''
+                    bold = False
 
-                match value_type:
-                    case 'NUM':
-                        try:
-                            meas_seq = item.MeasuredValueSequence[0]
-                            num_val = meas_seq.NumericValue
-                            unit = meas_seq.MeasurementUnitsCodeSequence[0].CodeMeaning if 'MeasurementUnitsCodeSequence' in meas_seq else ''
-                            value = f"{num_val} {unit}"
-                        except (AttributeError, IndexError):
-                            pass
-                    case 'CODE':
-                        try:
-                            value = item.ConceptCodeSequence[0].CodeMeaning
-                        except (AttributeError, IndexError):
-                            pass
-                    case 'TEXT':
-                        value = getattr(item, 'TextValue', '')
-                    case 'DATETIME':
-                        value = getattr(item, 'DateTime', '')
-                    case 'CONTAINER':
-                        value = '' #'[Container]'
-                    case 'UIDREF':
-                        value = getattr(item, 'UID', '')
-                    case _:
-                        value = f'(ValueType {value_type} not parsed)'
+                    match value_type:
+                        case 'NUM':
+                            try:
+                                meas_seq = item.MeasuredValueSequence[0]
+                                num_val = meas_seq.NumericValue
+                                unit = meas_seq.MeasurementUnitsCodeSequence[0].CodeMeaning if 'MeasurementUnitsCodeSequence' in meas_seq else ''
+                                value = f"{num_val} {unit}"
+                            except (AttributeError, IndexError):
+                                pass
+                        case 'CODE':
+                            try:
+                                value = item.ConceptCodeSequence[0].CodeMeaning
+                            except (AttributeError, IndexError):
+                                pass
+                        case 'TEXT':
+                            value = getattr(item, 'TextValue', '')
+                        case 'DATETIME':
+                            value = getattr(item, 'DateTime', '')
+                        case 'CONTAINER':
+                            value = '' #'[Container]'
+                            bold = True
+                        case 'UIDREF':
+                            value = getattr(item, 'UID', '')
+                        case _:
+                            value = f'(ValueType {value_type} not parsed)'
 
-                output.append('\t'*level + f'{concept_name}: {value}')
+                    modif = ['', '']
+                    if bold:
+                        modif = ['<b>', '</b>']
+                    output.append(
+                        '\t'*level + f'{modif[0]}{concept_name}: {value}{modif[1]}')
 
-                if 'ContentSequence' in item:
-                    parse_node(item, level=level+1)
+                    if 'ContentSequence' in item:
+                        parse_node(item, level=level+1)
 
-        if 'ContentSequence' in self.pydict:
-            parse_node(self.pydict)
-            txt = ('\n').join(output)
-            self.txt_content.setPlainText(txt)
-            
+            if 'ContentSequence' in self.pydict:
+                parse_node(self.pydict)
+                txt = ('<br>').join(output)
+                dlg = TextDisplay(
+                    self, '<p style="white-space: pre-wrap;">' + txt + '</p>',
+                    title=f'ContentSequence of {self.sample_filepath.text()}',
+                    min_width=1000, min_height=800, txt_is_html=True)
+                dlg.setModal(False)
+                dlg.show()
+
     def keyPressEvent(self, event):
         """Avoid close dialog on enter in widgets."""
         if event.key() == Qt.Key.Key_Return:

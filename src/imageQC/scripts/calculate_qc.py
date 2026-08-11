@@ -602,6 +602,8 @@ def calculate_qc(input_main, wid_auto=None,
                                 force_new_roi.append('MTF')
                         if 'Foc' in marked[i]:
                             force_new_roi.append('Foc')
+                        if 'Pha' in marked[i]:
+                            force_new_roi.append('Pha')
                         if 'Def' in marked[i]:
                             marked_3d[i].append('Def')
                     elif modality == 'Mammo':
@@ -830,7 +832,6 @@ def calculate_qc(input_main, wid_auto=None,
                                     pass
 
                             prev_image_xypix[test] = xypix[i]
-
                             if calculate_new_roi:
                                 prev_roi[test], errmsg = get_rois(
                                     image, i, input_main)

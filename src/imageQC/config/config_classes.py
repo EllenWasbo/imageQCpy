@@ -702,7 +702,7 @@ class ParamSetPET(ParamSetCommon):
     rec_type: int = 0
     # 0,1,2 = RC avg,max,peak, 3,4,5 Bq/mL avg,max,peak, 6,7,8 = CRC avg,max,peak
     rec_auto_select_slices: bool = True
-    rec_percent_slices: int = 90  # % within fwhm of background profile to include
+    rec_percent_slices: int = 75  # % within fwhm of background profile to include
     rec_table: RecTable = field(default_factory=RecTable)
     rec_sphere_diameters: list[float] = field(
         default_factory=lambda: [10., 13., 17., 22., 28., 37.])  # in mm NB increasing
@@ -710,6 +710,7 @@ class ParamSetPET(ParamSetCommon):
     rec_sphere_percent: int = 50  # % threshold to evaluate mean from
     rec_plot: int = 0  # 0 = table values, 1 = z-profile
     rec_earl: int = 1  # tolerances from 0 = None, 1 = EARL1, 2 = EARL2
+    rec_sphere_volume: int = 1000
     rec_background_volume: int = 9500
     rec_one_syringe: bool = False  # True if one syringe and rest in background
     mtf_type: int = 2

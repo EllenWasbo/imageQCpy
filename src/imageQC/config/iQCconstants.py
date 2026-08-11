@@ -20,7 +20,7 @@ USERNAME = os.getlogin()
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
 # A when fundamental changes or B turns 99, B when major changes,
 #   C new python release (or small fix)
-VERSION = '3.2.8'
+VERSION = '3.2.9'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -228,7 +228,7 @@ HEADERS = {
                          'Blur diameter x (mm)', 'Blur diameter y (mm)',
                          'FS x (mm)', 'FS y (mm)']},
         'Pha': {
-                'alt0': [],
+                'alt0': ['Limiting spatial frequency', 'Limiting low contrast'],
                 'alt1': []
                 },
         'Def': {'alt0': ['# equal to avg of 8 neighbours',

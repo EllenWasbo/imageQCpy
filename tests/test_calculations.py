@@ -16,9 +16,23 @@ import imageQC.scripts.calculate_qc as calculate_qc
 import imageQC.resources
 
 '''during testing:
+run pytest with -s flag
 import matplotlib.pyplot as plt
-imgplot = plt.imshow(image) / plt.scatter(x, y)
+plt.imshow(image) or plt.scatter(x, y)
 plt.show()
+
+or
+at first breakpoint()
+import matplotlib.pyplot as plt
+plt.ion()
+fig, ax = plt.subplots()
+im = ax.imshow(some_image)
+plt.pause(.1)
+
+then for subsequent images
+im.set_data(sec_image)
+fig.canvas.draw_idle()
+plt.pause(.1)
 '''
 path_tests = Path(__file__).parent
 path_src_imageQC = path_tests.parent / 'src' / 'imageQC'
@@ -465,6 +479,7 @@ def test_Xray_Pha():
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
+    breakpoint()
     values = np.round(np.array(input_main.results['Pha']['values'][0]))
     assert 1 == 1
 

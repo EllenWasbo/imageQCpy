@@ -1230,8 +1230,8 @@ class MainWindow(QMainWindow):
         menu_bar.addMenu(menu_help)
 
         # fill toolbar
-        tool_bar.addActions([
-            self.act_open, self.act_open_adv, act_open_auto, act_wizard_auto, act_dash])
+        #tool_bar.addWidget(uir.LabelHeader('Load files:', 3))
+        tool_bar.addActions([self.act_open, self.act_open_adv])
         tool_bar.addSeparator()
         tool_bar.addWidget(self.chk_append)
         tool_bar.addSeparator()
@@ -1241,11 +1241,19 @@ class MainWindow(QMainWindow):
         self.lbl_n_loaded = QLabel('0    ')
         tool_bar.addWidget(QLabel('Loaded images:'))
         tool_bar.addWidget(self.lbl_n_loaded)
-        tool_bar.addWidget(QLabel('             '))
+        tool_bar.addWidget(QLabel('      '))
         tool_bar.addWidget(QLabel('List files as'))
         tool_bar.addWidget(self.cbox_file_list_display)
 
-        tool_bar.addWidget(QLabel('             '))
+        tool_bar.addWidget(QLabel('     '))
+        tool_bar.addSeparator()
+        tool_bar.addWidget(QLabel('     '))
+        #tool_bar.addWidget(uir.LabelHeader('Automation:', 3))
+        tool_bar.addActions([act_open_auto, act_wizard_auto, act_dash])
+        tool_bar.addWidget(QLabel('     '))
+        tool_bar.addSeparator()
+        tool_bar.addWidget(QLabel('     '))
+        #tool_bar.addWidget(uir.LabelHeader('Miscellaneous:', 3))
         tool_bar.addActions([
             act_reset_split, act_rename_dcm, act_report, act_settings])
         tool_bar.addWidget(QLabel('             '))

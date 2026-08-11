@@ -484,6 +484,11 @@ class ParamsTabCommon(QTabWidget):
                     self.main.current_paramset.sni_alt = alt
                     if attribute == 'sni_channels':
                         self.update_enabled()
+                elif attribute == 'rec_one_syringe':
+                    if content is True and self.rec_sphere_volume.value() == 1000:
+                        self.rec_sphere_volume.setValue(1270)
+                    elif content is False and self.rec_sphere_volume.value() == 1270:
+                        self.rec_sphere_volume.setValue(1000)
                 if all([self.main.current_modality == 'Xray',
                         self.main.current_test == 'NPS']):
                     self.update_NPS_independent_pixels()
@@ -2012,6 +2017,22 @@ class ParamsTabXray(ParamsTabCommon):
                 self.hom_roi_size_label.setText('ROI radius (mm)')
                 self.stack_hom.setCurrentIndex(0)
 
+    def update_pha_plot_options(self):
+        """Update plot options for slice thickness."""
+        self.pha_plot.clear()
+        self.pha_plot.blockSignals(True)
+        curr_type = self.pha_type.currentIndex()
+        if curr_type == 0:
+            items = [
+                'Bar pattern: Contrast transfer function CTF',
+                'Bar pattern: Found min, max values'
+                ]
+        else:
+            items = []
+        self.pha_plot.blockSignals(False)
+        self.pha_plot.addItems(items)
+        self.param_changed_from_gui(attribute='pha_type')
+
     def create_tab_hom(self):
         """GUI of tab Homogeneity."""
         self.tab_hom = ParamsWidget(self, run_txt='Calculate homogeneity')
@@ -2270,22 +2291,21 @@ class ParamsTabXray(ParamsTabCommon):
         self.tab_pha.hlo_top.addWidget(uir.UnderConstruction(
             txt='Under construction and validation...'))
         
-        self.pha_tab_alt = QComboBox()
-        self.pha_tab_alt.addItems(ALTERNATIVES['Xray']['Pha'])
-        self.pha_tab_alt.currentIndexChanged.connect(
-            lambda: self.param_changed_from_gui(attribute='pha_type'))
+        self.pha_type = QComboBox()
+        self.pha_type.addItems(ALTERNATIVES['Xray']['Pha'])
+        self.pha_type.currentIndexChanged.connect(self.update_pha_plot_options)
 
         self.tab_pha.hlo_top.addWidget(QLabel('Phantom: '))
-        self.tab_pha.hlo_top.addWidget(self.pha_tab_alt)
-        '''
-        self.pha_result_image = QComboBox()
-        self.pha_result_image.currentIndexChanged.connect(
-            self.main.wid_res_image.canvas.result_image_draw)
+        self.tab_pha.hlo_top.addWidget(self.pha_type)
 
-        self.tab_def.hlo.addSpacing(300)
-        self.tab_def.hlo.addWidget(self.def_result_image)
-        self.def_result_image.addItems([])
-        '''
+        self.pha_plot = QComboBox()
+        self.pha_plot.currentIndexChanged.connect(
+            self.main.wid_res_plot.plotcanvas.plot)
+
+        self.tab_pha.hlo.addSpacing(300)
+        self.tab_pha.hlo.addWidget(QLabel('Result plot'))
+        self.tab_pha.hlo.addWidget(self.pha_plot)
+        self.update_pha_plot_options()
 
 
 class ParamsTabMammo(ParamsTabCommon):
@@ -3793,16 +3813,18 @@ class ParamsTabPET(ParamsTabCommon):
         self.rec_act_sph.editingFinished.connect(self.clear_results_current_test)
         self.rec_act_sph_resid = QDoubleSpinBox(decimals=2, minimum=0.)
         self.rec_act_sph_resid.editingFinished.connect(self.clear_results_current_test)
-        self.rec_vol_sph = QDoubleSpinBox(decimals=2, minimum=0., maximum=2000)
-        self.rec_vol_sph.setValue(1000)
-        self.rec_vol_sph.editingFinished.connect(self.clear_results_current_test)
+        self.rec_sphere_volume = QDoubleSpinBox(decimals=2, minimum=0., maximum=2000)
+        self.rec_sphere_volume.setValue(1000)
+        self.rec_sphere_volume.editingFinished.connect(
+            lambda: self.param_changed_from_gui(attribute='rec_sphere_volume',
+                                                update_roi=False))
         self.rec_act_bg = QDoubleSpinBox(decimals=2, minimum=0.)
         self.rec_act_bg.editingFinished.connect(self.clear_results_current_test)
         self.rec_act_bg_resid = QDoubleSpinBox(decimals=2, minimum=0.)
         self.rec_act_bg_resid.editingFinished.connect(self.clear_results_current_test)
         self.rec_background_volume = QDoubleSpinBox(
             decimals=0, minimum=0, maximum=20000)
-        self.rec_background_volume.valueChanged.connect(
+        self.rec_background_volume.editingFinished.connect(
             lambda: self.param_changed_from_gui(attribute='rec_background_volume',
                                                 update_roi=False))
         self.rec_one_syringe = QCheckBox('Single syringe method')
@@ -3838,7 +3860,7 @@ class ParamsTabPET(ParamsTabCommon):
         flo2.addRow(QLabel('at'), self.rec_time_sph)
         flo1.addRow(QLabel('Residual (MBq)'), self.rec_act_sph_resid)
         flo2.addRow(QLabel('at'), self.rec_time_sph_resid)
-        flo1.addRow(QLabel('Total volume (mL)'), self.rec_vol_sph)
+        flo1.addRow(QLabel('Volume for filling spheres (mL)'), self.rec_sphere_volume)
 
         hlo_bg_top = QHBoxLayout()
         vlo_left.addLayout(hlo_bg_top)
@@ -3929,7 +3951,7 @@ class ParamsTabPET(ParamsTabCommon):
     def get_Rec_activities(self):
         """Get values for Recovery curve test."""
         if all([
-                self.rec_vol_sph.value() > 0,
+                self.rec_sphere_volume.value() > 0,
                 self.rec_act_sph.value() > 0
                 ]):
             if self.rec_act_sph_resid.value() > 0:
@@ -3969,11 +3991,11 @@ class ParamsTabPET(ParamsTabCommon):
                 diams = self.main.current_paramset.rec_sphere_diameters
                 vol_spheres = np.sum(4/3*np.pi*(np.array(diams)/2/10)**3)  # mL
                 fraction_act_bg = (
-                    self.rec_vol_sph.value() - vol_spheres) / self.rec_vol_sph.value()
+                    self.rec_sphere_volume.value() - vol_spheres) / self.rec_sphere_volume.value()
                 bg_time = sph_time
                 bg_act = sph_act * fraction_act_bg
 
-            sph_act = sph_act * 1000000 / self.rec_vol_sph.value()
+            sph_act = sph_act * 1000000 / self.rec_sphere_volume.value()
             bg_act = bg_act * 1000000 / self.rec_background_volume.value()
             rec_dict = {
                 'sphere_Bq_ml': sph_act, 'sphere_time': sph_time,
@@ -4382,7 +4404,7 @@ class SRtagTreeWidget(QWidget):
         dlg.exec()
         changed = False
         if dlg.clickedButton() == dlg.yes:
-            txt, ok = QInputDialog.getItem(
+            txt, ok = QInputDialog.getText(
                 self, 'Add Code Meaning                  ', 'Code Meaning:')
             if ok and txt:
                 self.eve_tagpattern.insert(row + 1, [txt, ''])
@@ -4697,6 +4719,8 @@ class PositionWidget(QWidget):
             if None ['Label', 'pos x [mm]', 'pos y [mm]']
         use_rectangle : bool
             type of getting/using positions/coordinates
+        warn_output_add_delete: bool
+            True = test whether change in table affect output defined in the paramset
         """
         super().__init__()
         self.get_position_tooltips = [

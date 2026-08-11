@@ -1,3 +1,20 @@
+# v3.2.9
+_Aug 11, 2026_
+
+Changes:
+- Moved buttons for automation (open, wizard, dash) to the middle of the toolbar to make all first buttons fit more logically together (regarding opening and sorting of loaded files)
+- DICOM header read/inspect tool: 
+  - Parse SR ContentSequence opens in new window and with bold headers for the CONTAINER elements for better overview
+  - showing values in array when selected tag value is array
+- PET Recovery curves:
+  - Changed default percentage of phantom to use for background calculations from 90 to 75. 
+  - Volume before filling of spheres will be saved with parameterset (e.g. for 1-syringe method one can save this with 1270 mL).
+
+Fixes:
+- DICOM header read/inspect tool: 
+  - selected element content updated when using arrow keys to change list element
+- SR test "Extract event details": Export with comma as desimal mark now works.
+
 # v3.2.8
 _Jul 30, 2026_
 

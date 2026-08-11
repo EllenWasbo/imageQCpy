@@ -1798,12 +1798,15 @@ class TextDisplay(ImageQCDialog):
 
     def __init__(self, parent_widget, text, title='',
                  read_only=True,
-                 min_width=1000, min_height=1000):
+                 min_width=1000, min_height=1000, txt_is_html=False):
         super().__init__(parent=parent_widget)
         vlo = QVBoxLayout()
         self.setLayout(vlo)
         txtEdit = QTextEdit('', self)
-        txtEdit.setPlainText(text)
+        if txt_is_html:
+            txtEdit.setHtml(text)
+        else:
+            txtEdit.setPlainText(text)
         txtEdit.setReadOnly(read_only)
         txtEdit.createStandardContextMenu()
         txtEdit.setMinimumWidth(min_width)

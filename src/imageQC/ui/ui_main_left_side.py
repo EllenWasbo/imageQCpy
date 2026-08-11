@@ -24,6 +24,7 @@ from imageQC.ui.ui_image_canvas import get_rotated_crosshair
 from imageQC.ui import reusable_widgets as uir
 from imageQC.ui.ui_dialogs import ImageQCDialog
 from imageQC.ui.tag_patterns import TagPatternEditDialog
+from imageQC.ui.dicom_inspect import DicomInspectDialog
 from imageQC.config.iQCconstants import ENV_ICON_PATH, QUICKTEST_OPTIONS
 from imageQC.config import config_classes as cfc
 from imageQC.scripts import dcm
@@ -537,15 +538,11 @@ class DicomHeaderWidget(QWidget):
 
     def dump_dicom(self):
         """Dump dicom elements for active file to text."""
-        proceed = True
-        if self.main.gui.active_img_no < 0:
-            QMessageBox.information(self, 'Missing input',
-                                    'No file selected.')
-            proceed = False
-        if proceed:
-            dcm.dump_dicom(self,
-                           filename=self.main.imgs[
-                               self.main.gui.active_img_no].filepath)
+        filename = ''
+        if self.main.gui.active_img_no > -1:
+            filename=self.main.imgs[self.main.gui.active_img_no].filepath
+        dlg = DicomInspectDialog(self, filename=filename)
+        dlg.exec()
 
     def refresh_img_info(self, info_list_general, info_list_modality):
         """Refresh dicom header information for selected image."""

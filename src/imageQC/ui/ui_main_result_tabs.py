@@ -245,11 +245,12 @@ class ResultTable(QTableWidget):
                 linked_image_list = False
             except (KeyError, TypeError):
                 pass
-        elif self.main.current_test == 'Eve':
+        elif (self.main.current_modality == 'SR'
+              and self.main.current_test in ['Acc', 'Eve']):
             transposed = True
             idx = self.main.gui.active_img_no
-            row_labels = self.main.results['Eve'][idx]['headers']
-            values_cols = self.main.results['Eve'][idx]['values']
+            row_labels = self.main.results[self.main.current_test][idx]['headers']
+            values_cols = self.main.results[self.main.current_test][idx]['values']
 
             df = pd.DataFrame(values_cols)
             temp_rows = df.T
@@ -270,7 +271,7 @@ class ResultTable(QTableWidget):
             values_cols = df.T.values.tolist()
             linked_image_list = False
 
-            unit_table = self.main.results['Eve'][idx]['details_dict']
+            unit_table = self.main.results[self.main.current_test][idx]['details_dict']
             df_unit_table = pd.DataFrame(unit_table)
             unit_table = df_unit_table.T.values.tolist()
             units = []
@@ -292,7 +293,10 @@ class ResultTable(QTableWidget):
                             unit = avail_units[0]
                 units.append(unit)
             values_cols.insert(0, units)
-            col_labels = [f'Event {i}' for i in range(len(values_cols))]
+            if self.main.current_test == 'Eve':
+                col_labels = [f'Event {i}' for i in range(len(values_cols))]
+            else:
+                col_labels=['Accumulated data']
             col_labels[0] = 'Unit'
         else:
             if linked_image_list:

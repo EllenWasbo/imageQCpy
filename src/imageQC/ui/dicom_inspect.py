@@ -6,6 +6,7 @@
 """
 import os
 import copy
+import html
 
 import pandas
 from PyQt6.QtCore import Qt
@@ -432,6 +433,9 @@ class DicomInspectDialog(ImageQCDialog):
                     modif = ['', '']
                     if bold:
                         modif = ['<b>', '</b>']
+                    if type(value) == str:
+                        if '<' in value:
+                            value = '<code>' + html.escape(value) + '</code>'
                     output.append(
                         '\t'*level + f'{modif[0]}{concept_name}: {value}{modif[1]}')
 

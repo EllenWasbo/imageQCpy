@@ -577,6 +577,8 @@ class MainWindow(QMainWindow):
                 if self.active_img is not None and refresh_display:
                     self.update_roi()
                     self.refresh_results_display()
+                elif self.gui.active_img_no > -1 and self.current_modality == 'SR':
+                    self.refresh_results_display()
                 self.wid_image_display.tool_rectangle.setChecked(
                     self.current_test == 'Num')
         self.stop_wait_cursor()

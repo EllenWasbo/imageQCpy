@@ -1610,6 +1610,7 @@ def parse_SR_content_sequence(filename, sort_irr_event_uids=False):
                 idx_starts.insert(0, 0)
                 idx_starts.append(len(table_out))
                 cds_events = []
+                acc_code_meanings = []
                 for i in range(n_events + 1):
                     output_this_group = table_out[
                         idx_starts[i]:idx_starts[i + 1]]
@@ -1621,6 +1622,10 @@ def parse_SR_content_sequence(filename, sort_irr_event_uids=False):
                         cds_events.extend(
                             [row[1] for row in output_this_group
                              if row[2] != 'CONTAINER'])
+                    else:
+                        acc_code_meanings = [
+                            row[1] for row in output_this_group
+                            if row[2] != 'CONTAINER']
                 available_code_meanings = list(set(cds_events))
                 available_code_meanings.sort()
                 table_out = table_out_grouped
@@ -1628,6 +1633,9 @@ def parse_SR_content_sequence(filename, sort_irr_event_uids=False):
                 output['table'] = table_out
                 output['table_object'] = table_out_obj
                 output['available_code_meanings'] = available_code_meanings
+                acc_code_meanings = list(set(acc_code_meanings))
+                acc_code_meanings.sort()
+                output['available_code_meanings_acc'] = acc_code_meanings
         else:
             errmsg.append('Found no Content Sequence in file. Could not extract data.')
 

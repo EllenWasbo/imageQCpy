@@ -73,7 +73,8 @@ def refresh_results_display(main, update_table=True):
         if 'ResultTableWidget' in type_wid and update_table:
             if main.current_test == 'vendor':
                 main.wid_res_tbl.result_table.fill_table(vendor=True)
-            elif main.current_test == 'Eve':  # SR event, one result pr file
+            elif (main.current_modality == 'SR'
+                  and main.current_test in ['Eve', 'Acc']):  # one result pr file
                 try:
                     main.wid_res_tbl.result_table.fill_table()
                 except (KeyError, TypeError, IndexError):

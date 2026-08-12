@@ -1,3 +1,12 @@
+# v3.2.10
+_Aug 12, 2026_
+
+New functionalities:
+- Added SR test "Extract accumulated data" to list accumulated data as only per event data is listed in test "Extract event details"
+
+Changes:
+- SR test "Extract event details": Now handles repeated elements like multiple X-ray tubes for CT, SSDE per slice readouts. Divided by / within results table pr event. 
+
 # v3.2.9
 _Aug 11, 2026_
 

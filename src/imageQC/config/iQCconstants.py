@@ -18,9 +18,10 @@ USERNAME = os.getlogin()
 
 # version string used to caluclate increasing number for comparison
 # convention: A.B.C-bD where A,B,C,D is numbers < 100 and always increasing
-# A when fundamental changes or B turns 99, B when major changes,
-#   C new python release (or small fix)
-VERSION = '3.2.9'
+# A when fundamental changes or B turns 99,
+# B when major changes f.x. new requirements
+# C small changes
+VERSION = '3.2.10'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -38,7 +39,7 @@ ENV_ICON_PATH = 'IMAGEQC_ICON_PATH'
 USER_PREFS_FNAME = 'user_preferences.yaml'
 
 # dict: with lists defining modalities and their corresponding
-#  list of tests with QuickTest as option."""
+#  list of tests with QuickTest as option. Same order as tabs in GUI
 QUICKTEST_OPTIONS = {
     'CT': ['DCM', 'ROI', 'Num', 'Hom', 'Noi', 'Sli', 'MTF', 'TTF', 'CTn',
            'HUw', 'Rin', 'Dim', 'NPS'],
@@ -50,7 +51,7 @@ QUICKTEST_OPTIONS = {
     'SPECT': ['DCM', 'ROI', 'Num', 'MTF', 'Rin'],
     'PET': ['DCM', 'ROI', 'Num', 'Hom', 'Cro', 'Rec', 'MTF'],
     'MR': ['DCM', 'ROI', 'Num', 'SNR', 'PIU', 'Gho', 'Geo', 'Sli', 'MTF'],
-    'SR': ['DCM', 'Eve']}
+    'SR': ['DCM', 'Acc', 'Eve']}
 
 COLORS = ['r', 'b', 'g', 'y', 'c', 'm', 'skyblue', 'orange']
 

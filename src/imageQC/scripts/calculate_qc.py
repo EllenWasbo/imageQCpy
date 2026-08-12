@@ -680,7 +680,7 @@ def calculate_qc(input_main, wid_auto=None,
                             if paramset.mtf_auto_center:
                                 force_new_roi.append('MTF')
                     elif modality == 'SR':
-                        if 'Eve' in marked[i]:
+                        if 'Eve' in marked[i] or 'Acc' in marked[i]:
                             read_sr[i] = True
 
             # list of shape + pix for testing if new roi need to be calculated
@@ -816,7 +816,7 @@ def calculate_qc(input_main, wid_auto=None,
 
                 for test in marked[i]:
                     input_main.current_test = test
-                    if test not in ['DCM', 'Eve', '']:
+                    if test not in ['DCM', ''] and modality != 'SR':
                         if test in marked_3d[i]:
                             if matrix[i] is None:  # only once pr image
                                 matrix[i] = image  # save image for later
@@ -988,61 +988,19 @@ def calculate_qc(input_main, wid_auto=None,
                     'values_sup_info': ''
                     }
 
-            # For test SR - Eve - NB one result dict pr file
-            if 'Eve' in flattened_marked and cancelled is False:
-                res_list = []
-                for i in range(n_img):
-                    sr_output = None
-                    if sr_res[i]:
-                        sr_output, errmsgs_this = sr_res[i]
-                        if errmsgs_this[0]:
-                            intro = f'Test Eve, file {i}:'
-                            if errmsgs_this:
-                                errmsgs.append(intro)
-                                errmsgs.extend(errmsgs_this)
+            # For test SR - Acc/Eve - NB one result dict pr file
+            if modality == 'SR' and cancelled is False:
+                if 'Eve' in flattened_marked or 'Acc' in flattened_marked:
+                    res_Acc, res_Eve, errs = extract_SR_content(
+                        sr_res, marked, paramset)
+                    if len(errs) > 0:
+                        errmsgs.extend(errs)
+                    if len(res_Eve) > 0:
+                        input_main.results['Eve'] = res_Eve
+                    if len(res_Acc) > 0:
+                        input_main.results['Acc'] = res_Acc
 
-                    if sr_output:
-                        if len(paramset.eve_tagpattern) == 0:
-                            # use all available
-                            headers = sr_output['available_code_meanings']
-                        else:
-                            headers = [row[0] for row in paramset.eve_tagpattern]
 
-                        dataf = {}
-                        dataf_units = {}
-                        grouped_output = sr_output['table_object']
-                        for header in headers:
-                            col_vals = []
-                            col_units = []
-                            for irr_event in grouped_output[1:]:
-                                available = [obj.code_meaning for obj in irr_event]
-                                val = None
-                                unit = None
-                                if header in available:
-                                    idx = available.index(header)
-                                    val = irr_event[idx].value
-                                    unit = irr_event[idx].unit
-                                col_vals.append(val)
-                                col_units.append(unit)
-                            dataf[header] = col_vals
-                            dataf_units[header] = col_units
-                        dataf = pandas.DataFrame(dataf)
-                        dataf_units = pandas.DataFrame(dataf_units)
-
-                        res_list.append({
-                            'headers': headers,
-                            'values': dataf.values.tolist(),
-                            'alternative': 0,
-                            'headers_sup': [],
-                            'values_sup': [[] for i in range(n_img)],
-                            'details_dict': dataf_units.values.tolist(),
-                            'pr_image': True,
-                            'pr_image_sup': True,
-                            'values_info': '',
-                            'values_sup_info': ''
-                            })
-                if len(res_list) > 0:
-                    input_main.results['Eve'] = res_list
 
     msgs = []
     if len(errmsgs) > 0:
@@ -4738,3 +4696,135 @@ def calculate_recovery_curve(matrix, img_info, center_roi, zpos, zpos_center,
         errmsg = 'Failed to find 6 spheres'
 
     return (details_dict, errmsg)
+
+
+def extract_SR_content(sr_res, marked, paramset):
+    """Extract SR content for test Acc and Eve.
+
+    Parameters
+    ----------
+    sr_res : list
+        results pr fil from dcm.parse_SR_content_sequence
+    marked : list
+        list of testcodes to be used pr file
+    paramset : config_classes.ParamSetSR
+
+    Returns
+    -------
+    res_list_acc : list
+        list of dict to results for test Acc
+    res_list_eve : list
+        list of dict to results for test Eve
+    error_messages:
+        pr file from dcm.parse_SR_content_sequence
+    """
+    res_list_eve = []
+    res_list_acc = []
+    error_messages = []
+    for i, marked_this in enumerate(marked):
+        sr_output = None
+        if sr_res[i]:
+            sr_output, errmsgs_this = sr_res[i]
+            if errmsgs_this[0]:
+                intro = f'Parse SR, file {i}:'
+                if errmsgs_this:
+                    error_messages.append(intro)
+                    error_messages.extend(errmsgs_this)
+        if sr_output:
+            headers_eve = []
+            if 'Eve' in marked_this:
+                if len(paramset.eve_tagpattern) == 0:
+                    # use all available
+                    headers_eve = sr_output['available_code_meanings']
+                else:
+                    headers_eve = [row[0] for row in paramset.eve_tagpattern]
+            headers_acc = []
+            if 'Acc' in marked_this:
+                if len(paramset.acc_tagpattern) == 0:
+                    # use all available
+                    headers_acc = sr_output['available_code_meanings_acc']
+                else:
+                    headers_acc = [row[0] for row in paramset.acc_tagpattern]
+
+            grouped_output = sr_output['table_object']
+
+            # Acc
+            dataf = {}
+            dataf_units = {}
+            acc_data = grouped_output[0]
+            available = [obj.code_meaning for obj in acc_data]
+            for header in headers_acc:
+                col_vals = []
+                col_units = []
+                val = None
+                unit = None
+                if header in available:
+                    idxs = mm.get_all_matches(available, header)
+                    if len(idxs) == 1:
+                        val = acc_data[idxs[0]].value
+                    else:
+                        val = ' / '.join(
+                            [str(acc_data[idx].value) for idx in idxs])
+                    unit = acc_data[idxs[0]].unit
+                col_vals.append(val)
+                col_units.append(unit)
+                dataf[header] = col_vals
+                dataf_units[header] = col_units
+            if dataf:
+                dataf = pandas.DataFrame(dataf)
+                dataf_units = pandas.DataFrame(dataf_units)
+
+                res_list_acc.append({
+                    'headers': headers_acc,
+                    'values': dataf.values.tolist(),
+                    'alternative': 0,
+                    'headers_sup': [],
+                    'values_sup': [],
+                    'details_dict': dataf_units.values.tolist(),
+                    'pr_image': True,
+                    'pr_image_sup': True,
+                    'values_info': '',
+                    'values_sup_info': ''
+                    })
+
+            # Eve
+            dataf = {}
+            dataf_units = {}
+            for header in headers_eve:
+                col_vals = []
+                col_units = []
+                for irr_event in grouped_output[1:]:
+                    available = [obj.code_meaning for obj in irr_event]
+                    val = None
+                    unit = None
+                    if header in available:
+                        idxs = mm.get_all_matches(available, header)
+                        if len(idxs) == 1:
+                            val = irr_event[idxs[0]].value
+                        else:
+                            val = ' / '.join(
+                                [str(irr_event[idx].value) for idx in idxs])
+                        unit = irr_event[idxs[0]].unit
+                    col_vals.append(val)
+                    col_units.append(unit)
+                dataf[header] = col_vals
+                dataf_units[header] = col_units
+            if dataf:
+                dataf = pandas.DataFrame(dataf)
+                dataf_units = pandas.DataFrame(dataf_units)
+
+                res_list_eve.append({
+                    'headers': headers_eve,
+                    'values': dataf.values.tolist(),
+                    'alternative': 0,
+                    'headers_sup': [],
+                    'values_sup': [],
+                    'details_dict': dataf_units.values.tolist(),
+                    'pr_image': True,
+                    'pr_image_sup': True,
+                    'values_info': '',
+                    'values_sup_info': ''
+                    })
+
+    return (res_list_acc, res_list_eve, error_messages)
+

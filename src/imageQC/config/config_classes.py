@@ -792,6 +792,7 @@ class ParamSetSR:
     postprocessing: PostProcessVariables = field(
         default_factory=PostProcessVariables)
     dcm_tagpattern: TagPatternFormat = field(default_factory=TagPatternFormat)
+    acc_tagpattern: list = field(default_factory=list)
     eve_tagpattern: list = field(default_factory=list)
 
 

@@ -81,15 +81,16 @@ If adding icons, a dark-mode icon is also needed. Create a separate virtual envi
 - in config_func.py load_settings - add code to if fname == '&lt;the new fname&gt;'
 - if more than only the fname to load:
 	- search for "'patterns'" in  settings_reusables.py - you will probably have to make these places work for you new template
-- if coupled in auto_template or paramset or tag_infos by labels/attribute names - consider warnings (verify_auto_template / 
+- if coupled in auto_template or paramset or tag_infos by labels/attribute names - consider warnings (verify_auto_template) 
 - consider add to 
 	- MainWindow (update settings) if affect processes in main window
 	- ImportMain (settings.py) if settings should be available for import (if yaml file it should be)
-	- syncronize StackWidget update_from_yaml with SettingsDialog import from yaml + update_import main
-	- InputMain (input_main_auto.py) if affect processes in calculate_qc or run_automation_non_gui/open_automation, run_template
+	- syncronize StackWidget update_from_yaml with SettingsDialog import_from_yaml + update_import_main
+	- InputMain (scripts/input_main.py) if affect processes in calculate_qc or run_automation_non_gui/open_automation, run_template
 - if not modality_dict:
 	- add code to SettingsDialog - update_import_main, get_marked
-	- SharedSettings - verify_config_files
+	- SharedSettingsWidget - verify_config_files
+	- consider changes to config/config_func.py - import_settings
 - if PositionTable to set column headers - settings_reusables.py QuickTestOutputSubDialog elif testcode == in update data
 
 ## Update requirements / dependencies

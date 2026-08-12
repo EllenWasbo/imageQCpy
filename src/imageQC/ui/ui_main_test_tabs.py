@@ -245,8 +245,12 @@ class ParamsTabCommon(QTabWidget):
                     self.sni_channels_table_widget.current_table = copy.deepcopy(
                         paramset.sni_channels_table)
                     self.sni_channels_table_widget.update_table()
+                elif field.name == 'acc_tagpattern':
+                    self.acc_tagpattern_widget.tagpattern = copy.deepcopy(
+                        paramset.acc_tagpattern)
+                    self.acc_tagpattern_widget.update_data()
                 elif field.name == 'eve_tagpattern':
-                    self.eve_tagpattern_widget.eve_tagpattern = copy.deepcopy(
+                    self.eve_tagpattern_widget.tagpattern = copy.deepcopy(
                         paramset.eve_tagpattern)
                     self.eve_tagpattern_widget.update_data()
 
@@ -4321,16 +4325,31 @@ class ParamsTabSR(ParamsTabCommon):
     def __init__(self, parent):
         super().__init__(parent, remove_roi_num=True)
 
+        self.create_tab_acc()
         self.create_tab_eve()
-
+        self.addTab(self.tab_acc, "Extract accumulated data")
         self.addTab(self.tab_eve, "Extract event details")
 
         self.flag_ignore_signals = False
 
+    def create_tab_acc(self):
+        """GUI of tab SR event details."""
+        self.tab_acc = ParamsWidget(self, run_txt='Extract accumulated data')
+        self.acc_tagpattern_widget = SRtagTreeWidget(
+            self, self.main, test='Acc')
+        self.tab_acc.hlo.addWidget(self.acc_tagpattern_widget)
+        btn_clear = QPushButton('Clear list')
+        btn_clear.clicked.connect(self.acc_tagpattern_widget.clear)
+        self.tab_acc.hlo.addWidget(btn_clear)
+        self.tab_acc.hlo.addStretch()
+        self.tab_acc.vlo.addWidget(QLabel(
+            'All available data will be extracted if none specified.'))
+
     def create_tab_eve(self):
         """GUI of tab SR event details."""
         self.tab_eve = ParamsWidget(self, run_txt='Extract event details')
-        self.eve_tagpattern_widget = SRtagTreeWidget(self, self.main)
+        self.eve_tagpattern_widget = SRtagTreeWidget(
+            self, self.main, test='Eve')
         self.tab_eve.hlo.addWidget(self.eve_tagpattern_widget)
         btn_clear = QPushButton('Clear list')
         btn_clear.clicked.connect(self.eve_tagpattern_widget.clear)
@@ -4343,10 +4362,11 @@ class ParamsTabSR(ParamsTabCommon):
 class SRtagTreeWidget(QWidget):
     """CT numbers table widget."""
 
-    def __init__(self, parent, main):
+    def __init__(self, parent, main, test=''):
         super().__init__()
         self.parent = parent
         self.main = main
+        self.test = test
 
         vlo = QVBoxLayout()
         self.setLayout(vlo)
@@ -4361,7 +4381,7 @@ class SRtagTreeWidget(QWidget):
         self.tree.setHeaderLabels(['CodeMeaning', 'Format'])
         self.tree.setRootIsDecorated(False)
 
-        self.eve_tagpattern = []
+        self.tagpattern = []
 
         if not self.main.save_blocked:
             toolb = QToolBar()
@@ -4407,7 +4427,7 @@ class SRtagTreeWidget(QWidget):
             txt, ok = QInputDialog.getText(
                 self, 'Add Code Meaning                  ', 'Code Meaning:')
             if ok and txt:
-                self.eve_tagpattern.insert(row + 1, [txt, ''])
+                self.tagpattern.insert(row + 1, [txt, ''])
                 changed = True
         else:
             filename = ''
@@ -4424,8 +4444,12 @@ class SRtagTreeWidget(QWidget):
                 output, errmsg = parse_SR_content_sequence(
                     filename, sort_irr_event_uids=True)
                 try:
+                    if self.test == 'Eve':
+                        texts = output['available_code_meanings']
+                    else:
+                        texts = output['available_code_meanings_acc']
                     dlg_list = SelectTextsDialog(
-                        texts=output['available_code_meanings'],
+                        texts=texts,
                         title='Select Code Meaning strings to add',
                         select_info='Found available Code Meaning from file:'
                         )
@@ -4434,7 +4458,7 @@ class SRtagTreeWidget(QWidget):
                         if selected_texts:
                             nn = 1
                             for txt in selected_texts:
-                                self.eve_tagpattern.insert(row + nn, [txt, ''])
+                                self.tagpattern.insert(row + nn, [txt, ''])
                                 nn += 1
                             changed = True
                 except KeyError:
@@ -4446,8 +4470,9 @@ class SRtagTreeWidget(QWidget):
 
         if changed:
             self.update_data(set_selected=row + 1)
-            setattr(self.main.current_paramset, 'eve_tagpattern',
-                    self.eve_tagpattern)
+            setattr(self.main.current_paramset,
+                    f'{self.test.lower()}_tagpattern',
+                    self.tagpattern)
             self.parent.flag_edit()
 
     def format_output(self):
@@ -4457,15 +4482,16 @@ class SRtagTreeWidget(QWidget):
         if len(sel) > 0:
             row = sel[0].row()
         if row > -1:
-            format_str = self.eve_tagpattern[row][1]
+            format_str = self.tagpattern[row][1]
             dlg = FormatDialog(format_string=format_str)
             res = dlg.exec()
             if res:
                 new_str = dlg.get_data()
-                self.eve_tagpattern[row][1] = new_str
+                self.tagpattern[row][1] = new_str
                 self.update_data(set_selected=row)
-                setattr(self.main.current_paramset, 'eve_tagpattern',
-                        self.eve_tagpattern)
+                setattr(self.main.current_paramset,
+                        f'{self.test.lower()}_tagpattern',
+                        self.tagpattern)
                 self.parent.flag_edit()
         else:
             QMessageBox.information(
@@ -4479,11 +4505,12 @@ class SRtagTreeWidget(QWidget):
         if len(sel) > 0:
             row = sel[0].row()
         if row > 0:
-            popped_row = self.eve_tagpattern.pop(row)
+            popped_row = self.tagpattern.pop(row)
             self.eve_tagpattern.insert(row - 1, popped_row)
             self.update_data(set_selected=row - 1)
-            setattr(self.main.current_paramset, 'eve_tagpattern',
-                    self.eve_tagpattern)
+            setattr(self.main.current_paramset,
+                    f'{self.test.lower()}_tagpattern',
+                    self.tagpattern)
             self.parent.flag_edit()
 
     def move_down(self):
@@ -4492,13 +4519,14 @@ class SRtagTreeWidget(QWidget):
         row = -1
         if len(sel) > 0:
             row = sel[0].row()
-            n_tags = len(self.eve_tagpattern)
+            n_tags = len(self.tagpattern)
             if row < n_tags-1:
-                popped_row = self.eve_tagpattern.pop(row)
-                self.eve_tagpattern.insert(row + 1, popped_row)
+                popped_row = self.tagpattern.pop(row)
+                self.tagpattern.insert(row + 1, popped_row)
                 self.update_data(set_selected=row + 1)
-                setattr(self.main.current_paramset, 'eve_tagpattern',
-                        self.eve_tagpattern)
+                setattr(self.main.current_paramset,
+                        f'{self.test.lower()}_tagpattern',
+                        self.tagpattern)
                 self.parent.flag_edit()
 
     def delete(self):
@@ -4507,26 +4535,28 @@ class SRtagTreeWidget(QWidget):
         row = -1
         if len(sel) > 0:
             row = sel[0].row()
-            self.eve_tagpattern.pop(row)
+            self.tagpattern.pop(row)
             self.update_data()
-            setattr(self.main.current_paramset, 'eve_tagpattern',
-                    self.eve_tagpattern)
+            setattr(self.main.current_paramset,
+                    f'{self.test.lower()}_tagpattern',
+                    self.tagpattern)
             self.parent.flag_edit()
 
     def clear(self):
         """Clear pattern."""
-        if len(self.eve_tagpattern) > 0:
-            self.eve_tagpattern = []
+        if len(self.tagpattern) > 0:
+            self.tagpattern = []
             self.update_data()
-            setattr(self.main.current_paramset, 'eve_tagpattern',
-                    self.eve_tagpattern)
+            setattr(self.main.current_paramset,
+                    f'{self.test.lower()}_tagpattern',
+                    self.tagpattern)
             self.parent.flag_edit()
 
     def update_data(self, set_selected=0):
         """Update table_pattern with data from current_template."""
         self.tree.clear()
-        if len(self.eve_tagpattern) > 0:
-            for row in self.eve_tagpattern:
+        if len(self.tagpattern) > 0:
+            for row in self.tagpattern:
                 item = QTreeWidgetItem(row)
                 self.tree.addTopLevelItem(item)
             if set_selected == -1:

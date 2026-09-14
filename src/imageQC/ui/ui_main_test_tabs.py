@@ -2003,8 +2003,8 @@ class ParamsTabXray(ParamsTabCommon):
         self.addTab(self.tab_stp, "STP")
         self.addTab(self.tab_var, "Variance")
         self.addTab(self.tab_foc, "Focal spot size")
+        self.addTab(self.tab_pha, "Phantom")
         if self.main.developer_mode:
-            self.addTab(self.tab_pha, "Phantom")
             self.addTab(self.tab_def, "Defective pixels")
 
         self.flag_ignore_signals = False

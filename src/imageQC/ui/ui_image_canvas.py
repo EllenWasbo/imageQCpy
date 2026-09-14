@@ -18,7 +18,7 @@ from skimage.transform import resize
 # imageQC block start
 from imageQC.scripts.mini_methods_calculate import get_min_max_pos_2d
 from imageQC.scripts.calculate_roi import (
-    generate_SNI_Siemens_image, get_roi_circle)
+    generate_SNI_Siemens_image, get_roi_circle, get_roi_Pha)
 from imageQC.config.iQCconstants import COLORS
 # imageQC block end
 
@@ -725,16 +725,42 @@ class ImageCanvas(GenericImageCanvas):
             try:
                 details_dict = self.main.results['Pha'][
                     'details_dict'][self.main.gui.active_img_no]
-                ctf_roi = details_dict['roi_ctfs'].astype(bool)
-                self.main.current_roi.append(ctf_roi)
+                ctf_roi = details_dict['bar_pattern']['roi_ctfs'].astype(bool)
+                if self.main.current_roi is None:
+                    roi, _ = get_roi_Pha(
+                        self.main.active_img,
+                        self.main.imgs[self.main.gui.active_img_no],
+                        self.main.current_paramset)
+                    self.main.current_roi = roi + [ctf_roi]
+                else:
+                    if len(self.main.current_roi) == 3:
+                        self.main.current_roi.append(ctf_roi)
+                idxs = [0, 3]
+                labels = ['found_highcontrast', 'bar_pattern']
+                if 'contrast' in details_dict:
+                    cnr_roi = details_dict['contrast']['roi_cnrs'].astype(bool)
+                    if len(self.main.current_roi) == 4:
+                        self.main.current_roi.append(cnr_roi)
+                        idxs.append(4)
+                        labels.append('disc and background')
+                    cnr_roi_pos = details_dict['contrast']['cnr_dxys']
+                    cx, cy = details_dict['center_xy']
+                    xs = np.array([pos[0] for pos in cnr_roi_pos]) + cx
+                    ys = np.array([pos[1] for pos in cnr_roi_pos]) + cy
+                    xs = np.append(xs, cx)
+                    ys = np.append(ys, cy)
+                    radii = details_dict['contrast']['cnr_radii']
+                    self.scatters = []
+                    scatter = self.ax.scatter(
+                        xs, ys, s=20, c='red', marker='x')
+                    self.scatters.append(scatter)
                 self.add_contours_to_all_rois(
-                    colors=COLORS,
-                    roi_indexes=[0, 2],
-                    labels=['found_highcontrast', 'bar_pattern'])
+                    colors=COLORS, roi_indexes=idxs, labels=labels)
             except KeyError:
-                pass
+                self.add_contours_to_all_rois(roi_indexes=[0, 2])
+
         else:
-            self.add_contours_to_all_rois(roi_indexes=[0])
+            self.add_contours_to_all_rois(roi_indexes=[0, 2])
 
     def PIU(self):
         """Draw MR PIU ROI."""

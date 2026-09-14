@@ -474,14 +474,15 @@ def test_Xray_Pha():
         )
 
     file_path = Path(r'C:\Users\ellen\CloudStation\ImageQCpy\DemoBilder\DemoBilder\Leeds\20221010_113330.005_80_.dcm')
+    #20221010_113330.005_80_
+    #20221010_114117.257_80_
     img_infos, ignored_files, _ = dcm.read_dcm_info(
         [file_path], GUI=False, tag_infos=input_main.tag_infos)
     input_main.imgs = img_infos
 
     calculate_qc.calculate_qc(input_main)
-    breakpoint()
-    values = np.round(np.array(input_main.results['Pha']['values'][0]))
-    assert 1 == 1
+    values = np.array(input_main.results['Pha']['values'][0])
+    assert np.array_equal(values, np.array([5., 2.2]))
 
 
 def test_Xray_Def():

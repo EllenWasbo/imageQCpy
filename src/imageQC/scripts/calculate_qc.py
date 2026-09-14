@@ -1000,8 +1000,6 @@ def calculate_qc(input_main, wid_auto=None,
                     if len(res_Acc) > 0:
                         input_main.results['Acc'] = res_Acc
 
-
-
     msgs = []
     if len(errmsgs) > 0:
         # flatten errmsgs and remove None and '' from errmsgs
@@ -1591,7 +1589,7 @@ def calculate_2d(image2d, roi_array, image_info, modality,
                     try:
                         values = details[prefix + 'MTF_details']['values']
                         values_sup = (
-                            details['gMTF_details']['LSF_fit_params']
+                            list(details['gMTF_details']['LSF_fit_params'])
                             + [details['gMTF_details']['prefilter_sigma']])
                         res = Results(
                             headers=headers, values=values,
@@ -1769,15 +1767,16 @@ def calculate_2d(image2d, roi_array, image_info, modality,
     def Pha():
         alt = paramset.pha_type
         headers = copy.deepcopy(HEADERS[modality][test_code]['alt'+str(alt)])
-        #headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt'+str(alt)])
+        headers_sup = copy.deepcopy(HEADERS_SUP[modality][test_code]['alt'+str(alt)])
         if image2d is None:
             res = Results(headers=headers)#, headers_sup=headers_sup)
         else:
-            details_dict, values, errmsgs = calculate_phantom_xray(
+            details_dict, values, values_sup, errmsgs = calculate_phantom_xray(
                 image2d, image_info, roi_array, paramset)
 
             res = Results(
                 headers=headers, values=values,
+                headers_sup=headers_sup, values_sup=values_sup,
                 details_dict=details_dict, errmsg=errmsgs)
 
         return res

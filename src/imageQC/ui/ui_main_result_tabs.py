@@ -295,9 +295,9 @@ class ResultTable(QTableWidget):
             values_cols.insert(0, units)
             if self.main.current_test == 'Eve':
                 col_labels = [f'Event {i}' for i in range(len(values_cols))]
+                col_labels[0] = 'Unit'
             else:
-                col_labels=['Accumulated data']
-            col_labels[0] = 'Unit'
+                col_labels=['Unit', 'Accumulated data']
         else:
             if linked_image_list:
                 marked_imgs = self.main.get_marked_imgs_current_test()
@@ -1533,23 +1533,24 @@ class ResultPlotCanvas(PlotCanvas):
 
                     xvals = dd_this['LSF_fit_x']
                     yvals = dd_this['LSF_fit']
-                    if self.main.current_paramset.mtf_type in [0, 5, 6]:
-                        # 2d or 3d point
-                        # +/- 5x sigma devided on 100 x values params
-                        try:
-                            sigma = dd_this['LSF_fit_params'][1]
-                            A = dd_this['LSF_fit_params'][0]
-                            xvals = (5 * sigma)/100 * np.arange(100)
-                            xvals = np.append(-xvals[::-1], xvals[1:])
-                            yvals = A * np.exp(
-                                -0.5 * (xvals ** 2) / (sigma ** 2))
-                            if len(dd_this['LSF_fit_params']) == 4:
-                                sigma2 = dd_this['LSF_fit_params'][3]
-                                A2 = dd_this['LSF_fit_params'][2]
-                                yvals = yvals + A2 * np.exp(
-                                    -0.5 * (xvals ** 2) / (sigma2 ** 2))
-                        except (KeyError, IndexError):
-                            pass
+                    if hasattr(self.main.current_paramset, 'mtf_type'):
+                        if self.main.current_paramset.mtf_type in [0, 5, 6]:
+                            # 2d or 3d point
+                            # +/- 5x sigma devided on 100 x values params
+                            try:
+                                sigma = dd_this['LSF_fit_params'][1]
+                                A = dd_this['LSF_fit_params'][0]
+                                xvals = (5 * sigma)/100 * np.arange(100)
+                                xvals = np.append(-xvals[::-1], xvals[1:])
+                                yvals = A * np.exp(
+                                    -0.5 * (xvals ** 2) / (sigma ** 2))
+                                if len(dd_this['LSF_fit_params']) == 4:
+                                    sigma2 = dd_this['LSF_fit_params'][3]
+                                    A2 = dd_this['LSF_fit_params'][2]
+                                    yvals = yvals + A2 * np.exp(
+                                        -0.5 * (xvals ** 2) / (sigma2 ** 2))
+                            except (KeyError, IndexError):
+                                pass
 
                     self.curves.append({
                         'label': f'LSF{lbl_prefilter} - gaussian fit' + suffix[ddno],
@@ -2214,34 +2215,91 @@ class ResultPlotCanvas(PlotCanvas):
             case 'Bar pattern: Contrast transfer function CTF':
                 self.curves.append({
                     'label': 'CTF',
-                    'xvals': details_dict['spatial_frequencies'],
-                    'yvals': details_dict['ctf_values'],
-                    'style': '.',
+                    'xvals': details_dict['bar_pattern']['spatial_frequencies'],
+                    'yvals': details_dict['bar_pattern']['ctf_values'],
+                    'style': 'o-',
                     'color': self.color_k,
-                    'markersize': 1.,
+                    'markersize': 2,
                      })
                 self.xtitle = 'Spatial frequency (lp/mm)'
                 self.ytitle = 'CTF'
 
             case 'Bar pattern: Found min, max values':
                 self.curves.append({
-                    'label': 'Minimum',
-                    'xvals': details_dict['spatial_frequencies'],
-                    'yvals': details_dict['min_values'],
-                    'style': '.',
-                    'color': 'blue',
-                    'markersize': 1.,
+                    'label': 'Maximum',
+                    'xvals': details_dict['bar_pattern']['spatial_frequencies'],
+                    'yvals': details_dict['bar_pattern']['max_values'],
+                    'style': 'o-',
+                    'color': 'red',
+                    'markersize': 2,
                      })
                 self.curves.append({
-                    'label': 'Maximum',
-                    'xvals': details_dict['spatial_frequencies'],
-                    'yvals': details_dict['max_values'],
-                    'style': '.',
-                    'color': 'red',
-                    'markersize': 1.,
+                    'label': 'Minimum',
+                    'xvals': details_dict['bar_pattern']['spatial_frequencies'],
+                    'yvals': details_dict['bar_pattern']['min_values'],
+                    'style': 'o-',
+                    'color': 'blue',
+                    'markersize': 2,
                      })
                 self.xtitle = 'Spatial frequency (lp/mm)'
                 self.ytitle = 'Pixel value'
+
+            case 'Bar pattern: Modulation transfer function MTF':
+                self.curves.append({
+                    'label': 'MTF',
+                    'xvals': details_dict['bar_pattern']['spatial_frequencies'],
+                    'yvals': details_dict['bar_pattern']['mtf_values'],
+                    'style': 'o-',
+                    'color': self.color_k,
+                    'markersize': 2,
+                     })
+                self.xtitle = 'Spatial frequency (lp/mm)'
+                self.ytitle = 'MTF'
+
+            case 'Contrast: CNR values':
+                self.curves.append({
+                    'label': 'CNR',
+                    'xvals': details_dict['contrast']['contrast_percents'],
+                    'yvals': details_dict['contrast']['cnr_values'],
+                    'style': 'o-',
+                    'color': 'blue',
+                    'markersize': 2,
+                     })
+                self.xtitle = 'Nominal contrast (%)'
+                self.ytitle = 'Contrast to noise ratio'
+
+            case 'Contrast: Found average disc and background':
+                self.curves.append({
+                    'label': 'Average disc',
+                    'xvals': details_dict['contrast']['contrast_percents'],
+                    'yvals': details_dict['contrast']['disc_means'],
+                    'style': 'o-',
+                    'color': 'blue',
+                    'markersize': 2,
+                     })
+                self.curves.append({
+                    'label': 'Average background',
+                    'xvals': details_dict['contrast']['contrast_percents'],
+                    'yvals': details_dict['contrast']['background_means'],
+                    'style': 'o-',
+                    'color': 'red',
+                    'markersize': 2,
+                     })
+                self.xtitle = 'Nominal contrast (%)'
+                self.ytitle = 'Found value'
+
+            case 'Contrast: Found stdev background':
+                self.curves.append({
+                    'label': 'Std background',
+                    'xvals': details_dict['contrast']['contrast_percents'],
+                    'yvals': details_dict['contrast']['background_stds'],
+                    'style': 'o--',
+                    'color': 'red',
+                    'markersize': 2,
+                     })
+                self.xtitle = 'Nominal contrast (%)'
+                self.ytitle = 'Found value'
+
 
     def Rec(self, sel_text):
         """Prepare plot for test PET recovery curve."""

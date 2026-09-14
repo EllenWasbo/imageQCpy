@@ -2029,7 +2029,11 @@ class ParamsTabXray(ParamsTabCommon):
         if curr_type == 0:
             items = [
                 'Bar pattern: Contrast transfer function CTF',
-                'Bar pattern: Found min, max values'
+                'Bar pattern: Found min, max values',
+                'Bar pattern: Modulation transfer function MTF',
+                'Contrast: CNR values',
+                'Contrast: Found average disc and background',
+                'Contrast: Found stdev background'
                 ]
         else:
             items = []
@@ -4506,7 +4510,7 @@ class SRtagTreeWidget(QWidget):
             row = sel[0].row()
         if row > 0:
             popped_row = self.tagpattern.pop(row)
-            self.eve_tagpattern.insert(row - 1, popped_row)
+            self.tagpattern.insert(row - 1, popped_row)
             self.update_data(set_selected=row - 1)
             setattr(self.main.current_paramset,
                     f'{self.test.lower()}_tagpattern',

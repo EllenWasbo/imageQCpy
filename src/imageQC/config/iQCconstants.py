@@ -21,7 +21,7 @@ USERNAME = os.getlogin()
 # A when fundamental changes or B turns 99,
 # B when major changes f.x. new requirements
 # C small changes
-VERSION = '3.2.10'
+VERSION = '3.2.11'
 
 if sys.platform.startswith("win"):
     APPDATA = os.path.join(os.environ['APPDATA'], 'imageQC')
@@ -86,7 +86,7 @@ ALTERNATIVES = {
                 'Central + quadrants ROI, avg + % difference from overall average',
                 'Flat field test from Mammo',
                 'Flat field test AAPM TG150'],
-        'Pha': ['TOR 18-FG', 'TOR CDR']
+        'Pha': ['TOR 18-FG']
         },
     'Mammo': {
        'ROI': ALTERNATIVES_ROI,
@@ -230,7 +230,6 @@ HEADERS = {
                          'FS x (mm)', 'FS y (mm)']},
         'Pha': {
                 'alt0': ['Limiting spatial frequency', 'Limiting low contrast'],
-                'alt1': []
                 },
         'Def': {'alt0': ['# equal to avg of 8 neighbours',
                          '# equal to avg of 4 neighbours']},
@@ -426,6 +425,10 @@ HEADERS_SUP = {
             'alt4': []
             },
         'MTF': {'alt0': ['A1', 'sigma1', 'A2', 'sigma2', 'sigma_prefilt']},
+        'Pha': {
+                'alt0': [],
+                'alt1': []
+                },
         'Def': {'alt0': [
             'max def frac 8', 'n max def frac 8',
             'max def frac 4', 'n max def frac 4']},

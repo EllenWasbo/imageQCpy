@@ -1,3 +1,13 @@
+# v3.2.11
+_Sep 15, 2026_
+
+New functionalities:
+- Xray test Phantom: Under construction / validation. Added test to analyse specific phantoms. Currently added Leeds TOR 18FG.
+
+Bugfixes:
+- Test Xray MTF, plot LSF no longer crashes on missing mtf_type
+- SR test "Extract event details" no longer crashes on move up element when specifying CodeMeanings to include.
+
 # v3.2.10
 _Aug 12, 2026_
 

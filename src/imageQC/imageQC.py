@@ -73,6 +73,7 @@ def main_non_ui():
                             help='Limit the run for specified modalities '
                             'or the specified modality/templatename '
                             'e.g. CT Xray/lab9 MR/lab3.')
+        parser.add_argument('--dev', action='store_true', help='Developer mode = True')
         args = parser.parse_args()
 
         import imageQC.scripts.automation as automation
@@ -195,9 +196,6 @@ def main_ui():
 if __name__ == '__main__':
     print('imageQC is starting up...', flush=True)
     warnings = []
-    developer_mode = False
-    if developer_mode:
-        prepare_debug()  # type c to continue, developer_mode=False in imageQC.py to deactivate debugging
     user_prefs_status, user_prefs_path, user_prefs = cff.load_user_prefs()
     # verify that config_folder exists
     if user_prefs.config_folder != '':
@@ -239,7 +237,12 @@ if __name__ == '__main__':
             ],
         )
 
-    if len(sys.argv) > 1:
+    developer_mode = False
+    if len(sys.argv) == 2 and sys.argv[-1] == '--dev':
+        developer_mode = True
+        prepare_debug()  # type c to continue, developer_mode=False in imageQC.py to deactivate debugging
+        main_ui()
+    elif len(sys.argv) > 1:
         main_non_ui()
     else:
         main_ui()

@@ -16,8 +16,9 @@ using virt env later
 - python -m imageQC.imageQC # to run the program
 - python -m pytest tests\test_calculations.py # example to test
 
-To be able to use breakpoints:
-- Find developer_mode in imageQC.py (currently at line 198) and set this variable from False to True.
+To be able to use breakpoints using Anaconda:
+- Add argument --dev (TODO - change prepare_debug function allowing this for a VS code environment too)
+- This also sets the developer_mode parameter to True which allows to show/hide unfinished functionalities to others
 
 To be able to plot during pytest or breakpoints:
 - import matplotlib.pyplot as plt

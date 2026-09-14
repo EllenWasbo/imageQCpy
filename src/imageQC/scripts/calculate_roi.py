@@ -1180,23 +1180,61 @@ def get_roi_Pha(image, image_info, paramset):
     pix = image_info.pix[0]
     if isinstance(paramset, cfc.ParamSetXray):
         if paramset.pha_type == 0:  # TOR 18FG
-            # find central high contrast object in central 50% of image
+            # find central high contrast object
             var_map = mmcalc.get_variance_map(
                 image, round(2./pix), 'same')
             high_contrast_in_bar_corners = find_rectangle_object_2(
                 var_map, pix,
                 polygon_node_dist_mm=5., range_size_mm=[7., 15.])
 
-            # fill polygon
-            try:
-                rr, cc = draw.polygon(
-                    high_contrast_in_bar_corners[:, 0],
-                    high_contrast_in_bar_corners[:, 1])
-                mask = np.zeros(image.shape, dtype=bool)
-                mask[rr, cc] = True
-            except TypeError:
-                mask = None
-            roi_array = [mask, high_contrast_in_bar_corners]
+            # finetune position and center of sides for highcontrast object
+            cx = round(np.mean(high_contrast_in_bar_corners[:-1,1]))
+            cy = round(np.mean(high_contrast_in_bar_corners[:-1,0]))
+            mm10 = round(10./pix)
+            xs = [cx - mm10, cx + mm10]
+            ys = [cy - mm10, cy + mm10]
+            sub = image[ys[0]:ys[1], xs[0]:xs[1]]
+            center_xys = find_rectangle_object(
+                sub, pix=pix, thresholds=[8., 0.1, 10, 0.5])
+            dx = center_xys[2][0] - center_xys[0][0]
+            dy = center_xys[2][1] - center_xys[0][1]
+            dist = np.sqrt(dx**2 + dy**2)
+            c_xy = np.mean(center_xys, axis=0)
+            c_xy_off = c_xy - np.array([sub.shape[1]//2, sub.shape[0]//2])
+            rot = np.rad2deg(np.arctan(dy/dx))
+
+            roi_sub = get_roi_rectangle(sub.shape, roi_width=dist,
+                                        roi_height=dist, offcenter_xy=c_xy_off)
+            roi = mmcalc.rotate2d_offcenter(
+                roi_sub.astype(float), -rot, c_xy_off)
+            roi_full = np.zeros(image.shape, dtype=bool)
+            roi_full[ys[0]:ys[1], xs[0]:xs[1]][roi > 0.5] = True
+
+            cxys = np.array(center_xys) + [xs[0], ys[0]]
+
+            # mask collimated area
+            mask_coll = np.zeros(image.shape, dtype=bool)
+            prof_y = np.max(image, axis=1)
+            prof_x = np.max(image, axis=0)
+            if (np.min(prof_x) < 0.2*np.max(prof_x)
+                or np.min(prof_y) < 0.2*np.max(prof_y)):
+                w_y, c_y = mmcalc.get_width_center_at_threshold(
+                    prof_y,
+                    threshold=0.5 * (
+                        np.max(prof_y)-np.min(prof_y)) + np.min(prof_y))
+                w_x, c_x = mmcalc.get_width_center_at_threshold(
+                    prof_x,
+                    threshold=0.5 * (
+                        np.max(prof_x)-np.min(prof_x)) + np.min(prof_x))
+                try:
+                    mask_coll[round(c_y-w_y/2):round(c_y+w_y/2),
+                              round(c_x-w_x/2):round(c_x+w_x/2)] = True
+                except (IndexError, TypeError):
+                    pass
+            if np.count_nonzero(mask_coll) == 0:
+                mask_coll = None
+
+            roi_array = [roi_full, cxys, mask_coll]
 
     return (roi_array, errmsg)
 
@@ -2032,8 +2070,7 @@ def find_intercepts(lines, lines2):
 
 def find_rectangle_object(image, mask_outer=0, pix=1.,
                           thresholds=[25., 0.1, 10., 0.5]):
-    
-    """Detect rectangle in image.
+    """Detect rectangle in image from intersection of edges.
 
     Parameters
     ----------
